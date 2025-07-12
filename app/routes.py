@@ -22,3 +22,11 @@ def upload_file():
 @main.route('/download/<filename>')
 def download_file(filename):
     return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+@main.route('/clear', methods=['POST'])
+def clear_files():
+    folder = current_app.config['UPLOAD_FOLDER']
+    for filename in os.listdir(folder):
+        file_path = os.path.join(folder, filename)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+    return redirect(url_for('main.home'))
