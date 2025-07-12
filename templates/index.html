@@ -1,7 +1,33 @@
 <!DOCTYPE html>
 <html>
-<head><title>Test</title></head>
+<head>
+  <title>Secure LAN Server</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
 <body>
-    <h1>Secure LAN Server Running</h1>
+
+  <h1>{{ msg }}</h1>
+
+  <section>
+    <h2>Upload a File</h2>
+    <form method="POST" action="{{ url_for('main.upload_file') }}" enctype="multipart/form-data">
+      <input type="file" name="file" required>
+      <button type="submit">Upload</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Available Files</h2>
+    <ul>
+      {% for file in files %}
+        <li>
+          <a href="{{ url_for('main.download_file', filename=file) }}">{{ file }}</a>
+        </li>
+      {% else %}
+        <li>No files uploaded yet.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
 </body>
 </html>
