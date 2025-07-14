@@ -6,7 +6,7 @@ main = Blueprint('main', __name__)
 @main.route('/')
 def home():
     files = os.listdir(current_app.config['UPLOAD_FOLDER'])
-    return render_template("index.html", msg="🚀 Secure LAN server is running!", files=files)
+    return render_template("index.html", msg="Lanvan", files=files)
 
 @main.route('/upload', methods=['POST'])
 def upload_file():
@@ -29,4 +29,11 @@ def clear_files():
         file_path = os.path.join(folder, filename)
         if os.path.isfile(file_path):
             os.remove(file_path)
+    return redirect(url_for('main.home'))
+@main.route('/delete/<filename>', methods=['POST'])
+def delete_file(filename):
+    folder = current_app.config['UPLOAD_FOLDER']
+    file_path = os.path.join(folder, filename)
+    if os.path.isfile(file_path):
+        os.remove(file_path)
     return redirect(url_for('main.home'))
