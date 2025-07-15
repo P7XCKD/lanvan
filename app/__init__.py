@@ -12,8 +12,8 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 app.config['MAX_CONTENT_LENGTH'] = 15 * 1024 * 1024 * 1024  # 15 GB
 
 # Register blueprint
-from app.routes import main
-app.register_blueprint(main)
+# from app.routes import main
+# app.register_blueprint(main)
 
 # Initialize compression
 compress = Compress()
