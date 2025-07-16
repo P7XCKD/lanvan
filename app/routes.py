@@ -1,11 +1,16 @@
 import os
 import time
+import io
 from typing import List
 from pathlib import Path
 from mimetypes import guess_type
+from zipfile import ZipFile
 
 from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse, Response
+from fastapi.responses import (
+    HTMLResponse, RedirectResponse, StreamingResponse,
+    JSONResponse, Response
+)
 from fastapi.templating import Jinja2Templates
 from starlette.status import HTTP_302_FOUND
 from werkzeug.utils import secure_filename
@@ -14,12 +19,11 @@ from app.config import is_allowed_file
 
 # === Setup ===
 router = APIRouter()
-UPLOAD_FOLDER = "app/uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+UPLOAD_FOLDER = Path("app/uploads")
+UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 templates = Jinja2Templates(directory="app/templates")
 
-# === Utility Functions ===
-
+# === Utilities ===
 def format_size(size_bytes):
     for unit in ["B", "KB", "MB", "GB"]:
         if size_bytes < 1024:
@@ -28,37 +32,38 @@ def format_size(size_bytes):
     return f"{size_bytes:.2f} TB"
 
 def get_file_list():
-    files = []
-    for fname in os.listdir(UPLOAD_FOLDER):
-        fpath = os.path.join(UPLOAD_FOLDER, fname)
-        if os.path.isfile(fpath):
-            files.append({
-                "name": fname,
-                "size": format_size(os.path.getsize(fpath)),
-                "mtime": os.path.getmtime(fpath)
-            })
-    return sorted(files, key=lambda f: f["mtime"], reverse=True)
+    return sorted([
+        {
+            "name": f.name,
+            "size": format_size(f.stat().st_size),
+            "mtime": f.stat().st_mtime
+        }
+        for f in UPLOAD_FOLDER.iterdir() if f.is_file()
+    ], key=lambda x: x["mtime"], reverse=True)
 
-def get_unique_filename(directory: str, filename: str):
+def get_unique_filename(directory: Path, filename: str) -> str:
     base = Path(filename).stem
     ext = Path(filename).suffix
     counter = 1
     new_name = filename
-    while os.path.exists(os.path.join(directory, new_name)):
+    while (directory / new_name).exists():
         new_name = f"{base}_{counter}{ext}"
         counter += 1
     return new_name
 
-def save_upload_file_sync(upload_file: UploadFile, destination: str):
+def save_upload_file_sync(upload_file: UploadFile, destination: Path):
     start = time.time()
-    with open(destination, "wb") as f:
+    with destination.open("wb") as buffer:
         while chunk := upload_file.file.read(4 * 1024 * 1024):
-            f.write(chunk)
+            buffer.write(chunk)
     print(f"[UPLOAD DONE] {destination} in {time.time() - start:.2f}s")
 
-def scan_file(path: str):
-    print(f"🧪 Background scanning file: {path}")
-    # Extend: checksum, virus scan, etc.
+def scan_file(path: Path):
+    print(f"🧪 Scanning file in background: {path}")
+    # Placeholder for: virus scan, checksum, or DLP hook
+    # Simulated delay or processing logic
+    # time.sleep(1)
+
 
 # === Routes ===
 
@@ -71,6 +76,7 @@ async def home(request: Request):
         "files": [f["name"] for f in files]
     })
 
+
 @router.post("/upload", name="upload_file")
 async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     if not file.filename:
@@ -80,15 +86,18 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
     if not is_allowed_file(filename):
         return {"error": "File type not allowed"}
 
-    filepath = os.path.join(UPLOAD_FOLDER, get_unique_filename(UPLOAD_FOLDER, filename))
+    unique_name = get_unique_filename(UPLOAD_FOLDER, filename)
+    filepath = UPLOAD_FOLDER / unique_name
     save_upload_file_sync(file, filepath)
     background_tasks.add_task(scan_file, filepath)
+
     return RedirectResponse(url="/", status_code=HTTP_302_FOUND)
+
 
 @router.post("/upload-multiple", name="upload_multiple_files")
 async def upload_multiple_files(background_tasks: BackgroundTasks, files: List[UploadFile] = File(...)):
     if len(files) > 10:
-        return {"error": "Max 10 files allowed"}
+        return JSONResponse(status_code=400, content={"error": "Max 10 files allowed"})
 
     for file in files:
         if not file.filename:
@@ -96,15 +105,15 @@ async def upload_multiple_files(background_tasks: BackgroundTasks, files: List[U
         filename = secure_filename(file.filename)
         if not is_allowed_file(filename):
             continue
-        filepath = os.path.join(UPLOAD_FOLDER, get_unique_filename(UPLOAD_FOLDER, filename))
+        filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, filename)
         save_upload_file_sync(file, filepath)
         background_tasks.add_task(scan_file, filepath)
 
     return RedirectResponse(url="/", status_code=HTTP_302_FOUND)
 
+
 @router.post("/upload-auto", name="upload_auto_file")
 async def upload_auto_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    """Clean backend endpoint for auto-upload via AJAX or QR/clipboard."""
     if not file.filename:
         return JSONResponse(status_code=400, content={"status": "error", "msg": "No file provided"})
 
@@ -112,26 +121,31 @@ async def upload_auto_file(background_tasks: BackgroundTasks, file: UploadFile =
     if not is_allowed_file(filename):
         return JSONResponse(status_code=400, content={"status": "error", "msg": "File type not allowed"})
 
-    filepath = os.path.join(UPLOAD_FOLDER, get_unique_filename(UPLOAD_FOLDER, filename))
+    filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, filename)
     save_upload_file_sync(file, filepath)
     background_tasks.add_task(scan_file, filepath)
 
-    return JSONResponse(content={"status": "success", "msg": f"{filename} uploaded", "path": filepath})
+    return JSONResponse(content={
+        "status": "success",
+        "msg": f"{filename} uploaded",
+        "path": str(filepath)
+    })
+
 
 @router.get("/download/{filename}", name="download_file")
 async def download_file(filename: str):
     safe_name = secure_filename(filename)
-    file_path = os.path.join(UPLOAD_FOLDER, safe_name)
+    file_path = UPLOAD_FOLDER / safe_name
 
-    if not os.path.isfile(file_path):
+    if not file_path.is_file():
         return Response("File not found", status_code=404)
 
-    file_size = os.path.getsize(file_path)
-    mime_type, _ = guess_type(file_path)
+    mime_type, _ = guess_type(str(file_path))
+    file_size = file_path.stat().st_size
 
-    def stream_file(path):
-        with open(path, "rb") as f:
-            while chunk := f.read(2 * 1024 * 1024):
+    def stream_file(path: Path):
+        with path.open("rb") as f:
+            while chunk := f.read(2 * 1024 * 1024):  # 2MB chunks
                 yield chunk
 
     return StreamingResponse(
@@ -140,22 +154,42 @@ async def download_file(filename: str):
         headers={
             "Content-Disposition": f'attachment; filename="{safe_name}"',
             "Content-Length": str(file_size),
-            "Cache-Control": "public, max-age=86400"
+            "Cache-Control": "public, max-age=86400",
+            "X-Accel-Buffering": "no"  # Optional: disable buffering for NGINX
         }
     )
 
+
+@router.get("/download-all", name="download_all")
+async def download_all_files():
+    zip_buffer = io.BytesIO()
+    with ZipFile(zip_buffer, "w") as zip_file:
+        for file in UPLOAD_FOLDER.iterdir():
+            if file.is_file():
+                zip_file.write(file, arcname=file.name)
+    zip_buffer.seek(0)
+
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": "attachment; filename=all_files.zip"
+        }
+    )
+
+
 @router.post("/clear", name="clear_files")
 async def clear_files():
-    for filename in os.listdir(UPLOAD_FOLDER):
-        path = os.path.join(UPLOAD_FOLDER, filename)
-        if os.path.isfile(path):
-            os.remove(path)
+    for file in UPLOAD_FOLDER.iterdir():
+        if file.is_file():
+            file.unlink()
     return RedirectResponse(url="/", status_code=HTTP_302_FOUND)
+
 
 @router.post("/delete/{filename}", name="delete_file")
 async def delete_file(filename: str):
     safe_name = secure_filename(filename)
-    path = os.path.join(UPLOAD_FOLDER, safe_name)
-    if os.path.isfile(path):
-        os.remove(path)
+    file_path = UPLOAD_FOLDER / safe_name
+    if file_path.is_file():
+        file_path.unlink()
     return RedirectResponse(url="/", status_code=HTTP_302_FOUND)

@@ -1,12 +1,12 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>LanVan</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}" />
   <style>
+    /* 🌐 Base Layout */
     body {
       font-family: Arial, sans-serif;
       background: #f2f3f7;
@@ -14,16 +14,12 @@
       padding: 1rem;
       color: #333;
     }
-
     header {
       text-align: center;
       margin-bottom: 2rem;
     }
 
-    h1 {
-      color: #333;
-    }
-
+    /* 📦 Sections */
     section {
       background: #fff;
       border-radius: 10px;
@@ -31,17 +27,13 @@
       padding: 1rem 1.5rem;
       margin-bottom: 1.5rem;
     }
-
-    section h2 {
+    h2 {
       margin-top: 0;
       font-size: 1.25rem;
       color: #555;
     }
 
-    input[type="file"] {
-      display: none;
-    }
-
+    /* 📤 Upload Zone */
     .drop-zone {
       border: 2px dashed #ccc;
       padding: 2rem;
@@ -51,259 +43,240 @@
       cursor: pointer;
       transition: border-color 0.2s;
     }
-
     .drop-zone.dragover {
       border-color: #4a90e2;
       background: #e8f0fe;
     }
-
+    input[type="file"] {
+      display: none;
+    }
     .file-preview {
       font-size: 0.9rem;
       color: #333;
+      margin-top: 0.5rem;
     }
 
-    button {
+    /* 🔘 Buttons */
+    button,
+    .download-btn {
       background-color: #4a90e2;
       color: white;
       border: none;
-      padding: 0.6rem;
+      padding: 0.6rem 0.8rem;
       font-size: 1rem;
       border-radius: 5px;
       cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
     }
-
-    button:hover {
+    button:hover,
+    .download-btn:hover {
       background-color: #357bd8;
     }
 
-    ul {
-      list-style-type: none;
-      padding-left: 0;
+    /* 🧹 Red button override */
+    .danger-btn {
+      background-color: #e74c3c;
     }
 
-    ul li {
-      padding: 0.3rem 0;
-    }
-
-    ul li a {
-      color: #007bff;
-      text-decoration: none;
-    }
-
-    ul li a:hover {
-      text-decoration: underline;
-    }
-
-    progress {
-      height: 20px;
-      border-radius: 10px;
-      width: 100%;
-      display: none;
-    }
-
-    #uploadStatus {
-      font-size: 0.9rem;
-      color: #555;
-    }
-
+    /* 🗂️ File Grid */
     .file-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 1rem;
       margin-top: 1rem;
     }
-
     .file-card {
       background: #fdfdfd;
       border: 1px solid #e1e1e1;
       border-radius: 10px;
       padding: 1rem;
       text-align: center;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       min-height: 150px;
-      transition: box-shadow 0.2s ease-in-out;
     }
-
     .file-card:hover {
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
-
     .file-icon {
       font-size: 2rem;
       margin-bottom: 0.5rem;
     }
-
     .file-name {
       font-size: 0.95rem;
-      color: #333;
-      margin-bottom: 0.5rem;
       overflow: hidden;
       white-space: nowrap;
       text-overflow: ellipsis;
+      margin-bottom: 0.5rem;
     }
 
-    .download-btn {
-      display: inline-block;
-      padding: 0.4rem 0.6rem;
-      font-size: 0.85rem;
-      background-color: #4a90e2;
-      color: white;
-      text-decoration: none;
-      border-radius: 5px;
-      transition: background-color 0.2s ease-in-out;
+    /* 📶 Upload Progress */
+    progress {
+      height: 20px;
+      border-radius: 10px;
+      width: 100%;
+      display: none;
+    }
+    #uploadStatus {
+      font-size: 0.9rem;
+      color: #555;
+      margin-top: 0.3rem;
     }
 
-    .download-btn:hover {
-      background-color: #357bd8;
-    }
-
+    /* 📱 Responsive */
     @media (max-width: 600px) {
       section {
         padding: 1rem;
       }
-      button {
+      button,
+      .download-btn {
         font-size: 0.95rem;
-        padding: 0.5rem;
+        padding: 0.5rem 0.7rem;
       }
     }
   </style>
 </head>
+
 <body>
 
-<header>
-  <h1>{{ msg }}</h1>
-</header>
+  <!-- 🚩 Header -->
+  <header>
+    <h1>{{ msg }}</h1>
+  </header>
 
-<!-- 📤 Drag & Drop Upload -->
-<section>
-  <h2>Upload Files (Auto-Upload on Select or Drop)</h2>
-  <form id="unifiedUploadForm">
-    <div class="drop-zone" id="drop-zone">
-      <p>📁 Drag & Drop files here or click to select</p>
-      <input type="file" id="fileInput" name="files" multiple required>
-      <div class="file-preview" id="file-preview"></div>
+  <!-- 📤 Upload Area -->
+  <section>
+    <h2>Upload Files (Auto-Upload on Select or Drop)</h2>
+    <form id="unifiedUploadForm">
+      <div class="drop-zone" id="drop-zone">
+        <p>📁 Drag & Drop files here or click to select</p>
+        <input type="file" id="fileInput" name="files" multiple required>
+        <div id="file-preview" class="file-preview"></div>
+      </div>
+      <progress id="uploadProgress" value="0" max="100"></progress>
+      <p id="uploadStatus"></p>
+    </form>
+  </section>
+
+  <!-- 🧹 Clear History -->
+  <section>
+    <h2>Manage Files</h2>
+    <form method="POST" action="{{ url_for('clear_files') }}" onsubmit="return confirm('Are you sure you want to clear all uploaded files?')">
+      <button type="submit" class="danger-btn">🧹 Clear History</button>
+    </form>
+  </section>
+
+  <!-- 📂 File List -->
+  <section>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h2>Available Files</h2>
+      <div>
+        <a href="{{ url_for('download_all') }}" class="download-btn">⬇ Download All</a>
+        <form method="POST" action="{{ url_for('clear_files') }}" onsubmit="return confirm('Are you sure?')" style="display: inline;">
+          <button type="submit" class="download-btn danger-btn">🧹 Clear History</button>
+        </form>
+      </div>
     </div>
-    <progress id="uploadProgress" value="0" max="100"></progress>
-    <p id="uploadStatus"></p>
-  </form>
-</section>
 
-<!-- 🧹 Clear All Files -->
-<section>
-  <h2>Manage Files</h2>
-  <form method="POST" action="{{ url_for('clear_files') }}" onsubmit="return confirm('Are you sure you want to clear all uploaded files?')">
-    <button type="submit" style="background-color: #e74c3c;">Clear History</button>
-  </form>
-</section>
-
-<!-- 📂 File List -->
-<section>
-  <h2>Available Files</h2>
-  {% if files %}
-  <div class="file-grid">
-    {% for file in files %}
-    <div class="file-card">
-      <div class="file-icon">📄</div>
-      <div class="file-name" title="{{ file }}">{{ file }}</div>
-      <a href="{{ url_for('download_file', filename=file) }}" download class="download-btn">⬇ Download</a>
+    {% if files %}
+    <div class="file-grid">
+      {% for file in files %}
+      <div class="file-card">
+        <div class="file-icon">📄</div>
+        <div class="file-name" title="{{ file }}">{{ file }}</div>
+        <a href="{{ url_for('download_file', filename=file) }}" class="download-btn" download>⬇ Download</a>
+      </div>
+      {% endfor %}
     </div>
-    {% endfor %}
-  </div>
-  {% else %}
+    {% else %}
     <p>No files uploaded yet.</p>
-  {% endif %}
-</section>
+    {% endif %}
+  </section>
 
-<!-- 📡 Auto Upload JS -->
-<script>
-  const dropZone = document.getElementById('drop-zone');
-  const fileInput = document.getElementById('fileInput');
-  const preview = document.getElementById('file-preview');
-  const progressBar = document.getElementById('uploadProgress');
-  const statusText = document.getElementById('uploadStatus');
+  <!-- 📡 JS Upload Logic -->
+  <script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('fileInput');
+    const preview = document.getElementById('file-preview');
+    const progressBar = document.getElementById('uploadProgress');
+    const statusText = document.getElementById('uploadStatus');
 
-  ['dragenter', 'dragover'].forEach(evt =>
-    dropZone.addEventListener(evt, e => {
-      e.preventDefault();
-      dropZone.classList.add('dragover');
-    })
-  );
+    ['dragenter', 'dragover'].forEach(evt =>
+      dropZone.addEventListener(evt, e => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+      })
+    );
 
-  ['dragleave', 'drop'].forEach(evt =>
-    dropZone.addEventListener(evt, e => {
-      e.preventDefault();
-      dropZone.classList.remove('dragover');
-    })
-  );
+    ['dragleave', 'drop'].forEach(evt =>
+      dropZone.addEventListener(evt, e => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+      })
+    );
 
-  dropZone.addEventListener('drop', e => {
-    fileInput.files = e.dataTransfer.files;
-    updatePreview(fileInput.files);
-    autoUpload(fileInput.files);
-  });
+    dropZone.addEventListener('click', () => fileInput.click());
 
-  dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('drop', e => {
+      fileInput.files = e.dataTransfer.files;
+      updatePreview(fileInput.files);
+      autoUpload(fileInput.files);
+    });
 
-  fileInput.addEventListener('change', () => {
-    updatePreview(fileInput.files);
-    autoUpload(fileInput.files);
-  });
+    fileInput.addEventListener('change', () => {
+      updatePreview(fileInput.files);
+      autoUpload(fileInput.files);
+    });
 
-  function updatePreview(files) {
-    preview.innerHTML = '';
-    if (!files.length) return;
-    for (let file of files) {
-      const div = document.createElement('div');
-      div.textContent = `📄 ${file.name}`;
-      preview.appendChild(div);
-    }
-  }
-
-  function autoUpload(files) {
-    if (!files.length) return;
-
-    const formData = new FormData();
-    for (let file of files) {
-      formData.append('files', file);
+    function updatePreview(files) {
+      preview.innerHTML = '';
+      Array.from(files).forEach(file => {
+        const div = document.createElement('div');
+        div.textContent = `📄 ${file.name}`;
+        preview.appendChild(div);
+      });
     }
 
-    const xhr = new XMLHttpRequest();
-    progressBar.style.display = 'block';
-    progressBar.value = 0;
-    statusText.innerText = 'Starting upload...';
+    function autoUpload(files) {
+      if (!files.length) return;
+      const formData = new FormData();
+      Array.from(files).forEach(file => formData.append('files', file));
 
-    const startTime = new Date().getTime();
+      const xhr = new XMLHttpRequest();
+      progressBar.style.display = 'block';
+      progressBar.value = 0;
+      statusText.innerText = 'Starting upload...';
 
-    xhr.upload.onprogress = function (e) {
-      if (e.lengthComputable) {
-        const percent = (e.loaded / e.total) * 100;
-        progressBar.value = percent;
-        const elapsed = (new Date().getTime() - startTime) / 1000;
-        const speed = e.loaded / 1024 / 1024 / elapsed;
-        statusText.innerText = `Uploading: ${percent.toFixed(1)}% @ ${speed.toFixed(2)} MB/s`;
-      }
-    };
+      const startTime = new Date().getTime();
 
-    xhr.onload = function () {
-      if (xhr.status === 200 || xhr.status === 302) {
-        statusText.innerText = '✅ Upload complete!';
-        setTimeout(() => location.reload(), 1000);
-      } else {
-        statusText.innerText = '❌ Upload failed.';
-      }
-    };
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) {
+          const percent = (e.loaded / e.total) * 100;
+          const elapsed = (new Date().getTime() - startTime) / 1000;
+          const speed = e.loaded / 1024 / 1024 / elapsed;
+          progressBar.value = percent;
+          statusText.innerText = `Uploading: ${percent.toFixed(1)}% @ ${speed.toFixed(2)} MB/s`;
+        }
+      };
 
-    xhr.onerror = function () {
-      statusText.innerText = '❌ Upload error.';
-    };
+      xhr.onload = () => {
+        statusText.innerText = xhr.status === 200 || xhr.status === 302
+          ? '✅ Upload complete!'
+          : '❌ Upload failed.';
+        if (xhr.status === 200 || xhr.status === 302) setTimeout(() => location.reload(), 1000);
+      };
 
-    xhr.open('POST', '/upload-multiple');
-    xhr.send(formData);
-  }
-</script>
+      xhr.onerror = () => {
+        statusText.innerText = '❌ Upload error.';
+      };
+
+      xhr.open('POST', '/upload-multiple');
+      xhr.send(formData);
+    }
+  </script>
 
 </body>
 </html>
