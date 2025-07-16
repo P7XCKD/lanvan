@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>LanVan</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
+
   <!-- FilePond Styles -->
   <link href="{{ url_for('static', path='filepond/css/filepond.min.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', path='filepond/css/filepond-plugin-image-preview.min.css') }}" rel="stylesheet">
@@ -25,6 +25,11 @@
     h1 {
       font-size: 1.8rem;
       color: #333;
+    }
+
+    main {
+      max-width: 1000px;
+      margin: 0 auto;
     }
 
     section {
@@ -53,11 +58,11 @@
       border-radius: 8px;
       padding: 1rem;
       text-align: center;
-      transition: all 0.2s ease;
+      transition: box-shadow 0.2s ease;
     }
 
     .file-card:hover {
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
     }
 
     .file-icon {
@@ -70,9 +75,14 @@
       margin-bottom: 0.5rem;
       color: #333;
       word-break: break-word;
+      overflow-wrap: break-word;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .download-btn {
+      display: inline-block;
       background: #3498db;
       color: white;
       text-decoration: none;
@@ -90,10 +100,11 @@
       background-color: #e74c3c;
       color: white;
       border: none;
-      padding: 0.6rem 1rem;
+      padding: 0.6rem 1.1rem;
       font-size: 0.95rem;
       border-radius: 6px;
       cursor: pointer;
+      transition: background 0.2s ease;
     }
 
     button:hover {
@@ -104,6 +115,10 @@
       .file-grid {
         grid-template-columns: 1fr;
       }
+
+      .file-name {
+        white-space: normal;
+      }
     }
   </style>
 </head>
@@ -113,37 +128,41 @@
   <h1>{{ msg }}</h1>
 </header>
 
-<!-- 📤 Upload Section -->
-<section>
-  <h2>Upload Files</h2>
-  <input type="file" class="filepond" name="files" multiple required />
-</section>
+<main>
 
-<!-- 🧹 Clear All Section -->
-<section>
-  <h2>Manage Files</h2>
-  <form method="POST" action="{{ url_for('clear_files') }}" onsubmit="return confirm('Are you sure you want to delete all uploaded files?')">
-    <button type="submit">Clear History</button>
-  </form>
-</section>
+  <!-- 📤 Upload Section -->
+  <section>
+    <h2>Upload Files</h2>
+    <input type="file" class="filepond" name="files" multiple required />
+  </section>
 
-<!-- 📂 File List Section -->
-<section>
-  <h2>Available Files</h2>
-  {% if files %}
-    <div class="file-grid">
-      {% for file in files %}
-      <div class="file-card">
-        <div class="file-icon">📄</div>
-        <div class="file-name" title="{{ file }}">{{ file }}</div>
-        <a href="{{ url_for('download_file', filename=file) }}" download class="download-btn">⬇ Download</a>
+  <!-- 🧹 Clear All Section -->
+  <section>
+    <h2>Manage Files</h2>
+    <form method="POST" action="{{ url_for('clear_files') }}" onsubmit="return confirm('Are you sure you want to delete all uploaded files?')">
+      <button type="submit">🧹 Clear All Files</button>
+    </form>
+  </section>
+
+  <!-- 📂 File List Section -->
+  <section>
+    <h2>Available Files</h2>
+    {% if files %}
+      <div class="file-grid">
+        {% for file in files %}
+        <div class="file-card">
+          <div class="file-icon">📄</div>
+          <div class="file-name" title="{{ file }}">{{ file }}</div>
+          <a href="{{ url_for('download_file', filename=file) }}" download class="download-btn">⬇ Download</a>
+        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
-    </div>
-  {% else %}
-    <p>No files uploaded yet.</p>
-  {% endif %}
-</section>
+    {% else %}
+      <p>No files uploaded yet.</p>
+    {% endif %}
+  </section>
+
+</main>
 
 <!-- 🌈 FilePond Scripts -->
 <script src="{{ url_for('static', path='filepond/js/filepond.min.js') }}"></script>
