@@ -4,102 +4,181 @@
   <meta charset="UTF-8">
   <title>LanVan</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
+  
+  <!-- FilePond Styles -->
+  <link href="{{ url_for('static', path='filepond/css/filepond.min.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', path='filepond/css/filepond-plugin-image-preview.min.css') }}" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f8f9fb;
+      padding: 1rem;
+      margin: 0;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      color: #333;
+    }
+
+    section {
+      margin-bottom: 2rem;
+      background: #fff;
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
+    section h2 {
+      font-size: 1.2rem;
+      margin-bottom: 0.8rem;
+      color: #444;
+    }
+
+    .file-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 1rem;
+    }
+
+    .file-card {
+      background: #fafafa;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+
+    .file-card:hover {
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    .file-icon {
+      font-size: 1.8rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .file-name {
+      font-size: 0.95rem;
+      margin-bottom: 0.5rem;
+      color: #333;
+      word-break: break-word;
+    }
+
+    .download-btn {
+      background: #3498db;
+      color: white;
+      text-decoration: none;
+      padding: 0.4rem 0.7rem;
+      border-radius: 5px;
+      font-size: 0.85rem;
+      transition: background 0.2s ease;
+    }
+
+    .download-btn:hover {
+      background: #2c80b4;
+    }
+
+    button {
+      background-color: #e74c3c;
+      color: white;
+      border: none;
+      padding: 0.6rem 1rem;
+      font-size: 0.95rem;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #c0392b;
+    }
+
+    @media (max-width: 600px) {
+      .file-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
 
+<header>
   <h1>{{ msg }}</h1>
+</header>
 
-  <!-- 📤 Single File Upload (AJAX with progress) -->
-  <section>
-    <h2>Upload a File</h2>
-    <form id="singleUploadForm">
-      <input type="file" id="singleFileInput" name="file" required>
-      <button type="submit">Upload</button>
-    </form>
-    <progress id="uploadProgress" value="0" max="100" style="width: 100%; display: none;"></progress>
-    <p id="uploadStatus"></p>
-  </section>
+<!-- 📤 Upload Section -->
+<section>
+  <h2>Upload Files</h2>
+  <input type="file" class="filepond" name="files" multiple required />
+</section>
 
-  <!-- 📤 Multiple File Upload (standard) -->
-  <section>
-    <h2>Upload Multiple Files</h2>
-    <form method="POST" action="{{ url_for('upload_multiple_files') }}" enctype="multipart/form-data">
-      <input type="file" name="files" multiple required>
-      <button type="submit">Upload Files</button>
-    </form>
-  </section>
+<!-- 🧹 Clear All Section -->
+<section>
+  <h2>Manage Files</h2>
+  <form method="POST" action="{{ url_for('clear_files') }}" onsubmit="return confirm('Are you sure you want to delete all uploaded files?')">
+    <button type="submit">Clear History</button>
+  </form>
+</section>
 
-  <!-- 🧹 Clear All Files -->
-  <section>
-    <form method="POST" action="{{ url_for('clear_files') }}" onsubmit="return confirm('Are you sure you want to clear all uploaded files?')">
-      <button type="submit">Clear History</button>
-    </form>
-  </section>
-
-  <!-- 📂 File List -->
-  <section>
-    <h2>Available Files</h2>
-    <ul>
+<!-- 📂 File List Section -->
+<section>
+  <h2>Available Files</h2>
+  {% if files %}
+    <div class="file-grid">
       {% for file in files %}
-        <li>
-          <a href="{{ url_for('download_file', filename=file) }}" download>{{ file }}</a>
-        </li>
-      {% else %}
-        <li>No files uploaded yet.</li>
+      <div class="file-card">
+        <div class="file-icon">📄</div>
+        <div class="file-name" title="{{ file }}">{{ file }}</div>
+        <a href="{{ url_for('download_file', filename=file) }}" download class="download-btn">⬇ Download</a>
+      </div>
       {% endfor %}
-    </ul>
-  </section>
+    </div>
+  {% else %}
+    <p>No files uploaded yet.</p>
+  {% endif %}
+</section>
 
-  <script>
-    const form = document.getElementById('singleUploadForm');
-    const fileInput = document.getElementById('singleFileInput');
-    const progressBar = document.getElementById('uploadProgress');
-    const statusText = document.getElementById('uploadStatus');
+<!-- 🌈 FilePond Scripts -->
+<script src="{{ url_for('static', path='filepond/js/filepond.min.js') }}"></script>
+<script src="{{ url_for('static', path='filepond/js/filepond-plugin-file-validate-size.min.js') }}"></script>
+<script src="{{ url_for('static', path='filepond/js/filepond-plugin-file-validate-type.min.js') }}"></script>
+<script src="{{ url_for('static', path='filepond/js/filepond-plugin-image-preview.min.js') }}"></script>
 
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      const file = fileInput.files[0];
-      if (!file) return;
+<script>
+  FilePond.registerPlugin(
+    FilePondPluginFileValidateSize,
+    FilePondPluginFileValidateType,
+    FilePondPluginImagePreview
+  );
 
-      const xhr = new XMLHttpRequest();
-      const formData = new FormData();
-      formData.append('file', file);
-
-      progressBar.style.display = 'block';
-      statusText.innerText = 'Starting upload...';
-      progressBar.value = 0;
-
-      const startTime = new Date().getTime();
-
-      xhr.upload.onprogress = function (e) {
-        if (e.lengthComputable) {
-          const percent = (e.loaded / e.total) * 100;
-          progressBar.value = percent;
-
-          const elapsed = (new Date().getTime() - startTime) / 1000;
-          const speed = e.loaded / 1024 / 1024 / elapsed;
-          statusText.innerText = `Uploading: ${percent.toFixed(1)}% @ ${speed.toFixed(2)} MB/s`;
+  FilePond.setOptions({
+    server: {
+      url: '/upload-multiple',
+      process: {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json'
         }
-      };
+      },
+      revert: null,
+      restore: null,
+      load: null,
+      fetch: null
+    },
+    allowMultiple: true,
+    maxParallelUploads: 3,
+    instantUpload: true
+  });
 
-      xhr.onload = function () {
-        if (xhr.status === 200 || xhr.status === 302) {
-          statusText.innerText = '✅ Upload complete!';
-          setTimeout(() => location.reload(), 1000);  // refresh after short delay
-        } else {
-          statusText.innerText = '❌ Upload failed.';
-        }
-      };
-
-      xhr.onerror = function () {
-        statusText.innerText = '❌ Upload error.';
-      };
-
-      xhr.open('POST', '/upload');
-      xhr.send(formData);
-    });
-  </script>
+  FilePond.create(document.querySelector('.filepond'));
+</script>
 
 </body>
 </html>
