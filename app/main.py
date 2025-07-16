@@ -20,8 +20,8 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 UPLOAD_FOLDER = "app/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ✅ Mount static files (CSS, JS, images, etc.)
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 # ✅ Setup Jinja2 template engine
 templates = Jinja2Templates(directory="app/templates")
