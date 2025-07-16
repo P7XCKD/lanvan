@@ -2,17 +2,21 @@
 
 import os
 
+# Maximum file size: 15 GB
 MAX_CONTENT_LENGTH = 15 * 1024 * 1024 * 1024  # 15 GB
+
+# Upload directory (relative to app root)
 UPLOAD_FOLDER = 'uploads'
 
-# Blocklist of forbidden extensions
+# ❌ Blocked extensions (everything else allowed)
 BLOCKED_EXTENSIONS = {'.exe', '.bat'}
 
-def is_allowed_file(filename):
+# ✅ Allow all files except .exe and .bat
+def is_allowed_file(filename: str) -> bool:
     ext = os.path.splitext(filename)[1].lower()
     return ext not in BLOCKED_EXTENSIONS
 
+# Optional compression config (if middleware added later)
 class Config:
-    # existing configs...
-    COMPRESS_LEVEL = 6  # range: 1 (fast) to 9 (best)
-    COMPRESS_MIN_SIZE = 500  # only compress responses > 500 bytes
+    COMPRESS_LEVEL = 6        # Range: 1 (fast) → 9 (best compression)
+    COMPRESS_MIN_SIZE = 500   # Only compress if response > 500 bytes

@@ -1,44 +1,105 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Lanvan</title>
- <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
-
+  <meta charset="UTF-8">
+  <title>LanVan</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
 </head>
 <body>
 
   <h1>{{ msg }}</h1>
 
+  <!-- 📤 Single File Upload (AJAX with progress) -->
   <section>
     <h2>Upload a File</h2>
-    <form method="POST" action="{{ url_for('upload_file') }}" enctype="multipart/form-data">
-      <input type="file" name="file" required>
+    <form id="singleUploadForm">
+      <input type="file" id="singleFileInput" name="file" required>
       <button type="submit">Upload</button>
+    </form>
+    <progress id="uploadProgress" value="0" max="100" style="width: 100%; display: none;"></progress>
+    <p id="uploadStatus"></p>
+  </section>
+
+  <!-- 📤 Multiple File Upload (standard) -->
+  <section>
+    <h2>Upload Multiple Files</h2>
+    <form method="POST" action="{{ url_for('upload_multiple_files') }}" enctype="multipart/form-data">
+      <input type="file" name="files" multiple required>
+      <button type="submit">Upload Files</button>
     </form>
   </section>
 
-  <form action="{{ url_for('clear_files') }}" method="POST" style="display: inline;">
-    <button type="submit" onclick="return confirm('Are you sure you want to clear all uploaded files?')">
-      Clear History
-    </button>
-  </form>
-<form action="/upload-multiple" method="post" enctype="multipart/form-data">
-  <input type="file" name="files" multiple>
-  <button type="submit">Upload Files</button>
-</form>
+  <!-- 🧹 Clear All Files -->
+  <section>
+    <form method="POST" action="{{ url_for('clear_files') }}" onsubmit="return confirm('Are you sure you want to clear all uploaded files?')">
+      <button type="submit">Clear History</button>
+    </form>
+  </section>
 
+  <!-- 📂 File List -->
   <section>
     <h2>Available Files</h2>
     <ul>
       {% for file in files %}
         <li>
-          <a href="{{ url_for('download_file', filename=file) }}">{{ file }}</a>
+          <a href="{{ url_for('download_file', filename=file) }}" download>{{ file }}</a>
         </li>
       {% else %}
         <li>No files uploaded yet.</li>
       {% endfor %}
     </ul>
   </section>
+
+  <script>
+    const form = document.getElementById('singleUploadForm');
+    const fileInput = document.getElementById('singleFileInput');
+    const progressBar = document.getElementById('uploadProgress');
+    const statusText = document.getElementById('uploadStatus');
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append('file', file);
+
+      progressBar.style.display = 'block';
+      statusText.innerText = 'Starting upload...';
+      progressBar.value = 0;
+
+      const startTime = new Date().getTime();
+
+      xhr.upload.onprogress = function (e) {
+        if (e.lengthComputable) {
+          const percent = (e.loaded / e.total) * 100;
+          progressBar.value = percent;
+
+          const elapsed = (new Date().getTime() - startTime) / 1000;
+          const speed = e.loaded / 1024 / 1024 / elapsed;
+          statusText.innerText = `Uploading: ${percent.toFixed(1)}% @ ${speed.toFixed(2)} MB/s`;
+        }
+      };
+
+      xhr.onload = function () {
+        if (xhr.status === 200 || xhr.status === 302) {
+          statusText.innerText = '✅ Upload complete!';
+          setTimeout(() => location.reload(), 1000);  // refresh after short delay
+        } else {
+          statusText.innerText = '❌ Upload failed.';
+        }
+      };
+
+      xhr.onerror = function () {
+        statusText.innerText = '❌ Upload error.';
+      };
+
+      xhr.open('POST', '/upload');
+      xhr.send(formData);
+    });
+  </script>
 
 </body>
 </html>
