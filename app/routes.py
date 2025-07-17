@@ -76,59 +76,37 @@ async def home(request: Request):
         "files": [f["name"] for f in files]
     })
 
+from starlette.status import HTTP_400_BAD_REQUEST
 
-@router.post("/upload", name="upload_file")
-async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    if not file.filename:
-        return {"error": "No selected file"}
+@router.post("/upload-auto", name="upload_auto_file")
+async def upload_auto_file(
+    background_tasks: BackgroundTasks,
+    files: List[UploadFile] = File(...)
+):
+    if not files:
+        return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={"status": "error", "msg": "No files uploaded"})
 
-    filename = secure_filename(file.filename)
-    if not is_allowed_file(filename):
-        return {"error": "File type not allowed"}
-
-    unique_name = get_unique_filename(UPLOAD_FOLDER, filename)
-    filepath = UPLOAD_FOLDER / unique_name
-    save_upload_file_sync(file, filepath)
-    background_tasks.add_task(scan_file, filepath)
-
-    return RedirectResponse(url="/", status_code=HTTP_302_FOUND)
-
-
-@router.post("/upload-multiple", name="upload_multiple_files")
-async def upload_multiple_files(background_tasks: BackgroundTasks, files: List[UploadFile] = File(...)):
-    if len(files) > 10:
-        return JSONResponse(status_code=400, content={"error": "Max 10 files allowed"})
-
+    uploaded = []
     for file in files:
         if not file.filename:
             continue
+
         filename = secure_filename(file.filename)
         if not is_allowed_file(filename):
             continue
+
         filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, filename)
         save_upload_file_sync(file, filepath)
         background_tasks.add_task(scan_file, filepath)
+        uploaded.append(str(filepath.name))
 
-    return RedirectResponse(url="/", status_code=HTTP_302_FOUND)
-
-
-@router.post("/upload-auto", name="upload_auto_file")
-async def upload_auto_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    if not file.filename:
-        return JSONResponse(status_code=400, content={"status": "error", "msg": "No file provided"})
-
-    filename = secure_filename(file.filename)
-    if not is_allowed_file(filename):
-        return JSONResponse(status_code=400, content={"status": "error", "msg": "File type not allowed"})
-
-    filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, filename)
-    save_upload_file_sync(file, filepath)
-    background_tasks.add_task(scan_file, filepath)
+    if not uploaded:
+        return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={"status": "error", "msg": "No valid files processed"})
 
     return JSONResponse(content={
         "status": "success",
-        "msg": f"{filename} uploaded",
-        "path": str(filepath)
+        "msg": f"{len(uploaded)} file(s) uploaded",
+        "files": uploaded
     })
 
 

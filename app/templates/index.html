@@ -168,13 +168,71 @@
         padding: 0.5rem;
       }
     }
-  </style>
+  </style><style>
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 30px;
+    margin-left: 1rem;
+  }
+
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0;
+    right: 0; bottom: 0;
+    background-color: #222;
+    transition: 0.4s;
+    border-radius: 30px;
+  }
+
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 22px;
+    width: 22px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: 0.4s;
+    border-radius: 50%;
+  }
+
+  .toggle-switch input:checked + .slider {
+    background-color: #4caf50;
+  }
+
+  .toggle-switch input:checked + .slider:before {
+    transform: translateX(30px);
+  }
+</style>
+
 </head>
 <body>
 
-<header>
-  <h1>{{ msg }}</h1>
+
+<header style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 1rem; background-color: #ffffff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+  <h1 style="margin: 0; font-size: 1.8rem; color: #333;">{{ msg }}</h1>
+
+  <!-- AES Toggle Block only -->
+  <div style="display: flex; align-items: center; background-color: #f0f0f0; padding: 0.4rem 0.8rem; border-radius: 25px; gap: 0.6rem;">
+    <span style="font-size: 0.95rem; color: #333;"><b>AES Encryption</b></span>
+    <label class="toggle-switch">
+      <input type="checkbox" id="enableEncryption">
+      <span class="slider"></span>
+    </label>
+  </div>
 </header>
+
+
+
 
 <!-- 📤 Drag & Drop Upload -->
 <section>
@@ -300,7 +358,8 @@
       statusText.innerText = '❌ Upload error.';
     };
 
-    xhr.open('POST', '/upload-multiple');
+   xhr.open('POST', '/upload-auto');
+
     xhr.send(formData);
   }
 </script>
