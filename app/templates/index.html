@@ -470,6 +470,24 @@ function autoUpload(files) {
     });
   });
 </script>
+<script>
+// ✅ Save toggle state when user changes it
+document.addEventListener('DOMContentLoaded', () => {
+  const aesToggle = document.getElementById('enableEncryption');
+  if (!aesToggle) return;
+
+  // Restore saved state
+  const saved = localStorage.getItem('aes_enabled');
+  if (saved !== null) {
+    aesToggle.checked = saved === '1';
+  }
+
+  // Save state on change
+  aesToggle.addEventListener('change', () => {
+    localStorage.setItem('aes_enabled', aesToggle.checked ? '1' : '0');
+  });
+});
+</script>
 
 </body>
 </html>
