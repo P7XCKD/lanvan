@@ -385,6 +385,60 @@
   }
 </script>
 
+<!-- 🔔 Toast Notification -->
+<div id="toast" style="
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #333;
+  color: #fff;
+  padding: 0.8rem 1.2rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  display: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  z-index: 9999;
+"></div>
+<script>
+  function showToast(message, duration = 3000) {
+    const toast = document.getElementById('toast');
+    toast.innerText = message;
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, duration);
+  }
+
+  document.querySelectorAll('.file-card a.download-btn').forEach(btn => {
+    btn.addEventListener('click', async function (e) {
+      e.preventDefault();
+
+      const fileUrl = this.getAttribute('href');
+      const fileName = this.closest('.file-card').querySelector('.file-name').textContent.trim();
+      showToast('⏳ Preparing download...');
+
+      try {
+        const response = await fetch(fileUrl);
+        if (!response.ok) throw new Error('Download failed');
+
+        // Convert response stream into a Blob
+        const blob = await response.blob();
+
+        // Create temporary anchor to trigger download
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(blobUrl);
+
+        showToast('✅ Download started!', 2500);
+      } catch (err) {
+        showToast('❌ Error: ' + err.message, 4000);
+      }
+    });
+  });
+</script>
 
 </body>
 </html>
