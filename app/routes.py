@@ -5,6 +5,7 @@ from typing import List
 from pathlib import Path
 from mimetypes import guess_type
 from zipfile import ZipFile
+from app.aes_utils import encrypt_bytes, decrypt_bytes
 
 from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks
 from fastapi.responses import (
@@ -51,12 +52,15 @@ def get_unique_filename(directory: Path, filename: str) -> str:
         counter += 1
     return new_name
 
-def save_upload_file_sync(upload_file: UploadFile, destination: Path):
-    start = time.time()
-    with destination.open("wb") as buffer:
-        while chunk := upload_file.file.read(4 * 1024 * 1024):
-            buffer.write(chunk)
-    print(f"[UPLOAD DONE] {destination} in {time.time() - start:.2f}s")
+from app.aes_utils import encrypt_bytes  # Adjust import path
+
+def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=False):
+    data = upload_file.file.read()
+    if encrypt:
+        data = encrypt_bytes(data)
+    with destination.open("wb") as f:
+        f.write(data)
+
 
 def scan_file(path: Path):
     print(f"🧪 Scanning file in background: {path}")
@@ -78,10 +82,14 @@ async def home(request: Request):
 
 from starlette.status import HTTP_400_BAD_REQUEST
 
+from fastapi import Query
+from app.aes_utils import encrypt_bytes  # Adjust if needed
+
 @router.post("/upload-auto", name="upload_auto_file")
 async def upload_auto_file(
     background_tasks: BackgroundTasks,
-    files: List[UploadFile] = File(...)
+    files: List[UploadFile] = File(...),
+    encrypt: bool = Query(False, description="Encrypt files with AES-256 if true")
 ):
     if not files:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={"status": "error", "msg": "No files uploaded"})
@@ -95,8 +103,11 @@ async def upload_auto_file(
         if not is_allowed_file(filename):
             continue
 
-        filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, filename)
-        save_upload_file_sync(file, filepath)
+        # Add .enc extension if encrypting
+        save_name = filename + ".enc" if encrypt else filename
+        filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, save_name)
+
+        save_upload_file_sync(file, filepath, encrypt=encrypt)
         background_tasks.add_task(scan_file, filepath)
         uploaded.append(str(filepath.name))
 
@@ -109,6 +120,7 @@ async def upload_auto_file(
         "files": uploaded
     })
 
+from app.aes_utils import decrypt_bytes
 
 @router.get("/download/{filename}", name="download_file")
 async def download_file(filename: str):
@@ -122,9 +134,10 @@ async def download_file(filename: str):
     file_size = file_path.stat().st_size
 
     def stream_file(path: Path):
-        with path.open("rb") as f:
-            while chunk := f.read(2 * 1024 * 1024):  # 2MB chunks
-                yield chunk
+        data = path.read_bytes()
+        if path.suffix == ".enc":
+            data = decrypt_bytes(data)
+        yield data
 
     return StreamingResponse(
         stream_file(file_path),
@@ -133,10 +146,11 @@ async def download_file(filename: str):
             "Content-Disposition": f'attachment; filename="{safe_name}"',
             "Content-Length": str(file_size),
             "Cache-Control": "public, max-age=86400",
-            "X-Accel-Buffering": "no"  # Optional: disable buffering for NGINX
+            "X-Accel-Buffering": "no"
         }
     )
 
+from app.aes_utils import decrypt_bytes
 
 @router.get("/download-all", name="download_all")
 async def download_all_files():
@@ -144,7 +158,12 @@ async def download_all_files():
     with ZipFile(zip_buffer, "w") as zip_file:
         for file in UPLOAD_FOLDER.iterdir():
             if file.is_file():
-                zip_file.write(file, arcname=file.name)
+                if file.suffix == ".enc":
+                    encrypted_data = file.read_bytes()
+                    decrypted_data = decrypt_bytes(encrypted_data)
+                    zip_file.writestr(file.stem, decrypted_data)  # Write decrypted file without .enc extension
+                else:
+                    zip_file.write(file, arcname=file.name)
     zip_buffer.seek(0)
 
     return StreamingResponse(

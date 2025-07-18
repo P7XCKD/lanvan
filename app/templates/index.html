@@ -362,7 +362,29 @@
 
     xhr.send(formData);
   }
+
+  
 </script>
+<script>
+  if (location.protocol === 'http:') {
+    const toggle = document.getElementById('enableEncryption');
+    if (toggle) {
+      // Disable interaction and dim appearance
+      toggle.disabled = true;
+      toggle.checked = false;
+      const toggleWrapper = toggle.closest('div');
+      toggleWrapper.style.opacity = '0.5';
+      toggleWrapper.title = "🔒 AES encryption is only available when using HTTPS.";
+
+      // Add fake click listener to explain restriction
+      toggleWrapper.addEventListener('click', function (e) {
+        e.preventDefault();
+        alert("🔒 AES encryption is only available over a secure HTTPS connection.");
+      });
+    }
+  }
+</script>
+
 
 </body>
 </html>

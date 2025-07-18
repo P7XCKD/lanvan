@@ -2,11 +2,10 @@ import os
 import socket
 import webbrowser
 import subprocess
-import multiprocessing
+import sys
 import uvicorn
 
 # === CONFIGURATION ===
-USE_HTTPS = True  # ✅ You can toggle this manually
 SSL_CERT_PATH = "certs/cert.pem"
 SSL_KEY_PATH = "certs/key.pem"
 PORT = 5000
@@ -44,11 +43,12 @@ def open_browser(ip, port, use_https):
 # === MAIN ENTRY ===
 if __name__ == "__main__":
     ip = get_ip()
-    # Only use HTTPS if user enabled it AND certs are present
-    use_https = USE_HTTPS and certs_available()
+    args = sys.argv
+    use_https = len(args) > 1 and args[1].lower() == "https"
 
-    if USE_HTTPS and not certs_available():
-        print("[⚠] HTTPS requested but cert.pem/key.pem not found. Falling back to HTTP.")
+    if use_https and not certs_available():
+        print("[⚠] HTTPS mode requested but cert.pem/key.pem not found. Falling back to HTTP.")
+        use_https = False
 
     print_banner(ip, PORT, use_https)
 
