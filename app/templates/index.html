@@ -320,48 +320,61 @@
     }
   }
 
-  function autoUpload(files) {
-    if (!files.length) return;
+function autoUpload(files) {
+  if (!files.length) return;
 
-    const formData = new FormData();
-    for (let file of files) {
-      formData.append('files', file);
-    }
+  const aesToggle = document.getElementById('enableEncryption');
+  const isAESEnabled = aesToggle && aesToggle.checked;
 
-    const xhr = new XMLHttpRequest();
-    progressBar.style.display = 'block';
-    progressBar.value = 0;
-    statusText.innerText = 'Starting upload...';
-
-    const startTime = new Date().getTime();
-
-    xhr.upload.onprogress = function (e) {
-      if (e.lengthComputable) {
-        const percent = (e.loaded / e.total) * 100;
-        progressBar.value = percent;
-        const elapsed = (new Date().getTime() - startTime) / 1000;
-        const speed = e.loaded / 1024 / 1024 / elapsed;
-        statusText.innerText = `Uploading: ${percent.toFixed(1)}% @ ${speed.toFixed(2)} MB/s`;
-      }
-    };
-
-    xhr.onload = function () {
-      if (xhr.status === 200 || xhr.status === 302) {
-        statusText.innerText = '✅ Upload complete!';
-        setTimeout(() => location.reload(), 1000);
-      } else {
-        statusText.innerText = '❌ Upload failed.';
-      }
-    };
-
-    xhr.onerror = function () {
-      statusText.innerText = '❌ Upload error.';
-    };
-
-   xhr.open('POST', '/upload-auto');
-
-    xhr.send(formData);
+  // ✅ Block upload if AES is ON and any file > 200MB
+  const overLimit = Array.from(files).some(file => file.size > 200 * 1024 * 1024);
+  if (isAESEnabled && overLimit) {
+    showToast("❌ AES is blocked for file size above 200MB to ensure smooth and efficient file transfer.", 5000);
+    return;
   }
+
+  const formData = new FormData();
+  for (let file of files) {
+    formData.append('files', file);
+  }
+
+  // ✅ Pass AES status to backend
+  formData.append('aes_enabled', isAESEnabled ? '1' : '0');
+
+  const xhr = new XMLHttpRequest();
+  progressBar.style.display = 'block';
+  progressBar.value = 0;
+  showToast('⏳ Starting upload...');
+
+  const startTime = new Date().getTime();
+
+  xhr.upload.onprogress = function (e) {
+    if (e.lengthComputable) {
+      const percent = (e.loaded / e.total) * 100;
+      progressBar.value = percent;
+      const elapsed = (new Date().getTime() - startTime) / 1000;
+      const speed = e.loaded / 1024 / 1024 / elapsed;
+      showToast(`📤 Uploading: ${percent.toFixed(1)}% @ ${speed.toFixed(2)} MB/s`, 1200);
+    }
+  };
+
+  xhr.onload = function () {
+    if (xhr.status === 200 || xhr.status === 302) {
+      showToast('✅ Upload complete!', 3000);
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      showToast('❌ Upload failed.', 4000);
+    }
+  };
+
+  xhr.onerror = function () {
+    showToast('❌ Upload error.', 4000);
+  };
+
+  xhr.open('POST', '/upload-auto');
+  xhr.send(formData);
+}
+
 
   
 </script>
@@ -399,30 +412,48 @@
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
   z-index: 9999;
 "></div>
+
 <script>
   function showToast(message, duration = 3000) {
     const toast = document.getElementById('toast');
+
+    // ✅ Cancel any previous toast timeout and hide it immediately
+    if (window._toastTimeout) {
+      clearTimeout(window._toastTimeout);
+      toast.style.display = 'none';
+    }
+
+    // ✅ Show new toast message
     toast.innerText = message;
     toast.style.display = 'block';
-    setTimeout(() => { toast.style.display = 'none'; }, duration);
+
+    // ✅ Auto-hide after `duration` ms
+    window._toastTimeout = setTimeout(() => {
+      toast.style.display = 'none';
+    }, duration);
   }
 
+  // 🎯 Handle download button clicks with toast support
   document.querySelectorAll('.file-card a.download-btn').forEach(btn => {
     btn.addEventListener('click', async function (e) {
       e.preventDefault();
 
       const fileUrl = this.getAttribute('href');
       const fileName = this.closest('.file-card').querySelector('.file-name').textContent.trim();
+
       showToast('⏳ Preparing download...');
 
       try {
         const response = await fetch(fileUrl);
         if (!response.ok) throw new Error('Download failed');
 
-        // Convert response stream into a Blob
+        // Optional: Show file size in toast
+        const contentLength = response.headers.get('Content-Length');
+        const fileSizeMB = contentLength ? (parseInt(contentLength) / (1024 * 1024)).toFixed(2) : 'unknown';
+
         const blob = await response.blob();
 
-        // Create temporary anchor to trigger download
+        // Create blob URL and trigger download
         const blobUrl = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = blobUrl;
@@ -432,7 +463,7 @@
         a.remove();
         window.URL.revokeObjectURL(blobUrl);
 
-        showToast('✅ Download started!', 2500);
+        showToast(`✅ Download started (${fileSizeMB} MB)`, 3000);
       } catch (err) {
         showToast('❌ Error: ' + err.message, 4000);
       }

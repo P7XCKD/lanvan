@@ -95,6 +95,9 @@ async def upload_auto_file(
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={"status": "error", "msg": "No files uploaded"})
 
     uploaded = []
+    MAX_AES_SIZE_MB = 200
+    MAX_AES_SIZE_BYTES = MAX_AES_SIZE_MB * 1024 * 1024
+
     for file in files:
         if not file.filename:
             continue
@@ -103,13 +106,37 @@ async def upload_auto_file(
         if not is_allowed_file(filename):
             continue
 
-        # Add .enc extension if encrypting
+        # 🔍 Check file size without breaking upload
+        file.file.seek(0, os.SEEK_END)
+        file_size = file.file.tell()
+        file.file.seek(0)
+
+        # 🚫 Block AES encryption if file > 200MB
+        if encrypt and file_size > MAX_AES_SIZE_BYTES:
+            return JSONResponse(
+                status_code=HTTP_400_BAD_REQUEST,
+                content={
+                    "status": "error",
+                    "msg": "AES is blocked for files >200MB to ensure smooth & efficient file transfer."
+                }
+            )
+
+        # ✅ Proceed with saving
         save_name = filename + ".enc" if encrypt else filename
         filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, save_name)
 
         save_upload_file_sync(file, filepath, encrypt=encrypt)
         background_tasks.add_task(scan_file, filepath)
         uploaded.append(str(filepath.name))
+
+        
+
+
+
+
+
+
+        
 
     if not uploaded:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={"status": "error", "msg": "No valid files processed"})
