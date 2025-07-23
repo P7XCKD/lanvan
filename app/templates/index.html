@@ -212,15 +212,6 @@
   .toggle-switch input:checked + .slider:before {
     transform: translateX(30px);
   }
-.encrypted-btn {
-  background-color: #2ecc71 !important;
-  color: white;
-}
-.encrypted-btn:hover {
-  background-color: #27ae60 !important;
-}
-
-
 </style>
 
 </head>
@@ -256,6 +247,7 @@
     <p id="uploadStatus"></p>
   </form>
 </section>
+
 <!-- 📂 File List -->
 <section>
   <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -269,23 +261,15 @@
   </div>
 
   {% if files %}
-    <div class="file-grid">
-      {% for file in files %}
-        <div class="file-card">
-          <div class="file-icon">📄</div>
-          <div class="file-name" title="{{ file.get('name', file) }}">
-            {{ file.get('name', file) }}
-            {% if file.get('is_encrypted', False) %}
-              <span title="AES Encrypted">🔒</span>
-            {% endif %}
-          </div>
-          <a href="{{ url_for('download_file', filename=file.get('name', file)) }}" download
-             class="download-btn {% if file.get('is_encrypted', False) %}encrypted-btn{% endif %}">
-            ⬇ Download
-          </a>
-        </div>
-      {% endfor %}
+  <div class="file-grid">
+    {% for file in files %}
+    <div class="file-card">
+      <div class="file-icon">📄</div>
+      <div class="file-name" title="{{ file }}">{{ file }}</div>
+      <a href="{{ url_for('download_file', filename=file) }}" download class="download-btn">⬇ Download</a>
     </div>
+    {% endfor %}
+  </div>
   {% else %}
     <p>No files uploaded yet.</p>
   {% endif %}
@@ -350,12 +334,17 @@ function autoUpload(files) {
   }
 
   const formData = new FormData();
+  const totalSize = Array.from(files).reduce((sum, file) => sum + file.size, 0);
+  const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
+  
   for (let file of files) {
     formData.append('files', file);
   }
 
-  // ✅ Pass AES status to backend
-  formData.append('aes_enabled', isAESEnabled ? '1' : '0');
+  // ✅ Pass AES status to backend (using correct parameter name)
+  if (isAESEnabled) {
+    formData.append('encrypt', 'true');
+  }
 
   const xhr = new XMLHttpRequest();
   progressBar.style.display = 'block';
@@ -370,14 +359,32 @@ function autoUpload(files) {
       progressBar.value = percent;
       const elapsed = (new Date().getTime() - startTime) / 1000;
       const speed = e.loaded / 1024 / 1024 / elapsed;
-      showToast(`📤 Uploading: ${percent.toFixed(1)}% @ ${speed.toFixed(2)} MB/s`, 1200);
+      const uploadedMB = (e.loaded / 1024 / 1024).toFixed(1);
+      showToast(`📤 Uploading ${percent.toFixed(1)}% (${uploadedMB}/${totalSizeMB} MB) @ ${speed.toFixed(2)} MB/s`, 1200);
     }
   };
 
   xhr.onload = function () {
+    const totalElapsed = ((new Date().getTime() - startTime) / 1000).toFixed(1);
+    const avgSpeed = (totalSize / 1024 / 1024 / totalElapsed).toFixed(2);
+    
     if (xhr.status === 200 || xhr.status === 302) {
-      showToast('✅ Upload complete!', 3000);
-      setTimeout(() => location.reload(), 1000);
+      // Save upload stats to logs
+      const uploadStats = {
+        type: 'upload',
+        filename: files.length > 1 ? `${files.length} files` : files[0].name,
+        size: totalSizeMB + ' MB',
+        time: totalElapsed + 's',
+        speed: avgSpeed + ' MB/s',
+        aesEnabled: isAESEnabled,
+        timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
+      };
+      saveStatsToLog(uploadStats);
+      
+      showToast(`✅ Upload complete (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s • Click to refresh page`, 0, uploadStats);
+      
+      // Store flag to reload page when toast is dismissed
+      window._shouldReloadAfterToast = true;
     } else {
       showToast('❌ Upload failed.', 4000);
     }
@@ -427,10 +434,12 @@ function autoUpload(files) {
   display: none;
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
   z-index: 9999;
-"></div>
+  cursor: pointer;
+  transition: background-color 0.2s;
+" title="Click to keep visible"></div>
 
 <script>
-  function showToast(message, duration = 3000) {
+  function showToast(message, duration = 3000, transferData = null) {
     const toast = document.getElementById('toast');
 
     // ✅ Cancel any previous toast timeout and hide it immediately
@@ -442,14 +451,113 @@ function autoUpload(files) {
     // ✅ Show new toast message
     toast.innerText = message;
     toast.style.display = 'block';
+    toast.style.backgroundColor = '#333';
+    
+    // Store transfer data for click handler
+    toast._transferData = transferData;
 
-    // ✅ Auto-hide after `duration` ms
-    window._toastTimeout = setTimeout(() => {
-      toast.style.display = 'none';
-    }, duration);
+    // ✅ Auto-hide after `duration` ms (unless duration is 0 for persistent toast)
+    if (duration > 0) {
+      window._toastTimeout = setTimeout(() => {
+        toast.style.display = 'none';
+      }, duration);
+    }
   }
 
-  // 🎯 Handle download button clicks with toast support
+  // 🖱️ Toast click handler to show persistent transfer details
+  document.getElementById('toast').addEventListener('click', function() {
+    const toast = this;
+    
+    // Clear any auto-hide timeout
+    if (window._toastTimeout) {
+      clearTimeout(window._toastTimeout);
+      window._toastTimeout = null;
+    }
+    
+    // If there's transfer data, show detailed log
+    if (toast._transferData) {
+      const data = toast._transferData;
+      let detailedMessage;
+      
+      if (data.type === 'download') {
+        detailedMessage = `📊 ${data.type.toUpperCase()}: ${data.filename}\n` +
+                         `📁 Size: ${data.size}\n` +
+                         `⏳ Processing: ${data.processingTime}\n` +
+                         `🕐 Time: ${data.timestamp}\n\n` +
+                         `💡 Click anywhere else to dismiss`;
+      } else {
+        detailedMessage = `📊 ${data.type.toUpperCase()}: ${data.filename}\n` +
+                         `📁 Size: ${data.size}\n` +
+                         `⏱️ Upload Duration: ${data.time} @ ${data.speed}\n` +
+                         `🔒 AES: ${data.aesEnabled ? 'Yes' : 'No'}\n` +
+                         `🕐 Time: ${data.timestamp}\n\n` +
+                         `💡 Click anywhere else to dismiss`;
+      }
+      
+      toast.style.whiteSpace = 'pre-line';
+      toast.style.backgroundColor = '#2c3e50';
+      toast.innerText = detailedMessage;
+      
+      // Make it persistent (no auto-hide)
+      toast.style.display = 'block';
+      
+    } else {
+      // No transfer data, just make current message persistent
+      toast.style.backgroundColor = '#2c3e50';
+      toast.style.display = 'block';
+    }
+  });
+
+  // 🖱️ Click anywhere else to dismiss persistent toast
+  document.addEventListener('click', function(e) {
+    const toast = document.getElementById('toast');
+    if (e.target !== toast && !toast.contains(e.target)) {
+      if (toast.style.backgroundColor === 'rgb(44, 62, 80)') { // Persistent mode
+        toast.style.display = 'none';
+        toast.style.whiteSpace = 'normal';
+        toast.style.backgroundColor = '#333';
+        
+        // ✅ Reload page if this was an upload completion toast
+        if (window._shouldReloadAfterToast) {
+          window._shouldReloadAfterToast = false;
+          location.reload();
+        }
+      }
+    }
+  });
+
+  // 🕒 Show persistent toast with elapsed time
+  function showPersistentToast(baseMessage) {
+    const toast = document.getElementById('toast');
+    const startTime = Date.now();
+    
+    // Clear any existing timeout
+    if (window._toastTimeout) {
+      clearTimeout(window._toastTimeout);
+    }
+    
+    // Clear any existing interval
+    if (window._toastInterval) {
+      clearInterval(window._toastInterval);
+    }
+    
+    // Update toast every 100ms with elapsed time
+    window._toastInterval = setInterval(() => {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      toast.innerText = `${baseMessage} (${elapsed}s)`;
+      toast.style.display = 'block';
+    }, 100);
+    
+    // Return function to stop the persistent toast
+    return function stopPersistentToast() {
+      if (window._toastInterval) {
+        clearInterval(window._toastInterval);
+        window._toastInterval = null;
+      }
+    };
+  }
+
+  // 🎯 Handle download button clicks with enhanced toast support
   document.querySelectorAll('.file-card a.download-btn').forEach(btn => {
     btn.addEventListener('click', async function (e) {
       e.preventDefault();
@@ -457,34 +565,88 @@ function autoUpload(files) {
       const fileUrl = this.getAttribute('href');
       const fileName = this.closest('.file-card').querySelector('.file-name').textContent.trim();
 
-      showToast('⏳ Preparing download...');
+      // Track processing time (server preparation)
+      const processingStartTime = Date.now();
+      const stopPersistentToast = showPersistentToast('⏳ Preparing download...');
 
       try {
         const response = await fetch(fileUrl);
         if (!response.ok) throw new Error('Download failed');
 
-        // Optional: Show file size in toast
+        // Calculate processing time (how long server took to prepare the file)
+        const processingTime = ((Date.now() - processingStartTime) / 1000).toFixed(1);
+        
+        // Get file size for progress tracking
         const contentLength = response.headers.get('Content-Length');
-        const fileSizeMB = contentLength ? (parseInt(contentLength) / (1024 * 1024)).toFixed(2) : 'unknown';
+        let fileSizeMB;
+        
+        if (!contentLength) {
+          // If no content-length header, read response to get actual size
+          const blob = await response.blob();
+          fileSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+          
+          // Create blob URL and trigger download
+          const blobUrl = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(blobUrl);
+        } else {
+          fileSizeMB = (parseInt(contentLength) / (1024 * 1024)).toFixed(2);
+          
+          // Create blob and trigger download
+          const blob = await response.blob();
+          const blobUrl = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(blobUrl);
+        }
 
-        const blob = await response.blob();
+        // Stop the persistent preparing toast
+        stopPersistentToast();
+        
+        // Save download stats to logs (processing time only)
+        const downloadStats = {
+          type: 'download',
+          filename: fileName,
+          size: fileSizeMB + ' MB',
+          processingTime: processingTime + 's',
+          timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
+        };
+        saveStatsToLog(downloadStats);
 
-        // Create blob URL and trigger download
-        const blobUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(blobUrl);
-
-        showToast(`✅ Download started (${fileSizeMB} MB)`, 3000);
+        // Simple completion toast with processing time only
+        const completionMessage = `✅ File ready for download (${fileSizeMB} MB) • Processing: ${processingTime}s`;
+        
+        showToast(completionMessage, 8000, downloadStats); // Pass transfer data for click details
+        
       } catch (err) {
+        // Stop any running toasts on error
+        stopPersistentToast();
         showToast('❌ Error: ' + err.message, 4000);
       }
     });
   });
+
+  // 📊 Save upload/download stats to localStorage
+  function saveStatsToLog(stats) {
+    const logs = JSON.parse(localStorage.getItem('transferLogs') || '[]');
+    logs.unshift(stats); // Add to beginning
+    
+    // Keep only last 20 entries to prevent storage bloat
+    if (logs.length > 20) {
+      logs.splice(20);
+    }
+    
+    localStorage.setItem('transferLogs', JSON.stringify(logs));
+  }
 </script>
 <script>
 // ✅ Save toggle state when user changes it
@@ -502,6 +664,19 @@ document.addEventListener('DOMContentLoaded', () => {
   aesToggle.addEventListener('change', () => {
     localStorage.setItem('aes_enabled', aesToggle.checked ? '1' : '0');
   });
+
+  // Show welcome message based on protocol (only once per session)
+  if (!sessionStorage.getItem('welcome_shown')) {
+    setTimeout(() => {
+      const isHTTP = location.protocol === 'http:';
+      if (isHTTP) {
+        showToast('🌐 LanVan is ready for file transfers.', 4000);
+      } else {
+        showToast('🔒 HTTPS mode active - Enhanced security enabled.', 4000);
+      }
+      sessionStorage.setItem('welcome_shown', '1');
+    }, 2000);
+  }
 });
 </script>
 
