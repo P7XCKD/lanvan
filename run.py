@@ -53,24 +53,25 @@ if __name__ == "__main__":
     print_banner(ip, PORT, use_https)
 
     if is_android_termux():
-        print("[*] Android (Termux) detected: launching Waitress or fallback Uvicorn...")
-        try:
-            subprocess.run([
-                "waitress-serve",
-                "--host=0.0.0.0",
-                "--port=" + str(PORT),
-                "app.main:app"
-            ])
-        except FileNotFoundError:
-            print("[!] Waitress not found. Using Uvicorn fallback...")
-            cmd = [
-                "uvicorn", "app.main:app",
-                "--host", "0.0.0.0",
-                "--port", str(PORT)
-            ]
-            if use_https:
-                cmd += ["--ssl-keyfile", SSL_KEY_PATH, "--ssl-certfile", SSL_CERT_PATH]
-            subprocess.run(cmd)
+        print("[*] Android (Termux) detected: launching Uvicorn...")
+        
+        # ⛔️ Waitress removed: FastAPI is ASGI and no longer supports WSGI servers like Waitress.
+        # subprocess.run([
+        #     "waitress-serve",
+        #     "--host=0.0.0.0",
+        #     "--port=" + str(PORT),
+        #     "app.main:app"
+        # ])
+
+        cmd = [
+            "uvicorn", "app.main:app",
+            "--host", "0.0.0.0",
+            "--port", str(PORT)
+        ]
+        if use_https:
+            cmd += ["--ssl-keyfile", SSL_KEY_PATH, "--ssl-certfile", SSL_CERT_PATH]
+        subprocess.run(cmd)
+
     else:
         print("[*] PC detected: launching Uvicorn with auto-reload...")
         open_browser(ip, PORT, use_https)
