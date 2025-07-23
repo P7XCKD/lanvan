@@ -37,10 +37,12 @@ def get_file_list():
         {
             "name": f.name,
             "size": format_size(f.stat().st_size),
-            "mtime": f.stat().st_mtime
+            "mtime": f.stat().st_mtime,
+            "is_encrypted": f.suffix == ".enc"
         }
         for f in UPLOAD_FOLDER.iterdir() if f.is_file()
     ], key=lambda x: x["mtime"], reverse=True)
+
 
 def get_unique_filename(directory: Path, filename: str) -> str:
     base = Path(filename).stem
@@ -71,13 +73,13 @@ def scan_file(path: Path):
 
 # === Routes ===
 
-@router.get("/", response_class=HTMLResponse, name="home")
-async def home(request: Request):
-    files = get_file_list()
+@router.get("/", response_class=HTMLResponse)
+def home(request: Request):
+    files = get_file_list()  # ✅ Must return dicts with name/is_encrypted
     return templates.TemplateResponse("index.html", {
         "request": request,
         "msg": "Lanvan",
-        "files": [f["name"] for f in files]
+        "files": files
     })
 
 from starlette.status import HTTP_400_BAD_REQUEST
