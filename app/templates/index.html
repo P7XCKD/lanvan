@@ -333,6 +333,21 @@ function autoUpload(files) {
     return;
   }
 
+  // 📦 CHUNKED UPLOAD: Check if any file >= 250MB
+  const CHUNK_THRESHOLD = 250 * 1024 * 1024; // 250MB
+  const hasLargeFiles = Array.from(files).some(file => file.size >= CHUNK_THRESHOLD);
+
+  if (hasLargeFiles) {
+    // Use chunked upload for large files
+    uploadFilesChunked(files, isAESEnabled);
+  } else {
+    // Use regular upload for smaller files
+    uploadFilesRegular(files, isAESEnabled);
+  }
+}
+
+// 🔄 Regular upload function (original logic)
+function uploadFilesRegular(files, isAESEnabled) {
   const formData = new FormData();
   const totalSize = Array.from(files).reduce((sum, file) => sum + file.size, 0);
   const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
@@ -396,6 +411,112 @@ function autoUpload(files) {
 
   xhr.open('POST', '/upload-auto');
   xhr.send(formData);
+}
+
+// 📦 Chunked upload function for large files (≥250MB)
+async function uploadFilesChunked(files, isAESEnabled) {
+  const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+  const totalSize = Array.from(files).reduce((sum, file) => sum + file.size, 0);
+  const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
+  
+  progressBar.style.display = 'block';
+  progressBar.value = 0;
+  
+  const startTime = new Date().getTime();
+  let totalUploaded = 0;
+  
+  showToast('⏳ Starting chunked upload...');
+
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileSize = file.size;
+      const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
+      
+      showToast(`📦 Uploading ${file.name} (${(fileSize / 1024 / 1024).toFixed(1)} MB) in ${totalChunks} chunks...`);
+
+      // Upload chunks for this file
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        const start = chunkIndex * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, fileSize);
+        const chunk = file.slice(start, end);
+        const partNumber = chunkIndex + 1;
+
+        // Create FormData for chunk
+        const chunkFormData = new FormData();
+        chunkFormData.append('chunk', chunk);
+        chunkFormData.append('filename', file.name);
+        chunkFormData.append('part_number', partNumber.toString());
+        chunkFormData.append('total_parts', totalChunks.toString());
+
+        // Upload chunk
+        const chunkResponse = await fetch('/upload_chunk', {
+          method: 'POST',
+          body: chunkFormData
+        });
+
+        if (!chunkResponse.ok) {
+          const errorData = await chunkResponse.json();
+          throw new Error(errorData.msg || `Chunk ${partNumber} failed`);
+        }
+
+        // Update progress
+        totalUploaded += chunk.size;
+        const overallProgress = (totalUploaded / totalSize) * 100;
+        progressBar.value = overallProgress;
+
+        const elapsed = (new Date().getTime() - startTime) / 1000;
+        const speed = totalUploaded / 1024 / 1024 / elapsed;
+        const uploadedMB = (totalUploaded / 1024 / 1024).toFixed(1);
+        
+        showToast(`📤 Chunk ${partNumber}/${totalChunks} • ${overallProgress.toFixed(1)}% (${uploadedMB}/${totalSizeMB} MB) @ ${speed.toFixed(2)} MB/s`, 1200);
+      }
+
+      // Finalize the file (combine chunks)
+      showToast(`🔗 Finalizing ${file.name}...`);
+      
+      const finalizeFormData = new FormData();
+      finalizeFormData.append('filename', file.name);
+      finalizeFormData.append('total_parts', totalChunks.toString());
+      if (isAESEnabled) {
+        finalizeFormData.append('encrypt', 'true');
+      }
+
+      const finalizeResponse = await fetch('/finalize_upload', {
+        method: 'POST',
+        body: finalizeFormData
+      });
+
+      if (!finalizeResponse.ok) {
+        const errorData = await finalizeResponse.json();
+        throw new Error(errorData.msg || `Failed to finalize ${file.name}`);
+      }
+    }
+
+    // Success - all files uploaded
+    const totalElapsed = ((new Date().getTime() - startTime) / 1000).toFixed(1);
+    const avgSpeed = (totalSize / 1024 / 1024 / totalElapsed).toFixed(2);
+
+    const uploadStats = {
+      type: 'chunked_upload',
+      filename: files.length > 1 ? `${files.length} files` : files[0].name,
+      size: totalSizeMB + ' MB',
+      time: totalElapsed + 's',
+      speed: avgSpeed + ' MB/s',
+      aesEnabled: isAESEnabled,
+      timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
+    };
+    saveStatsToLog(uploadStats);
+    
+    showToast(`✅ Chunked upload complete (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s • Click to refresh page`, 0, uploadStats);
+    
+    // Store flag to reload page when toast is dismissed
+    window._shouldReloadAfterToast = true;
+
+  } catch (error) {
+    showToast(`❌ Chunked upload failed: ${error.message}`, 5000);
+    console.error('Chunked upload error:', error);
+  }
 }
 
 

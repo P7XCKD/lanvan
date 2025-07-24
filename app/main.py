@@ -20,6 +20,10 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 UPLOAD_FOLDER = "app/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# ✅ Ensure temp chunks directory exists
+TEMP_CHUNKS_FOLDER = os.path.join(UPLOAD_FOLDER, "temp_chunks")
+os.makedirs(TEMP_CHUNKS_FOLDER, exist_ok=True)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
