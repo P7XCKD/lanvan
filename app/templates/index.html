@@ -333,13 +333,19 @@ function autoUpload(files) {
     return;
   }
 
-  // 📦 CHUNKED UPLOAD: Check if any file >= 250MB
+  // 📦 CHUNKED UPLOAD: Only use chunked uploads on HTTP (not HTTPS)
+  const isHTTPS = location.protocol === 'https:';
   const CHUNK_THRESHOLD = 250 * 1024 * 1024; // 250MB
   const hasLargeFiles = Array.from(files).some(file => file.size >= CHUNK_THRESHOLD);
 
-  if (hasLargeFiles) {
-    // Use chunked upload for large files
+  if (hasLargeFiles && !isHTTPS) {
+    // Use chunked upload for large files on HTTP only
+    showToast("📦 Large files detected: Using chunked upload for optimal performance.", 3000);
     uploadFilesChunked(files, isAESEnabled);
+  } else if (hasLargeFiles && isHTTPS) {
+    // On HTTPS, show a message that large files should use regular upload
+    showToast("🔒 HTTPS detected: Large files will use secure single-request upload for better reliability.", 3000);
+    uploadFilesRegular(files, isAESEnabled);
   } else {
     // Use regular upload for smaller files
     uploadFilesRegular(files, isAESEnabled);
@@ -367,15 +373,23 @@ function uploadFilesRegular(files, isAESEnabled) {
   showToast('⏳ Starting upload...');
 
   const startTime = new Date().getTime();
+  let lastProgressUpdate = 0;
+  const PROGRESS_UPDATE_INTERVAL = 2000; // Update progress toast every 2 seconds (no blinking)
 
   xhr.upload.onprogress = function (e) {
     if (e.lengthComputable) {
       const percent = (e.loaded / e.total) * 100;
       progressBar.value = percent;
-      const elapsed = (new Date().getTime() - startTime) / 1000;
-      const speed = e.loaded / 1024 / 1024 / elapsed;
-      const uploadedMB = (e.loaded / 1024 / 1024).toFixed(1);
-      showToast(`📤 Uploading ${percent.toFixed(1)}% (${uploadedMB}/${totalSizeMB} MB) @ ${speed.toFixed(2)} MB/s`, 1200);
+      
+      // 📱 Anti-blink: Update toast much less frequently
+      const now = Date.now();
+      if (now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL || percent >= 100) {
+        const elapsed = (now - startTime) / 1000;
+        const speed = e.loaded / 1024 / 1024 / elapsed;
+        const uploadedMB = (e.loaded / 1024 / 1024).toFixed(1);
+        updateProgressToast(`📤 Uploading ${percent.toFixed(1)}% (${uploadedMB}/${totalSizeMB} MB) @ ${speed.toFixed(2)} MB/s`);
+        lastProgressUpdate = now;
+      }
     }
   };
 
@@ -424,6 +438,8 @@ async function uploadFilesChunked(files, isAESEnabled) {
   
   const startTime = new Date().getTime();
   let totalUploaded = 0;
+  let lastToastUpdate = 0;
+  const TOAST_UPDATE_INTERVAL = 3000; // Update toast only every 3 seconds (anti-blink)
   
   showToast('⏳ Starting chunked upload...');
 
@@ -433,7 +449,7 @@ async function uploadFilesChunked(files, isAESEnabled) {
       const fileSize = file.size;
       const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
       
-      showToast(`📦 Uploading ${file.name} (${(fileSize / 1024 / 1024).toFixed(1)} MB) in ${totalChunks} chunks...`);
+      showToast(`📦 Processing ${file.name} (${(fileSize / 1024 / 1024).toFixed(1)} MB) - ${totalChunks} chunks`);
 
       // Upload chunks for this file
       for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
@@ -460,16 +476,24 @@ async function uploadFilesChunked(files, isAESEnabled) {
           throw new Error(errorData.msg || `Chunk ${partNumber} failed`);
         }
 
-        // Update progress
+        // Update progress bar immediately (smooth)
         totalUploaded += chunk.size;
         const overallProgress = (totalUploaded / totalSize) * 100;
         progressBar.value = overallProgress;
 
-        const elapsed = (new Date().getTime() - startTime) / 1000;
-        const speed = totalUploaded / 1024 / 1024 / elapsed;
-        const uploadedMB = (totalUploaded / 1024 / 1024).toFixed(1);
+        // � Anti-blink: Update toast much less frequently and only on significant progress
+        const now = Date.now();
+        const isLastChunk = (partNumber === totalChunks);
+        const isSignificantProgress = (partNumber % 10 === 0); // Every 10th chunk
         
-        showToast(`📤 Chunk ${partNumber}/${totalChunks} • ${overallProgress.toFixed(1)}% (${uploadedMB}/${totalSizeMB} MB) @ ${speed.toFixed(2)} MB/s`, 1200);
+        if (now - lastToastUpdate >= TOAST_UPDATE_INTERVAL || isLastChunk || isSignificantProgress) {
+          const elapsed = (now - startTime) / 1000;
+          const speed = totalUploaded / 1024 / 1024 / elapsed;
+          const uploadedMB = (totalUploaded / 1024 / 1024).toFixed(1);
+          
+          updateProgressToast(`📤 ${overallProgress.toFixed(0)}% complete • ${uploadedMB}/${totalSizeMB} MB @ ${speed.toFixed(1)} MB/s`);
+          lastToastUpdate = now;
+        }
       }
 
       // Finalize the file (combine chunks)
@@ -556,26 +580,34 @@ async function uploadFilesChunked(files, isAESEnabled) {
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
   z-index: 9999;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: opacity 0.3s ease, background-color 0.2s ease;
+  opacity: 1;
+  max-width: calc(100vw - 40px);
+  word-wrap: break-word;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 " title="Click to keep visible"></div>
 
 <script>
+  // 📱 Mobile-optimized toast functions - Anti-blink system
+  let _lastToastMessage = '';
+
   function showToast(message, duration = 3000, transferData = null) {
     const toast = document.getElementById('toast');
 
-    // ✅ Cancel any previous toast timeout and hide it immediately
+    // ✅ Cancel any previous toast timeout
     if (window._toastTimeout) {
       clearTimeout(window._toastTimeout);
-      toast.style.display = 'none';
     }
 
-    // ✅ Show new toast message
+    // ✅ Show new toast message (no transitions to prevent blinking)
     toast.innerText = message;
     toast.style.display = 'block';
     toast.style.backgroundColor = '#333';
     
     // Store transfer data for click handler
     toast._transferData = transferData;
+    _lastToastMessage = message;
 
     // ✅ Auto-hide after `duration` ms (unless duration is 0 for persistent toast)
     if (duration > 0) {
@@ -583,6 +615,34 @@ async function uploadFilesChunked(files, isAESEnabled) {
         toast.style.display = 'none';
       }, duration);
     }
+  }
+
+  // 📱 Throttled toast for frequent updates (mobile-friendly)
+  function showToastThrottled(message) {
+    const toast = document.getElementById('toast');
+    
+    // Simply update the text content without any transitions or opacity changes
+    toast.innerText = message;
+    toast.style.display = 'block';
+    toast.style.backgroundColor = '#333';
+    
+    // Store the message
+    _lastToastMessage = message;
+  }
+
+  // 🔄 Progressive toast updater - updates content smoothly without blinking
+  function updateProgressToast(message) {
+    const toast = document.getElementById('toast');
+    
+    // Only update if the message is different to prevent unnecessary DOM updates
+    if (_lastToastMessage !== message) {
+      toast.innerText = message;
+      _lastToastMessage = message;
+    }
+    
+    // Ensure toast is visible
+    toast.style.display = 'block';
+    toast.style.backgroundColor = '#333';
   }
 
   // 🖱️ Toast click handler to show persistent transfer details
