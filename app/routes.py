@@ -159,6 +159,7 @@ async def upload_auto_file(
     })
 
 @router.get("/download/{filename}", name="download_file")
+@router.head("/download/{filename}")
 async def download_file(filename: str, request: Request):
     safe_name = secure_filename(filename)
     file_path = UPLOAD_FOLDER / safe_name
@@ -168,6 +169,17 @@ async def download_file(filename: str, request: Request):
 
     mime_type, _ = guess_type(str(file_path))
     file_size = file_path.stat().st_size
+    
+    # ✅ Handle HEAD requests - return headers only for file info
+    if request.method == "HEAD":
+        headers = {
+            "Content-Length": str(file_size),
+            "Content-Type": mime_type or "application/octet-stream",
+            "Content-Disposition": f'attachment; filename="{safe_name}"',
+            "Accept-Ranges": "bytes",  # Indicate support for range requests
+            "Cache-Control": "public, max-age=86400"
+        }
+        return Response(content="", headers=headers, status_code=200)
     
     # ✅ Determine protocol (HTTP vs HTTPS)
     is_https = request.url.scheme == "https"
@@ -182,7 +194,7 @@ async def download_file(filename: str, request: Request):
     
     # 📦 Chunked download logic
     if is_large_file and not is_enc_file:
-        return await chunked_download_file(file_path, safe_name, mime_type, file_size)
+        return await chunked_download_file(file_path, safe_name, mime_type, file_size, request)
     else:
         return await full_download_file(file_path, safe_name, mime_type, file_size)
 
@@ -205,28 +217,63 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
         }
     )
 
-async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int):
+async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, request: Request | None = None):
     """Chunked file download - for large files (≥250MB) that are not .enc"""
     CHUNK_SIZE = 1024 * 1024  # 1MB chunks for download
     
+    # Check for Range header (for proper chunked downloads)
+    range_header = request.headers.get('Range') if request else None
+    start = 0
+    end = file_size - 1
+    
+    if range_header:
+        # Parse Range header: "bytes=start-end"
+        try:
+            range_match = range_header.replace('bytes=', '').split('-')
+            if len(range_match) == 2:
+                if range_match[0]:
+                    start = int(range_match[0])
+                if range_match[1]:
+                    end = int(range_match[1])
+                end = min(end, file_size - 1)
+        except ValueError:
+            pass  # Ignore invalid range headers
+    
+    content_length = end - start + 1
+    
     def stream_chunks():
         with open(file_path, "rb") as file:
-            while True:
-                chunk = file.read(CHUNK_SIZE)
+            file.seek(start)
+            remaining = content_length
+            while remaining > 0:
+                chunk_size = min(CHUNK_SIZE, remaining)
+                chunk = file.read(chunk_size)
                 if not chunk:
                     break
+                remaining -= len(chunk)
                 yield chunk
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{safe_name}"',
+        "Content-Length": str(content_length),
+        "Cache-Control": "public, max-age=86400",
+        "X-Accel-Buffering": "no",
+        "X-Download-Type": "chunked",  # Indicator for debugging
+        "Accept-Ranges": "bytes"
+    }
+    
+    # Add Content-Range header for partial content
+    if range_header:
+        headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+        status_code = 206  # Partial Content
+    else:
+        status_code = 200
 
     return StreamingResponse(
         stream_chunks(),
         media_type=mime_type or "application/octet-stream",
-        headers={
-            "Content-Disposition": f'attachment; filename="{safe_name}"',
-            "Content-Length": str(file_size),
-            "Cache-Control": "public, max-age=86400",
-            "X-Accel-Buffering": "no",
-            "X-Download-Type": "chunked"  # Indicator for debugging
-        }
+        headers=headers,
+        status_code=status_code
     )
 
 @router.get("/download-all", name="download_all")

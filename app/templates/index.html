@@ -351,29 +351,67 @@ function autoUpload(files) {
     return;
   }
 
-  // 📦 Lanvan File Transfer Strategy Implementation
+  // � Analyze file composition for smart toast notifications
   const CHUNK_THRESHOLD = 250 * 1024 * 1024; // 250MB
-  const hasLargeFiles = Array.from(files).some(file => file.size >= CHUNK_THRESHOLD);
-  const hasEncFiles = Array.from(files).some(file => file.name.endsWith('.enc'));
+  const totalFiles = files.length;
+  const totalSizeMB = Array.from(files).reduce((sum, file) => sum + file.size, 0) / (1024 * 1024);
+  
+  // Categorize files
+  const largeFiles = Array.from(files).filter(file => file.size >= CHUNK_THRESHOLD && !file.name.endsWith('.enc'));
+  const encFiles = Array.from(files).filter(file => file.name.endsWith('.enc'));
+  const regularFiles = Array.from(files).filter(file => file.size < CHUNK_THRESHOLD && !file.name.endsWith('.enc'));
+  
+  const hasLargeFiles = largeFiles.length > 0;
+  const hasEncFiles = encFiles.length > 0;
+  const hasRegularFiles = regularFiles.length > 0;
 
-  // 🔐 Enforcement Rules:
+  // 🔐 Enforcement Rules & Enhanced Toast Notifications:
   // 1. .enc files on HTTPS: Always use full upload (no chunking)
   // 2. Files ≥250MB (not .enc): Use chunked upload (HTTP & HTTPS)
   // 3. Files <250MB: Use regular upload
   
   if (hasEncFiles && isHTTPS) {
     // .enc files on HTTPS - always full upload
-    showToast("� .enc files detected: Using secure full upload to preserve encryption integrity.", 3000);
+    if (totalFiles === 1) {
+      showToast("🔒 .enc file detected: Using secure full upload to preserve encryption integrity.", 3000);
+    } else {
+      const encCount = encFiles.length;
+      const otherCount = totalFiles - encCount;
+      if (otherCount === 0) {
+        showToast(`🔒 ${encCount} .enc files detected: Using secure full upload to preserve encryption integrity.`, 3000);
+      } else {
+        showToast(`🔒 Mixed files (${encCount} .enc, ${otherCount} others): Using secure full upload for all files.`, 3000);
+      }
+    }
     uploadFilesRegular(files, isAESEnabled);
   } else if (hasLargeFiles && !hasEncFiles) {
     // Large files (≥250MB) that are not .enc - use chunked upload
     const protocolMsg = isHTTPS ? "HTTPS" : "HTTP";
-    showToast(`📦 Large files detected: Using chunked upload over ${protocolMsg} for optimal performance.`, 3000);
+    
+    if (totalFiles === 1) {
+      const sizeMB = (largeFiles[0].size / (1024 * 1024)).toFixed(1);
+      showToast(`📦 Large file (${sizeMB} MB): Using chunked upload over ${protocolMsg} for optimal performance.`, 3000);
+    } else {
+      const largeCount = largeFiles.length;
+      const regularCount = regularFiles.length;
+      
+      if (regularCount === 0) {
+        showToast(`📦 ${largeCount} large files (${totalSizeMB.toFixed(1)} MB total): Using chunked upload over ${protocolMsg}.`, 3000);
+      } else {
+        showToast(`📦 Mixed sizes: ${largeCount} large + ${regularCount} regular files (${totalSizeMB.toFixed(1)} MB): Using chunked upload for optimal handling.`, 3500);
+      }
+    }
     uploadFilesChunked(files, isAESEnabled);
   } else {
     // Small files or regular uploads
     const protocolMsg = isHTTPS ? "secure HTTPS" : "HTTP";
-    showToast(`📤 Using ${protocolMsg} upload for reliable file transfer.`, 2000);
+    
+    if (totalFiles === 1) {
+      const sizeMB = (files[0].size / (1024 * 1024)).toFixed(1);
+      showToast(`📤 Uploading ${sizeMB} MB file via ${protocolMsg} for reliable transfer.`, 2000);
+    } else {
+      showToast(`📤 Uploading ${totalFiles} files (${totalSizeMB.toFixed(1)} MB total) via ${protocolMsg} for reliable transfer.`, 2500);
+    }
     uploadFilesRegular(files, isAESEnabled);
   }
 }
@@ -415,7 +453,13 @@ function uploadFilesRegular(files, isAESEnabled) {
         const elapsed = (now - startTime) / 1000;
         const speed = e.loaded / 1024 / 1024 / elapsed;
         const uploadedMB = (e.loaded / 1024 / 1024).toFixed(1);
-        updateProgressToast(`📤 Uploading ${percent.toFixed(1)}% (${uploadedMB}/${totalSizeMB} MB) @ ${speed.toFixed(2)} MB/s`);
+        
+        // 📊 Enhanced progress message for multiple files
+        if (files.length === 1) {
+          updateProgressToast(`📤 Uploading ${percent.toFixed(1)}% (${uploadedMB}/${totalSizeMB} MB) @ ${speed.toFixed(2)} MB/s`);
+        } else {
+          updateProgressToast(`📤 Uploading ${files.length} files • ${percent.toFixed(1)}% (${uploadedMB}/${totalSizeMB} MB) @ ${speed.toFixed(2)} MB/s`);
+        }
         lastProgressUpdate = now;
       }
     }
@@ -442,17 +486,25 @@ function uploadFilesRegular(files, isAESEnabled) {
       };
       saveStatsToLog(uploadStats);
       
-      showToast(`✅ Upload complete via ${protocolMsg} (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s • Click to refresh page`, 0, uploadStats);
+      // 💾 Store file metadata for better download experience
+      storeFileMetadata(files, totalSize);
+      
+      // 📊 Enhanced completion message for multiple files
+      if (files.length === 1) {
+        showToast(`✅ Upload complete via ${protocolMsg} (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s • Click anywhere to refresh page`, 0, uploadStats);
+      } else {
+        showToast(`✅ ${files.length} files uploaded via ${protocolMsg} (${totalSizeMB} MB total) • ${totalElapsed}s @ ${avgSpeed} MB/s • Click anywhere to refresh page`, 0, uploadStats);
+      }
       
       // Store flag to reload page when toast is dismissed
       window._shouldReloadAfterToast = true;
     } else {
-      showToast('❌ Upload failed.', 4000);
+      showToast('❌ Upload failed • Click anywhere to dismiss', 0);
     }
   };
 
   xhr.onerror = function () {
-    showToast('❌ Upload error.', 4000);
+    showToast('❌ Upload error • Click anywhere to dismiss', 0);
   };
 
   xhr.open('POST', '/upload-auto');
@@ -489,8 +541,15 @@ async function uploadFilesChunked(files, isAESEnabled) {
       const file = files[i];
       const fileSize = file.size;
       const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
+      const currentFileNum = i + 1;
+      const fileSizeMB = (fileSize / 1024 / 1024).toFixed(1);
       
-      showToast(`📦 Processing ${file.name} (${(fileSize / 1024 / 1024).toFixed(1)} MB) - ${totalChunks} chunks`);
+      // 📊 Enhanced progress message for multiple files
+      if (files.length === 1) {
+        showToast(`📦 Processing ${file.name} (${fileSizeMB} MB) - ${totalChunks} chunks`);
+      } else {
+        showToast(`📦 File ${currentFileNum}/${files.length}: ${file.name} (${fileSizeMB} MB) - ${totalChunks} chunks`);
+      }
 
       // Upload chunks for this file
       for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
@@ -522,7 +581,7 @@ async function uploadFilesChunked(files, isAESEnabled) {
         const overallProgress = (totalUploaded / totalSize) * 100;
         progressBar.value = overallProgress;
 
-        // � Anti-blink: Update toast much less frequently and only on significant progress
+        // 📊 Anti-blink: Update toast much less frequently and only on significant progress
         const now = Date.now();
         const isLastChunk = (partNumber === totalChunks);
         const isSignificantProgress = (partNumber % 10 === 0); // Every 10th chunk
@@ -532,13 +591,22 @@ async function uploadFilesChunked(files, isAESEnabled) {
           const speed = totalUploaded / 1024 / 1024 / elapsed;
           const uploadedMB = (totalUploaded / 1024 / 1024).toFixed(1);
           
-          updateProgressToast(`📤 ${overallProgress.toFixed(0)}% complete • ${uploadedMB}/${totalSizeMB} MB @ ${speed.toFixed(1)} MB/s`);
+          // 📊 Enhanced progress message for multiple files
+          if (files.length === 1) {
+            updateProgressToast(`📤 ${overallProgress.toFixed(0)}% complete • ${uploadedMB}/${totalSizeMB} MB @ ${speed.toFixed(1)} MB/s`);
+          } else {
+            updateProgressToast(`📤 File ${currentFileNum}/${files.length} • ${overallProgress.toFixed(0)}% total • ${uploadedMB}/${totalSizeMB} MB @ ${speed.toFixed(1)} MB/s`);
+          }
           lastToastUpdate = now;
         }
       }
 
       // Finalize the file (combine chunks)
-      showToast(`🔗 Finalizing ${file.name}...`);
+      if (files.length === 1) {
+        showToast(`🔗 Finalizing ${file.name}...`);
+      } else {
+        showToast(`🔗 Finalizing file ${currentFileNum}/${files.length}: ${file.name}...`);
+      }
       
       const finalizeFormData = new FormData();
       finalizeFormData.append('filename', file.name);
@@ -577,13 +645,21 @@ async function uploadFilesChunked(files, isAESEnabled) {
     };
     saveStatsToLog(uploadStats);
     
-    showToast(`✅ Chunked upload complete via ${protocolMsg} (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s • Click to refresh page`, 0, uploadStats);
+    // 💾 Store file metadata for better download experience
+    storeFileMetadata(files, totalSize);
+    
+    // 📊 Enhanced completion message for multiple files
+    if (files.length === 1) {
+      showToast(`✅ Chunked upload complete via ${protocolMsg} (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s • Click anywhere to refresh page`, 0, uploadStats);
+    } else {
+      showToast(`✅ ${files.length} files chunked upload complete via ${protocolMsg} (${totalSizeMB} MB total) • ${totalElapsed}s @ ${avgSpeed} MB/s • Click anywhere to refresh page`, 0, uploadStats);
+    }
     
     // Store flag to reload page when toast is dismissed
     window._shouldReloadAfterToast = true;
 
   } catch (error) {
-    showToast(`❌ Chunked upload failed: ${error.message}`, 5000);
+    showToast(`❌ Chunked upload failed: ${error.message} • Click anywhere to dismiss`, 0);
     console.error('Chunked upload error:', error);
   }
 }
@@ -672,17 +748,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // ✅ Show new toast message (no transitions to prevent blinking)
     toast.innerText = message;
     toast.style.display = 'block';
-    toast.style.backgroundColor = '#333';
     
     // Store transfer data for click handler
     toast._transferData = transferData;
     _lastToastMessage = message;
 
-    // ✅ Auto-hide after `duration` ms (unless duration is 0 for persistent toast)
-    if (duration > 0) {
-      window._toastTimeout = setTimeout(() => {
-        toast.style.display = 'none';
-      }, duration);
+    // ✅ If this is a completion message (duration = 0), make it immediately persistent and easy to dismiss
+    if (duration === 0) {
+      toast.style.backgroundColor = '#2c3e50'; // Dark blue for persistent completion messages
+      toast.style.cursor = 'pointer';
+      toast.title = 'Click anywhere to dismiss or click here for details';
+    } else {
+      toast.style.backgroundColor = '#333'; // Normal gray for progress messages
+      toast.style.cursor = 'pointer';
+      toast.title = 'Click to keep visible';
+      
+      // ✅ Auto-hide after `duration` ms for progress messages
+      if (duration > 0) {
+        window._toastTimeout = setTimeout(() => {
+          toast.style.display = 'none';
+        }, duration);
+      }
     }
   }
 
@@ -737,7 +823,7 @@ document.addEventListener('DOMContentLoaded', () => {
         detailedMessage = `📊 ${data.type.toUpperCase()}: ${data.filename}\n` +
                          `📁 Size: ${data.size}\n` +
                          `⚡ Server Response: ${data.serverResponseTime || 'N/A'}\n` +
-                         `📥 Download Time: ${data.downloadTime || 'N/A'}\n` +
+                         `⚙️ Processing Time: ${data.processingTime || data.downloadTime || 'N/A'}\n` +
                          `⏱️ Total Time: ${data.totalTime || 'N/A'}\n` +
                          `🌐 Protocol: ${location.protocol === 'https:' ? 'HTTPS' : 'HTTP'}\n` +
                          `🕐 Time: ${timeRange}\n\n` +
@@ -775,10 +861,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', function(e) {
     const toast = document.getElementById('toast');
     if (e.target !== toast && !toast.contains(e.target)) {
-      if (toast.style.backgroundColor === 'rgb(44, 62, 80)') { // Persistent mode
+      if (toast.style.backgroundColor === 'rgb(44, 62, 80)') { // Persistent mode (either completion or detailed view)
         toast.style.display = 'none';
         toast.style.whiteSpace = 'normal';
         toast.style.backgroundColor = '#333';
+        toast.style.cursor = 'pointer';
+        toast.title = 'Click to keep visible';
         
         // ✅ Reload page if this was an upload completion toast
         if (window._shouldReloadAfterToast) {
@@ -820,99 +908,375 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // 🎯 Handle download button clicks with enhanced toast support
+  // 🎯 Handle download button clicks with enhanced toast support - LANVan Strategy Implementation
   document.querySelectorAll('.file-card a.download-btn').forEach(btn => {
     btn.addEventListener('click', async function (e) {
       e.preventDefault();
 
       const fileUrl = this.getAttribute('href');
       const fileName = this.closest('.file-card').querySelector('.file-name').textContent.trim();
+      const isHTTPS = location.protocol === 'https:';
 
-      // Track server response time (actual processing/preparation time)
-      const requestStartTime = Date.now();
-      const stopPersistentToast = showPersistentToast('⏳ Requesting file from server...');
+      // 📦 LANVan Download Strategy Implementation
+      const CHUNK_THRESHOLD = 250 * 1024 * 1024; // 250MB
+      const isEncFile = fileName.endsWith('.enc');
+
+      // First, get file info to determine download strategy
+      const startTime = Date.now();
+      const stopInitialToast = showPersistentToast('⏳ Analyzing file for optimal download strategy...');
 
       try {
-        const response = await fetch(fileUrl);
-        if (!response.ok) throw new Error('Download failed');
+        // HEAD request to get file size without downloading
+        const headResponse = await fetch(fileUrl, { method: 'HEAD' });
+        if (!headResponse.ok) throw new Error('File info request failed');
 
-        // Calculate actual server response time (time until headers received)
-        const serverResponseTime = ((Date.now() - requestStartTime) / 1000).toFixed(2);
+        const contentLength = headResponse.headers.get('Content-Length');
+        let fileSize = contentLength ? parseInt(contentLength) : 0;
         
-        // Start tracking download time
-        const downloadStartTime = Date.now();
-        stopPersistentToast();
-        const stopDownloadToast = showPersistentToast('📥 Downloading file...');
+        // 💾 If no Content-Length from server, try stored metadata
+        if (!fileSize) {
+          const storedMetadata = getFileMetadata(fileName);
+          if (storedMetadata) {
+            fileSize = storedMetadata.size;
+          }
+        }
         
-        // Get file size for progress tracking
-        const contentLength = response.headers.get('Content-Length');
-        let fileSizeMB;
-        
-        if (!contentLength) {
-          // If no content-length header, read response to get actual size
-          const blob = await response.blob();
-          fileSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
-          
-          // Create blob URL and trigger download
-          const blobUrl = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = blobUrl;
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          window.URL.revokeObjectURL(blobUrl);
+        const fileSizeMB = (fileSize / 1024 / 1024).toFixed(2);
+        const isLargeFile = fileSize >= CHUNK_THRESHOLD;
+
+        stopInitialToast();
+
+        // 🔐 Enforcement Rules for Downloads:
+        // 1. .enc files: Always use full download (no chunking)
+        // 2. Files ≥250MB (not .enc): Use chunked download (HTTP & HTTPS)
+        // 3. Files <250MB: Always use full download
+
+        if (isEncFile) {
+          // .enc files - always full download to preserve decryption integrity
+          const protocolMsg = isHTTPS ? "secure HTTPS" : "HTTP";
+          showToast(`🔐 .enc file detected: Using ${protocolMsg} full download to preserve decryption integrity.`, 3000);
+          await downloadFileRegular(fileUrl, fileName, fileSizeMB, startTime);
+        } else if (isLargeFile) {
+          // Large files (≥250MB) that are not .enc - use chunked download
+          const protocolMsg = isHTTPS ? "HTTPS" : "HTTP";
+          showToast(`📦 Large file detected: Using chunked download over ${protocolMsg} for optimal performance.`, 3000);
+          await downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, startTime);
         } else {
-          fileSizeMB = (parseInt(contentLength) / (1024 * 1024)).toFixed(2);
-          
-          // Create blob and trigger download
-          const blob = await response.blob();
-          const blobUrl = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = blobUrl;
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          window.URL.revokeObjectURL(blobUrl);
+          // Small files - use regular download
+          const protocolMsg = isHTTPS ? "secure HTTPS" : "HTTP";
+          showToast(`📥 Using ${protocolMsg} download for reliable file transfer.`, 2000);
+          await downloadFileRegular(fileUrl, fileName, fileSizeMB, startTime);
         }
 
-        // Calculate total download time
-        const totalDownloadTime = ((Date.now() - downloadStartTime) / 1000).toFixed(2);
-        const totalTime = ((Date.now() - requestStartTime) / 1000).toFixed(2);
-        
-        // Stop the download toast
-        stopDownloadToast();
-        
-        // Save download stats to logs with accurate timing
-        const downloadStats = {
-          type: 'download',
-          filename: fileName,
-          size: fileSizeMB + ' MB',
-          serverResponseTime: serverResponseTime + 's',
-          downloadTime: totalDownloadTime + 's',
-          totalTime: totalTime + 's',
-          timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
-          startTime: new Date(requestStartTime).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
-          endTime: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
-        };
-        saveStatsToLog(downloadStats);
-
-        // Enhanced completion toast with accurate timing breakdown
-        const completionMessage = `✅ Download complete (${fileSizeMB} MB) • Server: ${serverResponseTime}s • Download: ${totalDownloadTime}s`;
-        
-        showToast(completionMessage, 8000, downloadStats); // Pass transfer data for click details
-        
-      } catch (err) {
-        // Stop any running toasts on error
-        if (typeof stopPersistentToast === 'function') stopPersistentToast();
-        if (typeof stopDownloadToast === 'function') stopDownloadToast();
-        showToast('❌ Error: ' + err.message, 4000);
+      } catch (error) {
+        if (typeof stopInitialToast === 'function') stopInitialToast();
+        showToast(`❌ Download failed: ${error.message}`, 5000);
+        console.error('Download error:', error);
       }
     });
   });
 
-  // 📊 Save upload/download stats to localStorage
+// 🔄 Regular download function (original logic) - supports HTTP & HTTPS
+async function downloadFileRegular(fileUrl, fileName, fileSizeMB, requestStartTime) {
+  try {
+    const stopPersistentToast = showPersistentToast('⏳ Requesting file from server...');
+
+    const response = await fetch(fileUrl);
+    if (!response.ok) throw new Error('Download failed');
+
+    // Calculate actual server response time (time until headers received)
+    const serverResponseTime = ((Date.now() - requestStartTime) / 1000).toFixed(2);
+    
+    // Start tracking processing time (not downloading time)
+    const processingStartTime = Date.now();
+    stopPersistentToast();
+    
+    // Get file size for progress tracking
+    const contentLength = response.headers.get('Content-Length');
+    let actualFileSizeMB;
+    let processedBytes = 0;
+    let totalBytes = contentLength ? parseInt(contentLength) : 0;
+    
+    // 💾 If no Content-Length, try to get size from stored metadata
+    if (!contentLength) {
+      const storedMetadata = getFileMetadata(fileName);
+      if (storedMetadata) {
+        totalBytes = storedMetadata.size;
+        actualFileSizeMB = (storedMetadata.size / (1024 * 1024)).toFixed(2);
+      }
+    } else {
+      actualFileSizeMB = (parseInt(contentLength) / (1024 * 1024)).toFixed(2);
+    }
+    
+    if (!contentLength && !totalBytes) {
+      // If no content-length header and no stored metadata, download without size info
+      const stopProcessingToast = showPersistentToast('⚙️ Processing file...');
+      
+      const blob = await response.blob();
+      actualFileSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+      
+      stopProcessingToast();
+      showToast('⚙️ Finalizing download...', 1000);
+      
+      // Create blob URL and trigger download
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } else {
+      // We have size info (either from header or stored metadata) - show progress
+      if (!actualFileSizeMB) {
+        actualFileSizeMB = (totalBytes / (1024 * 1024)).toFixed(2);
+      }
+      
+      // Stream with progress tracking
+      const reader = response.body.getReader();
+      const chunks = [];
+      let lastProgressUpdate = 0;
+      const PROGRESS_UPDATE_INTERVAL = 500; // Update every 500ms for smooth progress
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        chunks.push(value);
+        processedBytes += value.length;
+        
+        // Calculate progress percentage
+        const progressPercent = totalBytes > 0 ? ((processedBytes / totalBytes) * 100).toFixed(1) : '0.0';
+        const processingElapsed = ((Date.now() - processingStartTime) / 1000).toFixed(1);
+        const processedMB = (processedBytes / 1024 / 1024).toFixed(1);
+        
+        // Update progress toast with percentage
+        const now = Date.now();
+        if (now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL || done) {
+          const sizeSource = contentLength ? "(server)" : "(stored)";
+          showToast(`⚙️ Processing ${progressPercent}% (${processedMB}/${actualFileSizeMB} MB) ${sizeSource} • Processing time: ${processingElapsed}s`, 100);
+          lastProgressUpdate = now;
+        }
+      }
+      
+      // Combine chunks and finalize
+      showToast('⚙️ Finalizing download...', 1000);
+      const blob = new Blob(chunks);
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    }
+
+    // Calculate total processing time (not download time)
+    const totalProcessingTime = ((Date.now() - processingStartTime) / 1000).toFixed(2);
+    const totalTime = ((Date.now() - requestStartTime) / 1000).toFixed(2);
+    
+    // Save download stats to logs with accurate timing
+    const downloadStats = {
+      type: 'download',
+      filename: fileName,
+      size: actualFileSizeMB + ' MB',
+      serverResponseTime: serverResponseTime + 's',
+      processingTime: totalProcessingTime + 's',
+      totalTime: totalTime + 's',
+      protocol: location.protocol === 'https:' ? 'HTTPS' : 'HTTP',
+      downloadType: 'regular',
+      timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
+      startTime: new Date(requestStartTime).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
+      endTime: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
+    };
+    saveStatsToLog(downloadStats);
+
+    // Enhanced completion toast with accurate timing breakdown
+    const protocolMsg = location.protocol === 'https:' ? 'HTTPS' : 'HTTP';
+    const completionMessage = `✅ Download complete via ${protocolMsg} (${actualFileSizeMB} MB) • Server: ${serverResponseTime}s • Processing: ${totalProcessingTime}s`;
+    
+    // Trigger-based download detection instead of time-based delay
+    detectDownloadCompletion(completionMessage, downloadStats);
+    
+  } catch (err) {
+    // Stop any running toasts on error
+    if (typeof stopPersistentToast === 'function') stopPersistentToast();
+    showToast('❌ Download error: ' + err.message + ' • Click anywhere to dismiss', 0);
+    throw err; // Re-throw for parent handler
+  }
+}
+
+// 📦 Chunked download function for large files (≥250MB) - supports HTTP & HTTPS
+async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requestStartTime) {
+  const isHTTPS = location.protocol === 'https:';
+  const protocolMsg = isHTTPS ? "HTTPS" : "HTTP";
+  const CHUNK_SIZE = 1024 * 1024; // 1MB chunks for download
+  const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
+  
+  try {
+    const stopInitialToast = showPersistentToast('⏳ Preparing chunked download...');
+    
+    // Start processing time tracking
+    const processingStartTime = Date.now();
+    let processedChunks = 0;
+    const chunks = [];
+    
+    stopInitialToast();
+    
+    // Process chunks with percentage tracking
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, fileSize);
+      
+      // Calculate progress percentage
+      const progressPercent = ((i + 1) / totalChunks * 100).toFixed(1);
+      const processingElapsed = ((Date.now() - processingStartTime) / 1000).toFixed(1);
+      
+      // Show processing time with percentage - NOT downloading time
+      showToast(`⚙️ Processing chunks ${progressPercent}% (${i + 1}/${totalChunks}) • Processing time: ${processingElapsed}s`, 100);
+      
+      try {
+        const response = await fetch(fileUrl, {
+          headers: {
+            'Range': `bytes=${start}-${end - 1}`
+          }
+        });
+        
+        if (!response.ok) throw new Error(`Chunk ${i + 1} failed`);
+        
+        const chunkBlob = await response.blob();
+        chunks.push(chunkBlob);
+        processedChunks++;
+        
+      } catch (chunkError) {
+        showToast(`❌ Processing failed at chunk ${i + 1}: ${chunkError.message}`, 5000);
+        return;
+      }
+    }
+    
+    // All chunks processed, now combine them
+    const totalProcessingTime = ((Date.now() - processingStartTime) / 1000).toFixed(1);
+    showToast(`🔗 Combining ${processedChunks} chunks... (Processing: ${totalProcessingTime}s)`);
+    
+    // Combine all chunks into final blob
+    const combinedBlob = new Blob(chunks);
+    
+    // Trigger download
+    const blobUrl = window.URL.createObjectURL(combinedBlob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(blobUrl);
+    
+    // Calculate final stats
+    const totalTime = ((Date.now() - requestStartTime) / 1000).toFixed(1);
+    
+    const downloadStats = {
+      type: 'chunked_download',
+      filename: fileName,
+      size: fileSizeMB + ' MB',
+      totalChunks: totalChunks,
+      processingTime: totalProcessingTime + 's',
+      totalTime: totalTime + 's',
+      timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
+    };
+    saveStatsToLog(downloadStats);
+    
+    // Success message with accurate terminology
+    showToast(`✅ Chunked download complete via ${protocolMsg} (${fileSizeMB} MB) • Processing: ${totalProcessingTime}s • Total: ${totalTime}s • Click anywhere to dismiss`, 0, downloadStats);
+    
+  } catch (error) {
+    showToast(`❌ Chunked download failed: ${error.message} • Click anywhere to dismiss`, 0);
+    console.error('Chunked download error:', error);
+  }
+}
+
+  // 🎯 Download completion detection - trigger-based instead of time-based
+  function detectDownloadCompletion(successMessage, transferData) {
+    let downloadDialogDetected = false;
+    let checkTimer = null;
+    
+    // More reliable method: Monitor document state and user activity
+    const originalTitle = document.title;
+    let titleCheckCount = 0;
+    
+    // Method 1: Detect download dialog by monitoring window focus/blur
+    const onWindowBlur = () => {
+      downloadDialogDetected = true;
+      setTimeout(() => {
+        // Check if user came back to window (made a decision)
+        if (document.hasFocus() && !document.hidden) {
+          cleanupAndShowResult();
+        }
+      }, 500);
+    };
+    
+    // Method 2: Monitor document visibility changes
+    const onVisibilityChange = () => {
+      if (!document.hidden && downloadDialogDetected) {
+        cleanupAndShowResult();
+      }
+    };
+    
+    // Method 3: Detect if browser shows download in progress
+    const checkDownloadState = () => {
+      titleCheckCount++;
+      
+      // Check if page title changed (some browsers change title during download)
+      const titleChanged = document.title !== originalTitle;
+      
+      // Check if window is focused and visible (user returned)
+      const isActive = document.hasFocus() && !document.hidden;
+      
+      if (titleCheckCount >= 25) { // 5 seconds total
+        cleanupAndShowResult();
+      } else if (isActive && downloadDialogDetected && titleCheckCount >= 3) {
+        // User returned to window after dialog appeared, likely successful
+        cleanupAndShowResult();
+      }
+    };
+    
+    const cleanupAndShowResult = () => {
+      // Clear all listeners and timers
+      window.removeEventListener('blur', onWindowBlur);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      if (checkTimer) clearInterval(checkTimer);
+      
+      // Determine success based on user returning to active window
+      const isActive = document.hasFocus() && !document.hidden;
+      
+      if (downloadDialogDetected && isActive) {
+        // User saw dialog and came back - likely accepted download - make it persistent like uploads
+        showToast(successMessage + " • Click anywhere to dismiss", 0, transferData);
+      } else if (!downloadDialogDetected) {
+        // No dialog detected - auto-download or instant acceptance - make it persistent like uploads
+        showToast(successMessage + " • Click anywhere to dismiss", 0, transferData);
+      } else {
+        // User possibly cancelled or download is pending - but still show stats when clicked
+        showToast("📥 Download requested - check your browser's downloads if file doesn't appear • Click anywhere to dismiss", 0, transferData);
+      }
+    };
+    
+    // Set up monitoring
+    window.addEventListener('blur', onWindowBlur);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    checkTimer = setInterval(checkDownloadState, 200);
+    
+    // Immediate check in case download is instant
+    setTimeout(() => {
+      if (!downloadDialogDetected && document.hasFocus()) {
+        // Likely instant download without dialog
+        cleanupAndShowResult();
+      }
+    }, 300);
+  }
+  
+  //  Save upload/download stats to localStorage
   function saveStatsToLog(stats) {
     const logs = JSON.parse(localStorage.getItem('transferLogs') || '[]');
     logs.unshift(stats); // Add to beginning
@@ -923,6 +1287,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     localStorage.setItem('transferLogs', JSON.stringify(logs));
+  }
+
+  // 💾 Store file metadata for downloads (fixes "unknown size" issue)
+  function storeFileMetadata(files, totalSize) {
+    const metadata = JSON.parse(localStorage.getItem('fileMetadata') || '{}');
+    
+    for (let file of files) {
+      metadata[file.name] = {
+        size: file.size,
+        sizeFormatted: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
+        type: file.type || 'unknown',
+        uploadDate: new Date().toISOString(),
+        timestamp: Date.now()
+      };
+    }
+    
+    // Clean up old metadata (keep only files from last 30 days)
+    const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    Object.keys(metadata).forEach(filename => {
+      if (metadata[filename].timestamp < thirtyDaysAgo) {
+        delete metadata[filename];
+      }
+    });
+    
+    localStorage.setItem('fileMetadata', JSON.stringify(metadata));
+  }
+
+  // 📁 Get stored file metadata (for downloads)
+  function getFileMetadata(filename) {
+    const metadata = JSON.parse(localStorage.getItem('fileMetadata') || '{}');
+    return metadata[filename] || null;
   }
 </script>
 <script>
