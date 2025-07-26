@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>LanVan</title>
+  <title>Lanvan</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
   <style>
@@ -218,16 +218,27 @@
 <body>
 
 
-<header style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 1rem; background-color: #ffffff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
-  <h1 style="margin: 0; font-size: 1.8rem; color: #333;">{{ msg }}</h1>
-
-  <!-- AES Toggle Block only -->
-  <div style="display: flex; align-items: center; background-color: #f0f0f0; padding: 0.4rem 0.8rem; border-radius: 25px; gap: 0.6rem;">
-    <span style="font-size: 0.95rem; color: #333;"><b>AES Encryption</b></span>
-    <label class="toggle-switch">
-      <input type="checkbox" id="enableEncryption">
-      <span class="slider"></span>
-    </label>
+<header style="padding: 0.5rem 1rem; background-color: #ffffff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05);">
+  <!-- Title -->
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+    <h1 style="margin: 0; font-size: 1.8rem; color: #333;">{{ msg }}</h1>
+    
+    <!-- AES Toggle Block (keep on right side) -->
+    <div style="display: flex; align-items: center; background-color: #f0f0f0; padding: 0.4rem 0.8rem; border-radius: 25px; gap: 0.6rem;">
+      <span style="font-size: 0.95rem; color: #333;"><b>AES Encryption</b></span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="enableEncryption">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+  
+  <!-- Protocol Status Below Title -->
+  <div style="display: flex; justify-content: flex-start;">
+    <div id="protocolStatus" style="display: flex; align-items: center; background-color: #e8f4fd; padding: 0.3rem 0.6rem; border-radius: 20px; gap: 0.4rem; font-size: 0.85rem;">
+      <span id="protocolIcon">🌐</span>
+      <span id="protocolText" style="color: #2c3e50; font-weight: 500;">HTTP</span>
+    </div>
   </div>
 </header>
 
@@ -325,6 +336,7 @@ function autoUpload(files) {
 
   const aesToggle = document.getElementById('enableEncryption');
   const isAESEnabled = aesToggle && aesToggle.checked;
+  const isHTTPS = location.protocol === 'https:';
 
   // ✅ Block upload if AES is ON and any file > 200MB
   const overLimit = Array.from(files).some(file => file.size > 200 * 1024 * 1024);
@@ -333,30 +345,46 @@ function autoUpload(files) {
     return;
   }
 
-  // 📦 CHUNKED UPLOAD: Only use chunked uploads on HTTP (not HTTPS)
-  const isHTTPS = location.protocol === 'https:';
+  // � Block AES on HTTP
+  if (isAESEnabled && !isHTTPS) {
+    showToast("❌ AES encryption is only available over HTTPS connections for security.", 5000);
+    return;
+  }
+
+  // 📦 Lanvan File Transfer Strategy Implementation
   const CHUNK_THRESHOLD = 250 * 1024 * 1024; // 250MB
   const hasLargeFiles = Array.from(files).some(file => file.size >= CHUNK_THRESHOLD);
+  const hasEncFiles = Array.from(files).some(file => file.name.endsWith('.enc'));
 
-  if (hasLargeFiles && !isHTTPS) {
-    // Use chunked upload for large files on HTTP only
-    showToast("📦 Large files detected: Using chunked upload for optimal performance.", 3000);
-    uploadFilesChunked(files, isAESEnabled);
-  } else if (hasLargeFiles && isHTTPS) {
-    // On HTTPS, show a message that large files should use regular upload
-    showToast("🔒 HTTPS detected: Large files will use secure single-request upload for better reliability.", 3000);
+  // 🔐 Enforcement Rules:
+  // 1. .enc files on HTTPS: Always use full upload (no chunking)
+  // 2. Files ≥250MB (not .enc): Use chunked upload (HTTP & HTTPS)
+  // 3. Files <250MB: Use regular upload
+  
+  if (hasEncFiles && isHTTPS) {
+    // .enc files on HTTPS - always full upload
+    showToast("� .enc files detected: Using secure full upload to preserve encryption integrity.", 3000);
     uploadFilesRegular(files, isAESEnabled);
+  } else if (hasLargeFiles && !hasEncFiles) {
+    // Large files (≥250MB) that are not .enc - use chunked upload
+    const protocolMsg = isHTTPS ? "HTTPS" : "HTTP";
+    showToast(`📦 Large files detected: Using chunked upload over ${protocolMsg} for optimal performance.`, 3000);
+    uploadFilesChunked(files, isAESEnabled);
   } else {
-    // Use regular upload for smaller files
+    // Small files or regular uploads
+    const protocolMsg = isHTTPS ? "secure HTTPS" : "HTTP";
+    showToast(`📤 Using ${protocolMsg} upload for reliable file transfer.`, 2000);
     uploadFilesRegular(files, isAESEnabled);
   }
 }
 
-// 🔄 Regular upload function (original logic)
+// 🔄 Regular upload function (original logic) - supports HTTP & HTTPS
 function uploadFilesRegular(files, isAESEnabled) {
   const formData = new FormData();
   const totalSize = Array.from(files).reduce((sum, file) => sum + file.size, 0);
   const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
+  const isHTTPS = location.protocol === 'https:';
+  const protocolMsg = isHTTPS ? "HTTPS" : "HTTP";
   
   for (let file of files) {
     formData.append('files', file);
@@ -370,7 +398,7 @@ function uploadFilesRegular(files, isAESEnabled) {
   const xhr = new XMLHttpRequest();
   progressBar.style.display = 'block';
   progressBar.value = 0;
-  showToast('⏳ Starting upload...');
+  showToast(`⏳ Starting ${protocolMsg} upload...`);
 
   const startTime = new Date().getTime();
   let lastProgressUpdate = 0;
@@ -394,7 +422,8 @@ function uploadFilesRegular(files, isAESEnabled) {
   };
 
   xhr.onload = function () {
-    const totalElapsed = ((new Date().getTime() - startTime) / 1000).toFixed(1);
+    const endTime = new Date().getTime();
+    const totalElapsed = ((endTime - startTime) / 1000).toFixed(1);
     const avgSpeed = (totalSize / 1024 / 1024 / totalElapsed).toFixed(2);
     
     if (xhr.status === 200 || xhr.status === 302) {
@@ -406,11 +435,14 @@ function uploadFilesRegular(files, isAESEnabled) {
         time: totalElapsed + 's',
         speed: avgSpeed + ' MB/s',
         aesEnabled: isAESEnabled,
-        timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
+        protocol: protocolMsg,
+        timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
+        startTime: new Date(startTime).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
+        endTime: new Date(endTime).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
       };
       saveStatsToLog(uploadStats);
       
-      showToast(`✅ Upload complete (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s • Click to refresh page`, 0, uploadStats);
+      showToast(`✅ Upload complete via ${protocolMsg} (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s • Click to refresh page`, 0, uploadStats);
       
       // Store flag to reload page when toast is dismissed
       window._shouldReloadAfterToast = true;
@@ -427,11 +459,19 @@ function uploadFilesRegular(files, isAESEnabled) {
   xhr.send(formData);
 }
 
-// 📦 Chunked upload function for large files (≥250MB)
+// 📦 Chunked upload function for large files (≥250MB) - supports HTTP & HTTPS
 async function uploadFilesChunked(files, isAESEnabled) {
   const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
   const totalSize = Array.from(files).reduce((sum, file) => sum + file.size, 0);
   const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
+  const isHTTPS = location.protocol === 'https:';
+  
+  // 🚫 Block .enc files from chunked upload on HTTPS
+  const hasEncFiles = Array.from(files).some(file => file.name.endsWith('.enc'));
+  if (hasEncFiles && isHTTPS) {
+    showToast("❌ .enc files cannot use chunked upload on HTTPS. Please use full upload to preserve encryption integrity.", 5000);
+    return;
+  }
   
   progressBar.style.display = 'block';
   progressBar.value = 0;
@@ -441,7 +481,8 @@ async function uploadFilesChunked(files, isAESEnabled) {
   let lastToastUpdate = 0;
   const TOAST_UPDATE_INTERVAL = 3000; // Update toast only every 3 seconds (anti-blink)
   
-  showToast('⏳ Starting chunked upload...');
+  const protocolMsg = isHTTPS ? "HTTPS" : "HTTP";
+  showToast(`⏳ Starting chunked upload over ${protocolMsg}...`);
 
   try {
     for (let i = 0; i < files.length; i++) {
@@ -518,7 +559,8 @@ async function uploadFilesChunked(files, isAESEnabled) {
     }
 
     // Success - all files uploaded
-    const totalElapsed = ((new Date().getTime() - startTime) / 1000).toFixed(1);
+    const endTime = new Date().getTime();
+    const totalElapsed = ((endTime - startTime) / 1000).toFixed(1);
     const avgSpeed = (totalSize / 1024 / 1024 / totalElapsed).toFixed(2);
 
     const uploadStats = {
@@ -528,11 +570,14 @@ async function uploadFilesChunked(files, isAESEnabled) {
       time: totalElapsed + 's',
       speed: avgSpeed + ' MB/s',
       aesEnabled: isAESEnabled,
-      timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
+      protocol: protocolMsg,
+      timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
+      startTime: new Date(startTime).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
+      endTime: new Date(endTime).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
     };
     saveStatsToLog(uploadStats);
     
-    showToast(`✅ Chunked upload complete (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s • Click to refresh page`, 0, uploadStats);
+    showToast(`✅ Chunked upload complete via ${protocolMsg} (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s • Click to refresh page`, 0, uploadStats);
     
     // Store flag to reload page when toast is dismissed
     window._shouldReloadAfterToast = true;
@@ -547,6 +592,30 @@ async function uploadFilesChunked(files, isAESEnabled) {
   
 </script>
 <script>
+// ✅ Update Protocol Status Indicator
+document.addEventListener('DOMContentLoaded', () => {
+  const protocolIcon = document.getElementById('protocolIcon');
+  const protocolText = document.getElementById('protocolText');
+  const protocolStatus = document.getElementById('protocolStatus');
+  const isHTTPS = location.protocol === 'https:';
+  
+  if (isHTTPS) {
+    protocolIcon.textContent = '🔒';
+    protocolText.textContent = 'HTTPS';
+    protocolStatus.style.backgroundColor = '#d4edda';
+    protocolStatus.style.border = '1px solid #c3e6cb';
+    protocolStatus.title = 'Secure connection - AES encryption available, chunked uploads supported for large files';
+  } else {
+    protocolIcon.textContent = '🌐';
+    protocolText.textContent = 'HTTP';
+    protocolStatus.style.backgroundColor = '#fff3cd';
+    protocolStatus.style.border = '1px solid #ffeaa7';
+    protocolStatus.title = 'Standard connection - Chunked uploads available for large files, AES requires HTTPS';
+  }
+});
+
+// ✅ Handle AES toggle restrictions
+document.addEventListener('DOMContentLoaded', () => {
   if (location.protocol === 'http:') {
     const toggle = document.getElementById('enableEncryption');
     if (toggle) {
@@ -661,17 +730,30 @@ async function uploadFilesChunked(files, isAESEnabled) {
       let detailedMessage;
       
       if (data.type === 'download') {
+        const timeRange = data.startTime && data.endTime ? 
+          `${data.startTime} - ${data.endTime}` : 
+          data.timestamp;
+          
         detailedMessage = `📊 ${data.type.toUpperCase()}: ${data.filename}\n` +
                          `📁 Size: ${data.size}\n` +
-                         `⏳ Processing: ${data.processingTime}\n` +
-                         `🕐 Time: ${data.timestamp}\n\n` +
+                         `⚡ Server Response: ${data.serverResponseTime || 'N/A'}\n` +
+                         `📥 Download Time: ${data.downloadTime || 'N/A'}\n` +
+                         `⏱️ Total Time: ${data.totalTime || 'N/A'}\n` +
+                         `🌐 Protocol: ${location.protocol === 'https:' ? 'HTTPS' : 'HTTP'}\n` +
+                         `🕐 Time: ${timeRange}\n\n` +
                          `💡 Click anywhere else to dismiss`;
       } else {
+        const protocolInfo = data.protocol ? `🌐 Protocol: ${data.protocol}\n` : '';
+        const timeRange = data.startTime && data.endTime ? 
+          `${data.startTime} - ${data.endTime}` : 
+          data.timestamp;
+          
         detailedMessage = `📊 ${data.type.toUpperCase()}: ${data.filename}\n` +
                          `📁 Size: ${data.size}\n` +
                          `⏱️ Upload Duration: ${data.time} @ ${data.speed}\n` +
                          `🔒 AES: ${data.aesEnabled ? 'Yes' : 'No'}\n` +
-                         `🕐 Time: ${data.timestamp}\n\n` +
+                         protocolInfo +
+                         `🕐 Time: ${timeRange}\n\n` +
                          `💡 Click anywhere else to dismiss`;
       }
       
@@ -746,16 +828,21 @@ async function uploadFilesChunked(files, isAESEnabled) {
       const fileUrl = this.getAttribute('href');
       const fileName = this.closest('.file-card').querySelector('.file-name').textContent.trim();
 
-      // Track processing time (server preparation)
-      const processingStartTime = Date.now();
-      const stopPersistentToast = showPersistentToast('⏳ Preparing download...');
+      // Track server response time (actual processing/preparation time)
+      const requestStartTime = Date.now();
+      const stopPersistentToast = showPersistentToast('⏳ Requesting file from server...');
 
       try {
         const response = await fetch(fileUrl);
         if (!response.ok) throw new Error('Download failed');
 
-        // Calculate processing time (how long server took to prepare the file)
-        const processingTime = ((Date.now() - processingStartTime) / 1000).toFixed(1);
+        // Calculate actual server response time (time until headers received)
+        const serverResponseTime = ((Date.now() - requestStartTime) / 1000).toFixed(2);
+        
+        // Start tracking download time
+        const downloadStartTime = Date.now();
+        stopPersistentToast();
+        const stopDownloadToast = showPersistentToast('📥 Downloading file...');
         
         // Get file size for progress tracking
         const contentLength = response.headers.get('Content-Length');
@@ -790,27 +877,36 @@ async function uploadFilesChunked(files, isAESEnabled) {
           window.URL.revokeObjectURL(blobUrl);
         }
 
-        // Stop the persistent preparing toast
-        stopPersistentToast();
+        // Calculate total download time
+        const totalDownloadTime = ((Date.now() - downloadStartTime) / 1000).toFixed(2);
+        const totalTime = ((Date.now() - requestStartTime) / 1000).toFixed(2);
         
-        // Save download stats to logs (processing time only)
+        // Stop the download toast
+        stopDownloadToast();
+        
+        // Save download stats to logs with accurate timing
         const downloadStats = {
           type: 'download',
           filename: fileName,
           size: fileSizeMB + ' MB',
-          processingTime: processingTime + 's',
-          timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
+          serverResponseTime: serverResponseTime + 's',
+          downloadTime: totalDownloadTime + 's',
+          totalTime: totalTime + 's',
+          timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
+          startTime: new Date(requestStartTime).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
+          endTime: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
         };
         saveStatsToLog(downloadStats);
 
-        // Simple completion toast with processing time only
-        const completionMessage = `✅ File ready for download (${fileSizeMB} MB) • Processing: ${processingTime}s`;
+        // Enhanced completion toast with accurate timing breakdown
+        const completionMessage = `✅ Download complete (${fileSizeMB} MB) • Server: ${serverResponseTime}s • Download: ${totalDownloadTime}s`;
         
         showToast(completionMessage, 8000, downloadStats); // Pass transfer data for click details
         
       } catch (err) {
         // Stop any running toasts on error
-        stopPersistentToast();
+        if (typeof stopPersistentToast === 'function') stopPersistentToast();
+        if (typeof stopDownloadToast === 'function') stopDownloadToast();
         showToast('❌ Error: ' + err.message, 4000);
       }
     });
@@ -851,7 +947,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       const isHTTP = location.protocol === 'http:';
       if (isHTTP) {
-        showToast('🌐 LanVan is ready for file transfers.', 4000);
+        showToast('🌐 Lanvan is ready for file transfers.', 4000);
       } else {
         showToast('🔒 HTTPS mode active - Enhanced security enabled.', 4000);
       }

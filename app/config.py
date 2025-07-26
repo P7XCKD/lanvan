@@ -16,6 +16,14 @@ def is_allowed_file(filename: str) -> bool:
     ext = os.path.splitext(filename)[1].lower()
     return ext not in BLOCKED_EXTENSIONS
 
+# SSL Configuration
+SSL_CERT_PATH = "certs/cert.pem"
+SSL_KEY_PATH = "certs/key.pem"
+
+def ssl_certs_available() -> bool:
+    """Check if SSL certificates are available"""
+    return os.path.exists(SSL_CERT_PATH) and os.path.exists(SSL_KEY_PATH)
+
 # Optional compression config (if middleware added later)
 class Config:
     COMPRESS_LEVEL = 6        # Range: 1 (fast) → 9 (best compression)

@@ -75,14 +75,25 @@ def scan_file(path: Path):
 @router.get("/", response_class=HTMLResponse, name="home")
 async def home(request: Request):
     files = get_file_list()
+    
+    # Add helpful debug info for HTTPS troubleshooting
+    protocol = request.url.scheme
+    host = request.headers.get("host", "unknown")
+    
     return templates.TemplateResponse("index.html", {
         "request": request,
         "msg": "Lanvan",
-        "files": [f["name"] for f in files]
+        "files": [f["name"] for f in files],
+        "debug_info": {
+            "protocol": protocol,
+            "host": host,
+            "port": "5000" if ":5000" in host else "unknown"
+        }
     })
 
 @router.post("/upload-auto", name="upload_auto_file")
 async def upload_auto_file(
+    request: Request,
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
     encrypt: bool = Query(False, description="Encrypt files with AES-256 if true")
@@ -91,6 +102,16 @@ async def upload_auto_file(
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
             "status": "error",
             "msg": "No files uploaded"
+        })
+
+    # 🔐 Protocol detection
+    is_https = request.url.scheme == "https"
+    
+    # 🚫 Enforce encryption restrictions
+    if encrypt and not is_https:
+        return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
+            "status": "error",
+            "msg": "AES encryption is only available over HTTPS connections for security."
         })
 
     uploaded = []
@@ -129,14 +150,16 @@ async def upload_auto_file(
             "msg": "No valid files processed"
         })
 
+    protocol_info = "HTTPS" if is_https else "HTTP"
     return JSONResponse(content={
         "status": "success",
-        "msg": f"{len(uploaded)} file(s) uploaded",
-        "files": uploaded
+        "msg": f"{len(uploaded)} file(s) uploaded via {protocol_info}",
+        "files": uploaded,
+        "protocol": protocol_info
     })
 
 @router.get("/download/{filename}", name="download_file")
-async def download_file(filename: str):
+async def download_file(filename: str, request: Request):
     safe_name = secure_filename(filename)
     file_path = UPLOAD_FOLDER / safe_name
 
@@ -145,7 +168,26 @@ async def download_file(filename: str):
 
     mime_type, _ = guess_type(str(file_path))
     file_size = file_path.stat().st_size
+    
+    # ✅ Determine protocol (HTTP vs HTTPS)
+    is_https = request.url.scheme == "https"
+    
+    # 🔐 Enforcement Rules:
+    # 1. .enc files: Always use full download (no chunking)
+    # 2. Files ≥250MB: Use chunked download if not .enc
+    # 3. Files <250MB: Always use full download
+    
+    is_enc_file = safe_name.endswith(".enc")
+    is_large_file = file_size >= 250 * 1024 * 1024  # 250MB threshold
+    
+    # 📦 Chunked download logic
+    if is_large_file and not is_enc_file:
+        return await chunked_download_file(file_path, safe_name, mime_type, file_size)
+    else:
+        return await full_download_file(file_path, safe_name, mime_type, file_size)
 
+async def full_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int):
+    """Full file download - for small files and .enc files"""
     def stream_file(path: Path):
         data = path.read_bytes()
         if path.suffix == ".enc":
@@ -160,6 +202,30 @@ async def download_file(filename: str):
             "Content-Length": str(file_size),
             "Cache-Control": "public, max-age=86400",
             "X-Accel-Buffering": "no"
+        }
+    )
+
+async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int):
+    """Chunked file download - for large files (≥250MB) that are not .enc"""
+    CHUNK_SIZE = 1024 * 1024  # 1MB chunks for download
+    
+    def stream_chunks():
+        with open(file_path, "rb") as file:
+            while True:
+                chunk = file.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                yield chunk
+
+    return StreamingResponse(
+        stream_chunks(),
+        media_type=mime_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}"',
+            "Content-Length": str(file_size),
+            "Cache-Control": "public, max-age=86400",
+            "X-Accel-Buffering": "no",
+            "X-Download-Type": "chunked"  # Indicator for debugging
         }
     )
 
@@ -201,19 +267,33 @@ async def delete_file(filename: str):
 
 @router.post("/upload_chunk", name="upload_chunk")
 async def upload_chunk(
+    request: Request,
     chunk: UploadFile = File(...),
     filename: str = Form(...),
     part_number: int = Form(...),
     total_parts: int = Form(...)
 ):
-    """Handle individual chunk uploads for large files"""
+    """Handle individual chunk uploads for large files - supports both HTTP and HTTPS"""
     try:
+        # 🔐 Protocol detection
+        is_https = request.url.scheme == "https"
+        
         # Secure the filename
         safe_filename = secure_filename(filename)
         if not safe_filename:
             return JSONResponse(
                 status_code=HTTP_400_BAD_REQUEST,
                 content={"status": "error", "msg": "Invalid filename"}
+            )
+        
+        # 🚫 Enforce .enc file restrictions on HTTPS
+        if is_https and safe_filename.endswith(".enc"):
+            return JSONResponse(
+                status_code=HTTP_400_BAD_REQUEST,
+                content={
+                    "status": "error", 
+                    "msg": "Chunked upload is disabled for .enc files to preserve encryption integrity. Please use full upload."
+                }
             )
         
         # Create chunk filename
@@ -229,7 +309,8 @@ async def upload_chunk(
             "status": "success",
             "msg": f"Chunk {part_number}/{total_parts} uploaded",
             "part_number": part_number,
-            "total_parts": total_parts
+            "total_parts": total_parts,
+            "protocol": "HTTPS" if is_https else "HTTP"
         })
         
     except Exception as e:
@@ -240,19 +321,33 @@ async def upload_chunk(
 
 @router.post("/finalize_upload", name="finalize_upload")
 async def finalize_upload(
+    request: Request,
     background_tasks: BackgroundTasks,
     filename: str = Form(...),
     total_parts: int = Form(...),
     encrypt: bool = Form(False)
 ):
-    """Combine all chunks into final file"""
+    """Combine all chunks into final file - supports both HTTP and HTTPS"""
     try:
+        # 🔐 Protocol detection  
+        is_https = request.url.scheme == "https"
+        
         # Secure the filename
         safe_filename = secure_filename(filename)
         if not safe_filename:
             return JSONResponse(
                 status_code=HTTP_400_BAD_REQUEST,
                 content={"status": "error", "msg": "Invalid filename"}
+            )
+        
+        # 🚫 Enforce encryption restrictions
+        if encrypt and not is_https:
+            return JSONResponse(
+                status_code=HTTP_400_BAD_REQUEST,
+                content={
+                    "status": "error",
+                    "msg": "AES encryption is only available over HTTPS connections for security."
+                }
             )
         
         # Check if encryption is requested and file would be too large
@@ -323,8 +418,9 @@ async def finalize_upload(
         
         return JSONResponse(content={
             "status": "success",
-            "msg": f"File '{final_path.name}' uploaded successfully",
-            "filename": final_path.name
+            "msg": f"File '{final_path.name}' uploaded successfully via {'HTTPS' if is_https else 'HTTP'}",
+            "filename": final_path.name,
+            "protocol": "HTTPS" if is_https else "HTTP"
         })
         
     except Exception as e:

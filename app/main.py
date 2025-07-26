@@ -7,7 +7,7 @@ from app.routes import router
 
 # ✅ Initialize FastAPI app with basic metadata and docs disabled
 app = FastAPI(
-    title="LanVan File Server",
+    title="Lanvan File Server",
     version="1.0.0",
     docs_url=None,     # Disable Swagger docs for performance
     redoc_url=None     # Disable ReDoc
