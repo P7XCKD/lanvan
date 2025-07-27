@@ -332,65 +332,206 @@
 
 <!-- 📡 Auto Upload JS -->
 <script>
-  const dropZone = document.getElementById('drop-zone');
-  const fileInput = document.getElementById('fileInput');
-  const preview = document.getElementById('file-preview');
-  const progressBar = document.getElementById('uploadProgress');
-  const statusText = document.getElementById('uploadStatus');
-
-  ['dragenter', 'dragover'].forEach(evt =>
-    dropZone.addEventListener(evt, e => {
-      e.preventDefault();
-      dropZone.classList.add('dragover');
-    })
-  );
-
-  ['dragleave', 'drop'].forEach(evt =>
-    dropZone.addEventListener(evt, e => {
-      e.preventDefault();
-      dropZone.classList.remove('dragover');
-    })
-  );
-
-  dropZone.addEventListener('drop', e => {
-    fileInput.files = e.dataTransfer.files;
-    updatePreview(fileInput.files);
-    autoUpload(fileInput.files);
+  // 🚀 Performance Optimization: Cache DOM elements once after DOM is loaded
+  let DOM_CACHE = {};
+  let dropZone, fileInput, preview, progressBar, statusText; // Legacy variables
+  
+  // Initialize DOM cache when DOM is ready
+  document.addEventListener('DOMContentLoaded', () => {
+    DOM_CACHE = {
+      dropZone: document.getElementById('drop-zone'),
+      fileInput: document.getElementById('fileInput'),
+      preview: document.getElementById('file-preview'),
+      progressBar: document.getElementById('uploadProgress'),
+      statusText: document.getElementById('uploadStatus'),
+      toast: document.getElementById('toast'),
+      protocolIcon: document.getElementById('protocolIcon'),
+      protocolText: document.getElementById('protocolText'),
+      protocolStatus: document.getElementById('protocolStatus'),
+      aesToggle: document.getElementById('enableEncryption')
+    };
+    
+    // Debug DOM cache - check if all elements are found
+    console.log('🔍 DOM Cache Status:', {
+      dropZone: !!DOM_CACHE.dropZone,
+      fileInput: !!DOM_CACHE.fileInput,
+      preview: !!DOM_CACHE.preview,
+      progressBar: !!DOM_CACHE.progressBar,
+      statusText: !!DOM_CACHE.statusText,
+      toast: !!DOM_CACHE.toast,
+      protocolIcon: !!DOM_CACHE.protocolIcon,
+      protocolText: !!DOM_CACHE.protocolText,
+      protocolStatus: !!DOM_CACHE.protocolStatus,
+      aesToggle: !!DOM_CACHE.aesToggle
+    });
+    
+    // Legacy variables for backward compatibility
+    dropZone = DOM_CACHE.dropZone;
+    fileInput = DOM_CACHE.fileInput;
+    preview = DOM_CACHE.preview;
+    progressBar = DOM_CACHE.progressBar;
+    statusText = DOM_CACHE.statusText;
+    
+    // Set up event listeners after DOM cache is ready
+    setupEventListeners();
   });
+  
+  function setupEventListeners() {
+    ['dragenter', 'dragover'].forEach(evt =>
+      DOM_CACHE.dropZone.addEventListener(evt, e => {
+        e.preventDefault();
+        DOM_CACHE.dropZone.classList.add('dragover');
+      })
+    );
 
-  dropZone.addEventListener('click', () => fileInput.click());
+    ['dragleave', 'drop'].forEach(evt =>
+      DOM_CACHE.dropZone.addEventListener(evt, e => {
+        e.preventDefault();
+        DOM_CACHE.dropZone.classList.remove('dragover');
+      })
+    );
 
-  fileInput.addEventListener('change', () => {
-    updatePreview(fileInput.files);
-    autoUpload(fileInput.files);
-  });
+    DOM_CACHE.dropZone.addEventListener('drop', e => {
+      console.log('📁 Drop event triggered');
+      DOM_CACHE.fileInput.files = e.dataTransfer.files;
+      console.log('📁 Files from drop:', e.dataTransfer.files.length);
+      updatePreview(DOM_CACHE.fileInput.files);
+      autoUpload(DOM_CACHE.fileInput.files);
+    });
+
+    DOM_CACHE.dropZone.addEventListener('click', () => {
+      console.log('🖱️ Drop zone clicked, opening file input');
+      DOM_CACHE.fileInput.click();
+    });
+
+    DOM_CACHE.fileInput.addEventListener('change', () => {
+      console.log('📂 File input changed, files:', DOM_CACHE.fileInput.files.length);
+      updatePreview(DOM_CACHE.fileInput.files);
+      autoUpload(DOM_CACHE.fileInput.files);
+    });
+
+    // Set up toast click handler
+    if (DOM_CACHE.toast) {
+      DOM_CACHE.toast.addEventListener('click', function() {
+        console.log('🔔 Toast clicked');
+        const toast = this;
+        
+        // Clear any auto-hide timeout using the new system
+        if (toastTimeout) {
+          clearTimeout(toastTimeout);
+          toastTimeout = null;
+        }
+        
+        // If there's transfer data, show detailed log
+        if (toast._transferData) {
+          console.log('📊 Showing detailed transfer data');
+          const data = toast._transferData;
+          let detailedMessage;
+          
+          if (data.type === 'download' || data.type === 'direct_download_ultra_fast') {
+            const timeRange = data.startTime && data.endTime ? 
+              `${data.startTime} - ${data.endTime}` : 
+              data.timestamp;
+              
+            detailedMessage = `📊 ${data.type.toUpperCase()}: ${data.filename}\n` +
+                             `📁 Size: ${data.size}\n` +
+                             `⚡ Server Response: ${data.serverResponseTime || 'N/A'}\n` +
+                             `⚙️ Processing Time: ${data.processingTime || data.downloadTime || 'N/A'}\n` +
+                             `⏱️ Total Time: ${data.totalTime || 'N/A'}\n` +
+                             `🌐 Protocol: ${location.protocol === 'https:' ? 'HTTPS' : 'HTTP'}\n` +
+                             `🕐 Time: ${timeRange}\n\n` +
+                             `💡 Click anywhere else to dismiss`;
+          } else {
+            const protocolInfo = data.protocol ? `🌐 Protocol: ${data.protocol}\n` : '';
+            const chunkInfo = data.chunkType ? `📦 Transfer Type: ${data.chunkType}\n` : '';
+            const networkInfo = data.networkSpeed ? `📡 Network Speed: ${data.networkSpeed}\n` : '';
+            const finalChunkInfo = data.finalChunkSize ? `🔧 Final Chunk Size: ${data.finalChunkSize}\n` : '';
+            const timeRange = data.startTime && data.endTime ? 
+              `${data.startTime} - ${data.endTime}` : 
+              data.timestamp;
+              
+            detailedMessage = `📊 ${data.type.toUpperCase()}: ${data.filename}\n` +
+                             `📁 Size: ${data.size}\n` +
+                             `⏱️ ${data.type === 'download' ? 'Download' : 'Upload'} Duration: ${data.time} @ ${data.speed}\n` +
+                             chunkInfo +
+                             networkInfo +
+                             finalChunkInfo +
+                             `🔒 AES: ${data.aesEnabled ? 'Yes' : 'No'}\n` +
+                             protocolInfo +
+                             `🕐 Time: ${timeRange}\n\n` +
+                             `💡 Click anywhere else to dismiss`;
+          }
+          
+          toast.style.whiteSpace = 'pre-line';
+          toast.style.backgroundColor = '#2c3e50';
+          toast.innerText = detailedMessage;
+          lastToastMessage = detailedMessage; // Update the tracked message
+          isPersistentToast = true; // Mark as persistent
+          
+          // Make it persistent (no auto-hide)
+          toast.style.display = 'block';
+          
+        } else {
+          console.log('📝 Making current toast persistent');
+          // No transfer data, just make current message persistent
+          toast.style.backgroundColor = '#2c3e50';
+          isPersistentToast = true; // Mark as persistent
+          toast.style.display = 'block';
+          toast.title = 'Persistent message - click anywhere else to dismiss';
+        }
+      });
+    } else {
+      console.warn('⚠️ Toast element not found in setupEventListeners');
+    }
+  }
 
   function updatePreview(files) {
-    preview.innerHTML = '';
+    DOM_CACHE.preview.innerHTML = '';
     if (!files.length) return;
     for (let file of files) {
       const div = document.createElement('div');
       div.textContent = `📄 ${file.name}`;
-      preview.appendChild(div);
+      DOM_CACHE.preview.appendChild(div);
     }
   }
 
-function autoUpload(files) {
-  if (!files.length) return;
+  function displaySelectedFiles(files) {
+    // For multiple files, show preview and let user manually upload if needed
+    updatePreview(files);
+    
+    // Show helpful message for multiple files
+    const totalSize = Array.from(files).reduce((sum, file) => sum + file.size, 0);
+    const totalSizeMB = (totalSize / 1024 / 1024).toFixed(1);
+    showToast(`📁 ${files.length} files selected (${totalSizeMB} MB total) - Auto-upload triggered`, 3000);
+    
+    // Actually trigger auto-upload for multiple files too
+    autoUpload(files);
+  }
 
-  const aesToggle = document.getElementById('enableEncryption');
-  const isAESEnabled = aesToggle && aesToggle.checked;
+function autoUpload(files) {
+  console.log('🚀 autoUpload called with files:', files ? files.length : 'no files', files);
+  
+  if (!files.length) {
+    console.log('❌ No files to upload');
+    return;
+  }
+
+  const isAESEnabled = DOM_CACHE.aesToggle && DOM_CACHE.aesToggle.checked;
   const isHTTPS = location.protocol === 'https:';
+
+  console.log('⚙️ Upload settings:', { isAESEnabled, isHTTPS });
 
   // ✅ Block upload if AES is ON and any file > 200MB
   const overLimit = Array.from(files).some(file => file.size > 200 * 1024 * 1024);
   if (isAESEnabled && overLimit) {
+    console.log('❌ AES blocked for large file');
     showToast("❌ AES is blocked for file size above 200MB to ensure smooth and efficient file transfer.", 5000);
     return;
   }
 
   // 🚫 Block AES on HTTP (re-enabled for testing)
   if (isAESEnabled && !isHTTPS) {
+    console.log('❌ AES blocked on HTTP');
     showToast("❌ AES encryption is only available over HTTPS connections for security.", 5000);
     return;
   }
@@ -976,9 +1117,9 @@ async function uploadFilesChunked(files, isAESEnabled) {
 <script>
 // ✅ Update Protocol Status Indicator
 document.addEventListener('DOMContentLoaded', () => {
-  const protocolIcon = document.getElementById('protocolIcon');
-  const protocolText = document.getElementById('protocolText');
-  const protocolStatus = document.getElementById('protocolStatus');
+  const protocolIcon = DOM_CACHE.protocolIcon;
+  const protocolText = DOM_CACHE.protocolText;
+  const protocolStatus = DOM_CACHE.protocolStatus;
   const isHTTPS = location.protocol === 'https:';
   
   if (isHTTPS) {
@@ -999,7 +1140,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ✅ Handle AES toggle restrictions (re-enabled for testing)
 document.addEventListener('DOMContentLoaded', () => {
   if (location.protocol === 'http:') {
-    const toggle = document.getElementById('enableEncryption');
+    const toggle = DOM_CACHE.aesToggle;
     if (toggle) {
       // Disable interaction and dim appearance
       toggle.disabled = true;
@@ -1067,7 +1208,32 @@ document.addEventListener('DOMContentLoaded', () => {
   let isPersistentToast = false;
 
   function showToast(message, duration = 3000, transferData = null) {
-    const toast = document.getElementById('toast');
+    console.log('🔔 showToast called:', { message, duration, hasTransferData: !!transferData });
+    let toast = DOM_CACHE.toast;
+    
+    // Robust fallback: Try to get toast element if DOM_CACHE is not available
+    if (!toast) {
+      console.warn('⚠️ DOM_CACHE.toast not available, trying direct selection');
+      toast = document.getElementById('toast');
+      if (toast) {
+        console.log('✅ Found toast directly, updating DOM_CACHE');
+        DOM_CACHE.toast = toast;
+      }
+    }
+    
+    if (!toast) {
+      console.error('❌ Toast element not found in DOM_CACHE or direct selection');
+      console.error('❌ Available DOM_CACHE keys:', Object.keys(DOM_CACHE));
+      // Try one more time with querySelector
+      toast = document.querySelector('#toast');
+      if (toast) {
+        console.log('✅ Found toast with querySelector, updating DOM_CACHE');
+        DOM_CACHE.toast = toast;
+      } else {
+        console.error('❌ Toast element completely unavailable');
+        return;
+      }
+    }
 
     // Clear any existing timeout
     if (toastTimeout) {
@@ -1110,7 +1276,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateToastContent(message, transferData = null) {
-    const toast = document.getElementById('toast');
+    let toast = DOM_CACHE.toast;
+    
+    // Robust fallback for toast element
+    if (!toast) {
+      console.warn('⚠️ updateToastContent: DOM_CACHE.toast not available, trying direct selection');
+      toast = document.getElementById('toast');
+      if (toast) {
+        DOM_CACHE.toast = toast;
+      } else {
+        console.error('❌ updateToastContent: Toast element not found');
+        return;
+      }
+    }
     
     // Only update if message changed to prevent unnecessary DOM updates
     if (lastToastMessage !== message) {
@@ -1128,7 +1306,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function hideToast() {
-    const toast = document.getElementById('toast');
+    let toast = DOM_CACHE.toast;
+    
+    // Robust fallback for toast element
+    if (!toast) {
+      console.warn('⚠️ hideToast: DOM_CACHE.toast not available, trying direct selection');
+      toast = document.getElementById('toast');
+      if (toast) {
+        DOM_CACHE.toast = toast;
+      } else {
+        console.error('❌ hideToast: Toast element not found');
+        return;
+      }
+    }
+    
     toast.style.display = 'none';
     toast.style.whiteSpace = 'normal'; // Reset white-space
     toast.style.backgroundColor = '#333'; // Reset background
@@ -1155,7 +1346,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateToastContent(message);
     
     // Ensure progress styling
-    const toast = document.getElementById('toast');
+    const toast = DOM_CACHE.toast;
     toast.style.backgroundColor = '#333';
     toast.style.cursor = 'pointer';
     toast.title = 'Upload in progress...';
@@ -1241,76 +1432,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 🖱️ Toast click handler to show persistent transfer details
-  document.getElementById('toast').addEventListener('click', function() {
-    const toast = this;
-    
-    // Clear any auto-hide timeout using the new system
-    if (toastTimeout) {
-      clearTimeout(toastTimeout);
-      toastTimeout = null;
-    }
-    
-    // If there's transfer data, show detailed log
-    if (toast._transferData) {
-      const data = toast._transferData;
-      let detailedMessage;
-      
-      if (data.type === 'download') {
-        const timeRange = data.startTime && data.endTime ? 
-          `${data.startTime} - ${data.endTime}` : 
-          data.timestamp;
-          
-        detailedMessage = `📊 ${data.type.toUpperCase()}: ${data.filename}\n` +
-                         `📁 Size: ${data.size}\n` +
-                         `⚡ Server Response: ${data.serverResponseTime || 'N/A'}\n` +
-                         `⚙️ Processing Time: ${data.processingTime || data.downloadTime || 'N/A'}\n` +
-                         `⏱️ Total Time: ${data.totalTime || 'N/A'}\n` +
-                         `🌐 Protocol: ${location.protocol === 'https:' ? 'HTTPS' : 'HTTP'}\n` +
-                         `🕐 Time: ${timeRange}\n\n` +
-                         `💡 Click anywhere else to dismiss`;
-      } else {
-        const protocolInfo = data.protocol ? `🌐 Protocol: ${data.protocol}\n` : '';
-        const chunkInfo = data.chunkType ? `📦 Transfer Type: ${data.chunkType}\n` : '';
-        const networkInfo = data.networkSpeed ? `📡 Network Speed: ${data.networkSpeed}\n` : '';
-        const finalChunkInfo = data.finalChunkSize ? `🔧 Final Chunk Size: ${data.finalChunkSize}\n` : '';
-        const timeRange = data.startTime && data.endTime ? 
-          `${data.startTime} - ${data.endTime}` : 
-          data.timestamp;
-          
-        detailedMessage = `📊 ${data.type.toUpperCase()}: ${data.filename}\n` +
-                         `📁 Size: ${data.size}\n` +
-                         `⏱️ ${data.type === 'download' ? 'Download' : 'Upload'} Duration: ${data.time} @ ${data.speed}\n` +
-                         chunkInfo +
-                         networkInfo +
-                         finalChunkInfo +
-                         `🔒 AES: ${data.aesEnabled ? 'Yes' : 'No'}\n` +
-                         protocolInfo +
-                         `🕐 Time: ${timeRange}\n\n` +
-                         `💡 Click anywhere else to dismiss`;
-      }
-      
-      toast.style.whiteSpace = 'pre-line';
-      toast.style.backgroundColor = '#2c3e50';
-      toast.innerText = detailedMessage;
-      lastToastMessage = detailedMessage; // Update the tracked message
-      isPersistentToast = true; // Mark as persistent
-      
-      // Make it persistent (no auto-hide)
-      toast.style.display = 'block';
-      
-    } else {
-      // No transfer data, just make current message persistent
-      toast.style.backgroundColor = '#2c3e50';
-      isPersistentToast = true; // Mark as persistent
-      toast.style.display = 'block';
-      toast.title = 'Persistent message - click anywhere else to dismiss';
-    }
-  });
-
   // 🖱️ Click anywhere else to dismiss persistent toast  
   document.addEventListener('click', function(e) {
-    const toast = document.getElementById('toast');
+    let toast = DOM_CACHE.toast;
+    
+    // Robust fallback for toast element
+    if (!toast) {
+      toast = document.getElementById('toast');
+      if (toast) {
+        DOM_CACHE.toast = toast;
+      } else {
+        return; // No toast element found
+      }
+    }
+    
     if (e.target !== toast && !toast.contains(e.target)) {
       if (toast.style.backgroundColor === 'rgb(44, 62, 80)') { // Persistent mode (either completion or detailed view)
         hideToast(); // Use the new hide function
@@ -1327,24 +1462,25 @@ document.addEventListener('DOMContentLoaded', () => {
   // 🕒 Show persistent toast with elapsed time (Legacy - replaced by new system)
 
   // 🎯 Handle download button clicks with direct download strategy - LANVan Ultra-Fast Implementation
-  document.querySelectorAll('.file-card a.download-btn').forEach(btn => {
-    btn.addEventListener('click', async function (e) {
-      e.preventDefault();
+  function setupDownloadHandlers() {
+    document.querySelectorAll('.file-card a.download-btn').forEach(btn => {
+      btn.addEventListener('click', async function (e) {
+        e.preventDefault();
 
-      const fileUrl = this.getAttribute('href');
-      const fileName = this.closest('.file-card').querySelector('.file-name').textContent.trim();
-      const isHTTPS = location.protocol === 'https:';
+        const fileUrl = this.getAttribute('href');
+        const fileName = this.closest('.file-card').querySelector('.file-name').textContent.trim();
+        const isHTTPS = location.protocol === 'https:';
 
-      // 📦 LANVan Direct Download Strategy - No Frontend Processing
-      const CHUNK_THRESHOLD = 250 * 1024 * 1024; // 250MB
-      const isEncFile = fileName.endsWith('.enc');
+        // 📦 LANVan Direct Download Strategy - No Frontend Processing
+        const CHUNK_THRESHOLD = 250 * 1024 * 1024; // 250MB
+        const isEncFile = fileName.endsWith('.enc');
 
-      // Quick file info check for strategy decision
-      const startTime = Date.now();
-      
-      // Show single stable toast with blue progress bar
-      showToast('⚡ Initializing download...', 0);
-      startProgressAnimation('blue', 2000);
+        // Quick file info check for strategy decision
+        const startTime = Date.now();
+        
+        // Show single stable toast with blue progress bar
+        showToast('⚡ Initializing download...', 0);
+        startProgressAnimation('blue', 2000);
 
       try {
         // HEAD request to get file info
@@ -1413,6 +1549,23 @@ document.addEventListener('DOMContentLoaded', () => {
         // Complete progress bar and show final success (safe for all devices)
         completeProgress('blue');
         setTimeout(() => {
+          console.log('🎯 Showing download completion toast:', completionMessage);
+          console.log('🎯 DOM_CACHE status:', {
+            toast: !!DOM_CACHE.toast,
+            toastId: DOM_CACHE.toast ? DOM_CACHE.toast.id : 'no-toast',
+            cacheKeys: Object.keys(DOM_CACHE)
+          });
+          
+          // Fallback: Try to get toast element directly if DOM_CACHE is missing
+          if (!DOM_CACHE.toast) {
+            console.warn('⚠️ DOM_CACHE.toast not available, trying direct selection');
+            const directToast = document.getElementById('toast');
+            if (directToast) {
+              console.log('✅ Found toast directly, updating DOM_CACHE');
+              DOM_CACHE.toast = directToast;
+            }
+          }
+          
           showToast(completionMessage, 0, downloadStats);
         }, 1500); // Brief delay to let download start
 
@@ -1438,6 +1591,15 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Direct download error:', error);
       }
     });
+  });
+  }
+
+  // Set up download handlers after DOM cache is ready
+  document.addEventListener('DOMContentLoaded', () => {
+    // Wait a bit to ensure DOM_CACHE is fully initialized
+    setTimeout(() => {
+      setupDownloadHandlers();
+    }, 100);
   });
 
 // � ULTRA-FAST BACKUP FUNCTIONS (only used if direct download fails)
