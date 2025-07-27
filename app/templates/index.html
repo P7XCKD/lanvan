@@ -159,6 +159,20 @@
       background-color: #357bd8;
     }
 
+    /* 🔔 Toast notification base styles */
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      pointer-events: none;
+    }
+    
+    .toast-visible {
+      pointer-events: auto;
+    }
+
     @media (max-width: 600px) {
       section {
         padding: 1rem;
@@ -166,6 +180,36 @@
       button {
         font-size: 0.95rem;
         padding: 0.5rem;
+      }
+      
+      /* 📱 Toast responsive styles for mobile */
+      #toast {
+        bottom: 10px !important;
+        left: 10px !important;
+        right: 10px !important;
+        transform: none !important;
+        -webkit-transform: none !important;
+        max-width: none !important;
+        min-width: auto !important;
+        margin: 0 !important;
+        font-size: 0.8rem !important;
+        padding: 0.6rem 1rem !important;
+        text-align: left !important;
+        line-height: 1.3 !important;
+      }
+    }
+    
+    /* 📱 Tablet breakpoint for toast */
+    @media (max-width: 900px) and (min-width: 601px) {
+      #toast {
+        bottom: 15px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        -webkit-transform: translateX(-50%) !important;
+        max-width: 400px !important;
+        margin: 0 !important;
+        font-size: 0.85rem !important;
       }
     }
   </style><style>
@@ -351,7 +395,7 @@ function autoUpload(files) {
     return;
   }
 
-  // � Analyze file composition for smart toast notifications
+  // 📊 Analyze file composition for smart toast notifications
   const CHUNK_THRESHOLD = 250 * 1024 * 1024; // 250MB
   const totalFiles = files.length;
   const totalSizeMB = Array.from(files).reduce((sum, file) => sum + file.size, 0) / (1024 * 1024);
@@ -373,14 +417,14 @@ function autoUpload(files) {
   if (hasEncFiles && isHTTPS) {
     // .enc files on HTTPS - always full upload
     if (totalFiles === 1) {
-      showToast("🔒 .enc file detected: Using secure full upload to preserve encryption integrity.", 3000);
+      showToast("🔒 .enc file detected: Using secure full upload to preserve encryption integrity.", 0);
     } else {
       const encCount = encFiles.length;
       const otherCount = totalFiles - encCount;
       if (otherCount === 0) {
-        showToast(`🔒 ${encCount} .enc files detected: Using secure full upload to preserve encryption integrity.`, 3000);
+        showToast(`🔒 ${encCount} .enc files detected: Using secure full upload to preserve encryption integrity.`, 0);
       } else {
-        showToast(`🔒 Mixed files (${encCount} .enc, ${otherCount} others): Using secure full upload for all files.`, 3000);
+        showToast(`🔒 Mixed files (${encCount} .enc, ${otherCount} others): Using secure full upload for all files.`, 0);
       }
     }
     uploadFilesRegular(files, isAESEnabled);
@@ -390,15 +434,15 @@ function autoUpload(files) {
     
     if (totalFiles === 1) {
       const sizeMB = (largeFiles[0].size / (1024 * 1024)).toFixed(1);
-      showToast(`📦 Large file (${sizeMB} MB): Using adaptive-chunked upload over ${protocolMsg} for optimal performance.`, 3000);
+      showToast(`📦 Large file (${sizeMB} MB): Using adaptive-chunked upload over ${protocolMsg} for optimal performance.`, 0);
     } else {
       const largeCount = largeFiles.length;
       const regularCount = regularFiles.length;
       
       if (regularCount === 0) {
-        showToast(`📦 ${largeCount} large files (${totalSizeMB.toFixed(1)} MB total): Using adaptive-chunked upload over ${protocolMsg}.`, 3000);
+        showToast(`📦 ${largeCount} large files (${totalSizeMB.toFixed(1)} MB total): Using adaptive-chunked upload over ${protocolMsg}.`, 0);
       } else {
-        showToast(`📦 Mixed sizes: ${largeCount} large + ${regularCount} regular files (${totalSizeMB.toFixed(1)} MB): Using adaptive-chunked upload for optimal handling.`, 3500);
+        showToast(`📦 Mixed sizes: ${largeCount} large + ${regularCount} regular files (${totalSizeMB.toFixed(1)} MB): Using adaptive-chunked upload for optimal handling.`, 0);
       }
     }
     uploadFilesChunked(files, isAESEnabled);
@@ -408,9 +452,9 @@ function autoUpload(files) {
     
     if (totalFiles === 1) {
       const sizeMB = (files[0].size / (1024 * 1024)).toFixed(1);
-      showToast(`📤 Uploading ${sizeMB} MB file via ${protocolMsg} full upload for reliable transfer.`, 2000);
+      showToast(`📤 Uploading ${sizeMB} MB file via ${protocolMsg} full upload for reliable transfer.`, 0);
     } else {
-      showToast(`📤 Uploading ${totalFiles} files (${totalSizeMB.toFixed(1)} MB total) via ${protocolMsg} full upload for reliable transfer.`, 2500);
+      showToast(`📤 Uploading ${totalFiles} files (${totalSizeMB.toFixed(1)} MB total) via ${protocolMsg} full upload for reliable transfer.`, 0);
     }
     uploadFilesRegular(files, isAESEnabled);
   }
@@ -436,7 +480,9 @@ function uploadFilesRegular(files, isAESEnabled) {
   const xhr = new XMLHttpRequest();
   progressBar.style.display = 'block';
   progressBar.value = 0;
-  showToast(`⏳ Starting ${protocolMsg} upload...`);
+  
+  // Smoothly update the existing toast instead of creating a new one
+  updateToastContent(`⏳ Starting ${protocolMsg} upload...`);
 
   const startTime = new Date().getTime();
   let lastProgressUpdate = 0;
@@ -512,7 +558,7 @@ function uploadFilesRegular(files, isAESEnabled) {
   xhr.send(formData);
 }
 
-// � Device capability detection functions for guest device support
+// 🔍 Device capability detection functions for guest device support
 function detectGuestDevice() {
   try {
     // Check for limited device indicators
@@ -577,9 +623,9 @@ function checkDevicePerformance() {
   }
 }
 
-// �📦 Optimized network-adaptive chunked upload function for large files (≥250MB) - supports HTTP & HTTPS
+// 📦 Optimized network-adaptive chunked upload function for large files (≥250MB) - supports HTTP & HTTPS
 async function uploadFilesChunked(files, isAESEnabled) {
-  // � Device capability detection for guest device support
+  // 🔍 Device capability detection for guest device support
   const isGuestDevice = detectGuestDevice();
   const deviceMemoryMB = getDeviceMemory();
   
@@ -594,14 +640,14 @@ async function uploadFilesChunked(files, isAESEnabled) {
   const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
   const isHTTPS = location.protocol === 'https:';
   
-  // � Guest device large file warning
+  // ⚠️ Guest device large file warning
   if (isGuestDevice && totalSize > 1024 * 1024 * 1024) { // > 1GB
     const fileSizeGB = (totalSize / 1024 / 1024 / 1024).toFixed(1);
     console.warn(`⚠️ Large file upload (${fileSizeGB}GB) detected on guest device. This may cause memory issues.`);
     showToast(`⚠️ Large file (${fileSizeGB}GB) on guest device may cause issues. Consider using regular upload or a smaller file.`, 5000);
   }
   
-  // �🚫 Block .enc files from chunked upload on HTTPS
+  // 🚫 Block .enc files from chunked upload on HTTPS
   const hasEncFiles = Array.from(files).some(file => file.name.endsWith('.enc'));
   if (hasEncFiles && isHTTPS) {
     showToast("❌ .enc files cannot use chunked upload on HTTPS. Please use full upload to preserve encryption integrity.", 5000);
@@ -619,10 +665,10 @@ async function uploadFilesChunked(files, isAESEnabled) {
   const protocolMsg = isHTTPS ? "HTTPS" : "HTTP";
   
   if (isGuestDevice) {
-    showToast(`⏳ Starting guest-safe adaptive-chunked upload over ${protocolMsg} (reduced chunk sizes for memory protection)...`);
+    updateToastContent(`⏳ Starting guest-safe adaptive-chunked upload over ${protocolMsg} (reduced chunk sizes for memory protection)...`);
     console.log(`🔍 Guest device detected - using conservative chunk sizes: ${(MIN_CHUNK_SIZE/1024/1024).toFixed(1)}MB to ${(MAX_CHUNK_SIZE/1024/1024).toFixed(1)}MB`);
   } else {
-    showToast(`⏳ Starting adaptive-chunked upload over ${protocolMsg}...`);
+    updateToastContent(`⏳ Starting adaptive-chunked upload over ${protocolMsg}...`);
   }
 
   // 🎯 Memory-aware chunk size adaptation for guest device support
@@ -668,9 +714,9 @@ async function uploadFilesChunked(files, isAESEnabled) {
       // 📊 Dynamic chunk estimation (will adapt during upload)
       let estimatedChunks = Math.ceil(fileSize / CHUNK_SIZE);
       if (files.length === 1) {
-        showToast(`📦 Processing ${file.name} (${fileSizeMB} MB) - ~${estimatedChunks} adaptive chunks (starting at ${(CHUNK_SIZE/1024/1024).toFixed(0)}MB)`);
+        updateToastContent(`📦 Processing ${file.name} (${fileSizeMB} MB) - ~${estimatedChunks} adaptive chunks (starting at ${(CHUNK_SIZE/1024/1024).toFixed(0)}MB)`);
       } else {
-        showToast(`📦 File ${currentFileNum}/${files.length}: ${file.name} (${fileSizeMB} MB) - ~${estimatedChunks} adaptive chunks`);
+        updateToastContent(`📦 File ${currentFileNum}/${files.length}: ${file.name} (${fileSizeMB} MB) - ~${estimatedChunks} adaptive chunks`);
       }
 
       // 🚀 Dynamic chunk processing with byte-position tracking (not chunk index)
@@ -823,9 +869,9 @@ async function uploadFilesChunked(files, isAESEnabled) {
 
       // Finalize the file (combine chunks) - use actual chunk count
       if (files.length === 1) {
-        showToast(`🔗 Finalizing ${file.name} (${chunkCount} chunks)...`);
+        updateToastContent(`🔗 Finalizing ${file.name} (${chunkCount} chunks)...`);
       } else {
-        showToast(`🔗 Finalizing file ${currentFileNum}/${files.length}: ${file.name} (${chunkCount} chunks)...`);
+        updateToastContent(`🔗 Finalizing file ${currentFileNum}/${files.length}: ${file.name} (${chunkCount} chunks)...`);
       }
       
       const finalizeFormData = new FormData();
@@ -976,7 +1022,8 @@ document.addEventListener('DOMContentLoaded', () => {
 <div id="toast" style="
   position: fixed;
   bottom: 20px;
-  right: 20px;
+  left: 50%;
+  transform: translateX(-50%);
   background: #333;
   color: #fff;
   padding: 0.8rem 1.2rem;
@@ -986,14 +1033,18 @@ document.addEventListener('DOMContentLoaded', () => {
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
   z-index: 9999;
   cursor: pointer;
-  transition: opacity 0.3s ease, background-color 0.2s ease;
+  transition: opacity 0.3s ease, background-color 0.2s ease, transform 0.3s ease;
   opacity: 1;
-  max-width: calc(100vw - 40px);
+  max-width: 500px;
+  min-width: 300px;
   word-wrap: break-word;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
+  overflow-wrap: break-word;
+  hyphens: auto;
+  -webkit-transform: translateX(-50%) translateZ(0);
+  transform: translateX(-50%) translateZ(0);
   overflow: hidden;
-  position: relative;
+  text-align: center;
+  line-height: 1.4;
 " title="Click to keep visible">
   <!-- Progress bar overlay -->
   <div id="toast-progress" style="
@@ -1009,70 +1060,113 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 
 <script>
-  // 📱 Mobile-optimized toast functions - Anti-blink system
-  let _lastToastMessage = '';
+  // 🎯 Improved Toast System - Single persistent toast with smooth updates
+  let currentToast = null;
+  let toastTimeout = null;
+  let lastToastMessage = '';
+  let isPersistentToast = false;
 
   function showToast(message, duration = 3000, transferData = null) {
     const toast = document.getElementById('toast');
 
-    // ✅ Cancel any previous toast timeout
-    if (window._toastTimeout) {
-      clearTimeout(window._toastTimeout);
+    // Clear any existing timeout
+    if (toastTimeout) {
+      clearTimeout(toastTimeout);
+      toastTimeout = null;
     }
 
-    // ✅ Show new toast message (no transitions to prevent blinking)
-    toast.innerText = message;
-    toast.style.display = 'block';
+    // Update content smoothly
+    updateToastContent(message, transferData);
     
-    // Store transfer data for click handler
-    toast._transferData = transferData;
-    _lastToastMessage = message;
+    // Show toast if hidden
+    if (toast.style.display === 'none') {
+      toast.style.display = 'block';
+    }
 
-    // ✅ If this is a completion message (duration = 0), make it immediately persistent and easy to dismiss
+    // Handle duration logic
     if (duration === 0) {
-      toast.style.backgroundColor = '#2c3e50'; // Dark blue for persistent completion messages
+      // Persistent toast (completion messages)
+      isPersistentToast = true;
+      toast.style.backgroundColor = '#2c3e50';
       toast.style.cursor = 'pointer';
       toast.title = 'Click anywhere to dismiss or click here for details';
-    } else {
-      toast.style.backgroundColor = '#333'; // Normal gray for progress messages
+    } else if (duration > 0) {
+      // Temporary toast with auto-hide
+      isPersistentToast = false;
+      toast.style.backgroundColor = '#333';
       toast.style.cursor = 'pointer';
       toast.title = 'Click to keep visible';
       
-      // ✅ Auto-hide after `duration` ms for progress messages
-      if (duration > 0) {
-        window._toastTimeout = setTimeout(() => {
-          toast.style.display = 'none';
-        }, duration);
-      }
+      toastTimeout = setTimeout(() => {
+        if (!isPersistentToast) { // Only hide if not made persistent
+          hideToast();
+        }
+      }, duration);
+    } else {
+      // Progress toast (duration < 0 means indefinite)
+      isPersistentToast = false;
+      toast.style.backgroundColor = '#333';
     }
   }
 
-  // 📱 Throttled toast for frequent updates (mobile-friendly)
-  function showToastThrottled(message) {
+  function updateToastContent(message, transferData = null) {
     const toast = document.getElementById('toast');
     
-    // Simply update the text content without any transitions or opacity changes
-    toast.innerText = message;
-    toast.style.display = 'block';
-    toast.style.backgroundColor = '#333';
-    
-    // Store the message
-    _lastToastMessage = message;
-  }
-
-  // 🔄 Progressive toast updater - updates content smoothly without blinking
-  function updateProgressToast(message) {
-    const toast = document.getElementById('toast');
-    
-    // Only update if the message is different to prevent unnecessary DOM updates
-    if (_lastToastMessage !== message) {
+    // Only update if message changed to prevent unnecessary DOM updates
+    if (lastToastMessage !== message) {
       toast.innerText = message;
-      _lastToastMessage = message;
+      lastToastMessage = message;
+    }
+    
+    // Store transfer data for click handler
+    if (transferData) {
+      toast._transferData = transferData;
     }
     
     // Ensure toast is visible
     toast.style.display = 'block';
+  }
+
+  function hideToast() {
+    const toast = document.getElementById('toast');
+    toast.style.display = 'none';
+    toast.style.whiteSpace = 'normal'; // Reset white-space
+    toast.style.backgroundColor = '#333'; // Reset background
+    toast.style.cursor = 'pointer';
+    toast.title = 'Click to keep visible';
+    isPersistentToast = false;
+    lastToastMessage = '';
+    
+    if (toastTimeout) {
+      clearTimeout(toastTimeout);
+      toastTimeout = null;
+    }
+  }
+
+  // 📱 Throttled toast for frequent updates (mobile-friendly) 
+  function showToastThrottled(message) {
+    // Use the improved update system
+    updateToastContent(message);
+  }
+
+  // 🔄 Progressive toast updater - updates content smoothly without blinking
+  function updateProgressToast(message) {
+    // Use the improved update system but don't set timeout
+    updateToastContent(message);
+    
+    // Ensure progress styling
+    const toast = document.getElementById('toast');
     toast.style.backgroundColor = '#333';
+    toast.style.cursor = 'pointer';
+    toast.title = 'Upload in progress...';
+  }
+
+  // 🎯 Persistent toast for long operations
+  function showPersistentToast(message) {
+    showToast(message, -1); // -1 means indefinite
+    return function stopPersistentToast() {
+      hideToast();
+    };
   }
 
   // 🎨 Progress bar functions for visual feedback - Safe for all devices
@@ -1151,10 +1245,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('toast').addEventListener('click', function() {
     const toast = this;
     
-    // Clear any auto-hide timeout
-    if (window._toastTimeout) {
-      clearTimeout(window._toastTimeout);
-      window._toastTimeout = null;
+    // Clear any auto-hide timeout using the new system
+    if (toastTimeout) {
+      clearTimeout(toastTimeout);
+      toastTimeout = null;
     }
     
     // If there's transfer data, show detailed log
@@ -1199,6 +1293,8 @@ document.addEventListener('DOMContentLoaded', () => {
       toast.style.whiteSpace = 'pre-line';
       toast.style.backgroundColor = '#2c3e50';
       toast.innerText = detailedMessage;
+      lastToastMessage = detailedMessage; // Update the tracked message
+      isPersistentToast = true; // Mark as persistent
       
       // Make it persistent (no auto-hide)
       toast.style.display = 'block';
@@ -1206,20 +1302,18 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       // No transfer data, just make current message persistent
       toast.style.backgroundColor = '#2c3e50';
+      isPersistentToast = true; // Mark as persistent
       toast.style.display = 'block';
+      toast.title = 'Persistent message - click anywhere else to dismiss';
     }
   });
 
-  // 🖱️ Click anywhere else to dismiss persistent toast
+  // 🖱️ Click anywhere else to dismiss persistent toast  
   document.addEventListener('click', function(e) {
     const toast = document.getElementById('toast');
     if (e.target !== toast && !toast.contains(e.target)) {
       if (toast.style.backgroundColor === 'rgb(44, 62, 80)') { // Persistent mode (either completion or detailed view)
-        toast.style.display = 'none';
-        toast.style.whiteSpace = 'normal';
-        toast.style.backgroundColor = '#333';
-        toast.style.cursor = 'pointer';
-        toast.title = 'Click to keep visible';
+        hideToast(); // Use the new hide function
         
         // ✅ Reload page if this was an upload completion toast
         if (window._shouldReloadAfterToast) {
@@ -1230,36 +1324,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 🕒 Show persistent toast with elapsed time
-  function showPersistentToast(baseMessage) {
-    const toast = document.getElementById('toast');
-    const startTime = Date.now();
-    
-    // Clear any existing timeout
-    if (window._toastTimeout) {
-      clearTimeout(window._toastTimeout);
-    }
-    
-    // Clear any existing interval
-    if (window._toastInterval) {
-      clearInterval(window._toastInterval);
-    }
-    
-    // Update toast every 100ms with elapsed time
-    window._toastInterval = setInterval(() => {
-      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      toast.innerText = `${baseMessage} (${elapsed}s)`;
-      toast.style.display = 'block';
-    }, 100);
-    
-    // Return function to stop the persistent toast
-    return function stopPersistentToast() {
-      if (window._toastInterval) {
-        clearInterval(window._toastInterval);
-        window._toastInterval = null;
-      }
-    };
-  }
+  // 🕒 Show persistent toast with elapsed time (Legacy - replaced by new system)
 
   // 🎯 Handle download button clicks with direct download strategy - LANVan Ultra-Fast Implementation
   document.querySelectorAll('.file-card a.download-btn').forEach(btn => {
@@ -1306,7 +1371,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const serverResponseTime = ((Date.now() - startTime) / 1000).toFixed(2);
         
         // Update toast with processing info - single stable message
-        updateProgressToast(`� Processing ${fileSizeMB} MB download...`);
+        updateProgressToast(`📥 Processing ${fileSizeMB} MB download...`);
 
         // 🚀 DIRECT DOWNLOAD - Let browser handle everything natively
         const link = document.createElement('a');
@@ -1348,7 +1413,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Complete progress bar and show final success (safe for all devices)
         completeProgress('blue');
         setTimeout(() => {
-          showToast(completionMessage, 4000, downloadStats);
+          showToast(completionMessage, 0, downloadStats);
         }, 1500); // Brief delay to let download start
 
       } catch (error) {
@@ -1394,8 +1459,20 @@ async function downloadFileMinimal(fileUrl, fileName, fileSizeMB, requestStartTi
     const totalTime = ((Date.now() - requestStartTime) / 1000).toFixed(2);
     const protocolMsg = location.protocol === 'https:' ? 'HTTPS' : 'HTTP';
     
+    // Create stats for minimal fallback download
+    const downloadStats = {
+      type: 'minimal_fallback_download',
+      filename: fileName,
+      size: fileSizeMB + ' MB',
+      time: totalTime + 's',
+      speed: (parseFloat(fileSizeMB) / parseFloat(totalTime)).toFixed(2) + ' MB/s',
+      protocol: protocolMsg,
+      strategy: 'minimal-fallback',
+      timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
+    };
+    
     setTimeout(() => {
-      showToast(`✅ Minimal fallback download complete via ${protocolMsg} (${fileSizeMB} MB) • ${totalTime}s • Click anywhere to dismiss`, 0);
+      showToast(`✅ Minimal fallback download complete via ${protocolMsg} (${fileSizeMB} MB) • ${totalTime}s • Click anywhere to dismiss`, 0, downloadStats);
     }, 1500);
     
   } catch (err) {
