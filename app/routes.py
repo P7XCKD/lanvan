@@ -433,22 +433,61 @@ async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str 
 
 @router.get("/download-all", name="download_all")
 async def download_all_files():
-    zip_buffer = io.BytesIO()
-    with ZipFile(zip_buffer, "w") as zip_file:
-        for file in UPLOAD_FOLDER.iterdir():
-            if file.is_file():
-                if file.suffix == ".enc":
-                    decrypted_data = decrypt_bytes_legacy(file.read_bytes())
-                    zip_file.writestr(file.stem, decrypted_data)
-                else:
-                    zip_file.write(file, arcname=file.name)
-    zip_buffer.seek(0)
-
-    return StreamingResponse(
-        zip_buffer,
-        media_type="application/zip",
-        headers={"Content-Disposition": "attachment; filename=all_files.zip"}
-    )
+    """Download all files as a ZIP archive with proper streaming"""
+    
+    # Check if there are any files to download
+    files_to_download = [file for file in UPLOAD_FOLDER.iterdir() if file.is_file()]
+    if not files_to_download:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "No files available for download"}
+        )
+    
+    # Create ZIP in memory with proper error handling
+    try:
+        zip_buffer = io.BytesIO()
+        with ZipFile(zip_buffer, "w") as zip_file:
+            for file in files_to_download:
+                try:
+                    if file.suffix == ".enc":
+                        # Decrypt .enc files before adding to ZIP
+                        decrypted_data = decrypt_bytes_legacy(file.read_bytes())
+                        zip_file.writestr(file.stem, decrypted_data)
+                    else:
+                        # Add regular files directly
+                        zip_file.write(file, arcname=file.name)
+                except Exception as e:
+                    print(f"⚠️ Error adding {file.name} to ZIP: {e}")
+                    # Continue with other files even if one fails
+                    continue
+        
+        zip_buffer.seek(0)
+        zip_data = zip_buffer.getvalue()
+        zip_buffer.close()
+        
+        # Create a proper generator for streaming
+        def generate_zip():
+            chunk_size = 8192  # 8KB chunks
+            for i in range(0, len(zip_data), chunk_size):
+                chunk = zip_data[i:i + chunk_size]
+                if chunk:  # Only yield non-empty chunks
+                    yield chunk
+        
+        return StreamingResponse(
+            generate_zip(),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": "attachment; filename=all_files.zip",
+                "Content-Length": str(len(zip_data))
+            }
+        )
+        
+    except Exception as e:
+        print(f"❌ Error creating ZIP archive: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to create ZIP archive: {str(e)}"}
+        )
 
 @router.post("/clear", name="clear_files")
 async def clear_files():

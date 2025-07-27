@@ -308,7 +308,7 @@
   <div style="display: flex; justify-content: space-between; align-items: center;">
     <h2>Available Files</h2>
     <div>
-      <a href="{{ url_for('download_all') }}" class="download-btn" style="margin-right: 0.5rem;">⬇ Download All</a>
+      <button onclick="showDownloadOptions(event)" class="download-btn" style="margin-right: 0.5rem;">⬇ Download All</button>
       <form method="POST" action="{{ url_for('clear_files') }}" onsubmit="return confirm('Are you sure you want to clear all uploaded files?\n\nNote: Files currently being uploaded may need to be cleared again after upload completes.')" style="display: inline;">
         <button type="submit" class="download-btn" style="background-color: #e74c3c;">🧹 Clear History</button>
       </form>
@@ -1472,6 +1472,315 @@ async function uploadFilesChunked(files, isAESEnabled) {
   }
 }
 
+// 🔔 Toast Notification System - Complete implementation
+let toastTimeout = null;
+let lastToastMessage = '';
+let isPersistentToast = false;
+
+function showToast(message, duration = 3000, transferData = null) {
+  const toast = DOM_CACHE.toast;
+  if (!toast) {
+    console.warn('⚠️ Toast element not found');
+    return;
+  }
+  
+  // Clear any existing timeout
+  if (toastTimeout) {
+    clearTimeout(toastTimeout);
+    toastTimeout = null;
+  }
+  
+  // Reset persistent state
+  isPersistentToast = false;
+  
+  // Set message and data
+  toast.innerText = message;
+  lastToastMessage = message;
+  
+  // Store transfer data for detailed view
+  if (transferData) {
+    toast._transferData = transferData;
+  } else {
+    delete toast._transferData;
+  }
+  
+  // Style the toast
+  toast.style.display = 'block';
+  toast.style.opacity = '1';
+  toast.style.transform = 'translateX(-50%) translateY(0)';
+  toast.style.backgroundColor = duration === 0 ? '#27ae60' : '#333';
+  toast.style.whiteSpace = 'normal';
+  toast.title = 'Click to keep visible';
+  
+  console.log(`🔔 Toast: ${message}`);
+  
+  // Auto-hide unless duration is 0 (persistent)
+  if (duration > 0) {
+    toastTimeout = setTimeout(() => {
+      hideToast();
+    }, duration);
+  }
+}
+
+function updateToastContent(message) {
+  const toast = DOM_CACHE.toast;
+  if (!toast) return;
+  
+  // Only update if not persistent
+  if (!isPersistentToast) {
+    toast.innerText = message;
+    lastToastMessage = message;
+    toast.style.display = 'block';
+    
+    // Reset styling for updates
+    toast.style.backgroundColor = '#333';
+    toast.style.whiteSpace = 'normal';
+  }
+}
+
+function updateProgressToast(message) {
+  // Same as updateToastContent for progress updates
+  updateToastContent(message);
+}
+
+function hideToast() {
+  const toast = DOM_CACHE.toast;
+  if (!toast) return;
+  
+  // Don't hide if persistent
+  if (isPersistentToast) return;
+  
+  // Clear timeout
+  if (toastTimeout) {
+    clearTimeout(toastTimeout);
+    toastTimeout = null;
+  }
+  
+  // Hide with animation
+  toast.style.opacity = '0';
+  toast.style.transform = 'translateX(-50%) translateY(20px)';
+  
+  setTimeout(() => {
+    if (!isPersistentToast) {
+      toast.style.display = 'none';
+      delete toast._transferData;
+    }
+  }, 300);
+}
+
+// 💾 File Metadata Storage
+function storeFileMetadata(files, totalSize) {
+  try {
+    const metadata = JSON.parse(localStorage.getItem('fileMetadata') || '{}');
+    const timestamp = Date.now();
+    
+    Array.from(files).forEach(file => {
+      metadata[file.name] = {
+        size: file.size,
+        timestamp: timestamp,
+        lastModified: file.lastModified,
+        type: file.type || 'unknown'
+      };
+    });
+    
+    localStorage.setItem('fileMetadata', JSON.stringify(metadata));
+    console.log(`💾 Stored metadata for ${files.length} files`);
+  } catch (e) {
+    console.log('⚠️ Failed to store file metadata:', e);
+  }
+}
+
+// 📊 Transfer Statistics Logging
+function saveStatsToLog(stats) {
+  try {
+    const logs = JSON.parse(localStorage.getItem('transferLogs') || '[]');
+    logs.unshift(stats); // Add to beginning
+    
+    // Keep only last 50 logs
+    if (logs.length > 50) {
+      logs.splice(50);
+    }
+    
+    localStorage.setItem('transferLogs', JSON.stringify(logs));
+    console.log(`📊 Saved transfer stats:`, stats.type, stats.size, stats.time);
+  } catch (e) {
+    console.log('⚠️ Failed to save transfer stats:', e);
+  }
+}
+
+// 🌐 Download Options Management
+function showDownloadOptions(event) {
+  event.preventDefault();
+  
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+  `;
+  
+  const dialog = document.createElement('div');
+  dialog.style.cssText = `
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    max-width: 500px;
+    margin: 1rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    text-align: center;
+  `;
+  
+  dialog.innerHTML = `
+    <h3 style="margin-top: 0; color: #333;">Choose Download Method</h3>
+    <p style="color: #666; margin-bottom: 2rem;">How would you like to download all files?</p>
+    
+    <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+      <button onclick="downloadAsZip()" style="
+        background: #4a90e2;
+        color: white;
+        border: none;
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 1rem;
+        min-width: 180px;
+      ">
+        📦 Download as ZIP
+        <br><small style="opacity: 0.8;">Single compressed file</small>
+      </button>
+      
+      <button onclick="downloadIndividually()" style="
+        background: #27ae60;
+        color: white;
+        border: none;
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 1rem;
+        min-width: 180px;
+      ">
+        📄 Download Separately
+        <br><small style="opacity: 0.8;">Individual files</small>
+      </button>
+    </div>
+    
+    <button onclick="closeDownloadModal()" style="
+      background: #e74c3c;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 1.5rem;
+      font-size: 0.9rem;
+    ">
+      Cancel
+    </button>
+  `;
+  
+  modal.appendChild(dialog);
+  document.body.appendChild(modal);
+  
+  // Store modal reference for cleanup
+  window.currentDownloadModal = modal;
+  
+  // Close on background click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeDownloadModal();
+    }
+  });
+  
+  // Close on Escape key
+  document.addEventListener('keydown', function escapeHandler(e) {
+    if (e.key === 'Escape') {
+      closeDownloadModal();
+      document.removeEventListener('keydown', escapeHandler);
+    }
+  });
+}
+
+function downloadAsZip() {
+  closeDownloadModal();
+  showToast('📦 Preparing ZIP download...', 3000);
+  
+  // Navigate to the ZIP download
+  window.location.href = '/download-all';
+}
+
+async function downloadIndividually() {
+  closeDownloadModal();
+  
+  try {
+    // Get list of files from the current page
+    const fileCards = document.querySelectorAll('.file-card .file-name');
+    const fileNames = Array.from(fileCards).map(card => card.textContent.trim());
+    
+    if (fileNames.length === 0) {
+      showToast('❌ No files found to download', 3000);
+      return;
+    }
+    
+    showToast(`📄 Starting individual download of ${fileNames.length} files...`, 0);
+    
+    let downloadCount = 0;
+    let failedDownloads = [];
+    
+    // Download each file with a small delay to prevent overwhelming the browser
+    for (let i = 0; i < fileNames.length; i++) {
+      try {
+        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay between downloads
+        
+        // Create download link and trigger download
+        const link = document.createElement('a');
+        link.href = `/download/${encodeURIComponent(fileNames[i])}`;
+        link.download = fileNames[i];
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        downloadCount++;
+        updateToastContent(`📄 Downloaded ${downloadCount}/${fileNames.length} files...`);
+        
+      } catch (error) {
+        console.error(`Failed to download ${fileNames[i]}:`, error);
+        failedDownloads.push(fileNames[i]);
+      }
+    }
+    
+    // Final status
+    if (failedDownloads.length === 0) {
+      showToast(`✅ Successfully downloaded all ${downloadCount} files individually!`, 5000);
+    } else {
+      showToast(`⚠️ Downloaded ${downloadCount} files. Failed: ${failedDownloads.length} (${failedDownloads.join(', ')})`, 8000);
+    }
+    
+  } catch (error) {
+    console.error('Individual download error:', error);
+    showToast('❌ Error during individual downloads', 5000);
+  }
+}
+
+function closeDownloadModal() {
+  const modal = window.currentDownloadModal;
+  if (modal) {
+    modal.remove();
+    window.currentDownloadModal = null;
+  }
+}
+
+// Make functions globally available
+window.downloadAsZip = downloadAsZip;
+window.downloadIndividually = downloadIndividually;
+window.closeDownloadModal = closeDownloadModal;
 
   
 </script>
@@ -1562,235 +1871,6 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 
 <script>
-  // 🎯 Improved Toast System - Single persistent toast with smooth updates
-  let currentToast = null;
-  let toastTimeout = null;
-  let lastToastMessage = '';
-  let isPersistentToast = false;
-
-  function showToast(message, duration = 3000, transferData = null) {
-    console.log('🔔 showToast called:', { message, duration, hasTransferData: !!transferData });
-    let toast = DOM_CACHE.toast;
-    
-    // Robust fallback: Try to get toast element if DOM_CACHE is not available
-    if (!toast) {
-      console.warn('⚠️ DOM_CACHE.toast not available, trying direct selection');
-      toast = document.getElementById('toast');
-      if (toast) {
-        console.log('✅ Found toast directly, updating DOM_CACHE');
-        DOM_CACHE.toast = toast;
-      }
-    }
-    
-    if (!toast) {
-      console.error('❌ Toast element not found in DOM_CACHE or direct selection');
-      console.error('❌ Available DOM_CACHE keys:', Object.keys(DOM_CACHE));
-      // Try one more time with querySelector
-      toast = document.querySelector('#toast');
-      if (toast) {
-        console.log('✅ Found toast with querySelector, updating DOM_CACHE');
-        DOM_CACHE.toast = toast;
-      } else {
-        console.error('❌ Toast element completely unavailable');
-        return;
-      }
-    }
-
-    // Clear any existing timeout
-    if (toastTimeout) {
-      clearTimeout(toastTimeout);
-      toastTimeout = null;
-    }
-
-    // Update content smoothly
-    updateToastContent(message, transferData);
-    
-    // Show toast if hidden
-    if (toast.style.display === 'none') {
-      toast.style.display = 'block';
-    }
-
-    // Handle duration logic
-    if (duration === 0) {
-      // Persistent toast (completion messages)
-      isPersistentToast = true;
-      toast.style.backgroundColor = '#2c3e50';
-      toast.style.cursor = 'pointer';
-      toast.title = 'Click anywhere to dismiss or click here for details';
-    } else if (duration > 0) {
-      // Temporary toast with auto-hide
-      isPersistentToast = false;
-      toast.style.backgroundColor = '#333';
-      toast.style.cursor = 'pointer';
-      toast.title = 'Click to keep visible';
-      
-      toastTimeout = setTimeout(() => {
-        if (!isPersistentToast) { // Only hide if not made persistent
-          hideToast();
-        }
-      }, duration);
-    } else {
-      // Progress toast (duration < 0 means indefinite)
-      isPersistentToast = false;
-      toast.style.backgroundColor = '#333';
-    }
-  }
-
-  function updateToastContent(message, transferData = null) {
-    let toast = DOM_CACHE.toast;
-    
-    // Robust fallback for toast element
-    if (!toast) {
-      console.warn('⚠️ updateToastContent: DOM_CACHE.toast not available, trying direct selection');
-      toast = document.getElementById('toast');
-      if (toast) {
-        DOM_CACHE.toast = toast;
-      } else {
-        console.error('❌ updateToastContent: Toast element not found');
-        return;
-      }
-    }
-    
-    // Only update if message changed to prevent unnecessary DOM updates
-    if (lastToastMessage !== message) {
-      toast.innerText = message;
-      lastToastMessage = message;
-    }
-    
-    // Store transfer data for click handler
-    if (transferData) {
-      toast._transferData = transferData;
-    }
-    
-    // Ensure toast is visible
-    toast.style.display = 'block';
-  }
-
-  function hideToast() {
-    let toast = DOM_CACHE.toast;
-    
-    // Robust fallback for toast element
-    if (!toast) {
-      console.warn('⚠️ hideToast: DOM_CACHE.toast not available, trying direct selection');
-      toast = document.getElementById('toast');
-      if (toast) {
-        DOM_CACHE.toast = toast;
-      } else {
-        console.error('❌ hideToast: Toast element not found');
-        return;
-      }
-    }
-    
-    toast.style.display = 'none';
-    toast.style.whiteSpace = 'normal'; // Reset white-space
-    toast.style.backgroundColor = '#333'; // Reset background
-    toast.style.cursor = 'pointer';
-    toast.title = 'Click to keep visible';
-    isPersistentToast = false;
-    lastToastMessage = '';
-    
-    if (toastTimeout) {
-      clearTimeout(toastTimeout);
-      toastTimeout = null;
-    }
-  }
-
-  // 📱 Throttled toast for frequent updates (mobile-friendly) 
-  function showToastThrottled(message) {
-    // Use the improved update system
-    updateToastContent(message);
-  }
-
-  // 🔄 Progressive toast updater - updates content smoothly without blinking
-  function updateProgressToast(message) {
-    // Use the improved update system but don't set timeout
-    updateToastContent(message);
-    
-    // Ensure progress styling
-    const toast = DOM_CACHE.toast;
-    toast.style.backgroundColor = '#333';
-    toast.style.cursor = 'pointer';
-    toast.title = 'Upload in progress...';
-  }
-
-  // 🎯 Persistent toast for long operations
-  function showPersistentToast(message) {
-    showToast(message, -1); // -1 means indefinite
-    return function stopPersistentToast() {
-      hideToast();
-    };
-  }
-
-  // 🎨 Progress bar functions with cached DOM elements for optimal performance
-  function setProgressColor(color) {
-    try {
-      // Use cached DOM element instead of repeated getElementById
-      let progressBar = DOM_CACHE.toastProgress;
-      if (!progressBar) {
-        progressBar = document.getElementById('toast-progress');
-        if (progressBar) DOM_CACHE.toastProgress = progressBar;
-      }
-      if (!progressBar) return; // Safe guard for guest devices
-      
-      if (color === 'blue') {
-        progressBar.style.background = 'linear-gradient(90deg, #2196F3, #42A5F5)';
-      } else if (color === 'green') {
-        progressBar.style.background = 'linear-gradient(90deg, #4CAF50, #66BB6A)';
-      } else {
-        progressBar.style.background = color;
-      }
-    } catch (err) {
-      console.log('Progress color update skipped on this device');
-    }
-  }
-
-  function updateProgress(percentage, color = 'green') {
-    try {
-      // Use cached DOM element
-      let progressBar = DOM_CACHE.toastProgress;
-      if (!progressBar) {
-        progressBar = document.getElementById('toast-progress');
-        if (progressBar) DOM_CACHE.toastProgress = progressBar;
-      }
-      if (!progressBar) return; // Safe guard for guest devices
-      
-      setProgressColor(color);
-      progressBar.style.width = Math.min(100, Math.max(0, percentage)) + '%';
-    } catch (err) {
-      console.log('Progress update skipped on this device');
-    }
-  }
-
-  function startProgressAnimation(color = 'green', duration = 2000) {
-    try {
-      setProgressColor(color);
-      // Use cached DOM element
-      let progressBar = DOM_CACHE.toastProgress;
-      if (!progressBar) {
-        progressBar = document.getElementById('toast-progress');
-        if (progressBar) DOM_CACHE.toastProgress = progressBar;
-      }
-      if (!progressBar) return; // Safe guard for guest devices
-      
-      progressBar.style.width = '0%';
-      
-      // Animate to 90% over the duration
-      const startTime = Date.now();
-      const animate = () => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(90, (elapsed / duration) * 90);
-        if (progressBar) progressBar.style.width = progress + '%';
-        
-        if (progress < 90 && progressBar) {
-          requestAnimationFrame(animate);
-        }
-      };
-      requestAnimationFrame(animate);
-    } catch (err) {
-      console.log('Progress animation skipped on this device');
-    }
-  }
-
   function completeProgress(color = 'green') {
     try {
       // Use cached DOM element
@@ -2258,86 +2338,6 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
   }
 }
 
-  // 🎯 Download completion detection - trigger-based instead of time-based
-  function detectDownloadCompletion(successMessage, transferData) {
-    let downloadDialogDetected = false;
-    let checkTimer = null;
-    
-    // More reliable method: Monitor document state and user activity
-    const originalTitle = document.title;
-    let titleCheckCount = 0;
-    
-    // Method 1: Detect download dialog by monitoring window focus/blur
-    const onWindowBlur = () => {
-      downloadDialogDetected = true;
-      setTimeout(() => {
-        // Check if user came back to window (made a decision)
-        if (document.hasFocus() && !document.hidden) {
-          cleanupAndShowResult();
-        }
-      }, 500);
-    };
-    
-    // Method 2: Monitor document visibility changes
-    const onVisibilityChange = () => {
-      if (!document.hidden && downloadDialogDetected) {
-        cleanupAndShowResult();
-      }
-    };
-    
-    // Method 3: Detect if browser shows download in progress
-    const checkDownloadState = () => {
-      titleCheckCount++;
-      
-      // Check if page title changed (some browsers change title during download)
-      const titleChanged = document.title !== originalTitle;
-      
-      // Check if window is focused and visible (user returned)
-      const isActive = document.hasFocus() && !document.hidden;
-      
-      if (titleCheckCount >= 25) { // 5 seconds total
-        cleanupAndShowResult();
-      } else if (isActive && downloadDialogDetected && titleCheckCount >= 3) {
-        // User returned to window after dialog appeared, likely successful
-        cleanupAndShowResult();
-      }
-    };
-    
-    const cleanupAndShowResult = () => {
-      // Clear all listeners and timers
-      window.removeEventListener('blur', onWindowBlur);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      if (checkTimer) clearInterval(checkTimer);
-      
-      // Determine success based on user returning to active window
-      const isActive = document.hasFocus() && !document.hidden;
-      
-      if (downloadDialogDetected && isActive) {
-        // User saw dialog and came back - likely accepted download - make it persistent like uploads
-        showToast(successMessage + " • Click anywhere to dismiss", 0, transferData);
-      } else if (!downloadDialogDetected) {
-        // No dialog detected - auto-download or instant acceptance - make it persistent like uploads
-        showToast(successMessage + " • Click anywhere to dismiss", 0, transferData);
-      } else {
-        // User possibly cancelled or download is pending - but still show stats when clicked
-        showToast("📥 Download requested - check your browser's downloads if file doesn't appear • Click anywhere to dismiss", 0, transferData);
-      }
-    };
-    
-    // Set up monitoring
-    window.addEventListener('blur', onWindowBlur);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    checkTimer = setInterval(checkDownloadState, 200);
-    
-    // Immediate check in case download is instant
-    setTimeout(() => {
-      if (!downloadDialogDetected && document.hasFocus()) {
-        // Likely instant download without dialog
-        cleanupAndShowResult();
-      }
-    }, 300);
-  }
-  
   //  Save upload/download stats to localStorage
   function saveStatsToLog(stats) {
     const logs = JSON.parse(localStorage.getItem('transferLogs') || '[]');
@@ -2380,6 +2380,83 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
   function getFileMetadata(filename) {
     const metadata = JSON.parse(localStorage.getItem('fileMetadata') || '{}');
     return metadata[filename] || null;
+  }
+
+  // Missing progress functions for compatibility
+  function setProgressColor(color) {
+    try {
+      // Use cached DOM element instead of repeated getElementById
+      let progressBar = DOM_CACHE.toastProgress;
+      if (!progressBar) {
+        progressBar = document.getElementById('toast-progress');
+        if (progressBar) DOM_CACHE.toastProgress = progressBar;
+      }
+      if (!progressBar) return; // Safe guard for guest devices
+      
+      if (color === 'blue') {
+        progressBar.style.background = 'linear-gradient(90deg, #2196F3, #42A5F5)';
+      } else if (color === 'green') {
+        progressBar.style.background = 'linear-gradient(90deg, #4CAF50, #66BB6A)';
+      } else {
+        progressBar.style.background = color;
+      }
+    } catch (err) {
+      console.log('Progress color update skipped on this device');
+    }
+  }
+
+  function updateProgress(percentage, color = 'green') {
+    try {
+      // Use cached DOM element
+      let progressBar = DOM_CACHE.toastProgress;
+      if (!progressBar) {
+        progressBar = document.getElementById('toast-progress');
+        if (progressBar) DOM_CACHE.toastProgress = progressBar;
+      }
+      if (!progressBar) return; // Safe guard for guest devices
+      
+      setProgressColor(color);
+      progressBar.style.width = Math.min(100, Math.max(0, percentage)) + '%';
+    } catch (err) {
+      console.log('Progress update skipped on this device');
+    }
+  }
+
+  function startProgressAnimation(color = 'green', duration = 2000) {
+    try {
+      setProgressColor(color);
+      // Use cached DOM element
+      let progressBar = DOM_CACHE.toastProgress;
+      if (!progressBar) {
+        progressBar = document.getElementById('toast-progress');
+        if (progressBar) DOM_CACHE.toastProgress = progressBar;
+      }
+      if (!progressBar) return; // Safe guard for guest devices
+      
+      progressBar.style.width = '0%';
+      
+      // Animate to 90% over the duration
+      const startTime = Date.now();
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(90, (elapsed / duration) * 90);
+        if (progressBar) progressBar.style.width = progress + '%';
+        
+        if (progress < 90 && progressBar) {
+          requestAnimationFrame(animate);
+        }
+      };
+      requestAnimationFrame(animate);
+    } catch (err) {
+      console.log('Progress animation skipped on this device');
+    }
+  }
+
+  function showPersistentToast(message) {
+    showToast(message, -1); // -1 means indefinite
+    return function stopPersistentToast() {
+      hideToast();
+    };
   }
 </script>
 <script>
