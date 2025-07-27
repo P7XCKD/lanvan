@@ -332,6 +332,73 @@
 
 <!-- 📡 Auto Upload JS -->
 <script>
+  // 🚀 Configuration Management - Centralized constants for better performance tuning
+  const LANVAN_CONFIG = {
+    // Memory thresholds
+    CHUNK_THRESHOLD: 250 * 1024 * 1024, // 250MB - when to use chunked upload
+    AES_SIZE_LIMIT: 200 * 1024 * 1024,  // 200MB - AES encryption limit
+    GUEST_MEMORY_LIMIT: 1024 * 1024 * 1024, // 1GB - guest device warning threshold
+    
+    // Chunk sizing for different device types
+    CHUNK_SIZES: {
+      GUEST_INITIAL: 8 * 1024 * 1024,   // 8MB initial for guest devices
+      GUEST_MIN: 1 * 1024 * 1024,       // 1MB minimum for guest devices
+      GUEST_MAX: 32 * 1024 * 1024,      // 32MB maximum for guest devices
+      REGULAR_INITIAL: 16 * 1024 * 1024, // 16MB initial for regular devices
+      REGULAR_MIN: 2 * 1024 * 1024,     // 2MB minimum for regular devices
+      REGULAR_MAX: 128 * 1024 * 1024    // 128MB maximum for regular devices
+    },
+    
+    // Performance tuning intervals (unified to reduce overhead)
+    INTERVALS: {
+      PROGRESS_UPDATE: 2500,  // Unified progress update interval (2.5s)
+      TOAST_UPDATE: 2500,     // Toast update interval (matches progress)
+      CHUNK_ADAPTATION: 3,    // Adapt chunk size every N chunks
+      MEMORY_CHECK: 10        // Check memory every N chunks (guest devices)
+    },
+    
+    // Network speed thresholds for chunk adaptation
+    SPEED_THRESHOLDS: {
+      ULTRA_FAST: 40,   // > 40 MB/s
+      VERY_FAST: 25,    // > 25 MB/s  
+      FAST: 15,         // > 15 MB/s
+      MEDIUM_FAST: 8,   // > 8 MB/s
+      MEDIUM: 4,        // > 4 MB/s
+      SLOW: 2           // < 2 MB/s
+    },
+    
+    // Memory management
+    MEMORY: {
+      HIGH_USAGE_THRESHOLD: 70, // Reduce chunk size above 70% memory usage
+      GC_FREQUENCY: 10          // Force GC every N chunks on guest devices
+    },
+    
+    // Error recovery and retry mechanisms
+    ERROR_RECOVERY: {
+      MAX_RETRIES: 3,           // Maximum retry attempts for failed chunks
+      RETRY_DELAY: 1000,        // Base delay between retries (ms)
+      EXPONENTIAL_BACKOFF: 2,   // Multiplier for exponential backoff
+      NETWORK_TIMEOUT: 30000    // Network timeout for chunk uploads (30s)
+    }
+  };
+
+  // 🎯 State Management - Centralized state tracking
+  const LANVAN_STATE = {
+    uploads: new Map(),         // Track active uploads by file ID
+    downloads: new Map(),       // Track active downloads by file ID
+    errors: [],                 // Error history for debugging
+    performance: {              // Performance metrics
+      totalUploaded: 0,
+      totalDownloaded: 0,
+      averageSpeed: 0,
+      sessionsStartTime: Date.now()
+    },
+    ui: {
+      activeToasts: 0,          // Track active toast count
+      lastUpdate: 0             // Last UI update timestamp
+    }
+  };
+
   // 🚀 Performance Optimization: Cache DOM elements once after DOM is loaded
   let DOM_CACHE = {};
   let dropZone, fileInput, preview, progressBar, statusText; // Legacy variables
@@ -345,6 +412,7 @@
       progressBar: document.getElementById('uploadProgress'),
       statusText: document.getElementById('uploadStatus'),
       toast: document.getElementById('toast'),
+      toastProgress: document.getElementById('toast-progress'), // Cache toast progress bar
       protocolIcon: document.getElementById('protocolIcon'),
       protocolText: document.getElementById('protocolText'),
       protocolStatus: document.getElementById('protocolStatus'),
@@ -521,8 +589,8 @@ function autoUpload(files) {
 
   console.log('⚙️ Upload settings:', { isAESEnabled, isHTTPS });
 
-  // ✅ Block upload if AES is ON and any file > 200MB
-  const overLimit = Array.from(files).some(file => file.size > 200 * 1024 * 1024);
+  // ✅ Block upload if AES is ON and any file > configured limit
+  const overLimit = Array.from(files).some(file => file.size > LANVAN_CONFIG.AES_SIZE_LIMIT);
   if (isAESEnabled && overLimit) {
     console.log('❌ AES blocked for large file');
     showToast("❌ AES is blocked for file size above 200MB to ensure smooth and efficient file transfer.", 5000);
@@ -537,7 +605,7 @@ function autoUpload(files) {
   }
 
   // 📊 Analyze file composition for smart toast notifications
-  const CHUNK_THRESHOLD = 250 * 1024 * 1024; // 250MB
+  const CHUNK_THRESHOLD = LANVAN_CONFIG.CHUNK_THRESHOLD;
   const totalFiles = files.length;
   const totalSizeMB = Array.from(files).reduce((sum, file) => sum + file.size, 0) / (1024 * 1024);
   
@@ -627,7 +695,7 @@ function uploadFilesRegular(files, isAESEnabled) {
 
   const startTime = new Date().getTime();
   let lastProgressUpdate = 0;
-  const PROGRESS_UPDATE_INTERVAL = 2000; // Update progress toast every 2 seconds (no blinking)
+  const PROGRESS_UPDATE_INTERVAL = LANVAN_CONFIG.INTERVALS.PROGRESS_UPDATE; // Unified interval from config
 
   xhr.upload.onprogress = function (e) {
     if (e.lengthComputable) {
@@ -658,6 +726,11 @@ function uploadFilesRegular(files, isAESEnabled) {
     const avgSpeed = (totalSize / 1024 / 1024 / totalElapsed).toFixed(2);
     
     if (xhr.status === 200 || xhr.status === 302) {
+      // Update performance metrics in LANVAN_STATE
+      LANVAN_STATE.performance.totalUploaded += totalSize;
+      const currentSession = (endTime - LANVAN_STATE.performance.sessionsStartTime) / 1000;
+      LANVAN_STATE.performance.averageSpeed = LANVAN_STATE.performance.totalUploaded / (1024 * 1024) / currentSession;
+
       // Save upload stats to logs
       const uploadStats = {
         type: 'regular_upload',
@@ -770,10 +843,10 @@ async function uploadFilesChunked(files, isAESEnabled) {
   const isGuestDevice = detectGuestDevice();
   const deviceMemoryMB = getDeviceMemory();
   
-  // 🚀 Memory-Aware Network-Adaptive Chunk Sizing System
-  let CHUNK_SIZE = isGuestDevice ? 8 * 1024 * 1024 : 16 * 1024 * 1024; // 8MB for guests, 16MB for others
-  const MIN_CHUNK_SIZE = isGuestDevice ? 1 * 1024 * 1024 : 2 * 1024 * 1024; // 1MB for guests, 2MB for others  
-  const MAX_CHUNK_SIZE = isGuestDevice ? 32 * 1024 * 1024 : 128 * 1024 * 1024; // 32MB for guests, 128MB for others
+  // 🚀 Memory-Aware Network-Adaptive Chunk Sizing System (Using Centralized Config)
+  let CHUNK_SIZE = isGuestDevice ? LANVAN_CONFIG.CHUNK_SIZES.GUEST_INITIAL : LANVAN_CONFIG.CHUNK_SIZES.REGULAR_INITIAL;
+  const MIN_CHUNK_SIZE = isGuestDevice ? LANVAN_CONFIG.CHUNK_SIZES.GUEST_MIN : LANVAN_CONFIG.CHUNK_SIZES.REGULAR_MIN;
+  const MAX_CHUNK_SIZE = isGuestDevice ? LANVAN_CONFIG.CHUNK_SIZES.GUEST_MAX : LANVAN_CONFIG.CHUNK_SIZES.REGULAR_MAX;
   let networkSpeed = 0; // MB/s
   let speedSamples = []; // Simplified tracking
   
@@ -782,7 +855,7 @@ async function uploadFilesChunked(files, isAESEnabled) {
   const isHTTPS = location.protocol === 'https:';
   
   // ⚠️ Guest device large file warning
-  if (isGuestDevice && totalSize > 1024 * 1024 * 1024) { // > 1GB
+  if (isGuestDevice && totalSize > LANVAN_CONFIG.GUEST_MEMORY_LIMIT) {
     const fileSizeGB = (totalSize / 1024 / 1024 / 1024).toFixed(1);
     console.warn(`⚠️ Large file upload (${fileSizeGB}GB) detected on guest device. This may cause memory issues.`);
     showToast(`⚠️ Large file (${fileSizeGB}GB) on guest device may cause issues. Consider using regular upload or a smaller file.`, 5000);
@@ -801,7 +874,7 @@ async function uploadFilesChunked(files, isAESEnabled) {
   const startTime = new Date().getTime();
   let totalUploaded = 0;
   let lastToastUpdate = 0;
-  const TOAST_UPDATE_INTERVAL = 3000; // Update toast only every 3 seconds (anti-blink)
+  const TOAST_UPDATE_INTERVAL = LANVAN_CONFIG.INTERVALS.TOAST_UPDATE; // Unified interval from config
   
   const protocolMsg = isHTTPS ? "HTTPS" : "HTTP";
   
@@ -812,36 +885,38 @@ async function uploadFilesChunked(files, isAESEnabled) {
     updateToastContent(`⏳ Starting adaptive-chunked upload over ${protocolMsg}...`);
   }
 
-  // 🎯 Memory-aware chunk size adaptation for guest device support
+  // 🎯 Simplified memory-aware chunk size adaptation using configuration
   function adaptChunkSize(speed) {
+    const thresholds = LANVAN_CONFIG.SPEED_THRESHOLDS;
+    
     if (isGuestDevice) {
       // Conservative chunking for guest devices to prevent memory issues
-      if (speed > 25) { // Fast network on guest device - medium chunks
+      if (speed > thresholds.VERY_FAST) { // > 25 MB/s
         CHUNK_SIZE = Math.min(MAX_CHUNK_SIZE, 16 * 1024 * 1024); // 16MB max
-      } else if (speed > 10) { // Medium network on guest device - small chunks
+      } else if (speed > thresholds.MEDIUM_FAST) { // > 8 MB/s
         CHUNK_SIZE = Math.min(MAX_CHUNK_SIZE, 8 * 1024 * 1024); // 8MB max
-      } else if (speed > 5) { // Slow network on guest device - very small chunks
+      } else if (speed > thresholds.MEDIUM) { // > 4 MB/s
         CHUNK_SIZE = Math.min(MAX_CHUNK_SIZE, 4 * 1024 * 1024); // 4MB max
-      } else { // Very slow network - minimum chunks
+      } else { // <= 4 MB/s - minimum chunks
         CHUNK_SIZE = Math.max(MIN_CHUNK_SIZE, 2 * 1024 * 1024); // 2MB minimum
       }
     } else {
-      // Original aggressive adaptation for powerful devices
-      if (speed > 40) { // Ultra-fast network - use maximum chunks
+      // Simplified adaptation for powerful devices
+      if (speed > thresholds.ULTRA_FAST) { // > 40 MB/s
         CHUNK_SIZE = MAX_CHUNK_SIZE;
-      } else if (speed > 25) { // Very fast network - large chunks
+      } else if (speed > thresholds.VERY_FAST) { // > 25 MB/s
         CHUNK_SIZE = Math.min(MAX_CHUNK_SIZE, 80 * 1024 * 1024); // 80MB
-      } else if (speed > 15) { // Fast network - medium-large chunks  
+      } else if (speed > thresholds.FAST) { // > 15 MB/s
         CHUNK_SIZE = Math.min(MAX_CHUNK_SIZE, 48 * 1024 * 1024); // 48MB
-      } else if (speed > 8) { // Medium-fast network - medium chunks
+      } else if (speed > thresholds.MEDIUM_FAST) { // > 8 MB/s
         CHUNK_SIZE = Math.min(MAX_CHUNK_SIZE, 24 * 1024 * 1024); // 24MB
-      } else if (speed > 4) { // Medium network - keep current or slightly increase
+      } else if (speed > thresholds.MEDIUM) { // > 4 MB/s
         CHUNK_SIZE = Math.min(MAX_CHUNK_SIZE, Math.max(CHUNK_SIZE, 12 * 1024 * 1024)); // 12MB minimum
-      } else if (speed < 2) { // Slow network - reduce gradually
+      } else if (speed < thresholds.SLOW) { // < 2 MB/s
         CHUNK_SIZE = Math.max(MIN_CHUNK_SIZE, CHUNK_SIZE * 0.8);
       }
+      // For 2-4 MB/s range, keep current chunk size stable
     }
-    // For 2-4 MB/s range, keep current chunk size stable
     return Math.round(CHUNK_SIZE);
   }
 
@@ -866,25 +941,20 @@ async function uploadFilesChunked(files, isAESEnabled) {
       let chunkCount = 0;
 
       while (currentPosition < fileSize) {
-        // 🔍 Memory monitoring for guest device protection
-        if (isGuestDevice) {
+        // 🔍 Optimized memory monitoring for guest device protection (reduced frequency)
+        if (isGuestDevice && chunkCount % LANVAN_CONFIG.MEMORY.GC_FREQUENCY === 0) {
           try {
-            // Check available memory before creating large chunks
+            // Check available memory before creating large chunks (only every N chunks)
             if (performance.memory && performance.memory.usedJSHeapSize) {
               const usedMemoryMB = performance.memory.usedJSHeapSize / (1024 * 1024);
               const limitMemoryMB = performance.memory.jsHeapSizeLimit / (1024 * 1024);
               const memoryUsagePercent = (usedMemoryMB / limitMemoryMB) * 100;
               
               // If memory usage is high, reduce chunk size
-              if (memoryUsagePercent > 70) {
+              if (memoryUsagePercent > LANVAN_CONFIG.MEMORY.HIGH_USAGE_THRESHOLD) {
                 CHUNK_SIZE = Math.max(MIN_CHUNK_SIZE, CHUNK_SIZE * 0.5);
                 console.log(`🔥 High memory usage (${memoryUsagePercent.toFixed(1)}%), reducing chunk size to ${(CHUNK_SIZE/1024/1024).toFixed(1)}MB`);
               }
-            }
-            
-            // Force garbage collection on guest devices every 10 chunks
-            if (chunkCount % 10 === 0 && window.gc) {
-              window.gc();
             }
           } catch (memError) {
             console.log('Memory monitoring failed, continuing with current chunk size:', memError);
@@ -894,7 +964,7 @@ async function uploadFilesChunked(files, isAESEnabled) {
         const chunkStartTime = Date.now();
         const end = Math.min(currentPosition + CHUNK_SIZE, fileSize);
         
-        // 💾 Safe chunk creation with memory protection
+        // 💾 Safe chunk creation with memory protection and explicit cleanup
         let chunk;
         try {
           chunk = file.slice(currentPosition, end);
@@ -905,62 +975,121 @@ async function uploadFilesChunked(files, isAESEnabled) {
           }
           
           // Additional safety check for guest devices
-          if (isGuestDevice && chunk.size > 32 * 1024 * 1024) { // 32MB limit for guests
+          if (isGuestDevice && chunk.size > LANVAN_CONFIG.CHUNK_SIZES.GUEST_MAX) {
             console.warn(`⚠️ Large chunk detected on guest device (${(chunk.size/1024/1024).toFixed(1)}MB), this may cause issues`);
           }
         } catch (chunkError) {
           throw new Error(`Memory error creating chunk: ${chunkError.message}. Try refreshing the page or using a smaller file.`);
         }
 
-        // Create FormData for chunk
-        const chunkFormData = new FormData();
+        // Create FormData for chunk with explicit cleanup tracking
+        let chunkFormData = new FormData();
         chunkFormData.append('chunk', chunk);
         chunkFormData.append('filename', file.name);
         chunkFormData.append('part_number', partNumber.toString());
         chunkFormData.append('total_parts', estimatedChunks.toString()); // Send current estimate
 
-        // Upload chunk
-        const chunkResponse = await fetch('/upload_chunk', {
-          method: 'POST',
-          body: chunkFormData
-        });
+        // 📊 Save chunk size BEFORE upload attempts for performance tracking
+        const chunkSize = chunk.size;
 
-        if (!chunkResponse.ok) {
-          const errorData = await chunkResponse.json().catch(() => ({ msg: 'Unknown error' }));
-          throw new Error(errorData.msg || `Chunk ${partNumber} failed with status ${chunkResponse.status}`);
+        // Upload chunk with retry mechanism
+        let retryCount = 0;
+        let chunkResponse;
+        let chunkResult;
+        
+        while (retryCount <= LANVAN_CONFIG.ERROR_RECOVERY.MAX_RETRIES) {
+          try {
+            chunkResponse = await Promise.race([
+              fetch('/upload_chunk', {
+                method: 'POST',
+                body: chunkFormData
+              }),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Network timeout')), LANVAN_CONFIG.ERROR_RECOVERY.NETWORK_TIMEOUT)
+              )
+            ]);
+
+            if (!chunkResponse.ok) {
+              throw new Error(`HTTP ${chunkResponse.status}`);
+            }
+            
+            // Verify chunk upload success
+            chunkResult = await chunkResponse.json();
+            if (chunkResult.status !== 'success') {
+              throw new Error(chunkResult.msg || `Chunk ${partNumber} upload was not successful`);
+            }
+            
+            // Success - break out of retry loop
+            break;
+            
+          } catch (error) {
+            retryCount++;
+            console.log(`🔄 Chunk ${partNumber} attempt ${retryCount} failed:`, error.message);
+            
+            if (retryCount > LANVAN_CONFIG.ERROR_RECOVERY.MAX_RETRIES) {
+              // Critical: Clean up chunk memory before throwing error
+              chunk = null;
+              chunkFormData = null;
+              throw new Error(`Chunk ${partNumber} failed after ${LANVAN_CONFIG.ERROR_RECOVERY.MAX_RETRIES} retries: ${error.message}`);
+            }
+            
+            // Wait before retry with exponential backoff
+            const delayMs = LANVAN_CONFIG.ERROR_RECOVERY.RETRY_DELAY * Math.pow(LANVAN_CONFIG.ERROR_RECOVERY.EXPONENTIAL_BACKOFF, retryCount - 1);
+            console.log(`⏳ Retrying chunk ${partNumber} in ${delayMs}ms...`);
+            
+            // Show retry message for user feedback
+            if (retryCount === 1) {
+              updateToastContent(`🔄 Network issue, retrying chunk ${partNumber}...`);
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+          }
         }
         
-        // Verify chunk upload success
-        const chunkResult = await chunkResponse.json();
-        if (chunkResult.status !== 'success') {
-          throw new Error(chunkResult.msg || `Chunk ${partNumber} upload was not successful`);
+        // Calculate timing after successful upload
+        const chunkDuration = (Date.now() - chunkStartTime) / 1000;
+        
+        // 🧹 CRITICAL MEMORY CLEANUP: Explicitly dispose of chunk data after successful upload
+        chunk = null;
+        chunkFormData = null;
+        
+        // Force garbage collection hints for guest devices
+        if (isGuestDevice && chunkCount % LANVAN_CONFIG.MEMORY.GC_FREQUENCY === 0) {
+          // Trigger GC if available (Chrome DevTools or --js-flags=--expose-gc)
+          if (typeof window.gc === 'function') {
+            window.gc();
+            console.log(`🧹 Forced garbage collection after chunk ${chunkCount}`);
+          }
+          // Additional memory pressure relief
+          if (typeof window.performance?.memory !== 'undefined') {
+            const usedMB = window.performance.memory.usedJSHeapSize / (1024 * 1024);
+            console.log(`💾 Memory usage: ${usedMB.toFixed(1)}MB after chunk ${chunkCount}`);
+          }
         }
         
-        // Optional: Log chunk success for debugging
+        // Optional: Log chunk success for debugging (using saved chunk size)
         if (chunkCount <= 5 || chunkCount % 20 === 0) {
-          console.log(`✅ Chunk ${partNumber} uploaded successfully (${(chunk.size/1024/1024).toFixed(1)}MB)`);
+          console.log(`✅ Chunk ${partNumber} uploaded successfully (${(chunkSize/1024/1024).toFixed(1)}MB)`);
         }
 
         chunkCount++;
 
-        // 🚀 Enhanced performance tracking - adapt quickly for maximum speed
+        // 🚀 Optimized performance tracking - using saved chunk data
+        const currentChunkSpeed = (chunkSize / 1024 / 1024) / chunkDuration;
+        
         if (chunkCount === 2) {
           // Quick initial assessment after 2nd chunk
-          const chunkDuration = (Date.now() - chunkStartTime) / 1000;
-          const chunkSpeed = (chunk.size / 1024 / 1024) / chunkDuration;
-          speedSamples.push(chunkSpeed);
-          networkSpeed = chunkSpeed;
+          speedSamples.push(currentChunkSpeed);
+          networkSpeed = currentChunkSpeed;
           
           // Early adaptation if speed is good
-          if (chunkSpeed > 15) {
-            CHUNK_SIZE = adaptChunkSize(chunkSpeed);
+          if (currentChunkSpeed > LANVAN_CONFIG.SPEED_THRESHOLDS.FAST) {
+            CHUNK_SIZE = adaptChunkSize(currentChunkSpeed);
           }
-        } else if (chunkCount > 2 && chunkCount % 3 === 0) {
-          // Regular adaptation every 3 chunks for responsive optimization
-          const chunkDuration = (Date.now() - chunkStartTime) / 1000;
-          const chunkSpeed = (chunk.size / 1024 / 1024) / chunkDuration;
+        } else if (chunkCount > 2 && chunkCount % LANVAN_CONFIG.INTERVALS.CHUNK_ADAPTATION === 0) {
+          // Regular adaptation using configuration interval for responsive optimization
           
-          speedSamples.push(chunkSpeed);
+          speedSamples.push(currentChunkSpeed);
           if (speedSamples.length > 5) speedSamples.shift(); // Keep 5 samples for better accuracy
           
           if (speedSamples.length >= 3) {
@@ -971,21 +1100,21 @@ async function uploadFilesChunked(files, isAESEnabled) {
             
             // Update estimated chunks when chunk size changes significantly
             if (Math.abs(CHUNK_SIZE - oldChunkSize) > (4 * 1024 * 1024)) { // 4MB difference
-              const remainingBytes = fileSize - currentPosition - chunk.size;
+              const remainingBytes = fileSize - currentPosition - chunkSize;
               const remainingChunks = Math.ceil(remainingBytes / CHUNK_SIZE);
               estimatedChunks = chunkCount + remainingChunks;
             }
           }
         }
 
-        // Update progress bar immediately (smooth)
-        totalUploaded += chunk.size;
+        // Update progress bar immediately (smooth) - using saved chunk size
+        totalUploaded += chunkSize;
         const overallProgress = (totalUploaded / totalSize) * 100;
         progressBar.value = overallProgress;
 
         // 📊 Reduced toast updates to minimize UI overhead
         const now = Date.now();
-        const isLastChunk = (currentPosition + chunk.size >= fileSize);
+        const isLastChunk = (currentPosition + chunkSize >= fileSize);
         const isSignificantProgress = (chunkCount % 10 === 0); // Every 10th chunk
         
         if (now - lastToastUpdate >= TOAST_UPDATE_INTERVAL || isLastChunk || isSignificantProgress) {
@@ -1003,12 +1132,12 @@ async function uploadFilesChunked(files, isAESEnabled) {
           lastToastUpdate = now;
         }
 
-        // Move to next chunk position
-        currentPosition += chunk.size;
+        // Move to next chunk position (using saved chunk size)
+        currentPosition += chunkSize;
         partNumber++;
       }
 
-      // Finalize the file (combine chunks) - use actual chunk count
+      // Finalize the file (combine chunks) with retry mechanism
       if (files.length === 1) {
         updateToastContent(`🔗 Finalizing ${file.name} (${chunkCount} chunks)...`);
       } else {
@@ -1022,20 +1151,54 @@ async function uploadFilesChunked(files, isAESEnabled) {
         finalizeFormData.append('encrypt', 'true');
       }
 
-      const finalizeResponse = await fetch('/finalize_upload', {
-        method: 'POST',
-        body: finalizeFormData
-      });
-
-      if (!finalizeResponse.ok) {
-        const errorData = await finalizeResponse.json();
-        throw new Error(errorData.msg || `Failed to finalize ${file.name}`);
-      }
+      let finalizeRetryCount = 0;
+      let finalizeResponse;
+      let finalizeData;
       
-      // Get finalize response data for better feedback
-      const finalizeData = await finalizeResponse.json();
-      if (finalizeData.actual_chunks !== chunkCount) {
-        console.log(`Note: Server found ${finalizeData.actual_chunks} chunks, expected ${chunkCount}`);
+      while (finalizeRetryCount <= LANVAN_CONFIG.ERROR_RECOVERY.MAX_RETRIES) {
+        try {
+          finalizeResponse = await Promise.race([
+            fetch('/finalize_upload', {
+              method: 'POST',
+              body: finalizeFormData
+            }),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Finalize timeout')), LANVAN_CONFIG.ERROR_RECOVERY.NETWORK_TIMEOUT)
+            )
+          ]);
+
+          if (!finalizeResponse.ok) {
+            throw new Error(`Finalize HTTP ${finalizeResponse.status}`);
+          }
+          
+          // Get finalize response data for better feedback
+          finalizeData = await finalizeResponse.json();
+          if (finalizeData.actual_chunks !== chunkCount) {
+            console.log(`Note: Server found ${finalizeData.actual_chunks} chunks, expected ${chunkCount}`);
+          }
+          
+          // Success - break out of retry loop
+          break;
+          
+        } catch (error) {
+          finalizeRetryCount++;
+          console.log(`🔄 Finalize attempt ${finalizeRetryCount} failed:`, error.message);
+          
+          if (finalizeRetryCount > LANVAN_CONFIG.ERROR_RECOVERY.MAX_RETRIES) {
+            throw new Error(`Failed to finalize ${file.name} after ${LANVAN_CONFIG.ERROR_RECOVERY.MAX_RETRIES} retries: ${error.message}`);
+          }
+          
+          // Wait before retry with exponential backoff
+          const delayMs = LANVAN_CONFIG.ERROR_RECOVERY.RETRY_DELAY * Math.pow(LANVAN_CONFIG.ERROR_RECOVERY.EXPONENTIAL_BACKOFF, finalizeRetryCount - 1);
+          console.log(`⏳ Retrying finalize in ${delayMs}ms...`);
+          
+          // Show retry message for user feedback
+          if (finalizeRetryCount === 1) {
+            updateToastContent(`🔄 Finalizing retry for ${file.name}...`);
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
       }
     }
 
@@ -1044,6 +1207,11 @@ async function uploadFilesChunked(files, isAESEnabled) {
     const totalElapsed = ((endTime - startTime) / 1000).toFixed(1);
     const avgSpeed = (totalSize / 1024 / 1024 / totalElapsed).toFixed(2);
     const finalChunkSizeMB = (CHUNK_SIZE / 1024 / 1024).toFixed(1);
+
+    // Update performance metrics in LANVAN_STATE
+    LANVAN_STATE.performance.totalUploaded += totalSize;
+    const currentSession = (endTime - LANVAN_STATE.performance.sessionsStartTime) / 1000;
+    LANVAN_STATE.performance.averageSpeed = LANVAN_STATE.performance.totalUploaded / (1024 * 1024) / currentSession;
 
     const uploadStats = {
       type: 'adaptive_chunked_upload',
@@ -1056,6 +1224,9 @@ async function uploadFilesChunked(files, isAESEnabled) {
       networkSpeed: networkSpeed.toFixed(1) + ' MB/s',
       aesEnabled: isAESEnabled,
       protocol: protocolMsg,
+      retryCount: 0, // TODO: Track total retries across all chunks
+      guestDevice: isGuestDevice,
+      deviceMemory: deviceMemoryMB + 'MB',
       timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
       startTime: new Date(startTime).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
       endTime: new Date(endTime).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
@@ -1079,6 +1250,26 @@ async function uploadFilesChunked(files, isAESEnabled) {
     // 🔍 Enhanced error handling with guest device support
     let errorMessage = error.message;
     let suggestionMessage = '';
+    
+    // Track error in LANVAN_STATE for debugging
+    LANVAN_STATE.errors.push({
+      type: 'adaptive_chunked_upload',
+      message: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString(),
+      context: {
+        files: files.length,
+        totalSize: totalSizeMB + ' MB',
+        isGuestDevice: isGuestDevice,
+        deviceMemory: deviceMemoryMB + ' MB',
+        chunkSize: (CHUNK_SIZE / 1024 / 1024).toFixed(1) + ' MB'
+      }
+    });
+    
+    // Keep only last 10 errors to prevent memory bloat
+    if (LANVAN_STATE.errors.length > 10) {
+      LANVAN_STATE.errors.splice(0, LANVAN_STATE.errors.length - 10);
+    }
     
     if (isGuestDevice) {
       if (totalSize > 1024 * 1024 * 1024) { // Files larger than 1GB
@@ -1360,10 +1551,15 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // 🎨 Progress bar functions for visual feedback - Safe for all devices
+  // 🎨 Progress bar functions with cached DOM elements for optimal performance
   function setProgressColor(color) {
     try {
-      const progressBar = document.getElementById('toast-progress');
+      // Use cached DOM element instead of repeated getElementById
+      let progressBar = DOM_CACHE.toastProgress;
+      if (!progressBar) {
+        progressBar = document.getElementById('toast-progress');
+        if (progressBar) DOM_CACHE.toastProgress = progressBar;
+      }
       if (!progressBar) return; // Safe guard for guest devices
       
       if (color === 'blue') {
@@ -1380,7 +1576,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateProgress(percentage, color = 'green') {
     try {
-      const progressBar = document.getElementById('toast-progress');
+      // Use cached DOM element
+      let progressBar = DOM_CACHE.toastProgress;
+      if (!progressBar) {
+        progressBar = document.getElementById('toast-progress');
+        if (progressBar) DOM_CACHE.toastProgress = progressBar;
+      }
       if (!progressBar) return; // Safe guard for guest devices
       
       setProgressColor(color);
@@ -1393,7 +1594,12 @@ document.addEventListener('DOMContentLoaded', () => {
   function startProgressAnimation(color = 'green', duration = 2000) {
     try {
       setProgressColor(color);
-      const progressBar = document.getElementById('toast-progress');
+      // Use cached DOM element
+      let progressBar = DOM_CACHE.toastProgress;
+      if (!progressBar) {
+        progressBar = document.getElementById('toast-progress');
+        if (progressBar) DOM_CACHE.toastProgress = progressBar;
+      }
       if (!progressBar) return; // Safe guard for guest devices
       
       progressBar.style.width = '0%';
@@ -1417,7 +1623,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function completeProgress(color = 'green') {
     try {
-      const progressBar = document.getElementById('toast-progress');
+      // Use cached DOM element
+      let progressBar = DOM_CACHE.toastProgress;
+      if (!progressBar) {
+        progressBar = document.getElementById('toast-progress');
+        if (progressBar) DOM_CACHE.toastProgress = progressBar;
+      }
       if (!progressBar) return; // Safe guard for guest devices
       
       setProgressColor(color);
@@ -1472,7 +1683,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isHTTPS = location.protocol === 'https:';
 
         // 📦 LANVan Direct Download Strategy - No Frontend Processing
-        const CHUNK_THRESHOLD = 250 * 1024 * 1024; // 250MB
+        const CHUNK_THRESHOLD = LANVAN_CONFIG.CHUNK_THRESHOLD;
         const isEncFile = fileName.endsWith('.enc');
 
         // Quick file info check for strategy decision
@@ -1517,12 +1728,14 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(link);
         
         // Trigger immediate download
+        const downloadStartTime = Date.now(); // Separate timing for processing vs total
         link.click();
         document.body.removeChild(link);
         
-        // 🕒 Calculate accurate timing
+        // 🕒 Separate timing calculations for accuracy
         const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
-        const processingTime = ((Date.now() - startTime) / 1000).toFixed(3);
+        const processingTime = ((downloadStartTime - startTime) / 1000).toFixed(3); // Time before download trigger
+        const downloadTime = ((Date.now() - downloadStartTime) / 1000).toFixed(3);  // Time for download trigger
         
         // Create accurate stats for direct download
         const downloadStats = {
@@ -1532,7 +1745,8 @@ document.addEventListener('DOMContentLoaded', () => {
           time: totalTime + 's',
           speed: (fileSizeMB / parseFloat(totalTime)).toFixed(2) + ' MB/s',
           serverResponseTime: serverResponseTime + 's',
-          processingTime: processingTime + 's', // Accurate processing time
+          processingTime: processingTime + 's', // Accurate processing time (separate calculation)
+          downloadTime: downloadTime + 's',     // Download trigger time
           totalTime: totalTime + 's',
           protocol: isHTTPS ? 'HTTPS' : 'HTTP',
           aesEnabled: isEncFile,
@@ -1784,8 +1998,8 @@ async function downloadFileRegular(fileUrl, fileName, fileSizeMB, requestStartTi
 async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requestStartTime) {
   const isHTTPS = location.protocol === 'https:';
   const protocolMsg = isHTTPS ? "HTTPS" : "HTTP";
-  const CHUNK_SIZE = 16 * 1024 * 1024; // 16MB chunks (16x larger than before for much faster processing)
-  const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
+  const DOWNLOAD_CHUNK_SIZE = 16 * 1024 * 1024; // 16MB chunks (16x larger than before for much faster processing)
+  const totalChunks = Math.ceil(fileSize / DOWNLOAD_CHUNK_SIZE);
   
   try {
     const stopInitialToast = showPersistentToast('⏳ Preparing high-performance chunked download...');
@@ -1799,8 +2013,8 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
     
     // 🚀 Process chunks with much larger sizes for faster performance
     for (let i = 0; i < totalChunks; i++) {
-      const start = i * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, fileSize);
+      const start = i * DOWNLOAD_CHUNK_SIZE;
+      const end = Math.min(start + DOWNLOAD_CHUNK_SIZE, fileSize);
       
       // Calculate progress percentage
       const progressPercent = ((i + 1) / totalChunks * 100).toFixed(1);
