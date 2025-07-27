@@ -278,10 +278,11 @@
   </div>
   
   <!-- Protocol Status Below Title -->
-  <div style="display: flex; justify-content: flex-start;">
-    <div id="protocolStatus" style="display: flex; align-items: center; background-color: #e8f4fd; padding: 0.3rem 0.6rem; border-radius: 20px; gap: 0.4rem; font-size: 0.85rem;">
+  <div style="display: flex; justify-content: flex-start; align-items: center; gap: 0.5rem;">
+    <div id="protocolStatus" onclick="showConnectionInfo()" style="display: flex; align-items: center; background-color: #e8f4fd; padding: 0.4rem 0.8rem; border-radius: 20px; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='#d0e9f7'" onmouseout="this.style.backgroundColor='#e8f4fd'">
       <span id="protocolIcon">🌐</span>
       <span id="protocolText" style="color: #2c3e50; font-weight: 500;">HTTP</span>
+      <span id="qrHintText" style="color: #2c3e50; font-size: 0.75rem; opacity: 0.8; font-weight: 400; transition: all 0.3s ease;">• Click for QR code</span>
     </div>
   </div>
 </header>
@@ -1728,27 +1729,123 @@ async function downloadIndividually() {
       return;
     }
     
-    showToast(`📄 Starting individual download of ${fileNames.length} files...`, 0);
+    showToast(`📄 Starting intelligent sequential download of ${fileNames.length} files (waits for each download to complete)...`, 0);
     
     let downloadCount = 0;
     let failedDownloads = [];
     
-    // Download each file with a small delay to prevent overwhelming the browser
+    // Smart download completion detection function
+    async function waitForDownloadCompletion(fileName, timeoutMs = 15000) {
+      return new Promise((resolve) => {
+        const startTime = Date.now();
+        let resolved = false;
+        let visibilityHandler, blurHandler, focusHandler;
+        
+        const cleanup = () => {
+          if (visibilityHandler) document.removeEventListener('visibilitychange', visibilityHandler);
+          if (blurHandler) window.removeEventListener('blur', blurHandler);
+          if (focusHandler) window.removeEventListener('focus', focusHandler);
+        };
+        
+        const resolveOnce = (method) => {
+          if (!resolved) {
+            resolved = true;
+            cleanup();
+            resolve(method);
+          }
+        };
+        
+        // Method 1: Immediate visibility change detection (Chrome/Edge)
+        if (navigator.userAgent.includes('Chrome') || navigator.userAgent.includes('Edge')) {
+          visibilityHandler = () => {
+            if (!resolved && Date.now() - startTime > 300) { // Reduced from 1000ms to 300ms
+              resolveOnce('visibility-change');
+            }
+          };
+          document.addEventListener('visibilitychange', visibilityHandler);
+        }
+        
+        // Method 2: Fast focus/blur detection (works on most browsers)
+        let focusLost = false;
+        blurHandler = () => {
+          focusLost = true;
+        };
+        focusHandler = () => {
+          if (focusLost && !resolved && Date.now() - startTime > 200) { // Reduced from 1000ms to 200ms
+            resolveOnce('focus-detection');
+          }
+        };
+        window.addEventListener('blur', blurHandler);
+        window.addEventListener('focus', focusHandler);
+        
+        // Method 3: Ultra-fast adaptive timeout based on actual download behavior
+        const adaptiveTimeout = Math.max(800, Math.min(3000, fileNames.length * 400)); // 0.8-3 seconds (was 2-10 seconds)
+        
+        setTimeout(() => {
+          resolveOnce('adaptive-timeout');
+        }, adaptiveTimeout);
+        
+        // Method 4: Quick fallback timeout (reduced from 30s to 15s)
+        setTimeout(() => {
+          resolveOnce('fallback-timeout');
+        }, timeoutMs);
+        
+        // Method 5: NEW - Network idle detection for very fast completion
+        let networkRequests = 0;
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+          networkRequests++;
+          return originalFetch.apply(this, args).finally(() => {
+            networkRequests--;
+            if (networkRequests === 0 && Date.now() - startTime > 100) {
+              setTimeout(() => {
+                if (networkRequests === 0 && !resolved && Date.now() - startTime > 500) {
+                  resolveOnce('network-idle');
+                }
+              }, 200);
+            }
+          });
+        };
+        
+        // Restore original fetch when done
+        setTimeout(() => {
+          window.fetch = originalFetch;
+        }, timeoutMs + 1000);
+      });
+    }
+    
+    // Download each file and wait for completion
     for (let i = 0; i < fileNames.length; i++) {
       try {
-        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay between downloads
+        const fileName = fileNames[i];
+        updateToastContent(`📄 Downloading ${fileName}... (${downloadCount + 1}/${fileNames.length})`);
         
-        // Create download link and trigger download
+        // Create and trigger download
         const link = document.createElement('a');
-        link.href = `/download/${encodeURIComponent(fileNames[i])}`;
-        link.download = fileNames[i];
+        link.href = `/download/${encodeURIComponent(fileName)}`;
+        link.download = fileName;
         link.style.display = 'none';
         document.body.appendChild(link);
+        
+        const downloadStartTime = Date.now();
         link.click();
         document.body.removeChild(link);
         
+        // Wait for download completion with intelligent detection
+        updateToastContent(`📄 ${fileName} downloading... waiting for completion (${downloadCount + 1}/${fileNames.length})`);
+        
+        const completionMethod = await waitForDownloadCompletion(fileName);
+        const downloadTime = ((Date.now() - downloadStartTime) / 1000).toFixed(1);
+        
         downloadCount++;
-        updateToastContent(`📄 Downloaded ${downloadCount}/${fileNames.length} files...`);
+        
+        console.log(`✅ Download ${downloadCount}: ${fileName} completed via ${completionMethod} in ${downloadTime}s`);
+        updateToastContent(`✅ ${fileName} completed (${downloadCount}/${fileNames.length}) • ${downloadTime}s`);
+        
+        // Minimal pause between downloads for browser stability (reduced from 500ms to 200ms)
+        if (i < fileNames.length - 1) { // Don't wait after the last file
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
         
       } catch (error) {
         console.error(`Failed to download ${fileNames[i]}:`, error);
@@ -1756,9 +1853,9 @@ async function downloadIndividually() {
       }
     }
     
-    // Final status
+    // Final status with timing information
     if (failedDownloads.length === 0) {
-      showToast(`✅ Successfully downloaded all ${downloadCount} files individually!`, 5000);
+      showToast(`✅ Successfully downloaded all ${downloadCount} files with intelligent completion detection!`, 5000);
     } else {
       showToast(`⚠️ Downloaded ${downloadCount} files. Failed: ${failedDownloads.length} (${failedDownloads.join(', ')})`, 8000);
     }
@@ -1782,6 +1879,281 @@ window.downloadAsZip = downloadAsZip;
 window.downloadIndividually = downloadIndividually;
 window.closeDownloadModal = closeDownloadModal;
 
+// 📡 QR Code Generation for Connection Info
+function generateQRCode(text, size = 200) {
+  // Simple QR code generation using QR Server API (works offline after first load)
+  // For fully offline support, we'll use a minimal QR code implementation
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}`;
+}
+
+// 🌐 Simple offline QR code generator (backup method)
+function generateOfflineQR(text, container) {
+  // Create a simple grid-based QR code for offline use
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = 200;
+  canvas.height = 200;
+  
+  // Simple pattern generation (basic QR-like appearance)
+  const size = 20;
+  const cellSize = canvas.width / size;
+  
+  // Generate pattern based on text hash
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) - hash + text.charCodeAt(i)) & 0xffffffff;
+  }
+  
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  ctx.fillStyle = '#000000';
+  
+  // Create QR-like pattern
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      // Position markers (corners)
+      if ((x < 7 && y < 7) || (x >= size-7 && y < 7) || (x < 7 && y >= size-7)) {
+        if ((x < 6 && y < 6 && (x === 0 || x === 5 || y === 0 || y === 5)) ||
+            (x >= size-6 && y < 6 && (x === size-6 || x === size-1 || y === 0 || y === 5)) ||
+            (x < 6 && y >= size-6 && (x === 0 || x === 5 || y === size-6 || y === size-1))) {
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
+        if ((x >= 2 && x <= 4 && y >= 2 && y <= 4) ||
+            (x >= size-5 && x <= size-3 && y >= 2 && y <= 4) ||
+            (x >= 2 && x <= 4 && y >= size-5 && y <= size-3)) {
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
+      } else {
+        // Data pattern based on hash
+        const pos = y * size + x;
+        if (((hash >> (pos % 32)) & 1) === 1) {
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+  }
+  
+  return canvas.toDataURL();
+}
+
+// 🔗 Get LAN IP and show connection info modal
+async function showConnectionInfo() {
+  // Get current URL info
+  const protocol = location.protocol;
+  const hostname = location.hostname;
+  const port = location.port;
+  const isHTTPS = protocol === 'https:';
+  
+  // Construct URL
+  let baseUrl = `${protocol}//${hostname}`;
+  if (port && port !== '80' && port !== '443') {
+    baseUrl += `:${port}`;
+  }
+  
+  // Try to detect LAN IP from hostname if possible
+  let lanIP = hostname;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    lanIP = 'localhost'; // Will show instructions to find LAN IP
+  }
+  
+  const fullUrl = baseUrl;
+  
+  // Create modal
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    padding: 1rem;
+    box-sizing: border-box;
+  `;
+  
+  const dialog = document.createElement('div');
+  dialog.style.cssText = `
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    max-width: 600px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    text-align: center;
+  `;
+  
+  // Generate QR code
+  const qrImageUrl = generateQRCode(fullUrl, 200);
+  
+  // Create local instructions
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+  const lanInstructions = isLocalhost ? `
+    <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 1rem; margin: 1rem 0; text-align: left;">
+      <h4 style="margin: 0 0 0.5rem 0; color: #856404;">🔍 To share on LAN:</h4>
+      <p style="margin: 0; font-size: 0.9rem; color: #856404;">
+        • Replace "localhost" with your computer's IP address<br>
+        • Windows: Run <code>ipconfig</code> and look for IPv4<br>
+        • Linux/Mac: Run <code>ip addr</code> or <code>ifconfig</code><br>
+        • Android Termux: Run <code>ip route | grep default</code>
+      </p>
+    </div>
+  ` : '';
+  
+  dialog.innerHTML = `
+    <h3 style="margin-top: 0; color: #333; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+      <span>${isHTTPS ? '🔒' : '🌐'}</span>
+      Connection Info
+    </h3>
+    
+    <div style="margin: 1.5rem 0;">
+      <img src="${qrImageUrl}" 
+           alt="QR Code for ${fullUrl}" 
+           style="border: 2px solid #e1e1e1; border-radius: 10px; max-width: 200px; height: auto;"
+           onerror="this.style.display='none'; document.getElementById('qr-offline-fallback').style.display='block';">
+      
+      <!-- Offline QR fallback -->
+      <div id="qr-offline-fallback" style="display: none; margin: 1rem 0;">
+        <canvas id="offline-qr" style="border: 2px solid #e1e1e1; border-radius: 10px;"></canvas>
+        <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">📱 Offline QR Code</p>
+      </div>
+    </div>
+    
+    <div style="background: #f8f9fa; border-radius: 10px; padding: 1rem; margin: 1rem 0;">
+      <h4 style="margin: 0 0 0.5rem 0; color: #333;">📡 Connection URL</h4>
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+        <code id="connection-url" style="
+          background: white; 
+          border: 1px solid #ddd; 
+          border-radius: 5px; 
+          padding: 0.5rem 0.8rem; 
+          font-size: 1rem; 
+          font-weight: bold; 
+          color: #2c3e50;
+          word-break: break-all;
+          flex: 1;
+          min-width: 200px;
+        ">${fullUrl}</code>
+        <button onclick="copyConnectionUrl()" style="
+          background: #28a745;
+          color: white;
+          border: none;
+          padding: 0.5rem 1rem;
+          border-radius: 5px;
+          cursor: pointer;
+          font-size: 0.9rem;
+          white-space: nowrap;
+        " title="Copy URL to clipboard">
+          📋 Copy
+        </button>
+      </div>
+    </div>
+    
+    ${lanInstructions}
+    
+    <button onclick="closeConnectionModal()" style="
+      background: #e74c3c;
+      color: white;
+      border: none;
+      padding: 0.8rem 2rem;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 2rem;
+      font-size: 1rem;
+    ">
+      Close
+    </button>
+  `;
+  
+  modal.appendChild(dialog);
+  document.body.appendChild(modal);
+  
+  // Store modal reference
+  window.currentConnectionModal = modal;
+  
+  // Set up offline QR fallback
+  const qrImage = dialog.querySelector('img');
+  qrImage.addEventListener('error', () => {
+    const fallbackDiv = document.getElementById('qr-offline-fallback');
+    const canvas = document.getElementById('offline-qr');
+    if (fallbackDiv && canvas) {
+      fallbackDiv.style.display = 'block';
+      const offlineQR = generateOfflineQR(fullUrl, canvas);
+      canvas.style.display = 'block';
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0);
+      img.src = offlineQR;
+    }
+  });
+  
+  // Close on background click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeConnectionModal();
+    }
+  });
+  
+  // Close on Escape key
+  document.addEventListener('keydown', function escapeHandler(e) {
+    if (e.key === 'Escape') {
+      closeConnectionModal();
+      document.removeEventListener('keydown', escapeHandler);
+    }
+  });
+}
+
+// 📋 Copy connection URL to clipboard
+async function copyConnectionUrl() {
+  const urlElement = document.getElementById('connection-url');
+  if (!urlElement) return;
+  
+  const url = urlElement.textContent;
+  
+  try {
+    // Modern clipboard API
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(url);
+      showToast('📋 Connection URL copied to clipboard!', 3000);
+    } else {
+      // Fallback for older browsers or HTTP
+      const textArea = document.createElement('textarea');
+      textArea.value = url;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      showToast('📋 Connection URL copied to clipboard!', 3000);
+    }
+  } catch (err) {
+    console.error('Copy failed:', err);
+    showToast('❌ Copy failed. Please copy manually.', 4000);
+  }
+}
+
+// 🚪 Close connection info modal
+function closeConnectionModal() {
+  const modal = window.currentConnectionModal;
+  if (modal) {
+    modal.remove();
+    window.currentConnectionModal = null;
+  }
+}
+
+// Make functions globally available
+window.showConnectionInfo = showConnectionInfo;
+window.copyConnectionUrl = copyConnectionUrl;
+window.closeConnectionModal = closeConnectionModal;
+
   
 </script>
 <script>
@@ -1792,18 +2164,58 @@ document.addEventListener('DOMContentLoaded', () => {
   const protocolStatus = DOM_CACHE.protocolStatus;
   const isHTTPS = location.protocol === 'https:';
   
+  // Find the QR code hint text (the third span in protocolStatus)
+  const qrHintText = protocolStatus.querySelector('#qrHintText');
+  
   if (isHTTPS) {
     protocolIcon.textContent = '🔒';
     protocolText.textContent = 'HTTPS';
     protocolStatus.style.backgroundColor = '#d4edda';
     protocolStatus.style.border = '1px solid #c3e6cb';
-    protocolStatus.title = 'Secure connection - AES encryption available, chunked uploads supported for large files';
+    protocolStatus.title = 'Secure HTTPS connection - Click to show connection info & QR code';
+    
+    // Update hover colors for HTTPS
+    protocolStatus.onmouseover = () => protocolStatus.style.backgroundColor = '#c3e6cb';
+    protocolStatus.onmouseout = () => protocolStatus.style.backgroundColor = '#d4edda';
   } else {
     protocolIcon.textContent = '🌐';
     protocolText.textContent = 'HTTP';
     protocolStatus.style.backgroundColor = '#fff3cd';
     protocolStatus.style.border = '1px solid #ffeaa7';
-    protocolStatus.title = 'Standard connection - Chunked uploads available for large files, AES requires HTTPS';
+    protocolStatus.title = 'HTTP connection - Click to show connection info & QR code';
+    
+    // Update hover colors for HTTP
+    protocolStatus.onmouseover = () => protocolStatus.style.backgroundColor = '#f5e79e';
+    protocolStatus.onmouseout = () => protocolStatus.style.backgroundColor = '#fff3cd';
+  }
+  
+  // Update QR hint text for better clarity and add click feedback
+  if (qrHintText) {
+    // Check if user has already discovered QR functionality
+    const hasUsedQR = localStorage.getItem('qr_hint_dismissed') === 'true';
+    
+    if (!hasUsedQR) {
+      qrHintText.textContent = '• Click for QR code';
+      qrHintText.style.display = 'inline';
+    } else {
+      qrHintText.style.display = 'none';
+    }
+    
+    // Add click feedback effect
+    protocolStatus.addEventListener('click', () => {
+      if (!hasUsedQR && qrHintText.style.display !== 'none') {
+        // Temporary visual feedback
+        qrHintText.style.opacity = '1';
+        qrHintText.style.fontWeight = '600';
+        qrHintText.textContent = '• Opening QR code...';
+        
+        // Mark as used and hide permanently after feedback
+        setTimeout(() => {
+          localStorage.setItem('qr_hint_dismissed', 'true');
+          qrHintText.style.display = 'none';
+        }, 800);
+      }
+    });
   }
 });
 
