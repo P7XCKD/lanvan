@@ -396,8 +396,112 @@
     ui: {
       activeToasts: 0,          // Track active toast count
       lastUpdate: 0             // Last UI update timestamp
+    },
+    memory: {
+      lastCleanup: Date.now(),  // Last memory cleanup time
+      cleanupInterval: 300000,  // Cleanup every 5 minutes
+      maxErrorHistory: 10,      // Maximum error entries to keep
+      maxFileMetadata: 50       // Maximum file metadata entries
     }
   };
+
+  // 🧹 Memory Management & Cleanup Functions
+  function performMemoryCleanup() {
+    const now = Date.now();
+    
+    // Only run cleanup if enough time has passed
+    if (now - LANVAN_STATE.memory.lastCleanup < LANVAN_STATE.memory.cleanupInterval) {
+      return;
+    }
+    
+    console.log('🧹 Performing memory cleanup...');
+    
+    // Cleanup error history
+    if (LANVAN_STATE.errors.length > LANVAN_STATE.memory.maxErrorHistory) {
+      LANVAN_STATE.errors.splice(0, LANVAN_STATE.errors.length - LANVAN_STATE.memory.maxErrorHistory);
+    }
+    
+    // Cleanup localStorage file metadata
+    try {
+      const metadata = JSON.parse(localStorage.getItem('fileMetadata') || '{}');
+      const entries = Object.entries(metadata);
+      if (entries.length > LANVAN_STATE.memory.maxFileMetadata) {
+        // Sort by timestamp and keep most recent
+        const sorted = entries.sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+        const newMetadata = {};
+        sorted.slice(0, LANVAN_STATE.memory.maxFileMetadata).forEach(([key, value]) => {
+          newMetadata[key] = value;
+        });
+        localStorage.setItem('fileMetadata', JSON.stringify(newMetadata));
+        console.log(`🧹 Cleaned file metadata: ${entries.length} → ${LANVAN_STATE.memory.maxFileMetadata}`);
+      }
+    } catch (e) {
+      console.log('⚠️ Error cleaning file metadata:', e);
+    }
+    
+    // Cleanup transfer logs
+    try {
+      const logs = JSON.parse(localStorage.getItem('transferLogs') || '[]');
+      if (logs.length > 20) {
+        logs.splice(20);
+        localStorage.setItem('transferLogs', JSON.stringify(logs));
+        console.log('🧹 Cleaned transfer logs');
+      }
+    } catch (e) {
+      console.log('⚠️ Error cleaning transfer logs:', e);
+    }
+    
+    // Force garbage collection if available
+    if (typeof window.gc === 'function') {
+      window.gc();
+      console.log('🧹 Forced garbage collection');
+    }
+    
+    LANVAN_STATE.memory.lastCleanup = now;
+  }
+
+  // 🔄 Deduplication for rapid file selection changes
+  let lastFileSelectionTime = 0;
+  let lastFileSelectionHash = '';
+  const FILE_SELECTION_DEBOUNCE = 500; // 500ms debounce
+  
+  function generateFileListHash(files) {
+    if (!files || files.length === 0) return '';
+    return Array.from(files).map(f => `${f.name}_${f.size}_${f.lastModified}`).join('|');
+  }
+  
+  function shouldProcessFileSelection(files) {
+    const now = Date.now();
+    const fileHash = generateFileListHash(files);
+    
+    // Check if this is a duplicate selection within debounce period
+    if (now - lastFileSelectionTime < FILE_SELECTION_DEBOUNCE && fileHash === lastFileSelectionHash) {
+      console.log('🔄 Duplicate file selection ignored (debounced)');
+      return false;
+    }
+    
+    lastFileSelectionTime = now;
+    lastFileSelectionHash = fileHash;
+    return true;
+  }
+
+  // 🌐 Enhanced Upload Concurrency Management
+  let activeUploads = 0;
+  const MAX_CONCURRENT_UPLOADS = 3; // Limit concurrent uploads
+  
+  function canStartUpload() {
+    return activeUploads < MAX_CONCURRENT_UPLOADS;
+  }
+  
+  function startUpload() {
+    activeUploads++;
+    console.log(`📤 Upload started (${activeUploads}/${MAX_CONCURRENT_UPLOADS} active)`);
+  }
+  
+  function endUpload() {
+    activeUploads = Math.max(0, activeUploads - 1);
+    console.log(`📤 Upload ended (${activeUploads}/${MAX_CONCURRENT_UPLOADS} active)`);
+  }
 
   // 🚀 Performance Optimization: Cache DOM elements once after DOM is loaded
   let DOM_CACHE = {};
@@ -584,6 +688,20 @@ function autoUpload(files) {
     return;
   }
 
+  // 🔄 Deduplication: Check for rapid duplicate selections
+  if (!shouldProcessFileSelection(files)) {
+    return;
+  }
+
+  // 🌐 Concurrency management: Check upload limits
+  if (!canStartUpload()) {
+    showToast(`⏳ Maximum concurrent uploads reached (${activeUploads}/${MAX_CONCURRENT_UPLOADS}). Please wait for current uploads to complete.`, 5000);
+    return;
+  }
+
+  // 🧹 Perform periodic memory cleanup
+  performMemoryCleanup();
+
   const isAESEnabled = DOM_CACHE.aesToggle && DOM_CACHE.aesToggle.checked;
   const isHTTPS = location.protocol === 'https:';
 
@@ -603,6 +721,9 @@ function autoUpload(files) {
     showToast("❌ AES encryption is only available over HTTPS connections for security.", 5000);
     return;
   }
+
+  // Start tracking this upload
+  startUpload();
 
   // 📊 Analyze file composition for smart toast notifications
   const CHUNK_THRESHOLD = LANVAN_CONFIG.CHUNK_THRESHOLD;
@@ -759,13 +880,18 @@ function uploadFilesRegular(files, isAESEnabled) {
       
       // Store flag to reload page when toast is dismissed
       window._shouldReloadAfterToast = true;
+      
+      // End upload tracking
+      endUpload();
     } else {
       showToast('❌ Upload failed • Click anywhere to dismiss', 0);
+      endUpload(); // End upload tracking on failure
     }
   };
 
   xhr.onerror = function () {
     showToast('❌ Upload error • Click anywhere to dismiss', 0);
+    endUpload(); // End upload tracking on error
   };
 
   xhr.open('POST', '/upload-auto');
@@ -843,7 +969,13 @@ async function uploadFilesChunked(files, isAESEnabled) {
   const isGuestDevice = detectGuestDevice();
   const deviceMemoryMB = getDeviceMemory();
   
-  // 🚀 Memory-Aware Network-Adaptive Chunk Sizing System (Using Centralized Config)
+  // � Comprehensive retry tracking system
+  let totalRetries = 0;
+  let totalChunkFailures = 0;
+  let totalFinalizeRetries = 0;
+  const retryHistory = []; // Track retry events for debugging
+  
+  // �🚀 Memory-Aware Network-Adaptive Chunk Sizing System (Using Centralized Config)
   let CHUNK_SIZE = isGuestDevice ? LANVAN_CONFIG.CHUNK_SIZES.GUEST_INITIAL : LANVAN_CONFIG.CHUNK_SIZES.REGULAR_INITIAL;
   const MIN_CHUNK_SIZE = isGuestDevice ? LANVAN_CONFIG.CHUNK_SIZES.GUEST_MIN : LANVAN_CONFIG.CHUNK_SIZES.REGULAR_MIN;
   const MAX_CHUNK_SIZE = isGuestDevice ? LANVAN_CONFIG.CHUNK_SIZES.GUEST_MAX : LANVAN_CONFIG.CHUNK_SIZES.REGULAR_MAX;
@@ -1024,9 +1156,24 @@ async function uploadFilesChunked(files, isAESEnabled) {
             
           } catch (error) {
             retryCount++;
+            totalRetries++;
+            
+            // Log retry event for debugging
+            const retryEvent = {
+              chunkNumber: partNumber,
+              fileName: file.name,
+              attempt: retryCount,
+              error: error.message,
+              timestamp: new Date().toISOString(),
+              chunkSize: (chunkSize / 1024 / 1024).toFixed(1) + 'MB'
+            };
+            retryHistory.push(retryEvent);
+            
             console.log(`🔄 Chunk ${partNumber} attempt ${retryCount} failed:`, error.message);
             
             if (retryCount > LANVAN_CONFIG.ERROR_RECOVERY.MAX_RETRIES) {
+              totalChunkFailures++;
+              
               // Critical: Clean up chunk memory before throwing error
               chunk = null;
               chunkFormData = null;
@@ -1035,11 +1182,11 @@ async function uploadFilesChunked(files, isAESEnabled) {
             
             // Wait before retry with exponential backoff
             const delayMs = LANVAN_CONFIG.ERROR_RECOVERY.RETRY_DELAY * Math.pow(LANVAN_CONFIG.ERROR_RECOVERY.EXPONENTIAL_BACKOFF, retryCount - 1);
-            console.log(`⏳ Retrying chunk ${partNumber} in ${delayMs}ms...`);
+            console.log(`⏳ Retrying chunk ${partNumber} in ${delayMs}ms... (Total retries so far: ${totalRetries})`);
             
             // Show retry message for user feedback
             if (retryCount === 1) {
-              updateToastContent(`🔄 Network issue, retrying chunk ${partNumber}...`);
+              updateToastContent(`🔄 Network issue, retrying chunk ${partNumber}... (${totalRetries} total retries)`);
             }
             
             await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -1182,6 +1329,19 @@ async function uploadFilesChunked(files, isAESEnabled) {
           
         } catch (error) {
           finalizeRetryCount++;
+          totalFinalizeRetries++;
+          totalRetries++;
+          
+          // Log finalize retry event
+          const finalizeRetryEvent = {
+            fileName: file.name,
+            finalizeAttempt: finalizeRetryCount,
+            error: error.message,
+            timestamp: new Date().toISOString(),
+            chunkCount: chunkCount
+          };
+          retryHistory.push(finalizeRetryEvent);
+          
           console.log(`🔄 Finalize attempt ${finalizeRetryCount} failed:`, error.message);
           
           if (finalizeRetryCount > LANVAN_CONFIG.ERROR_RECOVERY.MAX_RETRIES) {
@@ -1190,11 +1350,11 @@ async function uploadFilesChunked(files, isAESEnabled) {
           
           // Wait before retry with exponential backoff
           const delayMs = LANVAN_CONFIG.ERROR_RECOVERY.RETRY_DELAY * Math.pow(LANVAN_CONFIG.ERROR_RECOVERY.EXPONENTIAL_BACKOFF, finalizeRetryCount - 1);
-          console.log(`⏳ Retrying finalize in ${delayMs}ms...`);
+          console.log(`⏳ Retrying finalize in ${delayMs}ms... (Total retries: ${totalRetries})`);
           
           // Show retry message for user feedback
           if (finalizeRetryCount === 1) {
-            updateToastContent(`🔄 Finalizing retry for ${file.name}...`);
+            updateToastContent(`🔄 Finalizing retry for ${file.name}... (${totalRetries} total retries)`);
           }
           
           await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -1224,7 +1384,11 @@ async function uploadFilesChunked(files, isAESEnabled) {
       networkSpeed: networkSpeed.toFixed(1) + ' MB/s',
       aesEnabled: isAESEnabled,
       protocol: protocolMsg,
-      retryCount: 0, // TODO: Track total retries across all chunks
+      retryCount: totalRetries, // ✅ COMPLETED: Track total retries across all chunks
+      chunkRetries: totalRetries - totalFinalizeRetries,
+      finalizeRetries: totalFinalizeRetries,
+      chunkFailures: totalChunkFailures,
+      retryHistory: retryHistory.length > 0 ? retryHistory : null,
       guestDevice: isGuestDevice,
       deviceMemory: deviceMemoryMB + 'MB',
       timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
@@ -1245,6 +1409,9 @@ async function uploadFilesChunked(files, isAESEnabled) {
     
     // Store flag to reload page when toast is dismissed
     window._shouldReloadAfterToast = true;
+    
+    // End upload tracking
+    endUpload();
 
   } catch (error) {
     // 🔍 Enhanced error handling with guest device support
@@ -1289,6 +1456,9 @@ async function uploadFilesChunked(files, isAESEnabled) {
     }
     
     showToast(`❌ Adaptive-chunked upload failed: ${errorMessage}${suggestionMessage} • Click anywhere to dismiss`, 0);
+    
+    // End upload tracking on error
+    endUpload();
     console.error('Adaptive-chunked upload error details:', {
       error: error,
       message: error.message,

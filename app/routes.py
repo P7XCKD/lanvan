@@ -1,7 +1,8 @@
 import os
 import io
 import time
-from typing import List
+import re
+from typing import List, Optional, Tuple
 from pathlib import Path
 from mimetypes import guess_type
 from zipfile import ZipFile
@@ -15,7 +16,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.status import HTTP_302_FOUND, HTTP_400_BAD_REQUEST
 from werkzeug.utils import secure_filename
 
-from app.aes_utils import encrypt_bytes, decrypt_bytes
+from app.aes_utils import encrypt_bytes_legacy, decrypt_bytes_legacy, encrypt_file_with_metadata, decrypt_file_with_metadata
 from app.config import is_allowed_file
 
 # === Setup ===
@@ -28,6 +29,134 @@ TEMP_CHUNKS_FOLDER = UPLOAD_FOLDER / "temp_chunks"
 TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
 
 templates = Jinja2Templates(directory="app/templates")
+
+# === 🔍 VALIDATION CONSTANTS & FUNCTIONS ===
+MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024  # 10GB maximum file size
+MAX_FILENAME_LENGTH = 255
+MAX_CONCURRENT_UPLOADS = 5  # Maximum parallel uploads per session
+
+# Allowed MIME types for security
+ALLOWED_MIME_TYPES = {
+    'application/pdf', 'application/zip', 'application/x-zip-compressed',
+    'application/octet-stream', 'application/msword', 'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain', 'text/csv', 'text/html', 'text/css', 'text/javascript',
+    'image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp',
+    'video/mp4', 'video/avi', 'video/mov', 'video/mkv', 'video/webm',
+    'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/m4a', 'audio/flac'
+}
+
+# Dangerous file extensions to block
+BLOCKED_EXTENSIONS = {
+    '.exe', '.bat', '.cmd', '.com', '.scr', '.pif', '.vbs', '.js', '.jar',
+    '.msi', '.dll', '.sys', '.bin', '.deb', '.rpm', '.dmg', '.pkg'
+}
+
+def validate_filename(filename: str) -> Tuple[bool, str]:
+    """
+    Comprehensive filename validation for security and compatibility.
+    
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    if not filename:
+        return False, "Filename cannot be empty"
+    
+    if len(filename) > MAX_FILENAME_LENGTH:
+        return False, f"Filename too long (max {MAX_FILENAME_LENGTH} characters)"
+    
+    # Check for dangerous characters
+    dangerous_chars = r'[<>:"|?*\x00-\x1f]'
+    if re.search(dangerous_chars, filename):
+        return False, "Filename contains invalid characters"
+    
+    # Check for dangerous extensions
+    file_ext = Path(filename).suffix.lower()
+    if file_ext in BLOCKED_EXTENSIONS:
+        return False, f"File type {file_ext} is not allowed for security reasons"
+    
+    # Check for reserved Windows names
+    reserved_names = {
+        'CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5',
+        'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4',
+        'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'
+    }
+    name_without_ext = Path(filename).stem.upper()
+    if name_without_ext in reserved_names:
+        return False, f"Filename '{filename}' is reserved by the system"
+    
+    # Check for hidden files or files starting with dots (except .enc)
+    if filename.startswith('.') and not filename.endswith('.enc'):
+        return False, "Hidden files are not allowed"
+    
+    return True, ""
+
+def validate_file_size(file_size: int) -> Tuple[bool, str]:
+    """
+    Validate file size constraints.
+    
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    if file_size <= 0:
+        return False, "File is empty"
+    
+    if file_size > MAX_FILE_SIZE:
+        size_gb = file_size / (1024 * 1024 * 1024)
+        max_gb = MAX_FILE_SIZE / (1024 * 1024 * 1024)
+        return False, f"File too large ({size_gb:.1f}GB). Maximum allowed: {max_gb}GB"
+    
+    return True, ""
+
+def validate_mime_type(filename: str, content_type: Optional[str] = None) -> Tuple[bool, str]:
+    """
+    Validate MIME type for security.
+    
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    # Get MIME type from filename
+    guessed_type, _ = guess_type(filename)
+    
+    # Use provided content type or guessed type
+    mime_type = content_type or guessed_type
+    
+    if not mime_type:
+        # Allow unknown types for now, but log them
+        print(f"⚠️ Unknown MIME type for file: {filename}")
+        return True, ""
+    
+    # Check against allowed types
+    if mime_type not in ALLOWED_MIME_TYPES:
+        return False, f"File type '{mime_type}' is not allowed"
+    
+    return True, ""
+
+def validate_upload_request(filename: str, file_size: Optional[int] = None, content_type: Optional[str] = None) -> Tuple[bool, str]:
+    """
+    Comprehensive validation for upload requests.
+    
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    # Validate filename
+    is_valid, error_msg = validate_filename(filename)
+    if not is_valid:
+        return False, f"Invalid filename: {error_msg}"
+    
+    # Validate file size if provided
+    if file_size is not None:
+        is_valid, error_msg = validate_file_size(file_size)
+        if not is_valid:
+            return False, f"Invalid file size: {error_msg}"
+    
+    # Validate MIME type
+    is_valid, error_msg = validate_mime_type(filename, content_type)
+    if not is_valid:
+        return False, f"Invalid file type: {error_msg}"
+    
+    return True, ""
 
 # === Utility Functions ===
 def format_size(size_bytes):
@@ -60,7 +189,7 @@ def get_unique_filename(directory: Path, filename: str) -> str:
 def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=False):
     data = upload_file.file.read()
     if encrypt:
-        data = encrypt_bytes(data)
+        data = encrypt_bytes_legacy(data)
     with destination.open("wb") as f:
         f.write(data)
 
@@ -208,7 +337,7 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
             # 🔐 Optimized .enc file handling with streaming decryption
             with open(path, "rb") as file:
                 encrypted_data = file.read()
-                decrypted_data = decrypt_bytes(encrypted_data)
+                decrypted_data = decrypt_bytes_legacy(encrypted_data)
                 
                 # 🚀 Stream in very large chunks for maximum speed
                 data_length = len(decrypted_data)
@@ -309,7 +438,7 @@ async def download_all_files():
         for file in UPLOAD_FOLDER.iterdir():
             if file.is_file():
                 if file.suffix == ".enc":
-                    decrypted_data = decrypt_bytes(file.read_bytes())
+                    decrypted_data = decrypt_bytes_legacy(file.read_bytes())
                     zip_file.writestr(file.stem, decrypted_data)
                 else:
                     zip_file.write(file, arcname=file.name)
@@ -434,6 +563,27 @@ async def upload_chunk(
         # 🔐 Protocol detection
         is_https = request.url.scheme == "https"
         
+        # 🔍 COMPREHENSIVE VALIDATION: Validate upload request
+        is_valid, error_msg = validate_upload_request(filename, content_type=chunk.content_type)
+        if not is_valid:
+            return JSONResponse(
+                status_code=HTTP_400_BAD_REQUEST,
+                content={"status": "error", "msg": f"Validation failed: {error_msg}"}
+            )
+        
+        # 🔍 Enhanced validation: Check part number validity
+        if part_number < 1:
+            return JSONResponse(
+                status_code=HTTP_400_BAD_REQUEST,
+                content={"status": "error", "msg": f"Invalid part number: {part_number}. Must be >= 1."}
+            )
+        
+        if total_parts and part_number > total_parts:
+            return JSONResponse(
+                status_code=HTTP_400_BAD_REQUEST,
+                content={"status": "error", "msg": f"Part number {part_number} exceeds total parts {total_parts}."}
+            )
+        
         # Secure the filename
         safe_filename = secure_filename(filename)
         if not safe_filename:
@@ -452,23 +602,64 @@ async def upload_chunk(
                 }
             )
         
-        # Create chunk filename
-        chunk_filename = f"{safe_filename}.part{part_number}"
-        chunk_path = TEMP_CHUNKS_FOLDER / chunk_filename
+        # 📊 Check available disk space before writing
+        import shutil
+        total, used, free = shutil.disk_usage(TEMP_CHUNKS_FOLDER)
         
-        # Save the chunk
+        # Read chunk data first to check size
         chunk_data = await chunk.read()
         if not chunk_data:
             return JSONResponse(
                 status_code=HTTP_400_BAD_REQUEST,
                 content={"status": "error", "msg": f"Chunk {part_number} is empty"}
             )
+        
+        chunk_size = len(chunk_data)
+        
+        # Check if we have enough space (with 10% safety margin)
+        required_space = chunk_size * 1.1  # 10% safety margin
+        if free < required_space:
+            return JSONResponse(
+                status_code=507,  # Insufficient Storage
+                content={
+                    "status": "error", 
+                    "msg": f"Insufficient disk space. Required: {chunk_size / (1024*1024):.1f}MB, Available: {free / (1024*1024):.1f}MB"
+                }
+            )
+        
+        # Create chunk filename
+        chunk_filename = f"{safe_filename}.part{part_number}"
+        chunk_path = TEMP_CHUNKS_FOLDER / chunk_filename
+        
+        # 🔍 Check for duplicate chunks (prevent overwrites)
+        if chunk_path.exists():
+            # Log potential issue but allow overwrite (might be a retry)
+            print(f"⚠️ Warning: Chunk {chunk_filename} already exists, overwriting (possible retry)")
+        
+        # Save the chunk with error handling
+        try:
+            with open(chunk_path, "wb") as f:
+                f.write(chunk_data)
             
-        with open(chunk_path, "wb") as f:
-            f.write(chunk_data)
+            # Verify the file was written correctly
+            if not chunk_path.exists():
+                raise OSError(f"Failed to create chunk file {chunk_filename}")
+            
+            written_size = chunk_path.stat().st_size
+            if written_size != chunk_size:
+                raise OSError(f"Chunk size mismatch: expected {chunk_size}, written {written_size}")
+                
+        except OSError as e:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "status": "error", 
+                    "msg": f"Failed to save chunk {part_number}: {str(e)}"
+                }
+            )
         
         # Prepare response message
-        chunk_size_mb = len(chunk_data) / (1024 * 1024)
+        chunk_size_mb = chunk_size / (1024 * 1024)
         total_parts_msg = f"/{total_parts}" if total_parts else ""
         
         return JSONResponse(content={
@@ -477,6 +668,8 @@ async def upload_chunk(
             "part_number": part_number,
             "total_parts": total_parts,
             "chunk_size_mb": round(chunk_size_mb, 1),
+            "chunk_written_size": written_size,
+            "free_space_mb": round(free / (1024*1024), 1),
             "protocol": "HTTPS" if is_https else "HTTP"
         })
         
@@ -580,7 +773,7 @@ async def finalize_upload(
                 
                 # Encrypt if requested
                 if encrypt:
-                    chunk_data = encrypt_bytes(chunk_data)
+                    chunk_data = encrypt_bytes_legacy(chunk_data)
                 
                 # Write to final file
                 final_file.write(chunk_data)
