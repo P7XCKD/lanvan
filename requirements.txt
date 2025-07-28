@@ -1,0 +1,30 @@
+# 🚀 LANVan File Transfer Server Dependencies
+# Core web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Template engine
+jinja2==3.1.2
+
+# File upload handling
+python-multipart==0.0.6
+
+# MIME type detection and validation
+python-magic==0.4.27
+
+# Utilities (for werkzeug functions if needed)
+werkzeug==3.0.1
+
+# Security utilities
+werkzeug==3.0.1
+
+# Cryptography for AES encryption
+cryptography==41.0.7
+pycryptodome==3.19.0
+
+# System monitoring
+psutil==5.9.6
+
+# Optional: For development and testing
+# pytest==7.4.3
+# pytest-asyncio==0.21.1

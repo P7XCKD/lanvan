@@ -333,6 +333,24 @@
 
 <!-- 📡 Auto Upload JS -->
 <script>
+  // 🌐 Global Variables
+    let droppedFiles = [];
+    let isDragging = false;
+    let isUploadInProgress = false;
+    let pond;
+    let uploadType = 'regular';
+    let encryptionKey = null;
+    let isEncryptionEnabled = false;
+    let fetchInterceptorActive = false;
+    
+    // 🔒 AES Configuration (matches backend)
+    const AES_CONFIG = {
+      MAX_FILE_SIZE_MB: 200,
+      MAX_FILE_SIZE_BYTES: 200 * 1024 * 1024,
+      HTTPS_ONLY: true,
+      ALGORITHM: 'AES-256-CBC'
+    };
+
   // 🚀 Configuration Management - Centralized constants for better performance tuning
   const LANVAN_CONFIG = {
     // Memory thresholds
@@ -606,14 +624,18 @@
               `${data.startTime} - ${data.endTime}` : 
               data.timestamp;
               
-            detailedMessage = `📊 ${data.type.toUpperCase()}: ${data.filename}\n` +
-                             `📁 Size: ${data.size}\n` +
-                             `⚡ Server Response: ${data.serverResponseTime || 'N/A'}\n` +
-                             `⚙️ Processing Time: ${data.processingTime || data.downloadTime || 'N/A'}\n` +
-                             `⏱️ Total Time: ${data.totalTime || 'N/A'}\n` +
-                             `🌐 Protocol: ${location.protocol === 'https:' ? 'HTTPS' : 'HTTP'}\n` +
-                             `🕐 Time: ${timeRange}\n\n` +
-                             `💡 Click anywhere else to dismiss`;
+            // 🚀 PERFORMANCE: Use array join for efficient string building
+            detailedMessage = [
+              `📊 ${data.type.toUpperCase()}: ${data.filename}`,
+              `📁 Size: ${data.size}`,
+              `⚡ Server Response: ${data.serverResponseTime || 'N/A'}`,
+              `⚙️ Processing Time: ${data.processingTime || data.downloadTime || 'N/A'}`,
+              `⏱️ Total Time: ${data.totalTime || 'N/A'}`,
+              `🌐 Protocol: ${location.protocol === 'https:' ? 'HTTPS' : 'HTTP'}`,
+              `🕐 Time: ${timeRange}`,
+              '',
+              `💡 Click anywhere else to dismiss`
+            ].join('\n');
           } else {
             const protocolInfo = data.protocol ? `🌐 Protocol: ${data.protocol}\n` : '';
             const chunkInfo = data.chunkType ? `📦 Transfer Type: ${data.chunkType}\n` : '';
@@ -729,13 +751,30 @@ function autoUpload(files) {
   // 📊 Analyze file composition for smart toast notifications
   const CHUNK_THRESHOLD = LANVAN_CONFIG.CHUNK_THRESHOLD;
   const totalFiles = files.length;
-  const totalSizeMB = Array.from(files).reduce((sum, file) => sum + file.size, 0) / (1024 * 1024);
   
-  // Categorize files
-  const largeFiles = Array.from(files).filter(file => file.size >= CHUNK_THRESHOLD && !file.name.endsWith('.enc'));
-  const encFiles = Array.from(files).filter(file => file.name.endsWith('.enc'));
-  const regularFiles = Array.from(files).filter(file => file.size < CHUNK_THRESHOLD && !file.name.endsWith('.enc'));
+  // 🚀 PERFORMANCE: Single iteration to calculate total size and categorize files
+  let totalSize = 0;
+  const largeFiles = [];
+  const encFiles = [];
+  const regularFiles = [];
   
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    totalSize += file.size;
+    
+    const isEncFile = file.name.endsWith('.enc');
+    const isLargeFile = file.size >= CHUNK_THRESHOLD;
+    
+    if (isEncFile) {
+      encFiles.push(file);
+    } else if (isLargeFile) {
+      largeFiles.push(file);
+    } else {
+      regularFiles.push(file);
+    }
+  }
+  
+  const totalSizeMB = totalSize / (1024 * 1024);
   const hasLargeFiles = largeFiles.length > 0;
   const hasEncFiles = encFiles.length > 0;
   const hasRegularFiles = regularFiles.length > 0;
@@ -794,18 +833,25 @@ function autoUpload(files) {
 // 🔄 Regular upload function (original logic) - supports HTTP & HTTPS
 function uploadFilesRegular(files, isAESEnabled) {
   const formData = new FormData();
-  const totalSize = Array.from(files).reduce((sum, file) => sum + file.size, 0);
+  
+  // 🚀 PERFORMANCE: Calculate total size efficiently
+  let totalSize = 0;
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    formData.append('files', file);
+    totalSize += file.size;
+  }
+  
   const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
   const isHTTPS = location.protocol === 'https:';
   const protocolMsg = isHTTPS ? "HTTPS" : "HTTP";
-  
-  for (let file of files) {
-    formData.append('files', file);
-  }
 
   // ✅ Pass AES status to backend (using correct parameter name)
   if (isAESEnabled) {
     formData.append('encrypt', 'true');
+    // Show enhanced AES operation progress
+    updateToastContent(`🔒 AES-256 encryption enabled - Processing ${totalSizeMB} MB file(s) for secure upload...`);
+    console.log('🔐 Starting AES encryption for regular upload');
   }
 
   const xhr = new XMLHttpRequest();
@@ -831,13 +877,16 @@ function uploadFilesRegular(files, isAESEnabled) {
         const speed = e.loaded / 1024 / 1024 / elapsed;
         const uploadedMB = (e.loaded / 1024 / 1024).toFixed(1);
         
-        // 📊 Enhanced progress message for multiple files
+        // 📊 Enhanced progress message for multiple files with AES status
+        let progressMessage;
         if (files.length === 1) {
-          updateProgressToast(`📤 Uploading ${percent.toFixed(1)}% (${uploadedMB}/${totalSizeMB} MB) @ ${speed.toFixed(2)} MB/s`);
+          const aesStatus = isAESEnabled ? " 🔐" : "";
+          progressMessage = `📤 Uploading${aesStatus} ${percent.toFixed(1)}% (${uploadedMB}/${totalSizeMB} MB) @ ${speed.toFixed(2)} MB/s`;
         } else {
-          updateProgressToast(`📤 Uploading ${files.length} files • ${percent.toFixed(1)}% (${uploadedMB}/${totalSizeMB} MB) @ ${speed.toFixed(2)} MB/s`);
+          const aesStatus = isAESEnabled ? " (AES Encrypted)" : "";
+          progressMessage = `📤 Uploading ${files.length} files${aesStatus} • ${percent.toFixed(1)}% (${uploadedMB}/${totalSizeMB} MB) @ ${speed.toFixed(2)} MB/s`;
         }
-        lastProgressUpdate = now;
+        updateProgressToast(progressMessage);
       }
     }
   };
@@ -983,7 +1032,18 @@ async function uploadFilesChunked(files, isAESEnabled) {
   let networkSpeed = 0; // MB/s
   let speedSamples = []; // Simplified tracking
   
-  const totalSize = Array.from(files).reduce((sum, file) => sum + file.size, 0);
+  // 🚀 PERFORMANCE: Calculate total size and check for .enc files efficiently
+  let totalSize = 0;
+  let hasEncFiles = false;
+  
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    totalSize += file.size;
+    if (!hasEncFiles && file.name.endsWith('.enc')) {
+      hasEncFiles = true;
+    }
+  }
+  
   const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
   const isHTTPS = location.protocol === 'https:';
   
@@ -995,7 +1055,6 @@ async function uploadFilesChunked(files, isAESEnabled) {
   }
   
   // 🚫 Block .enc files from chunked upload on HTTPS
-  const hasEncFiles = Array.from(files).some(file => file.name.endsWith('.enc'));
   if (hasEncFiles && isHTTPS) {
     showToast("❌ .enc files cannot use chunked upload on HTTPS. Please use full upload to preserve encryption integrity.", 5000);
     return;
@@ -1132,15 +1191,17 @@ async function uploadFilesChunked(files, isAESEnabled) {
         
         while (retryCount <= LANVAN_CONFIG.ERROR_RECOVERY.MAX_RETRIES) {
           try {
-            chunkResponse = await Promise.race([
-              fetch('/upload_chunk', {
-                method: 'POST',
-                body: chunkFormData
-              }),
-              new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Network timeout')), LANVAN_CONFIG.ERROR_RECOVERY.NETWORK_TIMEOUT)
-              )
-            ]);
+            // 🚀 PERFORMANCE: AbortController for proper request cleanup
+            const abortController = new AbortController();
+            const timeoutId = setTimeout(() => abortController.abort(), LANVAN_CONFIG.ERROR_RECOVERY.NETWORK_TIMEOUT);
+            
+            chunkResponse = await fetch('/upload_chunk', {
+              method: 'POST',
+              body: chunkFormData,
+              signal: abortController.signal
+            });
+            
+            clearTimeout(timeoutId);
 
             if (!chunkResponse.ok) {
               throw new Error(`HTTP ${chunkResponse.status}`);
@@ -1271,11 +1332,13 @@ async function uploadFilesChunked(files, isAESEnabled) {
           const uploadedMB = (totalUploaded / 1024 / 1024).toFixed(1);
           const currentChunkSizeMB = (CHUNK_SIZE / 1024 / 1024).toFixed(1);
           
-          // 📊 Enhanced progress message with dynamic chunk info
+          // 📊 Enhanced progress message with dynamic chunk info and AES status
           if (files.length === 1) {
-            updateProgressToast(`📤 ${overallProgress.toFixed(0)}% • ${uploadedMB}/${totalSizeMB} MB @ ${speed.toFixed(1)} MB/s • ${currentChunkSizeMB}MB chunks (${chunkCount}/${estimatedChunks})`);
+            const aesStatus = isAESEnabled ? " 🔐" : "";
+            updateProgressToast(`📤${aesStatus} ${overallProgress.toFixed(0)}% • ${uploadedMB}/${totalSizeMB} MB @ ${speed.toFixed(1)} MB/s • ${currentChunkSizeMB}MB chunks (${chunkCount}/${estimatedChunks})`);
           } else {
-            updateProgressToast(`📤 File ${currentFileNum}/${files.length} • ${overallProgress.toFixed(0)}% • ${uploadedMB}/${totalSizeMB} MB @ ${speed.toFixed(1)} MB/s • ${currentChunkSizeMB}MB chunks`);
+            const aesStatus = isAESEnabled ? " (AES)" : "";
+            updateProgressToast(`📤 File ${currentFileNum}/${files.length}${aesStatus} • ${overallProgress.toFixed(0)}% • ${uploadedMB}/${totalSizeMB} MB @ ${speed.toFixed(1)} MB/s • ${currentChunkSizeMB}MB chunks`);
           }
           lastToastUpdate = now;
         }
@@ -1305,15 +1368,17 @@ async function uploadFilesChunked(files, isAESEnabled) {
       
       while (finalizeRetryCount <= LANVAN_CONFIG.ERROR_RECOVERY.MAX_RETRIES) {
         try {
-          finalizeResponse = await Promise.race([
-            fetch('/finalize_upload', {
-              method: 'POST',
-              body: finalizeFormData
-            }),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Finalize timeout')), LANVAN_CONFIG.ERROR_RECOVERY.NETWORK_TIMEOUT)
-            )
-          ]);
+          // 🚀 PERFORMANCE: AbortController for proper request cleanup
+          const finalizeAbortController = new AbortController();
+          const finalizeTimeoutId = setTimeout(() => finalizeAbortController.abort(), LANVAN_CONFIG.ERROR_RECOVERY.NETWORK_TIMEOUT);
+          
+          finalizeResponse = await fetch('/finalize_upload', {
+            method: 'POST',
+            body: finalizeFormData,
+            signal: finalizeAbortController.signal
+          });
+          
+          clearTimeout(finalizeTimeoutId);
 
           if (!finalizeResponse.ok) {
             throw new Error(`Finalize HTTP ${finalizeResponse.status}`);
@@ -1505,12 +1570,14 @@ function showToast(message, duration = 3000, transferData = null) {
     delete toast._transferData;
   }
   
-  // Style the toast
-  toast.style.display = 'block';
-  toast.style.opacity = '1';
-  toast.style.transform = 'translateX(-50%) translateY(0)';
-  toast.style.backgroundColor = duration === 0 ? '#27ae60' : '#333';
-  toast.style.whiteSpace = 'normal';
+  // 🚀 PERFORMANCE: Batch style changes with Object.assign
+  Object.assign(toast.style, {
+    display: 'block',
+    opacity: '1',
+    transform: 'translateX(-50%) translateY(0)',
+    backgroundColor: duration === 0 ? '#27ae60' : '#333',
+    whiteSpace: 'normal'
+  });
   toast.title = 'Click to keep visible';
   
   console.log(`🔔 Toast: ${message}`);
@@ -1557,9 +1624,11 @@ function hideToast() {
     toastTimeout = null;
   }
   
-  // Hide with animation
-  toast.style.opacity = '0';
-  toast.style.transform = 'translateX(-50%) translateY(20px)';
+  // 🚀 PERFORMANCE: Batch style changes for hide animation
+  Object.assign(toast.style, {
+    opacity: '0',
+    transform: 'translateX(-50%) translateY(20px)'
+  });
   
   setTimeout(() => {
     if (!isPersistentToast) {
@@ -1575,14 +1644,16 @@ function storeFileMetadata(files, totalSize) {
     const metadata = JSON.parse(localStorage.getItem('fileMetadata') || '{}');
     const timestamp = Date.now();
     
-    Array.from(files).forEach(file => {
+    // 🚀 PERFORMANCE: Efficient iteration without Array.from
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       metadata[file.name] = {
         size: file.size,
         timestamp: timestamp,
         lastModified: file.lastModified,
         type: file.type || 'unknown'
       };
-    });
+    }
     
     localStorage.setItem('fileMetadata', JSON.stringify(metadata));
     console.log(`💾 Stored metadata for ${files.length} files`);
@@ -1792,24 +1863,32 @@ async function downloadIndividually() {
         
         // Method 5: NEW - Network idle detection for very fast completion
         let networkRequests = 0;
-        const originalFetch = window.fetch;
-        window.fetch = function(...args) {
-          networkRequests++;
-          return originalFetch.apply(this, args).finally(() => {
-            networkRequests--;
-            if (networkRequests === 0 && Date.now() - startTime > 100) {
-              setTimeout(() => {
-                if (networkRequests === 0 && !resolved && Date.now() - startTime > 500) {
-                  resolveOnce('network-idle');
-                }
-              }, 200);
-            }
-          });
-        };
+        let originalFetch = null;
+        
+        if (!window._fetchIntercepted) {
+          originalFetch = window.fetch;
+          window.fetch = function(...args) {
+            networkRequests++;
+            return originalFetch.apply(this, args).finally(() => {
+              networkRequests--;
+              if (networkRequests === 0 && Date.now() - startTime > 100) {
+                setTimeout(() => {
+                  if (networkRequests === 0 && !resolved && Date.now() - startTime > 500) {
+                    resolveOnce('network-idle');
+                  }
+                }, 200);
+              }
+            });
+          };
+          window._fetchIntercepted = true;
+        }
         
         // Restore original fetch when done
         setTimeout(() => {
-          window.fetch = originalFetch;
+          if (originalFetch && window._fetchIntercepted) {
+            window.fetch = originalFetch;
+            window._fetchIntercepted = false;
+          }
         }, timeoutMs + 1000);
       });
     }
@@ -2306,7 +2385,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 🖱️ Click anywhere else to dismiss persistent toast  
-  document.addEventListener('click', function(e) {
+  document.addEventListener('click', function globalToastClickHandler(e) {
     let toast = DOM_CACHE.toast;
     
     // Robust fallback for toast element
@@ -2336,8 +2415,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 🎯 Handle download button clicks with direct download strategy - LANVan Ultra-Fast Implementation
   function setupDownloadHandlers() {
+    // 🚀 PERFORMANCE: Clean up existing listeners first to prevent memory leaks
     document.querySelectorAll('.file-card a.download-btn').forEach(btn => {
-      btn.addEventListener('click', async function (e) {
+      btn.replaceWith(btn.cloneNode(true));
+    });
+    
+    document.querySelectorAll('.file-card a.download-btn').forEach(btn => {
+      btn.addEventListener('click', async function handleDownloadClick(e) {
         e.preventDefault();
 
         const fileUrl = this.getAttribute('href');
@@ -2432,13 +2516,12 @@ document.addEventListener('DOMContentLoaded', () => {
             cacheKeys: Object.keys(DOM_CACHE)
           });
           
-          // Fallback: Try to get toast element directly if DOM_CACHE is missing
+          // 🚀 PERFORMANCE: Optimized fallback with DOM cache update
           if (!DOM_CACHE.toast) {
             console.warn('⚠️ DOM_CACHE.toast not available, trying direct selection');
-            const directToast = document.getElementById('toast');
-            if (directToast) {
-              console.log('✅ Found toast directly, updating DOM_CACHE');
-              DOM_CACHE.toast = directToast;
+            DOM_CACHE.toast = document.getElementById('toast');
+            if (DOM_CACHE.toast) {
+              console.log('✅ Found toast directly, updated DOM_CACHE');
             }
           }
           
@@ -2777,13 +2860,13 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
       };
     }
     
-    // Clean up old metadata (keep only files from last 30 days)
+    // 🚀 PERFORMANCE: Optimize metadata cleanup with for...in loop
     const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-    Object.keys(metadata).forEach(filename => {
+    for (const filename in metadata) {
       if (metadata[filename].timestamp < thirtyDaysAgo) {
         delete metadata[filename];
       }
-    });
+    }
     
     localStorage.setItem('fileMetadata', JSON.stringify(metadata));
   }

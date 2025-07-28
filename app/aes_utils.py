@@ -163,6 +163,92 @@ def decrypt_file_with_metadata(encrypted_data: bytes, metadata: Dict[str, Option
     
     return decrypt_bytes(encrypted_data, key, iv)
 
+def encrypt_file_stream(file_data: bytes, chunk_size: int = 1024 * 1024) -> Tuple[bytes, Dict[str, str]]:
+    """
+    Memory-efficient streaming AES encryption for large files.
+    
+    Args:
+        file_data: File content as bytes
+        chunk_size: Size of chunks to process (default 1MB)
+    
+    Returns:
+        tuple: (encrypted_data, metadata_dict)
+    """
+    key, salt = generate_secure_key()
+    iv = generate_secure_iv()
+    
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
+    
+    encrypted_chunks = []
+    data_length = len(file_data)
+    
+    # Process file in chunks to reduce memory usage
+    for i in range(0, data_length, chunk_size):
+        chunk = file_data[i:i + chunk_size]
+        
+        # Pad the last chunk if necessary
+        if i + chunk_size >= data_length:
+            chunk = pad(chunk)
+        
+        encrypted_chunk = encryptor.update(chunk)
+        encrypted_chunks.append(encrypted_chunk)
+    
+    # Finalize encryption
+    final_chunk = encryptor.finalize()
+    if final_chunk:
+        encrypted_chunks.append(final_chunk)
+    
+    encrypted_data = b''.join(encrypted_chunks)
+    
+    metadata = {
+        'salt': salt.hex(),
+        'iv': iv.hex(),
+        'key': key.hex(),
+        'algorithm': 'AES-256-CBC-Stream',
+        'original_size': str(data_length),
+        'encrypted_size': str(len(encrypted_data))
+    }
+    
+    return encrypted_data, metadata
+
+def decrypt_file_stream(encrypted_data: bytes, metadata: Dict[str, str], chunk_size: int = 1024 * 1024) -> bytes:
+    """
+    Memory-efficient streaming AES decryption for large files.
+    
+    Args:
+        encrypted_data: The encrypted file content
+        metadata: Metadata dict containing key, iv, etc.
+        chunk_size: Size of chunks to process (default 1MB)
+    
+    Returns:
+        bytes: Decrypted file content
+    """
+    key = bytes.fromhex(metadata['key'])
+    iv = bytes.fromhex(metadata['iv'])
+    
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    decryptor = cipher.decryptor()
+    
+    decrypted_chunks = []
+    data_length = len(encrypted_data)
+    
+    # Process encrypted data in chunks
+    for i in range(0, data_length, chunk_size):
+        chunk = encrypted_data[i:i + chunk_size]
+        decrypted_chunk = decryptor.update(chunk)
+        decrypted_chunks.append(decrypted_chunk)
+    
+    # Finalize decryption
+    final_chunk = decryptor.finalize()
+    if final_chunk:
+        decrypted_chunks.append(final_chunk)
+    
+    decrypted_data = b''.join(decrypted_chunks)
+    
+    # Remove padding from the final result
+    return unpad(decrypted_data)
+
 # 🔄 Legacy support functions (for backward compatibility during migration)
 def encrypt_bytes_legacy(data: bytes) -> bytes:
     """

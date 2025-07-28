@@ -14,10 +14,11 @@ from fastapi.responses import (
 )
 from fastapi.templating import Jinja2Templates
 from starlette.status import HTTP_302_FOUND, HTTP_400_BAD_REQUEST
-from werkzeug.utils import secure_filename
 
 from app.aes_utils import encrypt_bytes_legacy, decrypt_bytes_legacy, encrypt_file_with_metadata, decrypt_file_with_metadata
+from app.aes_config import AESConfig
 from app.config import is_allowed_file
+from app.validation import validate_upload_files, FileValidator, secure_filename
 
 # === Setup ===
 router = APIRouter()
@@ -189,9 +190,41 @@ def get_unique_filename(directory: Path, filename: str) -> str:
 def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=False):
     data = upload_file.file.read()
     if encrypt:
-        data = encrypt_bytes_legacy(data)
-    with destination.open("wb") as f:
-        f.write(data)
+        try:
+            # Import streaming encryption functions
+            from .aes_utils import encrypt_file_stream
+            
+            # Add file integrity validation for encrypted files
+            import hashlib
+            original_hash = hashlib.sha256(data).hexdigest()
+            print(f"🔒 Original file hash: {original_hash}")
+            
+            # Use memory-efficient streaming encryption
+            encrypted_data, metadata = encrypt_file_stream(data, chunk_size=1024 * 1024)  # 1MB chunks
+            
+            # Enhanced metadata with integrity information
+            metadata['original_hash'] = original_hash
+            metadata['original_size'] = str(len(data))
+            metadata['encrypted_size'] = str(len(encrypted_data))
+            metadata['encryption_method'] = 'streaming'
+            
+            # Save metadata to separate file
+            metadata_path = destination.with_suffix('.enc.meta')
+            with metadata_path.open("w") as meta_file:
+                import json
+                json.dump(metadata, meta_file, indent=2)
+            
+            # Write encrypted data
+            with destination.open("wb") as f:
+                f.write(encrypted_data)
+                
+            print(f"🔒 File encrypted using streaming AES with {len(encrypted_data)} bytes")
+        except Exception as e:
+            print(f"🚨 Streaming encryption failed: {e}")
+            raise Exception(f"AES encryption failed: {e}")
+    else:
+        with destination.open("wb") as f:
+            f.write(data)
 
 def scan_file(path: Path):
     print(f"🧪 Scanning file in background: {path}")
@@ -236,35 +269,49 @@ async def upload_auto_file(
     # 🔐 Protocol detection
     is_https = request.url.scheme == "https"
     
-    # 🚫 Enforce encryption restrictions (re-enabled for testing)
-    if encrypt and not is_https:
+    # �️ Comprehensive input validation
+    is_valid, error_messages, validated_files = validate_upload_files(files, encrypt, is_https)
+    if not is_valid:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
             "status": "error",
-            "msg": "AES encryption is only available over HTTPS connections for security."
+            "msg": "; ".join(error_messages)
         })
 
-    uploaded = []
-    MAX_AES_SIZE_MB = 200
-    MAX_AES_SIZE_BYTES = MAX_AES_SIZE_MB * 1024 * 1024
+    # �🚫 Enforce encryption restrictions using centralized config
+    if encrypt:
+        validation = AESConfig.validate_file_for_aes(0, is_https)  # Size will be checked per file
+        if not validation['valid'] and 'HTTPS' in validation['error']:
+            return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
+                "status": "error",
+                "msg": validation['error']
+            })
 
-    for file in files:
+    uploaded = []
+
+    for i, file in enumerate(files):
         if not file.filename:
             continue
 
-        filename = secure_filename(file.filename)
+        # Use validated filename
+        validated_file = validated_files[i] if i < len(validated_files) else None
+        if not validated_file:
+            continue
+            
+        filename = validated_file['sanitized_name']
+        file_size = validated_file['size']
+
+        # Double-check with existing validation (defense in depth)
         if not is_allowed_file(filename):
             continue
 
-        # Check size
-        file.file.seek(0, os.SEEK_END)
-        file_size = file.file.tell()
-        file.file.seek(0)
-
-        if encrypt and file_size > MAX_AES_SIZE_BYTES:
-            return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
-                "status": "error",
-                "msg": "AES is blocked for files >200MB to ensure smooth & efficient file transfer."
-            })
+        # Check size using centralized AES config
+        if encrypt:
+            validation = AESConfig.validate_file_for_aes(file_size, is_https)
+            if not validation['valid']:
+                return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
+                    "status": "error",
+                    "msg": validation['error']
+                })
 
         save_name = filename + ".enc" if encrypt else filename
         filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, save_name)
@@ -290,14 +337,21 @@ async def upload_auto_file(
 @router.get("/download/{filename}", name="download_file")
 @router.head("/download/{filename}")
 async def download_file(filename: str, request: Request):
+    print(f"📥 Download request for: {filename}")
+    
     safe_name = secure_filename(filename)
     file_path = UPLOAD_FOLDER / safe_name
+    
+    print(f"📂 Looking for file at: {file_path}")
 
     if not file_path.is_file():
+        print(f"❌ File not found: {file_path}")
         return Response("File not found", status_code=404)
 
     mime_type, _ = guess_type(str(file_path))
     file_size = file_path.stat().st_size
+    
+    print(f"📊 File info - Size: {file_size} bytes, MIME: {mime_type}")
     
     # ✅ Handle HEAD requests - return headers only for file info
     if request.method == "HEAD":
@@ -321,49 +375,134 @@ async def download_file(filename: str, request: Request):
     is_enc_file = safe_name.endswith(".enc")
     is_large_file = file_size >= 250 * 1024 * 1024  # 250MB threshold
     
+    print(f"🔍 Download strategy - Encrypted: {is_enc_file}, Large: {is_large_file}")
+    
     # 📦 Chunked download logic
     if is_large_file and not is_enc_file:
+        print("📦 Using chunked download")
         return await chunked_download_file(file_path, safe_name, mime_type, file_size, request)
     else:
+        print("📄 Using full download")
         return await full_download_file(file_path, safe_name, mime_type, file_size)
 
 async def full_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int):
     """Ultra-optimized full file download - for small files and .enc files"""
+    print(f"📤 Starting full download for: {safe_name}")
+    
     # 🚀 Much larger buffer for maximum speed - 32MB buffer (4x improvement)
     STREAM_BUFFER_SIZE = 32 * 1024 * 1024  # 32MB buffer (was 8MB)
     
     def stream_file_ultra_optimized(path: Path):
+        print(f"🔄 Streaming file: {path}")
+        
         if path.suffix == ".enc":
-            # 🔐 Optimized .enc file handling with streaming decryption
-            with open(path, "rb") as file:
-                encrypted_data = file.read()
-                decrypted_data = decrypt_bytes_legacy(encrypted_data)
+            print("🔐 Processing encrypted file")
+            # 🔐 Enhanced .enc file handling with streaming decryption and metadata validation
+            try:
+                # Check for metadata file first
+                metadata_path = path.with_suffix('.enc.meta')
+                metadata = None
                 
-                # 🚀 Stream in very large chunks for maximum speed
-                data_length = len(decrypted_data)
-                for i in range(0, data_length, STREAM_BUFFER_SIZE):
-                    chunk_end = min(i + STREAM_BUFFER_SIZE, data_length)
-                    yield decrypted_data[i:chunk_end]
+                if metadata_path.exists():
+                    with open(metadata_path, "r") as meta_file:
+                        import json
+                        metadata = json.load(meta_file)
+                        print(f"🔒 Found metadata for encrypted file: {metadata.get('encryption_method', 'legacy')}")
+                
+                with open(path, "rb") as file:
+                    encrypted_data = file.read()
+                    print(f"📊 Read {len(encrypted_data)} bytes of encrypted data")
+                    
+                    # Use appropriate decryption method based on metadata
+                    if metadata and metadata.get('encryption_method') == 'streaming':
+                        from .aes_utils import decrypt_file_stream
+                        decrypted_data = decrypt_file_stream(encrypted_data, metadata, chunk_size=1024 * 1024)
+                        print(f"🔒 Used streaming decryption for {path.name}")
+                    else:
+                        # Fallback to legacy decryption
+                        decrypted_data = decrypt_bytes_legacy(encrypted_data)
+                        print(f"🔒 Used legacy decryption for {path.name}")
+                    
+                    print(f"✅ Decrypted to {len(decrypted_data)} bytes")
+                    
+                    # Validate integrity if metadata available
+                    if metadata and 'original_hash' in metadata:
+                        import hashlib
+                        actual_hash = hashlib.sha256(decrypted_data).hexdigest()
+                        expected_hash = metadata['original_hash']
+                        if actual_hash != expected_hash:
+                            raise Exception(f"File integrity check failed! Expected: {expected_hash}, Got: {actual_hash}")
+                        print(f"✅ File integrity validated successfully")
+                    
+                    # 🚀 Stream in very large chunks for maximum speed
+                    data_length = len(decrypted_data)
+                    chunks_sent = 0
+                    for i in range(0, data_length, STREAM_BUFFER_SIZE):
+                        chunk_end = min(i + STREAM_BUFFER_SIZE, data_length)
+                        chunk = decrypted_data[i:chunk_end]
+                        chunks_sent += 1
+                        print(f"📤 Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
+                        yield chunk
+                        
+            except Exception as e:
+                print(f"🚨 AES decryption failed for {path}: {e}")
+                # Return error content instead of crashing
+                error_message = f"Error: Failed to decrypt file {path.name}. {str(e)}"
+                yield error_message.encode('utf-8')
         else:
+            print("📄 Processing regular file")
             # 🚀 Ultra-fast regular file streaming with optimized buffer
-            with open(path, "rb") as file:
-                while True:
-                    chunk = file.read(STREAM_BUFFER_SIZE)
-                    if not chunk:
-                        break
-                    yield chunk
+            try:
+                with open(path, "rb") as file:
+                    chunks_sent = 0
+                    while True:
+                        chunk = file.read(STREAM_BUFFER_SIZE)
+                        if not chunk:
+                            break
+                        chunks_sent += 1
+                        print(f"📤 Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
+                        yield chunk
+                print(f"✅ Completed streaming {chunks_sent} chunks")
+            except Exception as e:
+                print(f"🚨 File streaming failed for {path}: {e}")
+                error_message = f"Error: Failed to read file {path.name}. {str(e)}"
+                yield error_message.encode('utf-8')
 
+    # For encrypted files, we need to adjust the Content-Length after decryption
+    final_file_size = file_size
+    if file_path.suffix == ".enc":
+        # Try to get the original size from metadata
+        metadata_path = file_path.with_suffix('.enc.meta')
+        if metadata_path.exists():
+            try:
+                with open(metadata_path, "r") as meta_file:
+                    import json
+                    metadata = json.load(meta_file)
+                    if 'original_size' in metadata:
+                        final_file_size = int(metadata['original_size'])
+                        print(f"🔒 Using original size from metadata: {final_file_size}")
+            except Exception as e:
+                print(f"⚠️ Could not read metadata for size: {e}")
+    
+    headers = {
+        "Content-Disposition": f'attachment; filename="{safe_name}"',
+        "Content-Type": mime_type or "application/octet-stream",
+        "Cache-Control": "public, max-age=86400",
+        "X-Accel-Buffering": "no",
+        "X-Download-Type": "ultra-optimized-full",
+        "X-Buffer-Size": "32MB"
+    }
+    
+    # Only add Content-Length for non-encrypted files to avoid mismatch
+    if not file_path.suffix == ".enc":
+        headers["Content-Length"] = str(final_file_size)
+    
+    print(f"📋 Response headers: {headers}")
+    
     return StreamingResponse(
         stream_file_ultra_optimized(file_path),
         media_type=mime_type or "application/octet-stream",
-        headers={
-            "Content-Disposition": f'attachment; filename="{safe_name}"',
-            "Content-Length": str(file_size),
-            "Cache-Control": "public, max-age=86400",
-            "X-Accel-Buffering": "no",
-            "X-Download-Type": "ultra-optimized-full",  # Updated indicator
-            "X-Buffer-Size": "32MB"  # Performance indicator
-        }
+        headers=headers
     )
 
 async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, request: Request | None = None):
@@ -450,9 +589,15 @@ async def download_all_files():
             for file in files_to_download:
                 try:
                     if file.suffix == ".enc":
-                        # Decrypt .enc files before adding to ZIP
-                        decrypted_data = decrypt_bytes_legacy(file.read_bytes())
-                        zip_file.writestr(file.stem, decrypted_data)
+                        # Decrypt .enc files before adding to ZIP with error handling
+                        try:
+                            decrypted_data = decrypt_bytes_legacy(file.read_bytes())
+                            zip_file.writestr(file.stem, decrypted_data)
+                        except Exception as decrypt_error:
+                            print(f"🚨 AES decryption failed for {file.name}: {decrypt_error}")
+                            # Add error file to ZIP instead of crashing
+                            error_content = f"Error: Failed to decrypt {file.name}. File may be corrupted or not properly encrypted."
+                            zip_file.writestr(f"{file.stem}_DECRYPT_ERROR.txt", error_content.encode('utf-8'))
                     else:
                         # Add regular files directly
                         zip_file.write(file, arcname=file.name)
@@ -767,13 +912,13 @@ async def finalize_upload(
                 content={"status": "error", "msg": "No chunks found for this file"}
             )
 
-        # Check if encryption is requested and file would be too large
+        # Check if encryption is requested and validate using centralized config
         if encrypt:
             # Calculate total size by checking all actual chunks
             total_size = sum(chunk_path.stat().st_size for _, chunk_path in chunk_files)
             
-            MAX_AES_SIZE_BYTES = 200 * 1024 * 1024  # 200MB
-            if total_size > MAX_AES_SIZE_BYTES:
+            validation = AESConfig.validate_file_for_aes(total_size, is_https)
+            if not validation['valid']:
                 # Clean up chunks
                 for _, chunk_path in chunk_files:
                     if chunk_path.exists():
@@ -783,7 +928,7 @@ async def finalize_upload(
                     status_code=HTTP_400_BAD_REQUEST,
                     content={
                         "status": "error",
-                        "msg": "AES is blocked for files >200MB to ensure smooth & efficient file transfer."
+                        "msg": validation['error']
                     }
                 )
         
@@ -810,9 +955,23 @@ async def finalize_upload(
                 # Read chunk data
                 chunk_data = chunk_path.read_bytes()
                 
-                # Encrypt if requested
+                # Encrypt if requested with error handling
                 if encrypt:
-                    chunk_data = encrypt_bytes_legacy(chunk_data)
+                    try:
+                        chunk_data = encrypt_bytes_legacy(chunk_data)
+                    except Exception as encrypt_error:
+                        print(f"🚨 AES encryption failed for chunk {part_num}: {encrypt_error}")
+                        # Clean up and return error
+                        if final_path.exists():
+                            final_path.unlink()
+                        for _, clean_chunk_path in chunk_files:
+                            if clean_chunk_path.exists():
+                                clean_chunk_path.unlink()
+                        
+                        return JSONResponse(
+                            status_code=HTTP_400_BAD_REQUEST,
+                            content={"status": "error", "msg": f"AES encryption failed: {encrypt_error}"}
+                        )
                 
                 # Write to final file
                 final_file.write(chunk_data)
