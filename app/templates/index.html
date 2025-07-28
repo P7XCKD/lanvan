@@ -681,6 +681,9 @@
 
   // 🚀 Upload Manager Functions
   function createUploadItem(file, uploadId) {
+    // Check if AES encryption is enabled
+    const isAESEnabled = isEncryptionEnabled && document.getElementById('enableEncryption').checked;
+    
     return {
       id: uploadId,
       file: file,
@@ -693,7 +696,11 @@
       speed: 0,
       timeRemaining: 0,
       xhr: null,
-      error: null
+      error: null,
+      isAESEnabled: isAESEnabled, // Store AES encryption state
+      uploadedChunks: 0, // For resume functionality
+      totalChunks: 0, // For chunked uploads
+      pauseAllowed: !isAESEnabled // Pause only allowed for non-AES uploads
     };
   }
 
@@ -713,6 +720,9 @@
     if (manager && !isUploadManagerVisible) {
       manager.style.display = 'block';
       isUploadManagerVisible = true;
+      
+      // 🔔 Show helpful toast when upload manager first appears
+      showToast('📤 Upload Manager opened - Track your file uploads here!', 3000);
     }
   }
 
@@ -720,26 +730,36 @@
     // Get upload history from localStorage
     try {
       const transferLogs = JSON.parse(localStorage.getItem('transferLogs') || '[]');
-      const uploadLogs = transferLogs.filter(log => log.type && log.type.includes('upload'));
+      const uploadLogs = transferLogs.filter(log => log.type && log.type.toLowerCase().includes('upload'));
       
       if (uploadLogs.length === 0) {
         showToast('📊 No upload history available yet', 3000);
         return;
       }
       
-      // Create history display
-      let historyText = '📊 Recent Upload History:\n\n';
+      // Create detailed history display
+      let historyText = `📊 Upload History (${uploadLogs.length} records):\n\n`;
       uploadLogs.slice(0, 10).forEach((log, index) => {
         historyText += `${index + 1}. ${log.filename || 'Unknown'}\n`;
-        historyText += `   Size: ${log.size || 'Unknown'}\n`;
-        historyText += `   Speed: ${log.speed || 'Unknown'}\n`;
-        historyText += `   Time: ${log.timestamp || 'Unknown'}\n\n`;
+        historyText += `   📁 Size: ${log.size || 'Unknown'}\n`;
+        historyText += `   ⚡ Speed: ${log.speed || 'Unknown'}\n`;
+        historyText += `   ⏱️ Time: ${log.time || 'Unknown'}\n`;
+        historyText += `   🔗 Protocol: ${log.protocol || 'Unknown'}\n`;
+        historyText += `   📤 Method: ${log.method || 'Unknown'}\n`;
+        if (log.encrypted) historyText += `   🔒 Encrypted: Yes\n`;
+        if (log.chunks_used) historyText += `   📦 Chunks: ${log.chunks_used}\n`;
+        if (log.files_count) historyText += `   📊 Files: ${log.files_count}\n`;
+        historyText += `   📅 Date: ${log.timestamp || 'Unknown'}\n\n`;
       });
+      
+      if (uploadLogs.length > 10) {
+        historyText += `... and ${uploadLogs.length - 10} more entries\n\n`;
+      }
       
       historyText += 'Click anywhere to dismiss';
       
       // Show in a toast with extended duration
-      showToast(historyText, 10000);
+      showToast(historyText, 15000); // Longer duration for detailed info
       
     } catch (error) {
       console.error('Error loading upload history:', error);
@@ -757,20 +777,9 @@
       countElement.textContent = `(${activeUploads})`;
     }
 
-    // Auto-hide if no active uploads (simplified without toggle function)
-    if (activeUploads === 0 && isUploadManagerVisible) {
-      setTimeout(() => {
-        if (uploadQueue.filter(item => 
-          ['queued', 'uploading', 'paused'].includes(item.status)
-        ).length === 0) {
-          const manager = document.getElementById('uploadManager');
-          if (manager) {
-            manager.style.display = 'none';
-            isUploadManagerVisible = false;
-          }
-        }
-      }, 3000); // Hide after 3 seconds of no activity
-    }
+    // Keep upload manager visible - don't auto-hide
+    // Users can manually use the "Upload History" button to check completed uploads
+    // The upload manager will stay visible so users can see their upload progress and history
   }
 
   function renderUploadItem(uploadItem) {
@@ -800,7 +809,10 @@
         </div>
       </div>
       <div class="upload-controls">
-        <button class="upload-control-btn pause" id="pause-${uploadItem.id}" onclick="pauseUpload(${uploadItem.id})">⏸️</button>
+        ${uploadItem.pauseAllowed ? 
+          `<button class="upload-control-btn pause" id="pause-${uploadItem.id}" onclick="pauseUpload(${uploadItem.id})">⏸️</button>` : 
+          `<button class="upload-control-btn pause disabled" title="⚠️ Pause not available for AES encrypted uploads" disabled>⏸️</button>`
+        }
         <button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})">❌</button>
       </div>
     `;
@@ -854,14 +866,29 @@
 
     // Update pause/resume button
     if (pauseBtn) {
-      if (uploadItem.status === 'paused') {
+      // Check if pause is allowed (not for AES uploads)
+      if (!uploadItem.pauseAllowed || uploadItem.isAESEnabled) {
+        pauseBtn.disabled = true;
+        pauseBtn.className = 'upload-control-btn pause disabled';
+        pauseBtn.title = '⚠️ Pause not available for AES encrypted uploads';
+        pauseBtn.textContent = '⏸️';
+      } else if (uploadItem.status === 'paused') {
+        pauseBtn.disabled = false;
         pauseBtn.textContent = '▶️';
         pauseBtn.className = 'upload-control-btn resume';
+        pauseBtn.title = 'Resume upload';
         pauseBtn.onclick = () => resumeUpload(uploadItem.id);
-      } else {
+      } else if (uploadItem.status === 'uploading') {
+        pauseBtn.disabled = false;
         pauseBtn.textContent = '⏸️';
         pauseBtn.className = 'upload-control-btn pause';
+        pauseBtn.title = 'Pause upload';
         pauseBtn.onclick = () => pauseUpload(uploadItem.id);
+      } else {
+        // For completed, error, cancelled states
+        pauseBtn.disabled = true;
+        pauseBtn.className = 'upload-control-btn pause disabled';
+        pauseBtn.textContent = '⏸️';
       }
     }
   }
@@ -870,14 +897,24 @@
     const uploadItem = uploadQueue.find(item => item.id === uploadId);
     if (!uploadItem || uploadItem.status !== 'uploading') return;
 
+    // 🚫 Prevent pausing AES encrypted uploads
+    if (!uploadItem.pauseAllowed || uploadItem.isAESEnabled) {
+      showToast("⚠️ Cannot pause AES encrypted uploads to prevent data corruption.", 4000);
+      return;
+    }
+
+    // 🚫 Only allow pause for HTTP/HTTPS non-encrypted uploads
     if (uploadItem.xhr) {
       uploadItem.xhr.abort();
     }
     
-    // Store current progress when pausing
+    // Store current progress when pausing - this preserves actual upload state
     uploadItem.pausedAt = Date.now();
     uploadItem.pausedProgress = uploadItem.progress;
+    uploadItem.pausedBytes = uploadItem.uploadedBytes || 0; // Store actual uploaded bytes
     uploadItem.status = 'paused';
+    
+    showToast(`⏸️ Upload paused: ${uploadItem.fileName} (${uploadItem.progress.toFixed(1)}% completed)`, 3000);
     updateUploadItem(uploadItem);
     updateUploadManager();
   }
@@ -886,12 +923,41 @@
     const uploadItem = uploadQueue.find(item => item.id === uploadId);
     if (!uploadItem || uploadItem.status !== 'paused') return;
 
-    // Note: Due to HTTP upload limitations, we restart but keep visual progress
-    // In a production system, this would use chunked uploads for true resume
-    uploadItem.status = 'queued';
-    uploadItem.resuming = true; // Flag to show it's resuming
-    updateUploadItem(uploadItem);
-    startNextUpload();
+    // 🚫 Safety check - ensure it's allowed to resume
+    if (!uploadItem.pauseAllowed || uploadItem.isAESEnabled) {
+      showToast("⚠️ Cannot resume AES encrypted uploads.", 4000);
+      return;
+    }
+
+    // 🚀 Smart Resume Logic:
+    // For files < 50MB: restart upload (HTTP limitation)
+    // For files >= 50MB: use chunked upload with proper resume
+    const fileSizeMB = uploadItem.fileSize / (1024 * 1024);
+    
+    if (fileSizeMB >= 50) {
+      // Use chunked upload for large files - this supports true resume
+      uploadItem.status = 'uploading';
+      uploadItem.resuming = true;
+      showToast(`▶️ Resuming chunked upload: ${uploadItem.fileName} from ${uploadItem.progress.toFixed(1)}%`, 3000);
+      
+      // Start chunked upload with resume capability
+      uploadLargeFileChunked(uploadItem);
+    } else {
+      // For smaller files, restart but preserve visual progress briefly
+      uploadItem.status = 'uploading';
+      uploadItem.resuming = true;
+      showToast(`▶️ Restarting upload: ${uploadItem.fileName} (file too small for resume)`, 3000);
+      
+      // Reset progress for restart
+      uploadItem.progress = 0;
+      uploadItem.uploadedBytes = 0;
+      updateUploadItem(uploadItem);
+      
+      // Use regular upload
+      uploadSingleFileWithProgress(uploadItem);
+    }
+    
+    updateUploadManager();
   }
 
   function cancelUpload(uploadId) {
@@ -995,16 +1061,62 @@
         updateUploadItem(uploadItem);
         endUpload();
         
+        // 🔔 Show toast notification for individual file completion
+        const fileSize = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
+        const uploadTime = ((Date.now() - uploadItem.startTime) / 1000).toFixed(1);
+        const avgSpeed = (fileSize / uploadTime).toFixed(1);
+        showToast(`✅ ${uploadItem.file.name} uploaded successfully (${fileSize} MB in ${uploadTime}s @ ${avgSpeed} MB/s)`, 4000);
+        
+        // 📊 Save individual upload stats to history
+        const uploadStats = {
+          type: 'Single File Upload',
+          filename: uploadItem.file.name,
+          size: `${fileSize} MB`,
+          time: `${uploadTime}s`,
+          speed: `${avgSpeed} MB/s`,
+          timestamp: new Date().toLocaleString(),
+          protocol: window.location.protocol === 'https:' ? 'HTTPS' : 'HTTP',
+          method: 'Direct Upload',
+          encrypted: false // Single uploads typically aren't encrypted
+        };
+        saveStatsToLog(uploadStats);
+        
+        // 🔄 Immediately refresh file list for this completed upload
+        refreshFileList();
+        
         // Check if all uploads are complete before updating file list
         const hasActiveUploads = uploadQueue.some(item => 
           item.status === 'uploading' || item.status === 'queued'
         );
         
         if (!hasActiveUploads) {
-          // All uploads complete - update file list dynamically
+          // All uploads complete - final refresh and completion toast
           setTimeout(() => {
             refreshFileList();
           }, 500); // Small delay to ensure server processing is complete
+          
+          // 🔔 Show final completion toast for all uploads
+          const totalFiles = uploadQueue.length;
+          const totalSize = uploadQueue.reduce((sum, item) => sum + item.file.size, 0);
+          const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(1);
+          const sessionTime = ((Date.now() - Math.min(...uploadQueue.map(item => item.startTime))) / 1000).toFixed(1);
+          const sessionSpeed = (totalSizeMB / sessionTime).toFixed(1);
+          
+          // 📊 Save session completion stats
+          const sessionStats = {
+            type: 'Upload Session Complete',
+            filename: `${totalFiles} files`,
+            size: `${totalSizeMB} MB total`,
+            time: `${sessionTime}s`,
+            speed: `${sessionSpeed} MB/s`,
+            timestamp: new Date().toLocaleString(),
+            protocol: window.location.protocol === 'https:' ? 'HTTPS' : 'HTTP',
+            method: 'Batch Upload',
+            files_count: totalFiles
+          };
+          saveStatsToLog(sessionStats);
+          
+          showToast(`🎉 All ${totalFiles} files uploaded successfully! (${totalSizeMB} MB total in ${sessionTime}s @ ${sessionSpeed} MB/s)`, 6000);
         }
         
         // Remove completed item after delay
@@ -1022,6 +1134,9 @@
         updateUploadItem(uploadItem);
         endUpload();
         
+        // 🔔 Show toast notification for upload error
+        showToast(`❌ Upload failed: ${uploadItem.file.name} (Error ${xhr.status})`, 5000);
+        
         // Check if all uploads are complete (including failed ones)
         const hasActiveUploads = uploadQueue.some(item => 
           item.status === 'uploading' || item.status === 'queued'
@@ -1032,6 +1147,13 @@
           setTimeout(() => {
             refreshFileList();
           }, 500);
+          
+          // 🔔 Show completion summary even with errors
+          const successfulUploads = uploadQueue.filter(item => item.status === 'completed').length;
+          const failedUploads = uploadQueue.filter(item => item.status === 'error').length;
+          if (successfulUploads > 0) {
+            showToast(`📊 Upload session complete: ${successfulUploads} successful, ${failedUploads} failed`, 6000);
+          }
         }
       }
       
@@ -1069,6 +1191,163 @@
 
     xhr.open('POST', '/upload-auto');
     xhr.send(formData);
+  }
+
+  // 🚀 Chunked Upload with Resume Support
+  async function uploadLargeFileChunked(uploadItem) {
+    const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
+    const file = uploadItem.file;
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    
+    // Calculate starting chunk if resuming
+    let startChunk = 0;
+    if (uploadItem.resuming && uploadItem.pausedBytes) {
+      startChunk = Math.floor(uploadItem.pausedBytes / CHUNK_SIZE);
+      console.log(`🔄 Resuming upload from chunk ${startChunk + 1}/${totalChunks}`);
+    }
+    
+    uploadItem.totalChunks = totalChunks;
+    uploadItem.uploadedChunks = startChunk;
+    uploadItem.status = 'uploading';
+    
+    try {
+      // Upload chunks sequentially starting from resume point
+      for (let chunkIndex = startChunk; chunkIndex < totalChunks; chunkIndex++) {
+        // Check if upload was paused or cancelled
+        if (uploadItem.status === 'paused' || uploadItem.status === 'cancelled') {
+          console.log(`⏸️ Upload ${uploadItem.status} at chunk ${chunkIndex + 1}`);
+          return;
+        }
+        
+        const start = chunkIndex * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunk = file.slice(start, end);
+        
+        // Create form data for chunk
+        const formData = new FormData();
+        formData.append('chunk', chunk);
+        formData.append('filename', file.name);
+        formData.append('part_number', (chunkIndex + 1).toString());
+        formData.append('total_parts', totalChunks.toString());
+        
+        // Upload chunk with XMLHttpRequest for progress tracking
+        const success = await uploadChunkWithProgress(uploadItem, formData, chunkIndex, totalChunks);
+        
+        if (!success) {
+          uploadItem.status = 'error';
+          uploadItem.error = `Failed to upload chunk ${chunkIndex + 1}`;
+          updateUploadItem(uploadItem);
+          showToast(`❌ Chunk upload failed: ${uploadItem.fileName} (chunk ${chunkIndex + 1})`, 5000);
+          return;
+        }
+        
+        uploadItem.uploadedChunks = chunkIndex + 1;
+        
+        // Update progress based on chunks uploaded
+        const progress = ((chunkIndex + 1) / totalChunks) * 100;
+        uploadItem.progress = progress;
+        uploadItem.uploadedBytes = Math.min(end, file.size);
+        updateUploadItem(uploadItem);
+      }
+      
+      // All chunks uploaded, finalize the file
+      await finalizeChunkedUpload(uploadItem);
+      
+    } catch (error) {
+      uploadItem.status = 'error';
+      uploadItem.error = `Chunked upload failed: ${error.message}`;
+      updateUploadItem(uploadItem);
+      showToast(`❌ Chunked upload failed: ${uploadItem.fileName}`, 5000);
+    }
+  }
+
+  // Upload individual chunk with progress tracking
+  function uploadChunkWithProgress(uploadItem, formData, chunkIndex, totalChunks) {
+    return new Promise((resolve) => {
+      const xhr = new XMLHttpRequest();
+      
+      // Store xhr for potential cancellation
+      uploadItem.xhr = xhr;
+      
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 200) {
+          console.log(`✅ Chunk ${chunkIndex + 1}/${totalChunks} uploaded successfully`);
+          resolve(true);
+        } else {
+          console.log(`❌ Chunk ${chunkIndex + 1}/${totalChunks} failed: ${xhr.status}`);
+          resolve(false);
+        }
+      });
+      
+      xhr.addEventListener('error', () => {
+        console.log(`❌ Chunk ${chunkIndex + 1}/${totalChunks} error`);
+        resolve(false);
+      });
+      
+      xhr.addEventListener('abort', () => {
+        console.log(`⏸️ Chunk ${chunkIndex + 1}/${totalChunks} aborted`);
+        resolve(false);
+      });
+      
+      xhr.open('POST', '/upload_chunk');
+      xhr.send(formData);
+    });
+  }
+
+  // Finalize chunked upload
+  async function finalizeChunkedUpload(uploadItem) {
+    const formData = new FormData();
+    formData.append('filename', uploadItem.file.name);
+    formData.append('total_parts', uploadItem.totalChunks.toString());
+    formData.append('encrypt', 'false'); // Chunked uploads don't support encryption
+    
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 200) {
+          uploadItem.status = 'completed';
+          uploadItem.progress = 100;
+          updateUploadItem(uploadItem);
+          endUpload();
+          
+          // Show completion toast
+          const fileSize = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
+          const uploadTime = ((Date.now() - uploadItem.startTime) / 1000).toFixed(1);
+          showToast(`✅ ${uploadItem.fileName} uploaded successfully via chunked upload (${fileSize} MB, ${uploadItem.totalChunks} chunks)`, 5000);
+          
+          // Save stats
+          const uploadStats = {
+            type: 'Chunked File Upload',
+            filename: uploadItem.fileName,
+            size: `${fileSize} MB`,
+            time: `${uploadTime}s`,
+            chunks: uploadItem.totalChunks,
+            timestamp: new Date().toLocaleString(),
+            protocol: window.location.protocol === 'https:' ? 'HTTPS' : 'HTTP',
+            method: 'Chunked Upload (Resume Capable)',
+            encrypted: false
+          };
+          saveStatsToLog(uploadStats);
+          
+          // Check if all uploads complete
+          setTimeout(() => {
+            refreshFileList();
+          }, 500);
+          
+          resolve(true);
+        } else {
+          reject(new Error(`Finalization failed: ${xhr.status}`));
+        }
+      });
+      
+      xhr.addEventListener('error', () => {
+        reject(new Error('Finalization network error'));
+      });
+      
+      xhr.open('POST', '/finalize_upload');
+      xhr.send(formData);
+    });
   }
 
   // Helper functions
@@ -1406,6 +1685,9 @@
       DOM_CACHE.preview.innerHTML = '';
     }
     
+    // 🔔 Show toast notification for clearing selection
+    showToast('🧹 File selection cleared', 2000);
+    
     console.log('🧹 File selection cleared');
   }
 
@@ -1542,14 +1824,16 @@ function uploadFilesRegular(files, isAESEnabled) {
 
       // Save upload stats to logs
       const uploadStats = {
-        type: 'regular_upload',
+        type: 'Direct Upload',
         filename: files.length > 1 ? `${files.length} files` : files[0].name,
         size: totalSizeMB + ' MB',
         time: totalElapsed + 's',
         speed: avgSpeed + ' MB/s',
-        chunkType: 'Full Upload (No Chunks)',
-        aesEnabled: isAESEnabled,
+        method: 'Direct Upload (No Chunks)',
+        chunks_used: 0, // No chunks for direct upload
+        encrypted: isAESEnabled,
         protocol: protocolMsg,
+        files_count: files.length,
         timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
         startTime: new Date(startTime).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
         endTime: new Date(endTime).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
@@ -1561,13 +1845,18 @@ function uploadFilesRegular(files, isAESEnabled) {
       
       // 📊 Enhanced completion message for multiple files
       if (files.length === 1) {
-        showToast(`✅ Upload complete via ${protocolMsg} (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s • Click anywhere to refresh page`, 0, uploadStats);
+        showToast(`✅ Upload complete via ${protocolMsg} (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s`, 0, uploadStats);
       } else {
-        showToast(`✅ ${files.length} files uploaded via ${protocolMsg} (${totalSizeMB} MB total) • ${totalElapsed}s @ ${avgSpeed} MB/s • Click anywhere to refresh page`, 0, uploadStats);
+        showToast(`✅ ${files.length} files uploaded via ${protocolMsg} (${totalSizeMB} MB total) • ${totalElapsed}s @ ${avgSpeed} MB/s`, 0, uploadStats);
       }
       
-      // Store flag to reload page when toast is dismissed
-      window._shouldReloadAfterToast = true;
+      // 🔄 Auto-refresh file list after upload completion
+      setTimeout(() => {
+        refreshFileList();
+      }, 500);
+      
+      // Store flag to reload page when toast is dismissed (optional)
+      window._shouldReloadAfterToast = false; // Changed to false since we auto-refresh
       
       // End upload tracking
       endUpload();
@@ -2078,15 +2367,17 @@ async function uploadFilesChunked(files, isAESEnabled) {
     LANVAN_STATE.performance.averageSpeed = LANVAN_STATE.performance.totalUploaded / (1024 * 1024) / currentSession;
 
     const uploadStats = {
-      type: 'adaptive_chunked_upload',
+      type: 'Adaptive Chunked Upload',
       filename: files.length > 1 ? `${files.length} files` : files[0].name,
       size: totalSizeMB + ' MB',
       time: totalElapsed + 's',
       speed: avgSpeed + ' MB/s',
+      method: 'Adaptive Chunking',
+      chunks_used: partNumber - 1, // Total chunks used
       chunkType: `Adaptive (${(MIN_CHUNK_SIZE/1024/1024).toFixed(0)}MB-${MAX_CHUNK_SIZE/1024/1024}MB)`,
       finalChunkSize: finalChunkSizeMB + 'MB',
       networkSpeed: networkSpeed.toFixed(1) + ' MB/s',
-      aesEnabled: isAESEnabled,
+      encrypted: isAESEnabled,
       protocol: protocolMsg,
       retryCount: totalRetries, // ✅ COMPLETED: Track total retries across all chunks
       chunkRetries: totalRetries - totalFinalizeRetries,
@@ -2106,13 +2397,18 @@ async function uploadFilesChunked(files, isAESEnabled) {
     
     // 📊 Enhanced completion message for multiple files with adaptive info
     if (files.length === 1) {
-      showToast(`✅ Adaptive-chunked upload complete via ${protocolMsg} (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s • Final chunk: ${finalChunkSizeMB}MB • Click anywhere to refresh page`, 0, uploadStats);
+      showToast(`✅ Adaptive-chunked upload complete via ${protocolMsg} (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s • Final chunk: ${finalChunkSizeMB}MB`, 0, uploadStats);
     } else {
-      showToast(`✅ ${files.length} files adaptive-chunked upload complete via ${protocolMsg} (${totalSizeMB} MB total) • ${totalElapsed}s @ ${avgSpeed} MB/s • Final chunk: ${finalChunkSizeMB}MB • Click anywhere to refresh page`, 0, uploadStats);
+      showToast(`✅ ${files.length} files adaptive-chunked upload complete via ${protocolMsg} (${totalSizeMB} MB total) • ${totalElapsed}s @ ${avgSpeed} MB/s • Final chunk: ${finalChunkSizeMB}MB`, 0, uploadStats);
     }
     
-    // Store flag to reload page when toast is dismissed
-    window._shouldReloadAfterToast = true;
+    // 🔄 Auto-refresh file list after chunked upload completion
+    setTimeout(() => {
+      refreshFileList();
+    }, 500);
+    
+    // Store flag to reload page when toast is dismissed (optional)
+    window._shouldReloadAfterToast = false; // Changed to false since we auto-refresh
     
     // End upload tracking
     endUpload();
