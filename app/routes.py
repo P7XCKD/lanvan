@@ -1,8 +1,7 @@
 import os
 import io
 import time
-import re
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from pathlib import Path
 from mimetypes import guess_type
 from zipfile import ZipFile
@@ -17,8 +16,12 @@ from starlette.status import HTTP_302_FOUND, HTTP_400_BAD_REQUEST
 
 from app.aes_utils import encrypt_bytes_legacy, decrypt_bytes_legacy
 from app.aes_config import AESConfig
-from app.config import is_allowed_file
-from app.validation import validate_upload_files, secure_filename
+from app.validation import (
+    validate_upload_files, 
+    secure_filename,
+    is_allowed_file,
+    FileValidator
+)
 
 # === Setup ===
 router = APIRouter()
@@ -32,133 +35,8 @@ TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
 # Templates - keep local for routes that need it
 templates = Jinja2Templates(directory="app/templates")
 
-# === 🔍 VALIDATION CONSTANTS & FUNCTIONS ===
-MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024  # 10GB maximum file size
-MAX_FILENAME_LENGTH = 255
+# === 🔍 CONSTANTS ===
 MAX_CONCURRENT_UPLOADS = 5  # Maximum parallel uploads per session
-
-# Allowed MIME types for security
-ALLOWED_MIME_TYPES = {
-    'application/pdf', 'application/zip', 'application/x-zip-compressed',
-    'application/octet-stream', 'application/msword', 'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/plain', 'text/csv', 'text/html', 'text/css', 'text/javascript',
-    'image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp',
-    'video/mp4', 'video/avi', 'video/mov', 'video/mkv', 'video/webm',
-    'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/m4a', 'audio/flac'
-}
-
-# Dangerous file extensions to block
-BLOCKED_EXTENSIONS = {
-    '.exe', '.bat', '.cmd', '.com', '.scr', '.pif', '.vbs', '.js', '.jar',
-    '.msi', '.dll', '.sys', '.bin', '.deb', '.rpm', '.dmg', '.pkg'
-}
-
-def validate_filename(filename: str) -> Tuple[bool, str]:
-    """
-    Comprehensive filename validation for security and compatibility.
-    
-    Returns:
-        tuple: (is_valid, error_message)
-    """
-    if not filename:
-        return False, "Filename cannot be empty"
-    
-    if len(filename) > MAX_FILENAME_LENGTH:
-        return False, f"Filename too long (max {MAX_FILENAME_LENGTH} characters)"
-    
-    # Check for dangerous characters
-    dangerous_chars = r'[<>:"|?*\x00-\x1f]'
-    if re.search(dangerous_chars, filename):
-        return False, "Filename contains invalid characters"
-    
-    # Check for dangerous extensions
-    file_ext = Path(filename).suffix.lower()
-    if file_ext in BLOCKED_EXTENSIONS:
-        return False, f"File type {file_ext} is not allowed for security reasons"
-    
-    # Check for reserved Windows names
-    reserved_names = {
-        'CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5',
-        'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4',
-        'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'
-    }
-    name_without_ext = Path(filename).stem.upper()
-    if name_without_ext in reserved_names:
-        return False, f"Filename '{filename}' is reserved by the system"
-    
-    # Check for hidden files or files starting with dots (except .enc)
-    if filename.startswith('.') and not filename.endswith('.enc'):
-        return False, "Hidden files are not allowed"
-    
-    return True, ""
-
-def validate_file_size(file_size: int) -> Tuple[bool, str]:
-    """
-    Validate file size constraints.
-    
-    Returns:
-        tuple: (is_valid, error_message)
-    """
-    if file_size <= 0:
-        return False, "File is empty"
-    
-    if file_size > MAX_FILE_SIZE:
-        size_gb = file_size / (1024 * 1024 * 1024)
-        max_gb = MAX_FILE_SIZE / (1024 * 1024 * 1024)
-        return False, f"File too large ({size_gb:.1f}GB). Maximum allowed: {max_gb}GB"
-    
-    return True, ""
-
-def validate_mime_type(filename: str, content_type: Optional[str] = None) -> Tuple[bool, str]:
-    """
-    Validate MIME type for security.
-    
-    Returns:
-        tuple: (is_valid, error_message)
-    """
-    # Get MIME type from filename
-    guessed_type, _ = guess_type(filename)
-    
-    # Use provided content type or guessed type
-    mime_type = content_type or guessed_type
-    
-    if not mime_type:
-        # Allow unknown types for now, but log them
-        print(f"⚠️ Unknown MIME type for file: {filename}")
-        return True, ""
-    
-    # Check against allowed types
-    if mime_type not in ALLOWED_MIME_TYPES:
-        return False, f"File type '{mime_type}' is not allowed"
-    
-    return True, ""
-
-def validate_upload_request(filename: str, file_size: Optional[int] = None, content_type: Optional[str] = None) -> Tuple[bool, str]:
-    """
-    Comprehensive validation for upload requests.
-    
-    Returns:
-        tuple: (is_valid, error_message)
-    """
-    # Validate filename
-    is_valid, error_msg = validate_filename(filename)
-    if not is_valid:
-        return False, f"Invalid filename: {error_msg}"
-    
-    # Validate file size if provided
-    if file_size is not None:
-        is_valid, error_msg = validate_file_size(file_size)
-        if not is_valid:
-            return False, f"Invalid file size: {error_msg}"
-    
-    # Validate MIME type
-    is_valid, error_msg = validate_mime_type(filename, content_type)
-    if not is_valid:
-        return False, f"Invalid file type: {error_msg}"
-    
-    return True, ""
 
 # === Utility Functions ===
 def format_size(size_bytes):
@@ -795,12 +673,12 @@ async def upload_chunk(
         # 🔐 Protocol detection
         is_https = request.url.scheme == "https"
         
-        # 🔍 COMPREHENSIVE VALIDATION: Validate upload request
-        is_valid, error_msg = validate_upload_request(filename, content_type=chunk.content_type)
-        if not is_valid:
+        # 🔍 COMPREHENSIVE VALIDATION: Validate upload request using centralized validation
+        validation_result = FileValidator.validate_filename(filename)
+        if not validation_result['valid']:
             return JSONResponse(
                 status_code=HTTP_400_BAD_REQUEST,
-                content={"status": "error", "msg": f"Validation failed: {error_msg}"}
+                content={"status": "error", "msg": f"Validation failed: {validation_result['error']}"}
             )
         
         # 🔍 Enhanced validation: Check part number validity
