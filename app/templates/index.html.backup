@@ -908,14 +908,12 @@
       pausedChunkIndex: null,
       // 📊 Statistics tracking
       pauseCount: 0,
-      resumeCount: 0
+      resumeCount: 0,
+      batchId: null
     };
   }
 
   function addToUploadQueue(files) {
-    // No batch grouping - process each file individually
-    console.log(`� Adding ${files.length} file(s) to upload queue`);
-    
     for (let file of files) {
       const uploadId = ++uploadIdCounter;
       const uploadItem = createUploadItem(file, uploadId);
@@ -1018,92 +1016,15 @@
     }
   }
 
-  // 📱 Device-Specific Session Management for Upload History with Real Device Names
+  // 📱 Device-Specific Session Management for Upload History
   function getCurrentDeviceId() {
     let deviceId = sessionStorage.getItem('lanvan_device_id');
     if (!deviceId) {
-      // Try to get actual device information
-      const deviceInfo = getDeviceInfo();
-      const timestamp = Date.now();
-      const randomId = Math.random().toString(36).substring(2, 8);
-      
-      // Create readable device ID with actual device name if available
-      deviceId = `${deviceInfo.name}_${timestamp}_${randomId}`;
+      // Generate unique device session ID
+      deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
       sessionStorage.setItem('lanvan_device_id', deviceId);
-      
-      console.log(`📱 New device session created: ${deviceInfo.displayName}`);
     }
     return deviceId;
-  }
-
-  function getDeviceInfo() {
-    // Try multiple methods to get device name
-    let deviceName = 'Unknown_Device';
-    let displayName = 'Unknown Device';
-    
-    try {
-      // Method 1: Try to get hostname if available (some browsers)
-      if (typeof window.clientInformation !== 'undefined' && window.clientInformation.platform) {
-        const platform = window.clientInformation.platform;
-        deviceName = platform.replace(/\s+/g, '_');
-      }
-      
-      // Method 2: Use navigator userAgent to detect device type
-      const userAgent = navigator.userAgent;
-      const browserInfo = getBrowserInfo(userAgent);
-      
-      // Method 3: Try to detect common device patterns
-      if (userAgent.includes('Windows')) {
-        if (userAgent.includes('Windows NT 10')) deviceName = 'Windows_PC';
-        else if (userAgent.includes('Windows NT 6')) deviceName = 'Windows_Legacy';
-        displayName = deviceName.replace('_', ' ');
-      } else if (userAgent.includes('Mac')) {
-        if (userAgent.includes('iPhone')) {
-          deviceName = 'iPhone';
-          displayName = 'iPhone';
-        } else if (userAgent.includes('iPad')) {
-          deviceName = 'iPad'; 
-          displayName = 'iPad';
-        } else {
-          deviceName = 'Mac';
-          displayName = 'Mac';
-        }
-      } else if (userAgent.includes('Android')) {
-        deviceName = 'Android_Device';
-        displayName = 'Android Device';
-      } else if (userAgent.includes('Linux')) {
-        deviceName = 'Linux_PC';
-        displayName = 'Linux PC';
-      }
-      
-      // Add browser info to make it more specific
-      deviceName = `${deviceName}_${browserInfo.name}`;
-      displayName = `${displayName} (${browserInfo.name})`;
-      
-    } catch (error) {
-      console.log('Could not detect device info, using fallback');
-      deviceName = 'Unknown_Device';
-      displayName = 'Unknown Device';
-    }
-    
-    return {
-      name: deviceName,
-      displayName: displayName
-    };
-  }
-
-  function getBrowserInfo(userAgent) {
-    if (userAgent.includes('Firefox')) {
-      return { name: 'Firefox', version: 'Unknown' };
-    } else if (userAgent.includes('Chrome') && !userAgent.includes('Edge')) {
-      return { name: 'Chrome', version: 'Unknown' };
-    } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
-      return { name: 'Safari', version: 'Unknown' };
-    } else if (userAgent.includes('Edge')) {
-      return { name: 'Edge', version: 'Unknown' };
-    } else {
-      return { name: 'Unknown', version: 'Unknown' };
-    }
   }
 
   function getDeviceUploadHistory() {
@@ -1146,23 +1067,28 @@
   function displayDeviceLogsWithPagination(logs, contentElement, paginationElement) {
     const itemsPerPage = 10;
     
-    // Sort logs by timestamp (newest first) for individual file display
-    const sortedLogs = logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    const totalPages = Math.ceil(sortedLogs.length / itemsPerPage);
+    // Group logs by batch and enhance display
+    const groupedLogs = groupLogsByBatch(logs);
+    const totalPages = Math.ceil(groupedLogs.length / itemsPerPage);
     let currentPage = 1;
     
     function renderPage(page) {
       const startIndex = (page - 1) * itemsPerPage;
       const endIndex = startIndex + itemsPerPage;
-      const pageItems = sortedLogs.slice(startIndex, endIndex);
+      const pageItems = groupedLogs.slice(startIndex, endIndex);
       
       let historyHTML = '';
-      pageItems.forEach((log, index) => {
+      pageItems.forEach((logGroup, index) => {
         const globalIndex = startIndex + index;
         const isEven = globalIndex % 2 === 0;
         
-        // Individual file display only - no batch grouping
-        historyHTML += renderSingleUpload(log, isEven);
+        if (logGroup.isBatch) {
+          // Batch upload display
+          historyHTML += renderBatchUpload(logGroup, isEven);
+        } else {
+          // Single upload display  
+          historyHTML += renderSingleUpload(logGroup.log, isEven);
+        }
       });
       
       contentElement.innerHTML = historyHTML;
@@ -1920,24 +1846,19 @@ Device Session will reset when browser is closed
         }
       }, 1000);
     } else {
-      // For smaller files: improve resume experience to reduce speed issues
-      showToast(`🔄 Resuming upload: ${uploadItem.fileName} from ${uploadItem.progress.toFixed(1)}%`, 3000);
+      // For smaller files, restart but preserve visual progress briefly
+      uploadItem.status = 'uploading';
+      uploadItem.resuming = true;
       
-      // Keep previous progress data for better continuity
-      const savedProgress = uploadItem.progress;
-      const savedBytes = uploadItem.uploadedBytes;
+      // Clear xhr references
+      uploadItem.xhr = null;
+      uploadItem.currentXhr = null;
       
-      console.log(`🔄 Resuming smaller file (${fileSizeMB.toFixed(1)}MB) - attempting to maintain progress`);
+      showToast(`🔄 Restarting upload: ${uploadItem.fileName} (file too small for resume)`, 3000);
       
-      // Try to resume with minimal restart penalty
-      // Don't reset progress completely - this helps with perceived speed
-      if (savedProgress > 10) {
-        // If we had significant progress, try to maintain some of it
-        uploadItem.progress = Math.max(0, savedProgress * 0.8); // Keep 80% of progress
-        uploadItem.uploadedBytes = Math.max(0, savedBytes * 0.8);
-        console.log(`📊 Maintaining partial progress: ${uploadItem.progress.toFixed(1)}%`);
-      }
-      
+      // Reset progress for restart
+      uploadItem.progress = 0;
+      uploadItem.uploadedBytes = 0;
       updateUploadItem(uploadItem);
       
       // Use regular upload
@@ -1994,27 +1915,10 @@ Device Session will reset when browser is closed
   }
 
   function startNextUpload() {
-    // Protect against interfering with active uploads
-    if (uploadQueue.length === 0) {
-      console.log('📤 Upload queue is empty');
-      return;
-    }
-    
-    // Find the next queued item that can be uploaded
     const queuedItem = uploadQueue.find(item => item.status === 'queued');
-    
-    if (!queuedItem) {
-      console.log('📤 No queued uploads found');
-      return;
+    if (queuedItem && canStartUpload()) {
+      startUploadWithManager(queuedItem);
     }
-    
-    if (!canStartUpload()) {
-      console.log(`📤 Cannot start upload: ${activeUploads}/${MAX_CONCURRENT_UPLOADS} uploads active`);
-      return;
-    }
-    
-    console.log(`📤 Starting upload for: ${queuedItem.file.name} (Queue: ${uploadQueue.length} items)`);
-    startUploadWithManager(queuedItem);
   }
 
   function startUploadWithManager(uploadItem) {
@@ -2026,10 +1930,9 @@ Device Session will reset when browser is closed
       uploadItem.progress = 0;
       uploadItem.uploadedBytes = 0;
     } else {
-      // For resuming uploads, keep the existing progress and don't reset
-      console.log(`🔄 Resuming upload with existing progress: ${uploadItem.progress.toFixed(1)}%`);
+      // For resuming uploads, we restart but show user it's resuming
+      uploadItem.startTime = Date.now();
       uploadItem.resuming = false; // Clear the resuming flag
-      // Don't reset startTime, progress, or uploadedBytes when resuming
     }
     
     updateUploadItem(uploadItem);
@@ -2106,6 +2009,7 @@ Device Session will reset when browser is closed
           chunkCount: 0,
           uploadId: uploadItem.id,
           sessionId: getCurrentDeviceId(),
+          batchId: uploadItem.batchId || null,
           fileExtension: uploadItem.fileName.split('.').pop()?.toLowerCase() || 'unknown'
         };
         saveStatsToLog(uploadStats);
@@ -2786,6 +2690,10 @@ Device Session will reset when browser is closed
     }
   }
 
+  // � SERVER SHUTDOWN DETECTION
+  let shutdownCheckInterval;
+  let serverShutdown = false;
+
   function startServerStatusMonitoring() {
     // Check server status every 2 seconds
     shutdownCheckInterval = setInterval(async () => {
@@ -2940,6 +2848,8 @@ Device Session will reset when browser is closed
         fileCountEl.textContent = `(${fileCount} file${fileCount === 1 ? '' : 's'})`;
       }
     }
+    progressBar = DOM_CACHE.progressBar;
+    statusText = DOM_CACHE.statusText;
     
     // Set up event listeners after DOM cache is ready
     setupEventListeners();
@@ -2957,74 +2867,9 @@ Device Session will reset when browser is closed
         setTimeout(refreshFileList, 1000);
       }
     });
-
-    // ✅ Update Protocol Status Indicator
-    const protocolIcon = DOM_CACHE.protocolIcon;
-    const protocolText = DOM_CACHE.protocolText;
-    const protocolStatus = DOM_CACHE.protocolStatus;
-    const isHTTPS = location.protocol === 'https:';
-    
-    // Find the QR code hint text (the third span in protocolStatus)
-    const qrHintText = protocolStatus.querySelector('#qrHintText');
-    
-    if (isHTTPS) {
-      protocolIcon.textContent = '🔒';
-      protocolText.textContent = 'HTTPS';
-      protocolText.style.color = '#22c55e';
-      
-      if (qrHintText) {
-        qrHintText.innerHTML = 'Tap the WiFi icon above to share this connection securely with other devices.';
-      }
-    } else {
-      protocolIcon.textContent = '🌐';
-      protocolText.textContent = 'HTTP';
-      protocolText.style.color = '#f59e0b';
-      
-      if (qrHintText) {
-        qrHintText.innerHTML = 'Consider using HTTPS for encrypted file transfers.';
-      }
-    }
-
-    // ✅ Handle AES toggle restrictions - DISABLED FOR HTTP
-    if (location.protocol === 'http:') {
-      const toggle = DOM_CACHE.aesToggle;
-      if (toggle) {
-        // Disable interaction and dim appearance
-        toggle.disabled = true;
-        toggle.checked = false;
-        isEncryptionEnabled = false; // Force encryption off for HTTP
-        const toggleWrapper = toggle.closest('div');
-        toggleWrapper.style.opacity = '0.5';
-        toggleWrapper.title = "🔒 AES encryption is only available when using HTTPS.";
-
-        // Add fake click listener to explain restriction
-        toggleWrapper.addEventListener('click', function (e) {
-          e.preventDefault();
-          alert("🔒 AES encryption is only available over a secure HTTPS connection.");
-        });
-      }
-    } else {
-      // HTTPS - encryption can be enabled
-      const toggle = DOM_CACHE.aesToggle;
-      if (toggle) {
-        toggle.addEventListener('change', function() {
-          isEncryptionEnabled = this.checked;
-          console.log('🔐 Encryption toggled:', isEncryptionEnabled);
-        });
-      }
-    }
   });
   
   function setupEventListeners() {
-    // Check if DOM elements are available before adding listeners
-    if (!DOM_CACHE.dropZone || !DOM_CACHE.fileInput) {
-      console.error('❌ Critical DOM elements not found:', {
-        dropZone: !!DOM_CACHE.dropZone,
-        fileInput: !!DOM_CACHE.fileInput
-      });
-      return;
-    }
-
     ['dragenter', 'dragover'].forEach(evt =>
       DOM_CACHE.dropZone.addEventListener(evt, e => {
         e.preventDefault();
@@ -3148,20 +2993,20 @@ Device Session will reset when browser is closed
   }
 
   function clearFileSelection() {
-    // Clear the file input (safe - doesn't affect active uploads)
+    // Clear the file input
     if (DOM_CACHE.fileInput) {
       DOM_CACHE.fileInput.value = '';
     }
     
-    // Clear the preview area (safe - only affects UI)
+    // Clear the preview area
     if (DOM_CACHE.preview) {
       DOM_CACHE.preview.innerHTML = '';
     }
     
-    // Note: We do NOT clear uploadQueue or any active upload state here
-    // This function only clears the file selection UI, not the upload manager
+    // 🔔 Show toast notification for clearing selection
+    showToast('🧹 File selection cleared', 2000);
     
-    console.log('🧹 File selection UI cleared (upload queue preserved)');
+    console.log('🧹 File selection cleared');
   }
 
   function displaySelectedFiles(files) {
@@ -3213,28 +3058,14 @@ function autoUpload(files) {
     return;
   }
 
-  // � Log current upload queue state before adding new files
-  const currentActiveUploads = uploadQueue.filter(item => 
-    ['uploading', 'paused'].includes(item.status)
-  ).length;
-  
-  console.log(`📤 Current upload state: ${currentActiveUploads} active uploads, adding ${files.length} new files`);
-
-  // �🚀 NEW: Add files to upload manager without interfering with active uploads
+  // 🚀 NEW: Add files to upload manager instead of immediate upload
   addToUploadQueue(Array.from(files));
   
-  // 🧹 Clear the file input and preview after adding to queue (safe operation)
+  // 🧹 Clear the file input and preview after adding to queue
   clearFileSelection();
   
-  // Start uploading new files if possible (won't affect active uploads)
+  // Start uploading if possible
   startNextUpload();
-
-  // 📊 Show feedback to user about adding files to active queue
-  if (currentActiveUploads > 0) {
-    showToast(`📤 Added ${files.length} file(s) to upload queue. ${currentActiveUploads} uploads currently active.`, 3000);
-  } else {
-    showToast(`🚀 Starting upload of ${files.length} file(s)...`, 3000);
-  }
 }
 
 // 🔄 Regular upload function (original logic) - supports HTTP & HTTPS
@@ -4659,6 +4490,90 @@ window.copyConnectionUrl = copyConnectionUrl;
 window.closeConnectionModal = closeConnectionModal;
 
   
+</script>
+<script>
+// ✅ Update Protocol Status Indicator
+document.addEventListener('DOMContentLoaded', () => {
+  const protocolIcon = DOM_CACHE.protocolIcon;
+  const protocolText = DOM_CACHE.protocolText;
+  const protocolStatus = DOM_CACHE.protocolStatus;
+  const isHTTPS = location.protocol === 'https:';
+  
+  // Find the QR code hint text (the third span in protocolStatus)
+  const qrHintText = protocolStatus.querySelector('#qrHintText');
+  
+  if (isHTTPS) {
+    protocolIcon.textContent = '🔒';
+    protocolText.textContent = 'HTTPS';
+    protocolStatus.style.backgroundColor = '#d4edda';
+    protocolStatus.style.border = '1px solid #c3e6cb';
+    protocolStatus.title = 'Secure HTTPS connection - Click to show connection info & QR code';
+    
+    // Update hover colors for HTTPS
+    protocolStatus.onmouseover = () => protocolStatus.style.backgroundColor = '#c3e6cb';
+    protocolStatus.onmouseout = () => protocolStatus.style.backgroundColor = '#d4edda';
+  } else {
+    protocolIcon.textContent = '🌐';
+    protocolText.textContent = 'HTTP';
+    protocolStatus.style.backgroundColor = '#fff3cd';
+    protocolStatus.style.border = '1px solid #ffeaa7';
+    protocolStatus.title = 'HTTP connection - Click to show connection info & QR code';
+    
+    // Update hover colors for HTTP
+    protocolStatus.onmouseover = () => protocolStatus.style.backgroundColor = '#f5e79e';
+    protocolStatus.onmouseout = () => protocolStatus.style.backgroundColor = '#fff3cd';
+  }
+  
+  // Update QR hint text for better clarity and add click feedback
+  if (qrHintText) {
+    // Check if user has already discovered QR functionality
+    const hasUsedQR = localStorage.getItem('qr_hint_dismissed') === 'true';
+    
+    if (!hasUsedQR) {
+      qrHintText.textContent = '• Click for QR code';
+      qrHintText.style.display = 'inline';
+    } else {
+      qrHintText.style.display = 'none';
+    }
+    
+    // Add click feedback effect
+    protocolStatus.addEventListener('click', () => {
+      if (!hasUsedQR && qrHintText.style.display !== 'none') {
+        // Temporary visual feedback
+        qrHintText.style.opacity = '1';
+        qrHintText.style.fontWeight = '600';
+        qrHintText.textContent = '• Opening QR code...';
+        
+        // Mark as used and hide permanently after feedback
+        setTimeout(() => {
+          localStorage.setItem('qr_hint_dismissed', 'true');
+          qrHintText.style.display = 'none';
+        }, 800);
+      }
+    });
+  }
+});
+
+// ✅ Handle AES toggle restrictions (re-enabled for testing)
+document.addEventListener('DOMContentLoaded', () => {
+  if (location.protocol === 'http:') {
+    const toggle = DOM_CACHE.aesToggle;
+    if (toggle) {
+      // Disable interaction and dim appearance
+      toggle.disabled = true;
+      toggle.checked = false;
+      const toggleWrapper = toggle.closest('div');
+      toggleWrapper.style.opacity = '0.5';
+      toggleWrapper.title = "🔒 AES encryption is only available when using HTTPS.";
+
+      // Add fake click listener to explain restriction
+      toggleWrapper.addEventListener('click', function (e) {
+        e.preventDefault();
+        alert("🔒 AES encryption is only available over a secure HTTPS connection.");
+      });
+    }
+  }
+});
 </script>
 
 <!-- 🔔 Toast Notification with Progress Bar Support -->

@@ -100,12 +100,30 @@ def kill_servers_on_port(port):
         print(f"[!] Error killing servers: {e}")
 
 def signal_handler(signum, frame):
-    """Handle Ctrl+C gracefully"""
-    print(f"\n[WARNING] Received signal {signum}. Shutting down servers...")
+    """Handle Ctrl+C gracefully with immediate shutdown"""
+    print(f"\n🚨 IMMEDIATE SHUTDOWN REQUESTED (signal {signum})")
+    print("⚠️ Killing all server processes immediately...")
+    
+    # Kill servers on both ports immediately
     kill_servers_on_port(HTTP_PORT)
     kill_servers_on_port(HTTPS_PORT)
-    print("[OK] All servers stopped. Goodbye!")
-    sys.exit(0)
+    
+    # Also kill any uvicorn processes
+    try:
+        if psutil:
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    if 'uvicorn' in proc.info['name'].lower() or \
+                       any('uvicorn' in str(cmd).lower() for cmd in proc.info['cmdline'] or []):
+                        print(f"🔥 Killing uvicorn process {proc.info['pid']}")
+                        proc.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+    except Exception as e:
+        print(f"Error killing uvicorn processes: {e}")
+    
+    print("✅ SHUTDOWN COMPLETE - All servers terminated!")
+    os._exit(0)  # Force immediate exit
 
 # === MAIN ENTRY ===
 if __name__ == "__main__":
@@ -168,20 +186,44 @@ if __name__ == "__main__":
     else:
         print("[*] PC detected: launching Uvicorn with auto-reload...")
         open_browser(ip, port, use_https)
+        
+        # Enhanced shutdown handling
+        server_process = None
         try:
-            uvicorn.run(
+            import uvicorn
+            
+            # Configure uvicorn for immediate shutdown
+            config = uvicorn.Config(
                 "app.main:app",
                 host="0.0.0.0",
                 port=port,
                 reload=True,
                 ssl_keyfile=SSL_KEY_PATH if use_https else None,
                 ssl_certfile=SSL_CERT_PATH if use_https else None,
-                log_level="warning"  # Suppress INFO logs
+                log_level="warning",  # Suppress INFO logs
+                access_log=False,     # Disable access logs for better performance
+                timeout_keep_alive=1, # Faster connection cleanup
+                timeout_graceful_shutdown=1  # Quick graceful shutdown
             )
+            
+            server = uvicorn.Server(config)
+            
+            # Run server with immediate shutdown capability
+            print("🚀 Server starting with enhanced shutdown handling...")
+            server.run()
+            
         except KeyboardInterrupt:
-            print("\n[WARNING] Keyboard interrupt received. Shutting down...")
+            print("\n🚨 KEYBOARD INTERRUPT - IMMEDIATE SHUTDOWN!")
+            kill_servers_on_port(port)
+            print("✅ Server force-stopped immediately.")
         except Exception as e:
             print(f"\n[!] Server error: {e}")
-        finally:
+            print("🔥 Force-killing server processes...")
             kill_servers_on_port(port)
-            print("[OK] Server stopped gracefully.")
+        finally:
+            # Ensure complete cleanup
+            try:
+                kill_servers_on_port(port)
+                print("✅ Final cleanup completed.")
+            except:
+                pass

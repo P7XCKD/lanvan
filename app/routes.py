@@ -938,3 +938,65 @@ async def finalize_upload(
             status_code=HTTP_400_BAD_REQUEST,
             content={"status": "error", "msg": f"File assembly failed: {str(e)}"}
         )
+
+# 🚨 EMERGENCY SHUTDOWN ENDPOINT
+@router.post("/api/shutdown")
+async def emergency_shutdown():
+    """
+    Emergency server shutdown endpoint - immediately terminates server
+    and notifies all connected clients.
+    """
+    import asyncio
+    from app.main import shutdown_event, connection_manager
+    
+    print("🚨 EMERGENCY SHUTDOWN REQUESTED!")
+    print("⚠️ Notifying all connected clients...")
+    
+    # Set the shutdown flag immediately
+    shutdown_event.set()
+    
+    # Send shutdown notifications to all active clients
+    async def notify_clients():
+        await connection_manager.disconnect_all()
+        print("✅ All clients notified and disconnected")
+    
+    # Schedule client notification in background
+    asyncio.create_task(notify_clients())
+    
+    # Force server shutdown after brief delay for response
+    async def force_shutdown():
+        await asyncio.sleep(0.5)  # Allow response to be sent
+        print("🔥 FORCING SERVER SHUTDOWN...")
+        import os
+        os._exit(0)  # Force immediate shutdown
+    
+    asyncio.create_task(force_shutdown())
+    
+    return JSONResponse({
+        "status": "shutdown",
+        "message": "🚨 Server is shutting down immediately. All operations halted.",
+        "warning": "⚠️ All active uploads and downloads have been terminated.",
+        "action": "Server will restart automatically if using a process manager."
+    })
+
+# 🔍 SERVER STATUS ENDPOINT
+@router.get("/api/server-status")
+async def server_status():
+    """Check if server is shutting down"""
+    from app.main import shutdown_event
+    
+    if shutdown_event.is_set():
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "shutdown",
+                "message": "⚠️ Server has been shut down. Please restart the server.",
+                "shutdown": True
+            }
+        )
+    
+    return JSONResponse({
+        "status": "online",
+        "message": "✅ Server is running normally",
+        "shutdown": False
+    })
