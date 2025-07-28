@@ -46,6 +46,47 @@ except ImportError as e:
     import psutil
     import uvicorn
 
+def install_test_dependencies():
+    """Install additional dependencies needed for testing"""
+    test_packages = ["aiohttp", "aiofiles", "psutil"]
+    print("[!] Installing test dependencies...")
+    subprocess.run([sys.executable, "-m", "pip", "install"] + test_packages)
+
+def run_tests():
+    """Run the automated test suite"""
+    try:
+        # Check if test dependencies are available
+        required_packages = ["aiohttp", "aiofiles", "psutil"]
+        missing_packages = []
+        
+        for package in required_packages:
+            try:
+                __import__(package)
+            except ImportError:
+                missing_packages.append(package)
+        
+        if missing_packages:
+            print(f"[!] Missing test packages: {', '.join(missing_packages)}")
+            install_test_dependencies()
+        
+        # Run the test suite
+        print("[*] Starting LanVan Automated Test Suite...")
+        result = subprocess.run([sys.executable, "test_lanvan.py"], check=False)
+        
+        if result.returncode == 0:
+            print("[✅] All tests completed successfully!")
+        else:
+            print(f"[❌] Tests completed with return code: {result.returncode}")
+        
+        return result.returncode
+        
+    except KeyboardInterrupt:
+        print("\n[⚠] Tests interrupted by user")
+        return 1
+    except Exception as e:
+        print(f"[❌] Test suite failed: {e}")
+        return 1
+
 # === CONFIGURATION ===
 SSL_CERT_PATH = "certs/cert.pem"
 SSL_KEY_PATH = "certs/key.pem"
@@ -109,14 +150,34 @@ def signal_handler(signum, frame):
 
 # === MAIN ENTRY ===
 if __name__ == "__main__":
+    # Check for test command first
+    if len(sys.argv) > 1 and sys.argv[1].lower() == "test":
+        sys.exit(run_tests())
+    
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
     ip = get_ip()
     args = sys.argv
-    use_https = len(args) > 1 and args[1].lower() == "https"
-    port = HTTPS_PORT if use_https else HTTP_PORT
+    
+    # Parse arguments
+    use_https = False
+    port = HTTP_PORT
+    
+    # Check for https argument
+    if "https" in [arg.lower() for arg in args[1:]]:
+        use_https = True
+        port = HTTPS_PORT
+    
+    # Check for custom port
+    for i, arg in enumerate(args):
+        if arg == "--port" and i + 1 < len(args):
+            try:
+                port = int(args[i + 1])
+            except ValueError:
+                print(f"[!] Invalid port number: {args[i + 1]}")
+                sys.exit(1)
     
     # Kill any existing servers on our port first
     kill_servers_on_port(port)

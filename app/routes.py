@@ -15,10 +15,10 @@ from fastapi.responses import (
 from fastapi.templating import Jinja2Templates
 from starlette.status import HTTP_302_FOUND, HTTP_400_BAD_REQUEST
 
-from app.aes_utils import encrypt_bytes_legacy, decrypt_bytes_legacy, encrypt_file_with_metadata, decrypt_file_with_metadata
+from app.aes_utils import encrypt_bytes_legacy, decrypt_bytes_legacy
 from app.aes_config import AESConfig
 from app.config import is_allowed_file
-from app.validation import validate_upload_files, FileValidator, secure_filename
+from app.validation import validate_upload_files, secure_filename
 
 # === Setup ===
 router = APIRouter()
