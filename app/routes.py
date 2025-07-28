@@ -29,6 +29,7 @@ UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 TEMP_CHUNKS_FOLDER = UPLOAD_FOLDER / "temp_chunks"
 TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
 
+# Templates - keep local for routes that need it
 templates = Jinja2Templates(directory="app/templates")
 
 # === 🔍 VALIDATION CONSTANTS & FUNCTIONS ===
@@ -253,6 +254,23 @@ async def home(request: Request):
         }
     })
 
+@router.get("/api/files", name="api_files")
+async def api_files():
+    """API endpoint to get current file list as JSON"""
+    try:
+        files = get_file_list()
+        return JSONResponse(content={
+            "status": "success",
+            "files": [f["name"] for f in files],
+            "count": len(files)
+        })
+    except Exception as e:
+        print(f"❌ Error getting file list: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "msg": f"Failed to get file list: {str(e)}"}
+        )
+
 @router.post("/upload-auto", name="upload_auto_file")
 async def upload_auto_file(
     request: Request,
@@ -269,7 +287,7 @@ async def upload_auto_file(
     # 🔐 Protocol detection
     is_https = request.url.scheme == "https"
     
-    # �️ Comprehensive input validation
+    # 🔍 Comprehensive input validation
     is_valid, error_messages, validated_files = validate_upload_files(files, encrypt, is_https)
     if not is_valid:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
@@ -277,7 +295,7 @@ async def upload_auto_file(
             "msg": "; ".join(error_messages)
         })
 
-    # �🚫 Enforce encryption restrictions using centralized config
+    # 🚫 Enforce encryption restrictions using centralized config
     if encrypt:
         validation = AESConfig.validate_file_for_aes(0, is_https)  # Size will be checked per file
         if not validation['valid'] and 'HTTPS' in validation['error']:
@@ -287,27 +305,36 @@ async def upload_auto_file(
             })
 
     uploaded = []
+    
+    print(f"🔍 Processing {len(files)} files for upload...")
 
     for i, file in enumerate(files):
+        print(f"📁 Processing file {i+1}/{len(files)}: {file.filename}")
+        
         if not file.filename:
+            print(f"❌ Skipping file {i+1}: No filename")
             continue
 
         # Use validated filename
         validated_file = validated_files[i] if i < len(validated_files) else None
         if not validated_file:
+            print(f"❌ Skipping file {i+1}: Validation failed")
             continue
             
         filename = validated_file['sanitized_name']
         file_size = validated_file['size']
+        print(f"📋 File {i+1} details: {filename} ({file_size} bytes)")
 
         # Double-check with existing validation (defense in depth)
         if not is_allowed_file(filename):
+            print(f"❌ Skipping file {i+1}: File type not allowed")
             continue
 
         # Check size using centralized AES config
         if encrypt:
             validation = AESConfig.validate_file_for_aes(file_size, is_https)
             if not validation['valid']:
+                print(f"❌ File {i+1} failed AES validation: {validation['error']}")
                 return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
                     "status": "error",
                     "msg": validation['error']
@@ -316,9 +343,13 @@ async def upload_auto_file(
         save_name = filename + ".enc" if encrypt else filename
         filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, save_name)
 
+        print(f"💾 Saving file {i+1} as: {filepath.name}")
         save_upload_file_sync(file, filepath, encrypt=encrypt)
         background_tasks.add_task(scan_file, filepath)
         uploaded.append(filepath.name)
+        print(f"✅ File {i+1} uploaded successfully: {filepath.name}")
+
+    print(f"🎉 Upload complete! {len(uploaded)} files uploaded: {uploaded}")
 
     if not uploaded:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
@@ -327,12 +358,18 @@ async def upload_auto_file(
         })
 
     protocol_info = "HTTPS" if is_https else "HTTP"
-    return JSONResponse(content={
+    response_data = {
         "status": "success",
         "msg": f"{len(uploaded)} file(s) uploaded via {protocol_info}",
         "files": uploaded,
-        "protocol": protocol_info
-    })
+        "protocol": protocol_info,
+        "total_files_processed": len(files),
+        "files_uploaded": len(uploaded),
+        "files_skipped": len(files) - len(uploaded)
+    }
+    
+    print(f"🎯 Upload response: {response_data}")
+    return JSONResponse(content=response_data)
 
 @router.get("/download/{filename}", name="download_file")
 @router.head("/download/{filename}")
@@ -353,7 +390,7 @@ async def download_file(filename: str, request: Request):
     
     print(f"📊 File info - Size: {file_size} bytes, MIME: {mime_type}")
     
-    # ✅ Handle HEAD requests - return headers only for file info
+    # OK: Handle HEAD requests - return headers only for file info
     if request.method == "HEAD":
         headers = {
             "Content-Length": str(file_size),
@@ -364,7 +401,7 @@ async def download_file(filename: str, request: Request):
         }
         return Response(content="", headers=headers, status_code=200)
     
-    # ✅ Determine protocol (HTTP vs HTTPS)
+    # OK: Determine protocol (HTTP vs HTTPS)
     is_https = request.url.scheme == "https"
     
     # 🔐 Enforcement Rules:
@@ -423,7 +460,7 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                         decrypted_data = decrypt_bytes_legacy(encrypted_data)
                         print(f"🔒 Used legacy decryption for {path.name}")
                     
-                    print(f"✅ Decrypted to {len(decrypted_data)} bytes")
+                    print(f"OK: Decrypted to {len(decrypted_data)} bytes")
                     
                     # Validate integrity if metadata available
                     if metadata and 'original_hash' in metadata:
@@ -432,7 +469,7 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                         expected_hash = metadata['original_hash']
                         if actual_hash != expected_hash:
                             raise Exception(f"File integrity check failed! Expected: {expected_hash}, Got: {actual_hash}")
-                        print(f"✅ File integrity validated successfully")
+                        print(f"OK: File integrity validated successfully")
                     
                     # 🚀 Stream in very large chunks for maximum speed
                     data_length = len(decrypted_data)
@@ -462,7 +499,7 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                         chunks_sent += 1
                         print(f"📤 Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
                         yield chunk
-                print(f"✅ Completed streaming {chunks_sent} chunks")
+                print(f"OK: Completed streaming {chunks_sent} chunks")
             except Exception as e:
                 print(f"🚨 File streaming failed for {path}: {e}")
                 error_message = f"Error: Failed to read file {path.name}. {str(e)}"
@@ -637,7 +674,6 @@ async def download_all_files():
 @router.post("/clear", name="clear_files")
 async def clear_files():
     """Clear all uploaded files and temporary chunks with enhanced Windows compatibility"""
-    import time
     import gc
     
     try:
@@ -682,11 +718,23 @@ async def clear_files():
         
         # Enhanced status message
         if files_locked > 0:
-            print(f"⚠️  Cleared {files_deleted} files and {chunks_deleted} chunks ({files_locked} files still in use)")
+            print(f"WARNING: Cleared {files_deleted} files and {chunks_deleted} chunks ({files_locked} files still in use)")
+            return JSONResponse(content={
+                "status": "warning",
+                "msg": f"Cleared {files_deleted} files and {chunks_deleted} chunks ({files_locked} files still in use)",
+                "files_deleted": files_deleted,
+                "chunks_deleted": chunks_deleted,
+                "files_locked": files_locked
+            })
         else:
-            print(f"✅ Cleared {files_deleted} files and {chunks_deleted} chunks")
-            
-        return RedirectResponse(url="/", status_code=HTTP_302_FOUND)
+            print(f"OK: Cleared {files_deleted} files and {chunks_deleted} chunks")
+            return JSONResponse(content={
+                "status": "success",
+                "msg": f"Cleared {files_deleted} files and {chunks_deleted} chunks",
+                "files_deleted": files_deleted,
+                "chunks_deleted": chunks_deleted,
+                "files_locked": 0
+            })
         
     except Exception as e:
         print(f"❌ Error during file clearing: {e}")
@@ -717,7 +765,7 @@ async def delete_file(filename: str):
             
         if file_path.is_file():
             file_path.unlink()
-            print(f"✅ Deleted file: {safe_name}")
+            print(f"OK: Deleted file: {safe_name}")
             return RedirectResponse(url="/", status_code=HTTP_302_FOUND)
         else:
             return JSONResponse(
@@ -884,7 +932,7 @@ async def finalize_upload(
                 content={"status": "error", "msg": "Invalid filename"}
             )
         
-        # 🚫 Enforce encryption restrictions (re-enabled for testing)
+        # 🚫 Enforce encryption restrictions
         if encrypt and not is_https:
             return JSONResponse(
                 status_code=HTTP_400_BAD_REQUEST,

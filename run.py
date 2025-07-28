@@ -1,6 +1,5 @@
 import os
 import socket
-import webbrowser
 import subprocess
 import sys
 import signal
@@ -25,7 +24,7 @@ def ensure_venv():
             result = subprocess.run([venv_python] + sys.argv, check=False)
             sys.exit(result.returncode)
         except KeyboardInterrupt:
-            print("\n[⚠] Virtual environment switch interrupted.")
+            print("\n[WARNING] Virtual environment switch interrupted.")
             sys.exit(1)
         except Exception as e:
             print(f"[!] Failed to switch to virtual environment: {e}")
@@ -45,47 +44,6 @@ except ImportError as e:
     subprocess.run([sys.executable, "-m", "pip", "install", "psutil", "uvicorn[standard]", "fastapi", "jinja2", "python-multipart", "werkzeug", "cryptography", "pycryptodome"])
     import psutil
     import uvicorn
-
-def install_test_dependencies():
-    """Install additional dependencies needed for testing"""
-    test_packages = ["aiohttp", "aiofiles", "psutil"]
-    print("[!] Installing test dependencies...")
-    subprocess.run([sys.executable, "-m", "pip", "install"] + test_packages)
-
-def run_tests():
-    """Run the automated test suite"""
-    try:
-        # Check if test dependencies are available
-        required_packages = ["aiohttp", "aiofiles", "psutil"]
-        missing_packages = []
-        
-        for package in required_packages:
-            try:
-                __import__(package)
-            except ImportError:
-                missing_packages.append(package)
-        
-        if missing_packages:
-            print(f"[!] Missing test packages: {', '.join(missing_packages)}")
-            install_test_dependencies()
-        
-        # Run the test suite
-        print("[*] Starting LanVan Automated Test Suite...")
-        result = subprocess.run([sys.executable, "test_lanvan.py"], check=False)
-        
-        if result.returncode == 0:
-            print("[✅] All tests completed successfully!")
-        else:
-            print(f"[❌] Tests completed with return code: {result.returncode}")
-        
-        return result.returncode
-        
-    except KeyboardInterrupt:
-        print("\n[⚠] Tests interrupted by user")
-        return 1
-    except Exception as e:
-        print(f"[❌] Test suite failed: {e}")
-        return 1
 
 # === CONFIGURATION ===
 SSL_CERT_PATH = "certs/cert.pem"
@@ -112,13 +70,14 @@ def certs_available():
 
 def print_banner(ip, port, use_https):
     scheme = "https" if use_https else "http"
-    print(f"\n[✔] Server running at:")
-    print(f"🔗 Localhost:  {scheme}://127.0.0.1:{port}")
-    print(f"🌐 LAN IP:    {scheme}://{ip}:{port}\n")
+    print(f"\n[OK] Server running at:")
+    print(f"Local:  {scheme}://127.0.0.1:{port}")
+    print(f"LAN:    {scheme}://{ip}:{port}\n")
 
 def open_browser(ip, port, use_https):
     scheme = "https" if use_https else "http"
     try:
+        import webbrowser
         webbrowser.open(f"{scheme}://{ip}:{port}")
     except:
         print("[!] Failed to open browser.")
@@ -128,11 +87,11 @@ def kill_servers_on_port(port):
     try:
         for proc in psutil.process_iter(['pid', 'name']):
             try:
-                connections = proc.connections()
+                connections = proc.net_connections()
                 if connections:
                     for conn in connections:
                         if hasattr(conn, 'laddr') and conn.laddr.port == port and conn.status == psutil.CONN_LISTEN:
-                            print(f"[⚠] Killing process {proc.info['pid']} ({proc.info['name']}) on port {port}")
+                            print(f"[WARNING] Killing process {proc.info['pid']} ({proc.info['name']}) on port {port}")
                             proc.terminate()
                             proc.wait(timeout=3)
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
@@ -142,18 +101,14 @@ def kill_servers_on_port(port):
 
 def signal_handler(signum, frame):
     """Handle Ctrl+C gracefully"""
-    print(f"\n[⚠] Received signal {signum}. Shutting down servers...")
+    print(f"\n[WARNING] Received signal {signum}. Shutting down servers...")
     kill_servers_on_port(HTTP_PORT)
     kill_servers_on_port(HTTPS_PORT)
-    print("[✔] All servers stopped. Goodbye!")
+    print("[OK] All servers stopped. Goodbye!")
     sys.exit(0)
 
 # === MAIN ENTRY ===
 if __name__ == "__main__":
-    # Check for test command first
-    if len(sys.argv) > 1 and sys.argv[1].lower() == "test":
-        sys.exit(run_tests())
-    
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
@@ -183,7 +138,7 @@ if __name__ == "__main__":
     kill_servers_on_port(port)
 
     if use_https and not certs_available():
-        print("[⚠] HTTPS mode requested but cert.pem/key.pem not found. Falling back to HTTP.")
+        print("[WARNING] HTTPS mode requested but cert.pem/key.pem not found. Falling back to HTTP.")
         use_https = False
         port = HTTP_PORT
 
@@ -203,7 +158,8 @@ if __name__ == "__main__":
         cmd = [
             "uvicorn", "app.main:app",
             "--host", "0.0.0.0",
-            "--port", str(port)
+            "--port", str(port),
+            "--log-level", "warning"  # Suppress INFO logs
         ]
         if use_https:
             cmd += ["--ssl-keyfile", SSL_KEY_PATH, "--ssl-certfile", SSL_CERT_PATH]
@@ -219,12 +175,13 @@ if __name__ == "__main__":
                 port=port,
                 reload=True,
                 ssl_keyfile=SSL_KEY_PATH if use_https else None,
-                ssl_certfile=SSL_CERT_PATH if use_https else None
+                ssl_certfile=SSL_CERT_PATH if use_https else None,
+                log_level="warning"  # Suppress INFO logs
             )
         except KeyboardInterrupt:
-            print("\n[⚠] Keyboard interrupt received. Shutting down...")
+            print("\n[WARNING] Keyboard interrupt received. Shutting down...")
         except Exception as e:
             print(f"\n[!] Server error: {e}")
         finally:
             kill_servers_on_port(port)
-            print("[✔] Server stopped gracefully.")
+            print("[OK] Server stopped gracefully.")

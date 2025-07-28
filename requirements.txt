@@ -9,13 +9,7 @@ jinja2==3.1.2
 # File upload handling
 python-multipart==0.0.6
 
-# MIME type detection and validation
-python-magic==0.4.27
-
-# Utilities (for werkzeug functions if needed)
-werkzeug==3.0.1
-
-# Security utilities
+# Utilities
 werkzeug==3.0.1
 
 # Cryptography for AES encryption
@@ -24,7 +18,3 @@ pycryptodome==3.19.0
 
 # System monitoring
 psutil==5.9.6
-
-# Optional: For development and testing
-# pytest==7.4.3
-# pytest-asyncio==0.21.1
