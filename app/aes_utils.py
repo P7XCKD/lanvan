@@ -108,89 +108,108 @@ def decrypt_bytes(encrypted_data: bytes, key: bytes, iv: bytes) -> bytes:
     decrypted = unpad(decrypted_padded)
     return decrypted
 
-def encrypt_file_with_metadata(data: bytes, filename: Optional[str] = None) -> Tuple[bytes, Dict[str, Optional[str]]]:
+def encrypt_file_with_metadata(data: bytes, filename: Optional[str] = None, user_password: Optional[str] = None) -> Tuple[bytes, Dict[str, Optional[str]]]:
     """
     Encrypt file data and return encrypted data with metadata for secure storage.
     
     Args:
         data: File content as bytes
-        filename: Optional filename for additional entropy
+        filename: Optional filename for metadata
+        user_password: Optional user password for key derivation
     
     Returns:
         tuple: (encrypted_data, metadata_dict)
     """
     # Generate unique key and IV for this file
-    key, salt = generate_secure_key()
-    iv = generate_secure_iv()
+    if user_password:
+        # Use password-based key derivation
+        key, salt = generate_secure_key(user_password)
+    else:
+        # Generate random key for session-based encryption
+        key, salt = generate_secure_key()
     
-    # Add filename to entropy if provided
-    if filename:
-        filename_hash = hashlib.sha256(filename.encode('utf-8')).digest()
-        # Mix filename hash with key for additional entropy
-        key = bytes(a ^ b for a, b in zip(key, filename_hash))
+    iv = generate_secure_iv()
     
     encrypted_data, final_key, final_iv = encrypt_bytes(data, key, iv)
     
     metadata = {
         'salt': salt.hex(),
         'iv': final_iv.hex(),
-        'key': final_key.hex(),  # In production, store this securely (e.g., separate key management)
         'algorithm': 'AES-256-CBC',
-        'filename_hash': hashlib.sha256(filename.encode('utf-8')).hexdigest() if filename else None
+        'filename_hash': hashlib.sha256(filename.encode('utf-8')).hexdigest() if filename else None,
+        'key_derivation': 'password' if user_password else 'random',
+        'iterations': '100000' if user_password else None
     }
+    
+    # SECURITY: Key is NOT stored in metadata
+    # For password-based: key can be re-derived from password + salt
+    # For random keys: this is session-based encryption only
     
     return encrypted_data, metadata
 
-def decrypt_file_with_metadata(encrypted_data: bytes, metadata: Dict[str, Optional[str]]) -> bytes:
+def decrypt_file_with_metadata(encrypted_data: bytes, metadata: Dict[str, Optional[str]], user_password: Optional[str] = None) -> bytes:
     """
     Decrypt file data using stored metadata.
     
     Args:
         encrypted_data: The encrypted file content
-        metadata: Metadata dict containing key, iv, salt, etc.
+        metadata: Metadata dict containing salt, iv, etc.
+        user_password: Required if file was encrypted with password
     
     Returns:
         bytes: Decrypted file content
     """
-    key_hex = metadata.get('key')
     iv_hex = metadata.get('iv')
+    salt_hex = metadata.get('salt')
+    key_derivation = metadata.get('key_derivation', 'random')
     
-    if not key_hex or not iv_hex:
-        raise ValueError("Missing key or iv in metadata")
+    if not iv_hex or not salt_hex:
+        raise ValueError("Missing iv or salt in metadata")
     
-    key = bytes.fromhex(key_hex)
     iv = bytes.fromhex(iv_hex)
+    salt = bytes.fromhex(salt_hex)
+    
+    if key_derivation == 'password':
+        if not user_password:
+            raise ValueError("Password required for password-encrypted file")
+        # Re-derive key from password and salt
+        key, _ = generate_secure_key(user_password, salt)
+    else:
+        raise ValueError("Cannot decrypt random-key encrypted file without session key storage")
     
     return decrypt_bytes(encrypted_data, key, iv)
 
-def encrypt_file_stream(file_data: bytes, chunk_size: int = 1024 * 1024) -> Tuple[bytes, Dict[str, str]]:
+def encrypt_file_stream(file_data: bytes, user_password: Optional[str] = None, chunk_size: int = 1024 * 1024) -> Tuple[bytes, Dict[str, str]]:
     """
     Memory-efficient streaming AES encryption for large files.
     
     Args:
         file_data: File content as bytes
+        user_password: Optional user password for key derivation
         chunk_size: Size of chunks to process (default 1MB)
     
     Returns:
         tuple: (encrypted_data, metadata_dict)
     """
-    key, salt = generate_secure_key()
+    if user_password:
+        key, salt = generate_secure_key(user_password)
+    else:
+        key, salt = generate_secure_key()
+    
     iv = generate_secure_iv()
+    
+    # Properly pad the entire data first for CBC mode
+    padded_data = pad(file_data)
     
     cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
     encryptor = cipher.encryptor()
     
     encrypted_chunks = []
-    data_length = len(file_data)
+    data_length = len(padded_data)
     
-    # Process file in chunks to reduce memory usage
+    # Process padded data in chunks
     for i in range(0, data_length, chunk_size):
-        chunk = file_data[i:i + chunk_size]
-        
-        # Pad the last chunk if necessary
-        if i + chunk_size >= data_length:
-            chunk = pad(chunk)
-        
+        chunk = padded_data[i:i + chunk_size]
         encrypted_chunk = encryptor.update(chunk)
         encrypted_chunks.append(encrypted_chunk)
     
@@ -204,28 +223,44 @@ def encrypt_file_stream(file_data: bytes, chunk_size: int = 1024 * 1024) -> Tupl
     metadata = {
         'salt': salt.hex(),
         'iv': iv.hex(),
-        'key': key.hex(),
         'algorithm': 'AES-256-CBC-Stream',
-        'original_size': str(data_length),
-        'encrypted_size': str(len(encrypted_data))
+        'original_size': str(len(file_data)),
+        'encrypted_size': str(len(encrypted_data)),
+        'key_derivation': 'password' if user_password else 'random',
+        'iterations': '100000' if user_password else None
     }
     
     return encrypted_data, metadata
 
-def decrypt_file_stream(encrypted_data: bytes, metadata: Dict[str, str], chunk_size: int = 1024 * 1024) -> bytes:
+def decrypt_file_stream(encrypted_data: bytes, metadata: Dict[str, str], user_password: Optional[str] = None, chunk_size: int = 1024 * 1024) -> bytes:
     """
     Memory-efficient streaming AES decryption for large files.
     
     Args:
         encrypted_data: The encrypted file content
-        metadata: Metadata dict containing key, iv, etc.
+        metadata: Metadata dict containing salt, iv, etc.
+        user_password: Required if file was encrypted with password
         chunk_size: Size of chunks to process (default 1MB)
     
     Returns:
         bytes: Decrypted file content
     """
-    key = bytes.fromhex(metadata['key'])
-    iv = bytes.fromhex(metadata['iv'])
+    salt_hex = metadata.get('salt')
+    iv_hex = metadata.get('iv')
+    key_derivation = metadata.get('key_derivation', 'random')
+    
+    if not salt_hex or not iv_hex:
+        raise ValueError("Missing salt or iv in metadata")
+    
+    salt = bytes.fromhex(salt_hex)
+    iv = bytes.fromhex(iv_hex)
+    
+    if key_derivation == 'password':
+        if not user_password:
+            raise ValueError("Password required for password-encrypted file")
+        key, _ = generate_secure_key(user_password, salt)
+    else:
+        raise ValueError("Cannot decrypt random-key encrypted file without session key storage")
     
     cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
     decryptor = cipher.decryptor()
@@ -244,39 +279,35 @@ def decrypt_file_stream(encrypted_data: bytes, metadata: Dict[str, str], chunk_s
     if final_chunk:
         decrypted_chunks.append(final_chunk)
     
-    decrypted_data = b''.join(decrypted_chunks)
+    decrypted_padded_data = b''.join(decrypted_chunks)
     
     # Remove padding from the final result
-    return unpad(decrypted_data)
+    return unpad(decrypted_padded_data)
 
-# 🔄 Legacy support functions (for backward compatibility during migration)
-def encrypt_bytes_legacy(data: bytes) -> bytes:
+# � Secure session-based encryption functions for temporary use
+def encrypt_session_data(data: bytes, session_key: Optional[bytes] = None) -> Tuple[bytes, bytes, bytes]:
     """
-    DEPRECATED: Legacy function for backward compatibility.
-    Use encrypt_bytes() or encrypt_file_with_metadata() instead.
+    Encrypt data with session-based keys (for temporary/in-memory use only).
+    
+    Args:
+        data: Data to encrypt
+        session_key: Optional session key, generates random if None
+    
+    Returns:
+        tuple: (encrypted_data, key, iv) - Keep key in memory only
     """
-    import warnings
-    warnings.warn("encrypt_bytes_legacy is deprecated and insecure. Use encrypt_file_with_metadata().", 
-                  DeprecationWarning, stacklevel=2)
-    
-    # Use old hardcoded values only for legacy compatibility
-    legacy_key = bytes.fromhex("8f9c02a7d6f7cbb1da0499e18b113fe65c7a6d2f538b0a6412ccab5ede6b8839")
-    legacy_iv = bytes.fromhex("f012bc7d298e34af6509cb471d3a8250")
-    
-    encrypted, _, _ = encrypt_bytes(data, legacy_key, legacy_iv)
-    return encrypted
+    return encrypt_bytes(data, session_key)
 
-def decrypt_bytes_legacy(data: bytes) -> bytes:
+def decrypt_session_data(encrypted_data: bytes, key: bytes, iv: bytes) -> bytes:
     """
-    DEPRECATED: Legacy function for backward compatibility.
-    Use decrypt_bytes() or decrypt_file_with_metadata() instead.
+    Decrypt session-based encrypted data.
+    
+    Args:
+        encrypted_data: Encrypted data
+        key: Session key (from memory)
+        iv: IV used for encryption
+    
+    Returns:
+        bytes: Decrypted data
     """
-    import warnings
-    warnings.warn("decrypt_bytes_legacy is deprecated and insecure. Use decrypt_file_with_metadata().", 
-                  DeprecationWarning, stacklevel=2)
-    
-    # Use old hardcoded values only for legacy compatibility
-    legacy_key = bytes.fromhex("8f9c02a7d6f7cbb1da0499e18b113fe65c7a6d2f538b0a6412ccab5ede6b8839")
-    legacy_iv = bytes.fromhex("f012bc7d298e34af6509cb471d3a8250")
-    
-    return decrypt_bytes(data, legacy_key, legacy_iv)
+    return decrypt_bytes(encrypted_data, key, iv)

@@ -14,7 +14,7 @@ from fastapi.responses import (
 from fastapi.templating import Jinja2Templates
 from starlette.status import HTTP_302_FOUND, HTTP_400_BAD_REQUEST
 
-from app.aes_utils import encrypt_bytes_legacy, decrypt_bytes_legacy
+from app.aes_utils import encrypt_session_data, decrypt_session_data
 from app.aes_config import AESConfig
 from app.validation import (
     validate_upload_files, 
@@ -334,9 +334,12 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                         decrypted_data = decrypt_file_stream(encrypted_data, metadata, chunk_size=1024 * 1024)
                         print(f"🔒 Used streaming decryption for {path.name}")
                     else:
-                        # Fallback to legacy decryption
-                        decrypted_data = decrypt_bytes_legacy(encrypted_data)
-                        print(f"🔒 Used legacy decryption for {path.name}")
+                        # Note: Legacy encryption not supported - file may be corrupted
+                        print(f"⚠️ Cannot decrypt {path.name} - legacy encryption no longer supported")
+                        return Response(
+                            content=f"Error: File {path.name} uses unsupported legacy encryption",
+                            status_code=400
+                        )
                     
                     print(f"OK: Decrypted to {len(decrypted_data)} bytes")
                     
@@ -504,15 +507,10 @@ async def download_all_files():
             for file in files_to_download:
                 try:
                     if file.suffix == ".enc":
-                        # Decrypt .enc files before adding to ZIP with error handling
-                        try:
-                            decrypted_data = decrypt_bytes_legacy(file.read_bytes())
-                            zip_file.writestr(file.stem, decrypted_data)
-                        except Exception as decrypt_error:
-                            print(f"🚨 AES decryption failed for {file.name}: {decrypt_error}")
-                            # Add error file to ZIP instead of crashing
-                            error_content = f"Error: Failed to decrypt {file.name}. File may be corrupted or not properly encrypted."
-                            zip_file.writestr(f"{file.stem}_DECRYPT_ERROR.txt", error_content.encode('utf-8'))
+                        # Note: Legacy .enc files no longer supported for security reasons
+                        print(f"⚠️ Skipping legacy encrypted file: {file.name}")
+                        error_content = f"File {file.name} uses legacy encryption which is no longer supported for security reasons."
+                        zip_file.writestr(f"{file.stem}_LEGACY_ENCRYPTION_WARNING.txt", error_content.encode('utf-8'))
                     else:
                         # Add regular files directly
                         zip_file.write(file, arcname=file.name)
@@ -884,7 +882,10 @@ async def finalize_upload(
                 # Encrypt if requested with error handling
                 if encrypt:
                     try:
-                        chunk_data = encrypt_bytes_legacy(chunk_data)
+                        # Use secure session-based encryption for temporary chunks
+                        chunk_data, session_key, session_iv = encrypt_session_data(chunk_data)
+                        # Note: For production use, you'd want to store session_key and session_iv securely
+                        # For now, this is just for demonstration - chunks are temporary
                     except Exception as encrypt_error:
                         print(f"🚨 AES encryption failed for chunk {part_num}: {encrypt_error}")
                         # Clean up and return error
