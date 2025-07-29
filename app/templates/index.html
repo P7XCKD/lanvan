@@ -688,6 +688,19 @@
       REGULAR_MAX: 128 * 1024 * 1024    // 128MB maximum for regular devices
     },
     
+    // Smart Concurrent Upload System
+    CONCURRENT: {
+      MAX_UPLOADS: 6,           // Maximum concurrent uploads
+      MIN_UPLOADS: 1,           // Minimum concurrent uploads
+      NETWORK_FAST: 3,          // Concurrent uploads for fast networks (>10MB/s)
+      NETWORK_MEDIUM: 2,        // Concurrent uploads for medium networks (5-10MB/s)
+      NETWORK_SLOW: 1,          // Concurrent uploads for slow networks (<5MB/s)
+      ADAPTATION_INTERVAL: 5,   // Adapt every N uploads
+      SPEED_SAMPLE_SIZE: 3,     // Number of speed samples to average
+      CPU_THRESHOLD: 80,        // CPU usage threshold to reduce concurrency
+      MEMORY_THRESHOLD: 85      // Memory usage threshold to reduce concurrency
+    },
+    
     // Performance tuning intervals (unified to reduce overhead)
     INTERVALS: {
       PROGRESS_UPDATE: 2500,  // Unified progress update interval (2.5s)
@@ -824,17 +837,108 @@
     return true;
   }
 
-  // 🌐 Enhanced Upload Concurrency Management
+  // 🌐 Smart Concurrent Upload Management System
   let activeUploads = 0;
-  const MAX_CONCURRENT_UPLOADS = 3; // Limit concurrent uploads
+  let currentMaxConcurrent = LANVAN_CONFIG.CONCURRENT.NETWORK_MEDIUM; // Start with medium
+  let networkSpeedSamples = [];
+  let uploadCompletionTimes = [];
+  let lastConcurrencyAdjustment = 0;
+  let totalUploadsProcessed = 0;
+  
+  function getOptimalConcurrency() {
+    // Get average network speed from recent samples
+    if (networkSpeedSamples.length === 0) {
+      return LANVAN_CONFIG.CONCURRENT.NETWORK_MEDIUM;
+    }
+    
+    const avgSpeed = networkSpeedSamples.reduce((a, b) => a + b, 0) / networkSpeedSamples.length;
+    
+    // Detect device capability
+    const isLowEndDevice = detectGuestDevice();
+    const deviceMemory = getDeviceMemory();
+    
+    // Base concurrency on network speed
+    let optimal;
+    if (avgSpeed > 10) {
+      optimal = LANVAN_CONFIG.CONCURRENT.NETWORK_FAST;
+    } else if (avgSpeed > 5) {
+      optimal = LANVAN_CONFIG.CONCURRENT.NETWORK_MEDIUM;
+    } else {
+      optimal = LANVAN_CONFIG.CONCURRENT.NETWORK_SLOW;
+    }
+    
+    // Reduce for low-end devices
+    if (isLowEndDevice || deviceMemory < 4096) {
+      optimal = Math.min(optimal, 2);
+    }
+    
+    // Cap at maximum
+    return Math.min(optimal, LANVAN_CONFIG.CONCURRENT.MAX_UPLOADS);
+  }
+  
+  function updateNetworkSpeed(speedMBps) {
+    networkSpeedSamples.push(speedMBps);
+    
+    // Keep only recent samples
+    if (networkSpeedSamples.length > LANVAN_CONFIG.CONCURRENT.SPEED_SAMPLE_SIZE) {
+      networkSpeedSamples.shift();
+    }
+    
+    // Adapt concurrency every N uploads
+    totalUploadsProcessed++;
+    if (totalUploadsProcessed % LANVAN_CONFIG.CONCURRENT.ADAPTATION_INTERVAL === 0) {
+      const newOptimal = getOptimalConcurrency();
+      if (newOptimal !== currentMaxConcurrent) {
+        console.log(`📊 Adaptive concurrency: ${currentMaxConcurrent} → ${newOptimal} (avg speed: ${(networkSpeedSamples.reduce((a, b) => a + b, 0) / networkSpeedSamples.length).toFixed(1)} MB/s)`);
+        currentMaxConcurrent = newOptimal;
+        lastConcurrencyAdjustment = Date.now();
+        
+        // Update UI to reflect new concurrency
+        updateUploadManager();
+        
+        // Start additional uploads if we increased concurrency
+        if (newOptimal > activeUploads) {
+          setTimeout(() => {
+            startNextUpload();
+          }, 100);
+        }
+      }
+    }
+  }
+  
+  // Monitor system resources for concurrency optimization
+  function getSystemResourceUsage() {
+    const usage = {
+      memory: 50, // Default fallback
+      connection: 'unknown'
+    };
+    
+    try {
+      // Check memory if available
+      if (navigator.deviceMemory) {
+        const totalMemory = navigator.deviceMemory * 1024; // Convert to MB
+        usage.memory = Math.min(100, (4096 / totalMemory) * 100); // Estimate usage
+      }
+      
+      // Check connection type if available
+      if (navigator.connection) {
+        usage.connection = navigator.connection.effectiveType || 'unknown';
+        usage.downlink = navigator.connection.downlink || 0;
+      }
+    } catch (e) {
+      console.log('Resource monitoring not available');
+    }
+    
+    return usage;
+  }
   
   function canStartUpload() {
-    return activeUploads < MAX_CONCURRENT_UPLOADS;
+    return activeUploads < currentMaxConcurrent;
   }
   
   function startUpload() {
     activeUploads++;
-    console.log(`📤 Upload started (${activeUploads}/${MAX_CONCURRENT_UPLOADS} active)`);
+    console.log(`📤 Upload started (${activeUploads}/${currentMaxConcurrent} active, optimal: ${getOptimalConcurrency()})`);
     
     // Pause auto-refresh during uploads to avoid conflicts
     if (activeUploads === 1) {
@@ -844,7 +948,7 @@
   
   function endUpload() {
     activeUploads = Math.max(0, activeUploads - 1);
-    console.log(`📤 Upload ended (${activeUploads}/${MAX_CONCURRENT_UPLOADS} active)`);
+    console.log(`📤 Upload ended (${activeUploads}/${currentMaxConcurrent} active)`);
     
     // Resume auto-refresh when all uploads complete
     if (activeUploads === 0) {
@@ -1524,8 +1628,12 @@ Device Session will reset when browser is closed
       ['queued', 'uploading'].includes(item.status)
     ).length;
     
+    const currentlyUploading = uploadQueue.filter(item => item.status === 'uploading').length;
+    
     if (countElement) {
-      countElement.textContent = `(${activeUploads})`;
+      // Show both active count and concurrent info
+      const concurrencyInfo = currentlyUploading > 1 ? ` • ${currentlyUploading}/${currentMaxConcurrent} concurrent` : '';
+      countElement.textContent = `(${activeUploads}${concurrencyInfo})`;
     }
 
     // Keep upload manager visible - don't auto-hide
@@ -1665,12 +1773,28 @@ Device Session will reset when browser is closed
       uploadItem.xhr.abort();
     }
 
-    // Set status to cancelled and update UI to show red mark
+    // Set status to cancelled and update UI to show red mark IMMEDIATELY
     uploadItem.status = 'cancelled';
     uploadItem.error = 'Cancelled by user';
     
-    // Keep the current progress - don't reset it to show how much was uploaded
+    // Force immediate UI update to show cancel status
     updateUploadItem(uploadItem);
+    
+    // Also force update the progress text and button visibility
+    const statusText = document.getElementById(`status-${uploadItem.id}`);
+    const speedText = document.getElementById(`speed-${uploadItem.id}`);
+    const remainingText = document.getElementById(`remaining-${uploadItem.id}`);
+    const cancelBtn = document.querySelector(`#upload-${uploadItem.id} .upload-control-btn.cancel`);
+    const itemDiv = document.getElementById(`upload-${uploadItem.id}`);
+    
+    if (statusText) statusText.textContent = '❌ Cancelled';
+    if (speedText) speedText.textContent = 'Cancelled';
+    if (remainingText) remainingText.textContent = '';
+    if (cancelBtn) cancelBtn.style.display = 'none';
+    if (itemDiv) itemDiv.className = 'upload-item cancelled';
+    
+    // Keep the current progress - don't reset it to show how much was uploaded
+    console.log(`❌ Upload cancelled: ${uploadItem.fileName} at ${uploadItem.progress.toFixed(1)}%`);
     
     // End this upload and start the next one immediately
     endUpload();
@@ -1679,8 +1803,6 @@ Device Session will reset when browser is closed
     setTimeout(() => {
       startNextUpload();
     }, 100);
-    
-    console.log(`❌ Upload cancelled: ${uploadItem.fileName} at ${uploadItem.progress.toFixed(1)}%`);
     
     // DON'T remove from queue - keep it visible with red mark until all uploads finish
     // Cancelled items will be cleaned up when all uploads are complete
@@ -1759,21 +1881,49 @@ Device Session will reset when browser is closed
       return;
     }
     
-    // Find the next queued item that can be uploaded
-    const queuedItem = uploadQueue.find(item => item.status === 'queued');
+    // Find all queued items that can be uploaded
+    const queuedItems = uploadQueue.filter(item => item.status === 'queued');
     
-    if (!queuedItem) {
+    if (queuedItems.length === 0) {
       console.log('📤 No queued uploads found');
       return;
     }
     
-    if (!canStartUpload()) {
-      console.log(`📤 Cannot start upload: ${activeUploads}/${MAX_CONCURRENT_UPLOADS} uploads active`);
+    // Smart concurrent upload: Start multiple uploads if optimal
+    const availableSlots = currentMaxConcurrent - activeUploads;
+    const itemsToStart = Math.min(availableSlots, queuedItems.length);
+    
+    if (itemsToStart <= 0) {
+      console.log(`📤 Cannot start upload: ${activeUploads}/${currentMaxConcurrent} uploads active`);
       return;
     }
     
-    console.log(`📤 Starting upload for: ${queuedItem.file.name} (Queue: ${uploadQueue.length} items)`);
-    startUploadWithManager(queuedItem);
+    // Prioritize files by upload strategy (smaller files first for better concurrency)
+    const prioritizedItems = queuedItems.sort((a, b) => {
+      // AES files get priority to respect AES logic
+      const aHasAES = a.isAESEnabled;
+      const bHasAES = b.isAESEnabled;
+      
+      if (aHasAES && !bHasAES) return -1;
+      if (!aHasAES && bHasAES) return 1;
+      
+      // Then sort by file size (smaller files first for better throughput)
+      return a.fileSize - b.fileSize;
+    });
+    
+    // Start multiple uploads concurrently
+    for (let i = 0; i < itemsToStart; i++) {
+      const uploadItem = prioritizedItems[i];
+      console.log(`📤 Starting concurrent upload ${i + 1}/${itemsToStart}: ${uploadItem.file.name} (Queue: ${uploadQueue.length} items)`);
+      startUploadWithManager(uploadItem);
+    }
+    
+    // Show feedback for concurrent uploads
+    if (itemsToStart > 1) {
+      const isAESMixed = prioritizedItems.slice(0, itemsToStart).some(item => item.isAESEnabled);
+      const aesNote = isAESMixed ? ' (AES files prioritized)' : '';
+      showToast(`🚀 Starting ${itemsToStart} concurrent uploads${aesNote}`, 3000);
+    }
   }
 
   function startUploadWithManager(uploadItem) {
@@ -1816,6 +1966,14 @@ Device Session will reset when browser is closed
         uploadItem.speed = speed;
         uploadItem.timeRemaining = remaining;
 
+        // Update network speed tracking for smart concurrency (sample during upload)
+        if (elapsed > 2 && progress > 10 && progress < 90) { // Sample mid-upload for accuracy
+          const speedMBps = (e.loaded / (1024 * 1024)) / elapsed;
+          if (speedMBps > 0.1) { // Only track meaningful speeds
+            updateNetworkSpeed(speedMBps);
+          }
+        }
+
         updateUploadItem(uploadItem);
       }
     });
@@ -1827,10 +1985,16 @@ Device Session will reset when browser is closed
         updateUploadItem(uploadItem);
         endUpload();
         
-        // 🔔 Show toast notification for individual file completion
+        // � Track network speed for adaptive concurrency
         const fileSize = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
         const uploadTime = ((Date.now() - uploadItem.startTime) / 1000).toFixed(1);
         const avgSpeed = (fileSize / uploadTime).toFixed(1);
+        const speedMBps = parseFloat(avgSpeed);
+        
+        // Update network speed tracking for smart concurrency
+        updateNetworkSpeed(speedMBps);
+        
+        // 🔔 Show toast notification for individual file completion
         showToast(`✅ ${uploadItem.file.name} uploaded successfully (${fileSize} MB in ${uploadTime}s @ ${avgSpeed} MB/s)`, 4000);
         
         // 📊 Save individual upload stats to history with enhanced metadata
@@ -2984,7 +3148,14 @@ function autoUpload(files) {
   if (currentActiveUploads > 0) {
     showToast(`📤 Added ${files.length} file(s) to upload queue. ${currentActiveUploads} uploads currently active.`, 3000);
   } else {
-    showToast(`🚀 Starting upload of ${files.length} file(s)...`, 3000);
+    const optimalConcurrency = getOptimalConcurrency();
+    const filesToStart = Math.min(optimalConcurrency, files.length);
+    
+    if (filesToStart > 1) {
+      showToast(`🚀 Starting smart concurrent upload of ${files.length} file(s) (${filesToStart} concurrent)...`, 3000);
+    } else {
+      showToast(`🚀 Starting upload of ${files.length} file(s)...`, 3000);
+    }
   }
 }
 
