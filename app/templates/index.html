@@ -1253,7 +1253,7 @@
             ◀ Prev
           </button>
           <span style="padding: 0.4rem 1rem; color: #666;">
-            Page ${currentPage} of ${totalPages} (${groupedLogs.length} entries, ${logs.length} total uploads)
+            Page ${currentPage} of ${totalPages} (${logs.length} total uploads)
           </span>
           <button onclick="uploadHistoryPagination.goToPage(${currentPage + 1})" 
                   ${currentPage === totalPages ? 'disabled' : ''} 
@@ -1628,15 +1628,24 @@ Device Session will reset when browser is closed
       ['queued', 'uploading'].includes(item.status)
     ).length;
     
+    const completedUploads = uploadQueue.filter(item => 
+      ['completed', 'cancelled', 'error'].includes(item.status)
+    ).length;
+    
     const currentlyUploading = uploadQueue.filter(item => item.status === 'uploading').length;
     
     if (countElement) {
-      // Show both active count and concurrent info
+      // Show both active count and completed info
       const concurrencyInfo = currentlyUploading > 1 ? ` • ${currentlyUploading}/${currentMaxConcurrent} concurrent` : '';
-      countElement.textContent = `(${activeUploads}${concurrencyInfo})`;
+      const completedInfo = completedUploads > 0 ? ` • ${completedUploads} completed` : '';
+      countElement.textContent = `(${activeUploads}${concurrencyInfo}${completedInfo})`;
     }
 
-    // Keep upload manager visible - don't auto-hide
+    // Keep upload manager visible when there are ANY items (active or completed)
+    const uploadManager = document.getElementById('uploadManager');
+    if (uploadManager && uploadQueue.length > 0) {
+      uploadManager.style.display = 'block';
+    }
     // Users can manually use the logs to check completed uploads
     // The upload manager will stay visible so users can see their upload progress
   }
@@ -1838,7 +1847,7 @@ Device Session will reset when browser is closed
     clearBtn.className = 'upload-manager-btn';
     clearBtn.style.background = '#6c757d';
     clearBtn.style.marginLeft = '0.5rem';
-    clearBtn.textContent = '🧹 Clear Completed';
+    clearBtn.textContent = '🧹 Clear All';
     clearBtn.title = 'Clear all completed, cancelled, and failed uploads';
     clearBtn.onclick = clearCompletedUploads;
     
@@ -1983,6 +1992,7 @@ Device Session will reset when browser is closed
         uploadItem.status = 'completed';
         uploadItem.progress = 100;
         updateUploadItem(uploadItem);
+        updateUploadManager(); // Update manager to show completed count
         endUpload();
         
         // � Track network speed for adaptive concurrency
@@ -2031,8 +2041,10 @@ Device Session will reset when browser is closed
         };
         saveStatsToLog(uploadStats);
         
-        // 🔄 Immediately refresh file list for this completed upload
-        refreshFileList();
+        // 🔄 Delay file list refresh to ensure user can see completed status
+        setTimeout(() => {
+          refreshFileList();
+        }, 2000); // 2 second delay to show completion status
         
         // Check if all uploads are complete before updating file list
         const hasActiveUploads = uploadQueue.some(item => 
@@ -2040,23 +2052,28 @@ Device Session will reset when browser is closed
         );
         
         if (!hasActiveUploads) {
-          // All uploads complete - final refresh and completion toast
+          // All uploads complete - final refresh and completion toast with delay
           setTimeout(() => {
             refreshFileList();
-          }, 500); // Small delay to ensure server processing is complete
+          }, 3000); // 3 second delay to let user see all completed items
           
           // Show clear button for cancelled/completed uploads
           showClearCompletedButton();
           
           // 🔔 Show final completion toast for all uploads without creating batch log entry
-          const totalFiles = uploadQueue.length;
-          const totalSize = uploadQueue.reduce((sum, item) => sum + item.file.size, 0);
-          const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(1);
-          const sessionTime = ((Date.now() - Math.min(...uploadQueue.map(item => item.startTime))) / 1000).toFixed(1);
-          const sessionSpeed = (totalSizeMB / sessionTime).toFixed(1);
+          // Only count successfully completed uploads (exclude cancelled, error, etc.)
+          const completedUploads = uploadQueue.filter(item => item.status === 'completed');
+          const totalFiles = completedUploads.length;
           
-          // Only show completion toast - individual files are already logged separately
-          showToast(`🎉 All ${totalFiles} files uploaded successfully! (${totalSizeMB} MB total in ${sessionTime}s @ ${sessionSpeed} MB/s)`, 6000);
+          if (totalFiles > 0) {
+            const totalSize = completedUploads.reduce((sum, item) => sum + item.file.size, 0);
+            const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(1);
+            const sessionTime = ((Date.now() - Math.min(...completedUploads.map(item => item.startTime))) / 1000).toFixed(1);
+            const sessionSpeed = (totalSizeMB / sessionTime).toFixed(1);
+            
+            // Only show completion toast - individual files are already logged separately
+            showToast(`🎉 All ${totalFiles} files uploaded successfully! (${totalSizeMB} MB total in ${sessionTime}s @ ${sessionSpeed} MB/s)`, 6000);
+          }
         }
         
         // Don't auto-remove completed items - let user control with clear button
@@ -2068,6 +2085,7 @@ Device Session will reset when browser is closed
         if (!allUploadsFinished) {
           // All uploads complete - show clear button
           showClearCompletedButton();
+          updateUploadManager(); // Update the display to show completed count
         }
       } else {
         uploadItem.status = 'error';
@@ -2084,10 +2102,10 @@ Device Session will reset when browser is closed
         );
         
         if (!allUploadsFinished) {
-          // All uploads complete - update file list dynamically
+          // All uploads complete - delay file list refresh to show error status
           setTimeout(() => {
             refreshFileList();
-          }, 500);
+          }, 3000); // 3 second delay to let user see error status
           
           // Show clear button for cancelled/completed uploads
           showClearCompletedButton();
@@ -2119,7 +2137,7 @@ Device Session will reset when browser is closed
       if (!hasActiveUploads) {
         setTimeout(() => {
           refreshFileList();
-        }, 500);
+        }, 3000); // 3 second delay to show completion status
         
         // Show clear button for cancelled/completed uploads
         showClearCompletedButton();
@@ -3259,10 +3277,10 @@ function uploadFilesRegular(files, isAESEnabled) {
         showToast(`✅ ${files.length} files uploaded via ${protocolMsg} (${totalSizeMB} MB total) • ${totalElapsed}s @ ${avgSpeed} MB/s`, 0, uploadStats);
       }
       
-      // 🔄 Auto-refresh file list after upload completion
+      // 🔄 Delay file list refresh to show completion status
       setTimeout(() => {
         refreshFileList();
-      }, 500);
+      }, 3000); // 3 second delay to let user see completion
       
       // Store flag to reload page when toast is dismissed (optional)
       window._shouldReloadAfterToast = false; // Changed to false since we auto-refresh
@@ -3811,10 +3829,10 @@ async function uploadFilesChunked(files, isAESEnabled) {
       showToast(`✅ ${files.length} files adaptive-chunked upload complete via ${protocolMsg} (${totalSizeMB} MB total) • ${totalElapsed}s @ ${avgSpeed} MB/s • Final chunk: ${finalChunkSizeMB}MB`, 0, uploadStats);
     }
     
-    // 🔄 Auto-refresh file list after chunked upload completion
+    // 🔄 Delay file list refresh to show chunked completion status
     setTimeout(() => {
       refreshFileList();
-    }, 500);
+    }, 3000); // 3 second delay to let user see completion
     
     // Store flag to reload page when toast is dismissed (optional)
     window._shouldReloadAfterToast = false; // Changed to false since we auto-refresh
