@@ -207,6 +207,17 @@
       border-left: 4px solid #28a745;
     }
 
+    .upload-item.processing {
+      background: #fff8e1;
+      border-left: 4px solid #ffc107;
+      animation: processingPulse 2s ease-in-out infinite alternate;
+    }
+
+    @keyframes processingPulse {
+      from { opacity: 0.8; }
+      to { opacity: 1; }
+    }
+
     .upload-item.error {
       background: #fff8f8;
       border-left: 4px solid #dc3545;
@@ -1729,9 +1740,11 @@ Device Session will reset when browser is closed
     if (statusText) {
       let statusDisplay = uploadItem.status.charAt(0).toUpperCase() + uploadItem.status.slice(1);
       
-      // Special handling for cancelled status
+      // Special handling for status displays
       if (uploadItem.status === 'cancelled') {
         statusDisplay = '❌ Cancelled';
+      } else if (uploadItem.status === 'processing') {
+        statusDisplay = '⚙️ Processing...';
       }
       
       // Only update if text actually changed to prevent unnecessary redraws
@@ -1748,6 +1761,8 @@ Device Session will reset when browser is closed
       }
     } else if (speedText && uploadItem.status === 'cancelled') {
       speedText.textContent = 'Cancelled';
+    } else if (speedText && uploadItem.status === 'processing') {
+      speedText.textContent = 'Server processing';
     }
 
     // ⏱️ STABLE TIME: Update time remaining with debouncing
@@ -1760,10 +1775,10 @@ Device Session will reset when browser is closed
       remainingText.textContent = '';
     }
 
-    // Update cancel button state for cancelled items
+    // Update cancel button state for cancelled, completed, and processing items
     const cancelBtn = document.querySelector(`#upload-${uploadItem.id} .upload-control-btn.cancel`);
-    if (cancelBtn && uploadItem.status === 'cancelled') {
-      cancelBtn.style.display = 'none'; // Hide cancel button for cancelled items
+    if (cancelBtn && (uploadItem.status === 'cancelled' || uploadItem.status === 'completed' || uploadItem.status === 'processing')) {
+      cancelBtn.style.display = 'none'; // Hide cancel button for cancelled, completed, and processing items
     }
 
     // Update item styling based on status (only if changed)
@@ -1994,10 +2009,33 @@ Device Session will reset when browser is closed
 
     xhr.addEventListener('load', () => {
       if (xhr.status === 200) {
-        uploadItem.status = 'completed';
-        uploadItem.progress = 100;
-        updateUploadItem(uploadItem);
-        updateUploadManager(); // Update manager to show completed count
+        // Show processing status for files > 10MB
+        const fileSizeMB = uploadItem.file.size / (1024 * 1024);
+        if (fileSizeMB > 10) {
+          uploadItem.status = 'processing';
+          const statusText = document.getElementById(`status-${uploadItem.id}`);
+          const speedText = document.getElementById(`speed-${uploadItem.id}`);
+          if (statusText) statusText.textContent = '⚙️ Processing...';
+          if (speedText) speedText.textContent = 'Server processing';
+          updateUploadItem(uploadItem);
+          
+          // Show toast for processing
+          showToast(`⚙️ Processing ${uploadItem.file.name} on server... (${fileSizeMB.toFixed(1)} MB)`, 3000);
+          
+          // Show processing for a moment before marking complete
+          setTimeout(() => {
+            uploadItem.status = 'completed';
+            uploadItem.progress = 100;
+            updateUploadItem(uploadItem);
+            updateUploadManager(); // Update manager to show completed count
+          }, 1500); // 1.5 second processing indicator
+        } else {
+          uploadItem.status = 'completed';
+          uploadItem.progress = 100;
+          updateUploadItem(uploadItem);
+          updateUploadManager(); // Update manager to show completed count
+        }
+        
         endUpload();
         
         // � Track network speed for adaptive concurrency
@@ -2283,9 +2321,25 @@ Device Session will reset when browser is closed
       
       xhr.addEventListener('load', () => {
         if (xhr.status === 200) {
-          uploadItem.status = 'completed';
-          uploadItem.progress = 100;
+          // Show processing status for chunked files (always show for large files)
+          uploadItem.status = 'processing';
+          const statusText = document.getElementById(`status-${uploadItem.id}`);
+          const speedText = document.getElementById(`speed-${uploadItem.id}`);
+          if (statusText) statusText.textContent = '⚙️ Processing chunks...';
+          if (speedText) speedText.textContent = 'Server processing';
           updateUploadItem(uploadItem);
+          
+          const fileSizeMB = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
+          // Show toast for chunked processing
+          showToast(`⚙️ Processing ${uploadItem.totalChunks} chunks for ${uploadItem.fileName}... (${fileSizeMB} MB)`, 4000);
+          
+          // Show processing for chunked files (longer processing time)
+          setTimeout(() => {
+            uploadItem.status = 'completed';
+            uploadItem.progress = 100;
+            updateUploadItem(uploadItem);
+          }, 2000); // 2 second processing indicator for chunked files
+          
           endUpload();
           
           // Show completion toast
