@@ -1880,6 +1880,11 @@ Device Session will reset when browser is closed
     
     updateUploadManager();
     
+    // NOW refresh the file list since user manually cleared
+    setTimeout(() => {
+      refreshFileList();
+    }, 500);
+    
     console.log(`🧹 Cleared ${itemsToRemove.length} completed uploads`);
   }
 
@@ -2041,10 +2046,8 @@ Device Session will reset when browser is closed
         };
         saveStatsToLog(uploadStats);
         
-        // 🔄 Delay file list refresh to ensure user can see completed status
-        setTimeout(() => {
-          refreshFileList();
-        }, 2000); // 2 second delay to show completion status
+        // DON'T auto-refresh file list - let uploads stay visible until user clears them
+        // Only refresh when ALL uploads are complete or user manually clears
         
         // Check if all uploads are complete before updating file list
         const hasActiveUploads = uploadQueue.some(item => 
@@ -2052,12 +2055,7 @@ Device Session will reset when browser is closed
         );
         
         if (!hasActiveUploads) {
-          // All uploads complete - final refresh and completion toast with delay
-          setTimeout(() => {
-            refreshFileList();
-          }, 3000); // 3 second delay to let user see all completed items
-          
-          // Show clear button for cancelled/completed uploads
+          // All uploads complete - show clear button but DON'T auto-refresh files
           showClearCompletedButton();
           
           // 🔔 Show final completion toast for all uploads without creating batch log entry
@@ -2102,12 +2100,8 @@ Device Session will reset when browser is closed
         );
         
         if (!allUploadsFinished) {
-          // All uploads complete - delay file list refresh to show error status
-          setTimeout(() => {
-            refreshFileList();
-          }, 3000); // 3 second delay to let user see error status
-          
-          // Show clear button for cancelled/completed uploads
+          // All uploads complete - DON'T auto-refresh, let uploads stay visible until cleared
+          // Only show clear button for user control
           showClearCompletedButton();
           
           // 🔔 Show completion summary even with errors
@@ -2135,11 +2129,7 @@ Device Session will reset when browser is closed
       );
       
       if (!hasActiveUploads) {
-        setTimeout(() => {
-          refreshFileList();
-        }, 3000); // 3 second delay to show completion status
-        
-        // Show clear button for cancelled/completed uploads
+        // All uploads complete - DON'T auto-refresh, let uploads stay visible until cleared
         showClearCompletedButton();
       }
       
@@ -2346,10 +2336,7 @@ Device Session will reset when browser is closed
           );
           
           if (allUploadsComplete) {
-            // All uploads complete - show clear button and refresh file list
-            setTimeout(() => {
-              refreshFileList();
-            }, 500);
+            // All uploads complete - DON'T auto-refresh, just show clear button
             showClearCompletedButton();
           }
           
@@ -2540,9 +2527,14 @@ Device Session will reset when browser is closed
     if (!fileGrid) {
       // Create file grid if it doesn't exist
       const container = document.querySelector('.file-section') || document.querySelector('main');
-      const newGrid = document.createElement('div');
-      newGrid.className = 'file-grid';
-      container.appendChild(newGrid);
+      if (container) {
+        const newGrid = document.createElement('div');
+        newGrid.className = 'file-grid';
+        container.appendChild(newGrid);
+      } else {
+        console.warn('❌ Could not find container for file grid');
+        return;
+      }
     }
     
     const grid = document.querySelector('.file-grid');
