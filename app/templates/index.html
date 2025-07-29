@@ -1403,52 +1403,33 @@ Security: ${httpsUploads > (totalFiles/2) ? 'Mostly Secure (HTTPS)' : 'Mixed HTT
 
 `;
       
-      // Add each upload entry with enhanced details
-      deviceUploadLogs.forEach((log, index) => {
-        if (log.type === 'Batch Upload Complete') {
-          // Batch upload entry
-          reportContent += `[${index + 1}] BATCH UPLOAD: ${log.filename || 'Unknown Batch'}
-    Timestamp: ${log.timestamp || 'Unknown'}
-    Batch ID: ${log.batchId || 'Unknown'}
-    Total Size: ${log.size || 'Unknown'}
-    Upload Time: ${log.time || 'Unknown'}
-    Average Speed: ${log.speed || 'Unknown'}
-    Protocol: ${log.protocol || 'Unknown'}
-    Files Count: ${log.filesCount || 'Unknown'}
-    Files Chunked: ${log.filesChunked || 0}
-    File Types: ${log.fileTypes || 'Unknown'}
-    Average File Size: ${log.avgFileSize || 'Unknown'}
-    Session ID: ${log.sessionId || 'Unknown'}
-    
-    Batch Files:
-${(log.batchFiles || []).map(file => `      - ${file.name} (${file.size})${file.chunked ? ` [${file.chunks} chunks]` : ''}`).join('\n')}
-
-`;
-        } else {
-          // Single file upload entry
-          reportContent += `[${index + 1}] ${log.filename || 'Unknown File'}
-    Timestamp: ${log.timestamp || 'Unknown'}
+      // Add each individual file upload entry with enhanced details
+      deviceUploadLogs.filter(log => log.type.includes('File Upload')).forEach((log, index) => {
+        reportContent += `[${index + 1}] ${log.filename || 'Unknown File'}
+    Upload Start: ${log.startTime || log.timestamp || 'Unknown'}
+    Upload End: ${log.endTime || 'Unknown'}
+    Duration: ${log.time || 'Unknown'} (${log.timeSeconds || 'Unknown'}s)
     File Size: ${log.size || 'Unknown'} (${log.sizeBytes || 'Unknown'} bytes)
-    Upload Time: ${log.time || 'Unknown'} (${log.timeSeconds || 'Unknown'}s)
     Transfer Speed: ${log.speed || 'Unknown'} (${log.speedMBps || 'Unknown'} MB/s)
+    Upload Type: ${log.chunksUsed ? 'Chunked' : 'Direct'}
+    Chunk Count: ${log.chunkCount || 0}
+    Chunk Size: ${log.chunkSize || 'N/A'}
     Protocol: ${log.protocol || 'Unknown'}
     Method: ${log.method || 'Unknown'}
+    ${log.encrypted ? 'Encryption: AES-256-CBC' : 'Encryption: No'}
     File Extension: .${log.fileExtension || 'unknown'}
-    Upload Type: ${log.chunksUsed ? 'Chunked' : 'Direct'}
-    ${log.encrypted ? 'Encryption: Yes' : 'Encryption: No'}
+    Network Condition: ${log.networkCondition || 'Unknown'}
+    Transfer Efficiency: ${log.transferEfficiency || 'Unknown'}
     
     Advanced Stats:
     - Resume Count: ${log.resumeCount || 0}
-    - Chunks Used: ${log.chunksUsed ? 'Yes' : 'No'}
-    - Chunk Count: ${log.chunkCount || 0}
-    - Chunk Size: ${log.chunkSize || 'N/A'}
     - Supports Resume: ${log.supportsResume ? 'Yes' : 'No'}
     - Upload ID: ${log.uploadId || 'Unknown'}
     - Session ID: ${log.sessionId || 'Unknown'}
-    - Batch ID: ${log.batchId || 'Standalone'}
+    - Upload Method: ${log.uploadMethod || 'Unknown'}
+    - Average Chunk Time: ${log.avgChunkTime || 'N/A'}
 
 `;
-        }
       });
       
       reportContent += `
@@ -2878,6 +2859,33 @@ Device Session will reset when browser is closed
     } else {
       console.warn('⚠️ Toast element not found in setupEventListeners');
     }
+    
+    // 🖱️ Add global click handler to dismiss persistent toasts
+    document.addEventListener('click', function globalToastClickHandler(e) {
+      let toast = DOM_CACHE.toast;
+      
+      // Robust fallback for toast element
+      if (!toast) {
+        toast = document.getElementById('toast');
+        if (toast) {
+          DOM_CACHE.toast = toast;
+        } else {
+          return; // No toast element found
+        }
+      }
+      
+      if (e.target !== toast && !toast.contains(e.target)) {
+        if (toast.style.backgroundColor === 'rgb(44, 62, 80)') { // Persistent mode (either completion or detailed view)
+          hideToast(); // Use the new hide function
+          
+          // ✅ Reload page if this was an upload completion toast
+          if (window._shouldReloadAfterToast) {
+            window._shouldReloadAfterToast = false;
+            location.reload();
+          }
+        }
+      }
+    });
   }
 
   function updatePreview(files) {
@@ -4889,28 +4897,6 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
     console.error('High-performance chunked download error:', error);
   }
 }
-
-  //  Save upload/download stats to device-specific session storage
-  function saveStatsToLog(stats) {
-    try {
-      // Save to device-specific session storage (primary)
-      saveToDeviceUploadHistory(stats);
-      
-      // Also maintain backward compatibility with localStorage for global stats (optional)
-      const logs = JSON.parse(localStorage.getItem('transferLogs') || '[]');
-      logs.unshift(stats); // Add to beginning
-      
-      // Keep only last 20 entries in global storage to prevent storage bloat
-      if (logs.length > 20) {
-        logs.splice(20);
-      }
-      
-      localStorage.setItem('transferLogs', JSON.stringify(logs));
-      console.log(`📊 Saved transfer stats to device session:`, stats.type, stats.size, stats.time);
-    } catch (e) {
-      console.log('⚠️ Failed to save transfer stats:', e);
-    }
-  }
 
   // 💾 Store file metadata for downloads (fixes "unknown size" issue)
   function storeFileMetadata(files, totalSize) {
