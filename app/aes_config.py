@@ -15,8 +15,8 @@ class AESConfig:
     IV_LENGTH = 16   # 128 bits
     PBKDF2_ITERATIONS = 100000
     
-    # 🚫 Protocol Restrictions
-    HTTPS_ONLY = True
+    # 🚫 Protocol Restrictions - DISABLED for HTTP as requested
+    HTTPS_ONLY = False
     
     @classmethod
     def validate_file_for_aes(cls, file_size: int, is_https: bool) -> Dict[str, Any]:

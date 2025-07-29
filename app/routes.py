@@ -984,15 +984,27 @@ async def emergency_shutdown():
 @router.get("/api/server-status")
 async def server_status():
     """Check if server is shutting down"""
-    from app.main import shutdown_event
+    from app.main import shutdown_event, graceful_shutdown_initiated, shutdown_countdown
+    
+    # Check for graceful shutdown state
+    if graceful_shutdown_initiated:
+        return JSONResponse({
+            "status": "shutting_down",
+            "message": f"⚠️ Server shutdown initiated. {shutdown_countdown} seconds remaining.",
+            "shutdown": False,
+            "shutdownWarning": True,
+            "warningMessage": "Server is shutting down gracefully",
+            "countdown": shutdown_countdown
+        })
     
     if shutdown_event.is_set():
         return JSONResponse(
             status_code=503,
             content={
                 "status": "shutdown",
-                "message": "⚠️ Server has been shut down. Please restart the server.",
-                "shutdown": True
+                "message": "🚨 Server is now inactive. Please restart the server.",
+                "shutdown": True,
+                "timeRemaining": 0
             }
         )
     

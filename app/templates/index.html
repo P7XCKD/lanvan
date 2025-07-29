@@ -2609,7 +2609,7 @@ Device Session will reset when browser is closed
   let serverShutdown = false;
 
   function startServerStatusMonitoring() {
-    // Check server status every 3 seconds
+    // Check server status every 2 seconds for faster shutdown detection
     shutdownCheckInterval = setInterval(async () => {
       if (serverShutdown) return; // Don't check if already shut down
       
@@ -2620,50 +2620,95 @@ Device Session will reset when browser is closed
         });
         
         if (!response.ok || response.status === 503) {
-          handleServerShutdown();
+          handleServerShutdown('Server connection lost - server may have been shut down');
           return;
         }
         
         const data = await response.json();
         if (data.shutdown) {
-          handleServerShutdown();
+          // Graceful shutdown notification from server
+          const shutdownMessage = data.message || 'Server is shutting down gracefully';
+          const timeRemaining = data.timeRemaining || 5;
+          handleServerShutdown(shutdownMessage, timeRemaining);
+        } else if (data.shutdownWarning) {
+          // Pre-shutdown warning
+          const warningMessage = data.warningMessage || 'Server shutdown initiated - saving your work...';
+          const countdown = data.countdown || 10;
+          showShutdownWarning(warningMessage, countdown);
         }
       } catch (error) {
         // Network error - likely server is down
         if (!serverShutdown) {
-          handleServerShutdown('Network error - server may be offline');
+          handleServerShutdown('Server connection failed - server appears to be offline');
         }
       }
-    }, 3000);
+    }, 2000); // Check every 2 seconds for faster response
   }
 
-  function handleServerShutdown(reason = 'Server has been shut down') {
+  function showShutdownWarning(message, countdown) {
+    // Show warning toast with countdown
+    const warningToast = `⚠️ ${message} (${countdown}s)`;
+    showToast(warningToast, 0, null, 'warning');
+    
+    // Update countdown every second
+    let remainingTime = countdown;
+    const countdownInterval = setInterval(() => {
+      remainingTime--;
+      if (remainingTime > 0) {
+        const updatedWarning = `⚠️ ${message} (${remainingTime}s)`;
+        updateToastContent(updatedWarning);
+      } else {
+        clearInterval(countdownInterval);
+      }
+    }, 1000);
+    
+    // Add visual warning indicator
+    document.body.style.borderTop = '5px solid #ffc107';
+    
+    console.log(`⚠️ Shutdown warning: ${message} - ${countdown}s remaining`);
+  }
+
+  function handleServerShutdown(reason = 'Server has been shut down', gracefulTime = 0) {
     if (serverShutdown) return; // Prevent multiple notifications
     serverShutdown = true;
     
-    // Stop all uploads immediately
+    // Stop all uploads immediately with proper feedback
     if (uploadQueue.length > 0) {
       uploadQueue.forEach(item => {
         if (item.xhr) item.xhr.abort();
         if (item.currentXhr) item.currentXhr.abort();
         item.status = 'cancelled';
+        item.error = 'Server shutdown';
       });
       updateUploadManager();
+      console.log(`🚨 ${uploadQueue.length} uploads cancelled due to server shutdown`);
     }
     
     // Clear intervals
     if (shutdownCheckInterval) clearInterval(shutdownCheckInterval);
     if (refreshInterval) clearInterval(refreshInterval);
     
-    // Show permanent shutdown notification
+    // Determine shutdown type and message
+    let shutdownType = 'SHUTDOWN';
+    let messageColor = '#dc3545';
+    let overlayColor = 'rgba(220, 53, 69, 0.15)';
+    
+    if (gracefulTime > 0) {
+      shutdownType = 'GRACEFUL SHUTDOWN';
+      messageColor = '#ffc107';
+      overlayColor = 'rgba(255, 193, 7, 0.15)';
+    }
+    
+    // Show enhanced shutdown notification with device info
+    const deviceInfo = `Device: ${navigator.platform} | Browser: ${navigator.userAgent.split(' ').pop()}`;
     showToast(
-      `🚨 SERVER SHUTDOWN: ${reason}. All operations halted. Please restart the server to continue.`,
+      `🚨 SERVER ${shutdownType}: ${reason}\n\nAll operations halted. Files in progress have been cancelled.\n\nPlease wait for the server to restart or contact the host device.`,
       0, // Permanent toast
-      null,
+      { shutdownReason: reason, deviceInfo: deviceInfo, timestamp: new Date().toISOString() },
       'error'
     );
     
-    // Add shutdown overlay to prevent further interactions
+    // Add enhanced shutdown overlay
     const overlay = document.createElement('div');
     overlay.id = 'shutdownOverlay';
     overlay.style.cssText = `
@@ -2672,40 +2717,88 @@ Device Session will reset when browser is closed
       left: 0;
       width: 100vw;
       height: 100vh;
-      background: rgba(220, 53, 69, 0.15);
-      backdrop-filter: blur(2px);
+      background: ${overlayColor};
+      backdrop-filter: blur(3px);
       z-index: 10000;
       display: flex;
       justify-content: center;
       align-items: center;
       pointer-events: none;
+      animation: shutdownFadeIn 1s ease-in;
     `;
+    
+    // Add shutdown animation
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes shutdownFadeIn {
+        from { opacity: 0; backdrop-filter: blur(0px); }
+        to { opacity: 1; backdrop-filter: blur(3px); }
+      }
+      @keyframes shutdownPulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+      }
+    `;
+    document.head.appendChild(style);
     
     const shutdownMessage = document.createElement('div');
     shutdownMessage.style.cssText = `
-      background: #dc3545;
+      background: ${messageColor};
       color: white;
-      padding: 2rem;
-      border-radius: 10px;
+      padding: 2.5rem;
+      border-radius: 15px;
       text-align: center;
-      font-size: 1.2rem;
+      font-size: 1.3rem;
       font-weight: bold;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      max-width: 500px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      max-width: 600px;
       margin: 1rem;
+      animation: shutdownPulse 2s ease-in-out infinite;
+      border: 3px solid rgba(255,255,255,0.3);
     `;
+    
+    const currentTime = new Date().toLocaleString();
     shutdownMessage.innerHTML = `
-      🚨 SERVER OFFLINE<br>
-      <div style="font-size: 0.9rem; margin-top: 1rem; font-weight: normal;">
-        The server has been shut down.<br>
-        Please restart the server to continue using the application.
+      🚨 SERVER ${shutdownType}<br>
+      <div style="font-size: 1rem; margin-top: 1rem; font-weight: normal; line-height: 1.5;">
+        <strong>Reason:</strong> ${reason}<br><br>
+        <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+          • All file transfers have been stopped<br>
+          • Upload queue has been cleared<br>
+          • Server connection lost at ${currentTime}
+        </div>
+        <div style="font-size: 0.9rem; color: rgba(255,255,255,0.9);">
+          Please contact the host device to restart the server<br>
+          or wait for automatic restart if configured.
+        </div>
       </div>
     `;
     
     overlay.appendChild(shutdownMessage);
     document.body.appendChild(overlay);
     
-    console.error('🚨 Server shutdown detected. All operations terminated.');
+    // Log detailed shutdown information
+    console.error(`🚨 Server shutdown detected:`, {
+      reason: reason,
+      timestamp: new Date().toISOString(),
+      gracefulTime: gracefulTime,
+      uploadsActive: uploadQueue.length,
+      deviceInfo: navigator.userAgent,
+      url: location.href
+    });
+    
+    // Optional: Try to save any pending work to localStorage
+    try {
+      const shutdownInfo = {
+        timestamp: Date.now(),
+        reason: reason,
+        url: location.href,
+        uploadsLost: uploadQueue.length
+      };
+      localStorage.setItem('lastServerShutdown', JSON.stringify(shutdownInfo));
+    } catch (e) {
+      console.log('Could not save shutdown info to localStorage');
+    }
   }
 
   // Clear all files function
@@ -2738,107 +2831,7 @@ Device Session will reset when browser is closed
     }
   }
 
-  function startServerStatusMonitoring() {
-    // Check server status every 2 seconds
-    shutdownCheckInterval = setInterval(async () => {
-      if (serverShutdown) return; // Don't check if already shut down
-      
-      try {
-        const response = await fetch('/api/server-status', {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (!response.ok || response.status === 503) {
-          handleServerShutdown();
-          return;
-        }
-        
-        const data = await response.json();
-        if (data.shutdown) {
-          handleServerShutdown();
-        }
-      } catch (error) {
-        // Network error - likely server is down
-        if (!serverShutdown) {
-          handleServerShutdown('Network error - server may be offline');
-        }
-      }
-    }, 2000);
-  }
-
-  function handleServerShutdown(reason = 'Server has been shut down') {
-    if (serverShutdown) return; // Prevent multiple notifications
-    serverShutdown = true;
-    
-    // Stop all uploads immediately
-    if (uploadQueue.length > 0) {
-      uploadQueue.forEach(item => {
-        if (item.xhr) item.xhr.abort();
-        if (item.currentXhr) item.currentXhr.abort();
-        item.status = 'cancelled';
-      });
-      updateUploadManager();
-    }
-    
-    // Clear intervals
-    if (shutdownCheckInterval) clearInterval(shutdownCheckInterval);
-    if (refreshInterval) clearInterval(refreshInterval);
-    
-    // Show permanent shutdown notification
-    showToast(
-      `🚨 SERVER SHUTDOWN: ${reason}. All operations halted. Please restart the server to continue.`,
-      0, // Permanent toast
-      null,
-      'error'
-    );
-    
-    // Add shutdown overlay to prevent further interactions
-    const overlay = document.createElement('div');
-    overlay.id = 'shutdownOverlay';
-    overlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: rgba(220, 53, 69, 0.15);
-      backdrop-filter: blur(2px);
-      z-index: 10000;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      pointer-events: none;
-    `;
-    
-    const shutdownMessage = document.createElement('div');
-    shutdownMessage.style.cssText = `
-      background: #dc3545;
-      color: white;
-      padding: 2rem;
-      border-radius: 10px;
-      text-align: center;
-      font-size: 1.2rem;
-      font-weight: bold;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      max-width: 500px;
-      margin: 1rem;
-    `;
-    shutdownMessage.innerHTML = `
-      🚨 SERVER OFFLINE<br>
-      <div style="font-size: 0.9rem; margin-top: 1rem; font-weight: normal;">
-        The server has been shut down.<br>
-        Please restart the server to continue using the application.
-      </div>
-    `;
-    
-    overlay.appendChild(shutdownMessage);
-    document.body.appendChild(overlay);
-    
-    console.error('🚨 Server shutdown detected. All operations terminated.');
-  }
-
-  // �🚀 Performance Optimization: Cache DOM elements once after DOM is loaded
+  // Performance Optimization: Cache DOM elements once after DOM is loaded
   let DOM_CACHE = {};
   let dropZone, fileInput, preview, progressBar, statusText; // Legacy variables
   
@@ -3950,7 +3943,7 @@ let toastTimeout = null;
 let lastToastMessage = '';
 let isPersistentToast = false;
 
-function showToast(message, duration = 3000, transferData = null) {
+function showToast(message, duration = 3000, transferData = null, type = 'default') {
   const toast = DOM_CACHE.toast;
   if (!toast) {
     console.warn('⚠️ Toast element not found');
@@ -3977,12 +3970,24 @@ function showToast(message, duration = 3000, transferData = null) {
     delete toast._transferData;
   }
   
+  // Determine background color based on type and duration
+  let backgroundColor = '#333'; // Default
+  if (duration === 0) { // Persistent toast
+    if (type === 'error') {
+      backgroundColor = '#dc3545'; // Red for error
+    } else if (type === 'warning') {
+      backgroundColor = '#ffc107'; // Yellow for warning
+    } else {
+      backgroundColor = '#27ae60'; // Green for success/default persistent
+    }
+  }
+  
   // 🚀 PERFORMANCE: Batch style changes with Object.assign
   Object.assign(toast.style, {
     display: 'block',
     opacity: '1',
     transform: 'translateX(-50%) translateY(0)',
-    backgroundColor: duration === 0 ? '#27ae60' : '#333',
+    backgroundColor: backgroundColor,
     whiteSpace: 'normal'
   });
   toast.title = 'Click to keep visible';
