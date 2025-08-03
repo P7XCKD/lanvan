@@ -1144,11 +1144,11 @@
       
       if (deviceUploadLogs.length === 0) {
         logsContent.innerHTML = `
-          <div style="text-align: center; color: #666; padding: 2rem;">
+          <div style="text-align: center; color: #495057; padding: 2rem;">
             <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
-            <div style="font-size: 1.1rem;">No device logs for this session yet</div>
-            <div style="font-size: 0.9rem; margin-top: 0.5rem;">Upload some files to see activity logs here</div>
-            <div style="font-size: 0.85rem; margin-top: 1rem; color: #999;">
+            <div style="font-size: 1.1rem; color: #212529;">No device logs for this session yet</div>
+            <div style="font-size: 0.9rem; margin-top: 0.5rem; color: #6c757d;">Upload some files to see activity logs here</div>
+            <div style="font-size: 0.85rem; margin-top: 1rem; color: #6c757d;">
               📱 Logs are device-specific and clear when you close the browser
             </div>
           </div>
@@ -1357,7 +1357,7 @@
                   style="padding: 0.4rem 0.8rem; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: ${currentPage === 1 ? 'not-allowed' : 'pointer'};">
             ◀ Prev
           </button>
-          <span style="padding: 0.4rem 1rem; color: #666;">
+          <span style="padding: 0.4rem 1rem; color: #495057;">
             Page ${currentPage} of ${totalPages} (${logs.length} total uploads)
           </span>
           <button onclick="uploadHistoryPagination.goToPage(${currentPage + 1})" 
@@ -1517,19 +1517,19 @@
   }
 
   function renderSingleUpload(log, isEven) {
-    const chunkInfo = log.chunksUsed ? `<span style="color: #17a2b8;">📦 ${log.chunkCount || log.chunks || 'Unknown'} chunks</span>` : '<span style="color: #6c757d;">📄 Direct</span>';
+    const chunkInfo = log.chunksUsed ? `<span style="color: #0056b3;">📦 ${log.chunkCount || log.chunks || 'Unknown'} chunks</span>` : '<span style="color: #495057;">📄 Direct</span>';
     
     return `
-      <div style="background: ${isEven ? '#ffffff' : '#f5f5f5'}; padding: 1rem; margin-bottom: 0.5rem; border-radius: 6px; border: 1px solid #e0e0e0;">
+      <div style="background: ${isEven ? '#ffffff' : '#f8f9fa'}; padding: 1rem; margin-bottom: 0.5rem; border-radius: 6px; border: 1px solid #dee2e6;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-          <div style="font-weight: bold; color: #333; flex: 1;">
+          <div style="font-weight: bold; color: #212529; flex: 1;">
             ${log.filename || 'Unknown File'}
-            <span style="font-size: 0.8rem; color: #666; margin-left: 0.5rem;">.${log.fileExtension || 'unknown'}</span>
+            <span style="font-size: 0.8rem; color: #495057; margin-left: 0.5rem;">.${log.fileExtension || 'unknown'}</span>
           </div>
-          <div style="color: #666; font-size: 0.85rem;">${log.timestamp || 'Unknown Date'}</div>
+          <div style="color: #495057; font-size: 0.85rem;">${log.timestamp || 'Unknown Date'}</div>
         </div>
         
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; font-size: 0.9rem;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; font-size: 0.9rem; color: #212529;">
           <div><strong>📊 Size:</strong> ${log.size || 'Unknown'}</div>
           <div><strong>⚡ Speed:</strong> ${log.speed || 'Unknown'}</div>
           <div><strong>⏱️ Time:</strong> ${log.time || 'Unknown'}</div>
@@ -4979,6 +4979,9 @@ window.toggleDeviceLogs = toggleDeviceLogs;
 window.showAccessControlSettings = showAccessControlSettings;
 window.downloadAsZip = downloadAsZip;
 window.cancelUpload = cancelUpload;
+window.downloadDeviceLogs = downloadDeviceLogs;
+window.clearDeviceLogs = clearDeviceLogs;
+window.closeDeviceLogsModal = closeDeviceLogsModal;
 
   
 </script>
