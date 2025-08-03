@@ -5651,15 +5651,31 @@ document.addEventListener('DOMContentLoaded', () => {
   const aesToggle = document.getElementById('enableEncryption');
   if (!aesToggle) return;
 
-  // Restore saved state
-  const saved = localStorage.getItem('aes_enabled');
-  if (saved !== null) {
-    aesToggle.checked = saved === '1';
+  const isHTTP = location.protocol === 'http:';
+  
+  // For HTTP connections, force AES OFF and disable the toggle
+  if (isHTTP) {
+    aesToggle.checked = false;
+    aesToggle.disabled = true;
+    // Add visual indication that AES is disabled for HTTP
+    const toggleContainer = aesToggle.closest('.toggle-switch').parentElement;
+    toggleContainer.style.opacity = '0.6';
+    toggleContainer.title = 'AES encryption is disabled for HTTP connections. Use HTTPS for encryption.';
+    localStorage.setItem('aes_enabled', '0');
+  } else {
+    // For HTTPS, restore saved state and enable toggle
+    aesToggle.disabled = false;
+    const saved = localStorage.getItem('aes_enabled');
+    if (saved !== null) {
+      aesToggle.checked = saved === '1';
+    }
   }
 
-  // Save state on change
+  // Save state on change (only for HTTPS)
   aesToggle.addEventListener('change', () => {
-    localStorage.setItem('aes_enabled', aesToggle.checked ? '1' : '0');
+    if (!isHTTP) {
+      localStorage.setItem('aes_enabled', aesToggle.checked ? '1' : '0');
+    }
   });
 
   // Show welcome message based on protocol (only once per session)
