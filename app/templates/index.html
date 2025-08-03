@@ -560,6 +560,19 @@
     color: #333 !important;
   }
   
+  /* Force device logs content text color */
+  #deviceLogsContent, #deviceLogsContent * {
+    color: #212529 !important;
+  }
+  
+  #deviceLogsContent div, #deviceLogsContent span {
+    color: #212529 !important;
+  }
+  
+  #deviceLogsStats, #deviceLogsStats * {
+    color: #495057 !important;
+  }
+  
   @keyframes qr-fade-in {
     from {
       opacity: 0;
@@ -2932,7 +2945,14 @@ Device Session will reset when browser is closed
         const updatedWarning = `⚠️ ${message} (${remainingTime}s)`;
         updateToastContent(updatedWarning);
       } else {
+        // Show final shutdown message
         clearInterval(countdownInterval);
+        updateToastContent('🚨 SERVER IS SHUT DOWN - All operations halted');
+        
+        // Add final visual indication
+        document.body.style.borderTop = '5px solid #dc3545';
+        
+        console.log('🚨 Server shutdown completed - final message displayed');
       }
     }, 1000);
     
