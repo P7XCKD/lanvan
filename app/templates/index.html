@@ -543,6 +543,23 @@
     animation: qr-fade-in 0.5s ease-in-out;
   }
   
+  /* Device Logs Modal Text Override */
+  #deviceLogsModal * {
+    color: #212529 !important;
+  }
+  
+  #deviceLogsModal button {
+    color: white !important;
+  }
+  
+  #deviceLogsModal .pagination-button {
+    color: #212529 !important;
+  }
+  
+  #deviceLogsModal h3, #deviceLogsModal h4 {
+    color: #333 !important;
+  }
+  
   @keyframes qr-fade-in {
     from {
       opacity: 0;
@@ -1144,11 +1161,11 @@
       
       if (deviceUploadLogs.length === 0) {
         logsContent.innerHTML = `
-          <div style="text-align: center; color: #495057; padding: 2rem;">
+          <div style="text-align: center; color: #495057 !important; padding: 2rem;">
             <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
-            <div style="font-size: 1.1rem; color: #212529;">No device logs for this session yet</div>
-            <div style="font-size: 0.9rem; margin-top: 0.5rem; color: #6c757d;">Upload some files to see activity logs here</div>
-            <div style="font-size: 0.85rem; margin-top: 1rem; color: #6c757d;">
+            <div style="font-size: 1.1rem; color: #212529 !important;">No device logs for this session yet</div>
+            <div style="font-size: 0.9rem; margin-top: 0.5rem; color: #6c757d !important;">Upload some files to see activity logs here</div>
+            <div style="font-size: 0.85rem; margin-top: 1rem; color: #6c757d !important;">
               📱 Logs are device-specific and clear when you close the browser
             </div>
           </div>
@@ -1354,15 +1371,17 @@
         <div style="display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin-top: 1rem;">
           <button onclick="uploadHistoryPagination.goToPage(${currentPage - 1})" 
                   ${currentPage === 1 ? 'disabled' : ''} 
-                  style="padding: 0.4rem 0.8rem; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: ${currentPage === 1 ? 'not-allowed' : 'pointer'};">
+                  class="pagination-button"
+                  style="padding: 0.4rem 0.8rem; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: ${currentPage === 1 ? 'not-allowed' : 'pointer'}; color: #212529 !important;">
             ◀ Prev
           </button>
-          <span style="padding: 0.4rem 1rem; color: #495057;">
+          <span style="padding: 0.4rem 1rem; color: #495057 !important;">
             Page ${currentPage} of ${totalPages} (${logs.length} total uploads)
           </span>
           <button onclick="uploadHistoryPagination.goToPage(${currentPage + 1})" 
                   ${currentPage === totalPages ? 'disabled' : ''} 
-                  style="padding: 0.4rem 0.8rem; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: ${currentPage === totalPages ? 'not-allowed' : 'pointer'};">
+                  class="pagination-button"
+                  style="padding: 0.4rem 0.8rem; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: ${currentPage === totalPages ? 'not-allowed' : 'pointer'}; color: #212529 !important;">
             Next ▶
           </button>
         </div>
@@ -1517,26 +1536,26 @@
   }
 
   function renderSingleUpload(log, isEven) {
-    const chunkInfo = log.chunksUsed ? `<span style="color: #0056b3;">📦 ${log.chunkCount || log.chunks || 'Unknown'} chunks</span>` : '<span style="color: #495057;">📄 Direct</span>';
+    const chunkInfo = log.chunksUsed ? `<span style="color: #0056b3 !important;">📦 ${log.chunkCount || log.chunks || 'Unknown'} chunks</span>` : '<span style="color: #495057 !important;">📄 Direct</span>';
     
     return `
       <div style="background: ${isEven ? '#ffffff' : '#f8f9fa'}; padding: 1rem; margin-bottom: 0.5rem; border-radius: 6px; border: 1px solid #dee2e6;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-          <div style="font-weight: bold; color: #212529; flex: 1;">
+          <div style="font-weight: bold; color: #212529 !important; flex: 1;">
             ${log.filename || 'Unknown File'}
-            <span style="font-size: 0.8rem; color: #495057; margin-left: 0.5rem;">.${log.fileExtension || 'unknown'}</span>
+            <span style="font-size: 0.8rem; color: #495057 !important; margin-left: 0.5rem;">.${log.fileExtension || 'unknown'}</span>
           </div>
-          <div style="color: #495057; font-size: 0.85rem;">${log.timestamp || 'Unknown Date'}</div>
+          <div style="color: #495057 !important; font-size: 0.85rem;">${log.timestamp || 'Unknown Date'}</div>
         </div>
         
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; font-size: 0.9rem; color: #212529;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; font-size: 0.9rem; color: #212529 !important;">
           <div><strong>📊 Size:</strong> ${log.size || 'Unknown'}</div>
           <div><strong>⚡ Speed:</strong> ${log.speed || 'Unknown'}</div>
           <div><strong>⏱️ Time:</strong> ${log.time || 'Unknown'}</div>
           <div><strong>🌐 Protocol:</strong> ${log.protocol || 'Unknown'}</div>
           <div><strong>🔧 Method:</strong> ${log.method || 'Unknown'}</div>
           <div><strong>📦 Chunks:</strong> ${chunkInfo}</div>
-          ${log.encrypted ? '<div><strong>🔒 Encrypted:</strong> <span style="color: #dc3545;">Yes</span></div>' : '<div><strong>🔒 Encrypted:</strong> <span style="color: #6c757d;">No</span></div>'}
+          ${log.encrypted ? '<div><strong>🔒 Encrypted:</strong> <span style="color: #dc3545 !important;">Yes</span></div>' : '<div><strong>🔒 Encrypted:</strong> <span style="color: #6c757d !important;">No</span></div>'}
         </div>
       </div>
     `;
@@ -5638,7 +5657,7 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
     </div>
     
     <div id="deviceLogsSection" style="display: block;">
-      <div id="deviceLogsContent" style="max-height: 400px; overflow-y: auto; background: #f9f9f9; padding: 1rem; border-radius: 8px; border: 1px solid #e0e0e0;">
+      <div id="deviceLogsContent" style="max-height: 400px; overflow-y: auto; background: #f9f9f9; padding: 1rem; border-radius: 8px; border: 1px solid #e0e0e0; color: #212529 !important;">
         <!-- Logs content will be populated here -->
       </div>
       <div id="deviceLogsPagination" style="text-align: center; margin-top: 1rem; display: none;">
