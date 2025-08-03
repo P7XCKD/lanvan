@@ -180,7 +180,7 @@
       background-color: #357bd8;
     }
 
-    /* � Upload Manager Styles */
+    /* 📤 Upload Manager Styles */
     .upload-queue {
       max-height: 400px;
       overflow-y: auto;
@@ -352,7 +352,7 @@
       transform: none !important;
     }
 
-    /* �🔔 Toast notification base styles */
+    /* 🔔 Toast notification base styles */
     .toast-container {
       position: fixed;
       bottom: 20px;
@@ -531,6 +531,28 @@
   .toggle-switch input:checked + .slider:before {
     transform: translateX(30px);
   }
+
+  /* QR Code Loading Animation */
+  @keyframes qr-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* Smooth QR code reveal animation */
+  .qr-reveal {
+    animation: qr-fade-in 0.5s ease-in-out;
+  }
+  
+  @keyframes qr-fade-in {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
 </style>
 
 </head>
@@ -542,13 +564,84 @@
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
     <h1 style="margin: 0; font-size: 1.8rem; color: #333;">{{ msg }}</h1>
     
-    <!-- AES Toggle Block (keep on right side) -->
-    <div style="display: flex; align-items: center; background-color: #f0f0f0; padding: 0.4rem 0.8rem; border-radius: 25px; gap: 0.6rem;">
-      <span style="font-size: 0.95rem; color: #333;"><b>AES Encryption</b></span>
-      <label class="toggle-switch">
-        <input type="checkbox" id="enableEncryption">
-        <span class="slider"></span>
-      </label>
+    <!-- Settings & AES Toggle Block (keep on right side) -->
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <!-- AES Encryption Toggle -->
+      <div style="display: flex; align-items: center; background-color: #f0f0f0; padding: 0.4rem 0.8rem; border-radius: 25px; gap: 0.6rem;">
+        <span style="font-size: 0.95rem; color: #333;"><b>AES Encryption</b></span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="enableEncryption">
+          <span class="slider"></span>
+        </label>
+      </div>
+      
+      <!-- Settings Button -->
+      <div style="position: relative;">
+        <button id="settingsBtn" onclick="toggleSettingsMenu()" style="
+          background: #6c757d;
+          color: white;
+          border: none;
+          padding: 0.5rem 0.8rem;
+          border-radius: 25px;
+          cursor: pointer;
+          font-size: 0.9rem;
+          display: flex;
+          align-items: center;
+          gap: 0.3rem;
+          transition: all 0.3s ease;
+        " onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">
+          ⚙️ Settings
+        </button>
+        
+        <!-- Settings Dropdown Menu -->
+        <div id="settingsMenu" style="
+          display: none;
+          position: absolute;
+          right: 0;
+          top: 100%;
+          margin-top: 0.5rem;
+          background: white;
+          border-radius: 10px;
+          box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+          border: 1px solid #e1e5e9;
+          min-width: 200px;
+          z-index: 1000;
+          overflow: hidden;
+        ">
+          <button onclick="toggleDeviceLogs(); toggleSettingsMenu();" style="
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border: none;
+            background: white;
+            text-align: left;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: background-color 0.2s ease;
+          " onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='white'">
+            📊 Device Logs
+          </button>
+          <div style="height: 1px; background: #e1e5e9; margin: 0;"></div>
+          <button onclick="showAccessControlSettings(); toggleSettingsMenu();" style="
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border: none;
+            background: white;
+            text-align: left;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: background-color 0.2s ease;
+            color: #6c757d;
+          " onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='white'" title="Coming soon - Access control features">
+            🔐 Access Control <span style="font-size: 0.7rem; opacity: 0.6;">(Soon)</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
   
@@ -562,44 +655,7 @@
   </div>
 </header>
 
-<!-- 📊 Device Logs Section -->
-<section>
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-    <h2>📊 Device Logs</h2>
-    <button onclick="toggleDeviceLogs()" id="logsBtn" class="download-btn" style="background: #17a2b8; color: white;">
-      📊 View Logs
-    </button>
-  </div>
-  
-  <!-- Device Logs Content (initially hidden) -->
-  <div id="deviceLogsSection" style="display: none;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-      <h3 style="margin: 0; color: #333; font-size: 1.1rem;">📱 This Device Session Only</h3>
-      <div style="display: flex; gap: 0.5rem;">
-        <button onclick="downloadDeviceLogs()" id="downloadLogsBtn" style="background: #28a745; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
-          📄 Download Logs
-        </button>
-        <button onclick="clearDeviceLogs()" id="clearLogsBtn" style="background: #6c757d; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
-          🧹 Clear Logs
-        </button>
-      </div>
-    </div>
-    <div id="deviceLogsStats" style="background: #e9ecef; padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; color: #495057;">
-      <!-- Logs stats will be populated here -->
-    </div>
-    <div id="deviceLogsContent" style="max-height: 400px; overflow-y: auto; background: #f9f9f9; padding: 1rem; border-radius: 8px; border: 1px solid #e0e0e0;">
-      <!-- Logs content will be populated here -->
-    </div>
-    <div id="deviceLogsPagination" style="text-align: center; margin-top: 1rem; display: none;">
-      <!-- Pagination controls will be populated here -->
-    </div>
-  </div>
-</section>
-
-
-
-
-<!-- 📤 Upload Files & Manager (Merged Section) -->
+<!--  Upload Files & Manager (Merged Section) -->
 <section>
   <h2>📤 Upload Files & Manager</h2>
   
@@ -669,12 +725,12 @@
     let isEncryptionEnabled = false;
     let fetchInterceptorActive = false;
     
-    // � Upload Manager System
+    // 📤 Upload Manager System
     let uploadQueue = [];
     let uploadIdCounter = 0;
     let isUploadManagerVisible = false;
     
-    // �🔒 AES Configuration (matches backend)
+    // 🔒 AES Configuration (matches backend)
     const AES_CONFIG = {
       MAX_FILE_SIZE_MB: 200,
       MAX_FILE_SIZE_BYTES: 200 * 1024 * 1024,
@@ -995,7 +1051,7 @@
 
   function addToUploadQueue(files) {
     // No batch grouping - process each file individually
-    console.log(`� Adding ${files.length} file(s) to upload queue`);
+    console.log(`📤 Adding ${files.length} file(s) to upload queue`);
     
     for (let file of files) {
       const uploadId = ++uploadIdCounter;
@@ -1018,59 +1074,113 @@
     }
   }
 
+  // ⚙️ Settings Menu Functions
+  function toggleSettingsMenu() {
+    const settingsMenu = document.getElementById('settingsMenu');
+    if (settingsMenu.style.display === 'none' || settingsMenu.style.display === '') {
+      settingsMenu.style.display = 'block';
+      // Close menu when clicking outside
+      setTimeout(() => {
+        document.addEventListener('click', closeSettingsOnOutsideClick);
+      }, 100);
+    } else {
+      settingsMenu.style.display = 'none';
+      document.removeEventListener('click', closeSettingsOnOutsideClick);
+    }
+  }
+
+  function closeSettingsOnOutsideClick(event) {
+    const settingsMenu = document.getElementById('settingsMenu');
+    const settingsBtn = document.getElementById('settingsBtn');
+    
+    if (!settingsMenu.contains(event.target) && !settingsBtn.contains(event.target)) {
+      settingsMenu.style.display = 'none';
+      document.removeEventListener('click', closeSettingsOnOutsideClick);
+    }
+  }
+
+  function showAccessControlSettings() {
+    showToast('🔐 Access Control features coming soon! Stay tuned for host-guest permissions, device whitelisting, and access tokens.', 5000);
+  }
+
   function toggleDeviceLogs() {
+    // Open device logs in modal format
+    const modal = document.getElementById('deviceLogsModal');
+    modal.style.display = 'flex';
+    
+    // Populate logs data
+    populateDeviceLogsModal();
+    
+    // Close on escape key
+    document.addEventListener('keydown', function escapeHandler(e) {
+      if (e.key === 'Escape') {
+        closeDeviceLogsModal();
+        document.removeEventListener('keydown', escapeHandler);
+      }
+    });
+    
+    // Close on background click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeDeviceLogsModal();
+      }
+    });
+  }
+
+  function closeDeviceLogsModal() {
+    const modal = document.getElementById('deviceLogsModal');
+    modal.style.display = 'none';
+  }
+
+  function populateDeviceLogsModal() {
     const logsSection = document.getElementById('deviceLogsSection');
-    const logsBtn = document.getElementById('logsBtn');
     const logsContent = document.getElementById('deviceLogsContent');
     const logsStats = document.getElementById('deviceLogsStats');
     const logsPagination = document.getElementById('deviceLogsPagination');
     
-    if (logsSection.style.display === 'none') {
-      // Show logs
-      try {
-        const deviceUploadLogs = getDeviceUploadHistory();
-        
-        if (deviceUploadLogs.length === 0) {
-          logsContent.innerHTML = `
-            <div style="text-align: center; color: #666; padding: 2rem;">
-              <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
-              <div style="font-size: 1.1rem;">No device logs for this session yet</div>
-              <div style="font-size: 0.9rem; margin-top: 0.5rem;">Upload some files to see activity logs here</div>
-              <div style="font-size: 0.85rem; margin-top: 1rem; color: #999;">
-                📱 Logs are device-specific and clear when you close the browser
-              </div>
+    // Show logs in modal
+    try {
+      const deviceUploadLogs = getDeviceUploadHistory();
+      
+      if (deviceUploadLogs.length === 0) {
+        logsContent.innerHTML = `
+          <div style="text-align: center; color: #666; padding: 2rem;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
+            <div style="font-size: 1.1rem;">No device logs for this session yet</div>
+            <div style="font-size: 0.9rem; margin-top: 0.5rem;">Upload some files to see activity logs here</div>
+            <div style="font-size: 0.85rem; margin-top: 1rem; color: #999;">
+              📱 Logs are device-specific and clear when you close the browser
             </div>
-          `;
-          logsStats.innerHTML = '';
-          logsPagination.style.display = 'none';
-        } else {
-          // Generate logs stats
-          const totalFiles = deviceUploadLogs.length;
-          const totalSizeBytes = deviceUploadLogs.reduce((sum, log) => {
-            const sizeMB = parseFloat(log.size?.replace(/[^\d.-]/g, '') || '0');
-            return sum + sizeMB;
-          }, 0);
-          const sessionStartTime = deviceUploadLogs[deviceUploadLogs.length - 1]?.timestamp;
-          const sessionEndTime = deviceUploadLogs[0]?.timestamp;
-          
-          logsStats.innerHTML = `
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
-              <div><strong>📊 Total Entries:</strong> ${totalFiles}</div>
-              <div><strong>💾 Total Data:</strong> ${totalSizeBytes.toFixed(1)} MB</div>
-              <div><strong>� Device Session:</strong> ${getCurrentDeviceId().substring(0, 8)}...</div>
-              <div><strong>⏰ Session Started:</strong> ${sessionStartTime || 'Unknown'}</div>
-            </div>
-          `;
-          
-          // Display logs with pagination (grouped by batch)
-          displayDeviceLogsWithPagination(deviceUploadLogs, logsContent, logsPagination);
-        }
+          </div>
+        `;
+        logsStats.innerHTML = '';
+        logsPagination.style.display = 'none';
+      } else {
+        // Generate logs stats
+        const totalFiles = deviceUploadLogs.length;
+        const totalSizeBytes = deviceUploadLogs.reduce((sum, log) => {
+          const sizeMB = parseFloat(log.size?.replace(/[^\d.-]/g, '') || '0');
+          return sum + sizeMB;
+        }, 0);
+        const sessionStartTime = deviceUploadLogs[deviceUploadLogs.length - 1]?.timestamp;
+        const sessionEndTime = deviceUploadLogs[0]?.timestamp;
         
-        logsSection.style.display = 'block';
-        logsBtn.innerHTML = '📊 Hide Logs';
-        showToast('📊 Device logs displayed', 2000);
+        logsStats.innerHTML = `
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+            <div><strong>📊 Total Entries:</strong> ${totalFiles}</div>
+            <div><strong>💾 Total Data:</strong> ${totalSizeBytes.toFixed(1)} MB</div>
+            <div><strong>📱 Device Session:</strong> ${getCurrentDeviceId().substring(0, 8)}...</div>
+            <div><strong>⏰ Session Started:</strong> ${sessionStartTime || 'Unknown'}</div>
+          </div>
+        `;
         
-      } catch (error) {
+        // Display logs with pagination (grouped by batch)
+        displayDeviceLogsWithPagination(deviceUploadLogs, logsContent, logsPagination);
+        
+        console.log('📊 Device logs populated in modal:', deviceUploadLogs.length, 'entries');
+      }
+        
+    } catch (error) {
         console.error('Error loading device logs:', error);
         logsContent.innerHTML = `
           <div style="text-align: center; color: #dc3545; padding: 2rem;">
@@ -1080,25 +1190,9 @@
           </div>
         `;
         logsStats.innerHTML = '';
-        logsSection.style.display = 'block';
-        logsBtn.innerHTML = '📊 Hide Logs';
-      }
-    } else {
-      // Hide logs
-      logsSection.style.display = 'none';
-      logsBtn.innerHTML = '📊 View Logs';
-      
-      // Force button text update to ensure it sticks
-      setTimeout(() => {
-        if (logsSection.style.display === 'none') {
-          logsBtn.innerHTML = '📊 View Logs';
-        }
-      }, 50);
-      
-      showToast('📊 Device logs hidden', 1500);
     }
   }
-
+  
   // 📱 Device-Specific Session Management for Upload History with Real Device Names
   function getCurrentDeviceId() {
     let deviceId = sessionStorage.getItem('lanvan_device_id');
@@ -1820,6 +1914,31 @@ Device Session will reset when browser is closed
     // Keep the current progress - don't reset it to show how much was uploaded
     console.log(`❌ Upload cancelled: ${uploadItem.fileName} at ${uploadItem.progress.toFixed(1)}%`);
     
+    // 📊 Log cancelled upload with detailed stats
+    const cancelledStats = {
+      type: 'Cancelled Upload',
+      filename: uploadItem.fileName,
+      size: `${(uploadItem.file.size / (1024 * 1024)).toFixed(1)} MB`,
+      sizeBytes: uploadItem.file.size,
+      progress: `${uploadItem.progress.toFixed(1)}%`,
+      uploadedBytes: uploadItem.uploadedBytes || 0,
+      cancelledAt: new Date().toLocaleString(),
+      cancelledAtISO: new Date().toISOString(),
+      reason: 'Cancelled by user',
+      timestamp: new Date().toLocaleString(),
+      timestampISO: new Date().toISOString(),
+      protocol: window.location.protocol === 'https:' ? 'HTTPS' : 'HTTP',
+      method: 'Upload Cancelled',
+      encrypted: uploadItem.isAESEnabled || false,
+      uploadId: uploadItem.id,
+      sessionId: getCurrentDeviceId(),
+      fileExtension: uploadItem.fileName.split('.').pop()?.toLowerCase() || 'unknown',
+      uploadMethod: uploadItem.totalChunks ? 'Chunked (Cancelled)' : 'Direct (Cancelled)',
+      supportsResume: uploadItem.totalChunks ? true : false,
+      status: 'cancelled'
+    };
+    saveStatsToLog(cancelledStats);
+    
     // End this upload and start the next one immediately
     endUpload();
     
@@ -1828,16 +1947,47 @@ Device Session will reset when browser is closed
       startNextUpload();
     }, 100);
     
-    // DON'T remove from queue - keep it visible with red mark until all uploads finish
-    // Cancelled items will be cleaned up when all uploads are complete
+    // 🔍 Check if we should show clear button after cancellation
+    // Check if all uploads are now finished (no more active uploads)
+    const hasActiveUploads = uploadQueue.some(item => 
+      item.status === 'uploading' || item.status === 'queued'
+    );
+    
+    if (!hasActiveUploads) {
+      // All uploads finished (including this cancellation) - show clear button
+      showClearCompletedButton();
+      updateUploadManager(); // Update the display to show completed/cancelled count
+    }
+    
+    // DON'T remove from queue - keep it visible with red mark until user clears manually
   }
 
   function cancelAllUploads() {
+    const itemsBeingCancelled = uploadQueue.filter(item => 
+      ['queued', 'uploading'].includes(item.status)
+    );
+    
+    console.log(`❌ Cancelling ${itemsBeingCancelled.length} active uploads...`);
+    
     uploadQueue.forEach(item => {
       if (['queued', 'uploading'].includes(item.status)) {
         cancelUpload(item.id);
       }
     });
+    
+    // After all cancellations, ensure clear button is shown
+    // Use a slight delay to ensure all individual cancel operations complete
+    setTimeout(() => {
+      const hasActiveUploads = uploadQueue.some(item => 
+        item.status === 'uploading' || item.status === 'queued'
+      );
+      
+      if (!hasActiveUploads) {
+        showClearCompletedButton();
+        updateUploadManager();
+        console.log(`✅ All ${itemsBeingCancelled.length} uploads cancelled - clear button shown`);
+      }
+    }, 200);
   }
 
   function showClearCompletedButton() {
@@ -2038,7 +2188,7 @@ Device Session will reset when browser is closed
         
         endUpload();
         
-        // � Track network speed for adaptive concurrency
+        // 📊 Track network speed for adaptive concurrency
         const fileSize = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
         const uploadTime = ((Date.now() - uploadItem.startTime) / 1000).toFixed(1);
         const avgSpeed = (fileSize / uploadTime).toFixed(1);
@@ -2080,7 +2230,8 @@ Device Session will reset when browser is closed
           supportsResume: false,
           resumeCount: 0,
           transferEfficiency: '100%', // Direct uploads are 100% efficient
-          networkCondition: uploadItem.speed > (5 * 1024 * 1024) ? 'Fast' : uploadItem.speed > (1 * 1024 * 1024) ? 'Medium' : 'Slow'
+          networkCondition: uploadItem.speed > (5 * 1024 * 1024) ? 'Fast' : uploadItem.speed > (1 * 1024 * 1024) ? 'Medium' : 'Slow',
+          status: 'completed' // Add status field for successful uploads
         };
         saveStatsToLog(uploadStats);
         
@@ -2096,7 +2247,12 @@ Device Session will reset when browser is closed
           // All uploads complete - show clear button but DON'T auto-refresh files
           showClearCompletedButton();
           
-          // 🔔 Show final completion toast for all uploads without creating batch log entry
+          // � Refresh file count immediately to show new total
+          setTimeout(() => {
+            refreshFileCountOnly();
+          }, 100); // Small delay to ensure server has processed all files
+          
+          // �🔔 Show final completion toast for all uploads without creating batch log entry
           // Only count successfully completed uploads (exclude cancelled, error, etc.)
           const completedUploads = uploadQueue.filter(item => item.status === 'completed');
           const totalFiles = completedUploads.length;
@@ -2132,6 +2288,35 @@ Device Session will reset when browser is closed
         // 🔔 Show toast notification for upload error
         showToast(`❌ Upload failed: ${uploadItem.file.name} (Error ${xhr.status})`, 5000);
         
+        // 📊 Log failed upload with detailed stats
+        const failedStats = {
+          type: 'Failed Upload',
+          filename: uploadItem.fileName,
+          size: `${(uploadItem.file.size / (1024 * 1024)).toFixed(1)} MB`,
+          sizeBytes: uploadItem.file.size,
+          progress: `${uploadItem.progress.toFixed(1)}%`,
+          uploadedBytes: uploadItem.uploadedBytes || 0,
+          failedAt: new Date().toLocaleString(),
+          failedAtISO: new Date().toISOString(),
+          errorCode: xhr.status,
+          errorMessage: `HTTP ${xhr.status}`,
+          reason: 'Server error',
+          timestamp: new Date().toLocaleString(),
+          timestampISO: new Date().toISOString(),
+          startTime: new Date(uploadItem.startTime).toLocaleString(),
+          startTimeISO: new Date(uploadItem.startTime).toISOString(),
+          protocol: window.location.protocol === 'https:' ? 'HTTPS' : 'HTTP',
+          method: 'Upload Failed',
+          encrypted: uploadItem.isAESEnabled || false,
+          uploadId: uploadItem.id,
+          sessionId: getCurrentDeviceId(),
+          fileExtension: uploadItem.fileName.split('.').pop()?.toLowerCase() || 'unknown',
+          uploadMethod: uploadItem.totalChunks ? 'Chunked (Failed)' : 'Direct (Failed)',
+          supportsResume: uploadItem.totalChunks ? true : false,
+          status: 'failed' // Add status field for failed uploads
+        };
+        saveStatsToLog(failedStats);
+        
         // Check if all uploads are complete (including failed ones)
         const allUploadsFinished = uploadQueue.some(item => 
           item.status === 'uploading' || item.status === 'queued'
@@ -2157,9 +2342,38 @@ Device Session will reset when browser is closed
 
     xhr.addEventListener('error', () => {
       uploadItem.status = 'error';
-      uploadItem.error = 'Upload failed';
+      uploadItem.error = 'Network error';
       updateUploadItem(uploadItem);
       endUpload();
+      
+      // 📊 Log network error upload with detailed stats
+      const networkErrorStats = {
+        type: 'Network Error Upload',
+        filename: uploadItem.fileName,
+        size: `${(uploadItem.file.size / (1024 * 1024)).toFixed(1)} MB`,
+        sizeBytes: uploadItem.file.size,
+        progress: `${uploadItem.progress.toFixed(1)}%`,
+        uploadedBytes: uploadItem.uploadedBytes || 0,
+        failedAt: new Date().toLocaleString(),
+        failedAtISO: new Date().toISOString(),
+        errorCode: 'NETWORK_ERROR',
+        errorMessage: 'Network connection failed',
+        reason: 'Network error',
+        timestamp: new Date().toLocaleString(),
+        timestampISO: new Date().toISOString(),
+        startTime: new Date(uploadItem.startTime).toLocaleString(),
+        startTimeISO: new Date(uploadItem.startTime).toISOString(),
+        protocol: window.location.protocol === 'https:' ? 'HTTPS' : 'HTTP',
+        method: 'Upload Network Error',
+        encrypted: uploadItem.isAESEnabled || false,
+        uploadId: uploadItem.id,
+        sessionId: getCurrentDeviceId(),
+        fileExtension: uploadItem.fileName.split('.').pop()?.toLowerCase() || 'unknown',
+        uploadMethod: uploadItem.totalChunks ? 'Chunked (Network Error)' : 'Direct (Network Error)',
+        supportsResume: uploadItem.totalChunks ? true : false,
+        status: 'network_error' // Add status field for network error uploads
+      };
+      saveStatsToLog(networkErrorStats);
       
       // Check if all uploads are complete
       const hasActiveUploads = uploadQueue.some(item => 
@@ -2379,7 +2593,8 @@ Device Session will reset when browser is closed
             transferEfficiency: uploadItem.resumeCount > 0 ? `${(100 - (uploadItem.resumeCount * 5)).toFixed(1)}%` : '100%',
             networkCondition: uploadItem.speed > (3 * 1024 * 1024) ? 'Fast' : uploadItem.speed > (1 * 1024 * 1024) ? 'Medium' : 'Slow',
             chunkFailures: 0, // TODO: Track chunk failures
-            avgChunkTime: `${(parseFloat(uploadTime) / uploadItem.totalChunks).toFixed(2)}s`
+            avgChunkTime: `${(parseFloat(uploadTime) / uploadItem.totalChunks).toFixed(2)}s`,
+            status: 'completed' // Add status field for successful chunked uploads
           };
           saveStatsToLog(uploadStats);
           
@@ -2392,6 +2607,11 @@ Device Session will reset when browser is closed
           if (allUploadsComplete) {
             // All uploads complete - DON'T auto-refresh, just show clear button
             showClearCompletedButton();
+            
+            // 🔄 Refresh file count immediately to show new total
+            setTimeout(() => {
+              refreshFileCountOnly();
+            }, 100); // Small delay to ensure server has processed all files
           }
           
           resolve(true);
@@ -2480,6 +2700,9 @@ Device Session will reset when browser is closed
       lastFileCount = fileGrid.querySelectorAll('.file-card').length;
     }
     
+    // Immediate file count refresh to ensure accuracy
+    refreshFileCountOnly();
+    
     // Set up polling every 5 seconds to check for file changes
     autoRefreshInterval = setInterval(async () => {
       if (!autoRefreshActive) return;
@@ -2503,7 +2726,10 @@ Device Session will reset when browser is closed
             showToast(`📁 ${lastFileCount - currentFileCount} file(s) removed from other device(s)`, 3000);
           }
           
-          lastFileCount = currentFileCount;
+          // lastFileCount is updated inside updateFileDisplay now
+        } else {
+          // Even if file count is same, ensure display is current (files might have changed)
+          updateFileCount(currentFileCount);
         }
       } catch (error) {
         console.error('❌ Auto-refresh failed:', error);
@@ -2543,19 +2769,48 @@ Device Session will reset when browser is closed
     }, 2000);
   }
 
-  function updateFileDisplay(files) {
-    const fileGrid = document.querySelector('.file-grid');
-    const noFilesMsg = document.querySelector('.no-files-message');
+  // 📊 Dedicated function to update file count display
+  function updateFileCount(fileCount) {
     const fileCountEl = document.getElementById('fileCount');
-    
-    // Update file count
     if (fileCountEl) {
-      if (files && files.length > 0) {
-        fileCountEl.textContent = `(${files.length} file${files.length === 1 ? '' : 's'})`;
+      if (fileCount > 0) {
+        fileCountEl.textContent = `(${fileCount} file${fileCount === 1 ? '' : 's'})`;
       } else {
         fileCountEl.textContent = '';
       }
     }
+    console.log(`📊 File count updated: ${fileCount} files`);
+  }
+
+  // 🔄 Refresh only the file count from server without updating display
+  async function refreshFileCountOnly() {
+    try {
+      const response = await fetch('/api/files');
+      if (!response.ok) {
+        console.warn(`❌ Failed to refresh file count: HTTP ${response.status}`);
+        return;
+      }
+      
+      const data = await response.json();
+      updateFileCount(data.files.length);
+      lastFileCount = data.files.length; // Keep auto-refresh tracking in sync
+      
+      console.log(`🔄 File count refreshed: ${data.files.length} files`);
+    } catch (error) {
+      console.error('❌ Failed to refresh file count:', error);
+    }
+  }
+
+  function updateFileDisplay(files) {
+    const fileGrid = document.querySelector('.file-grid');
+    const noFilesMsg = document.querySelector('.no-files-message');
+    
+    // Update file count using dedicated function
+    const fileCount = files ? files.length : 0;
+    updateFileCount(fileCount);
+    
+    // Update lastFileCount for auto-refresh tracking
+    lastFileCount = fileCount;
     
     if (!files || files.length === 0) {
       // Show no files message
@@ -2880,10 +3135,12 @@ Device Session will reset when browser is closed
     if (fileGrid) {
       const fileCards = fileGrid.querySelectorAll('.file-card');
       const fileCount = fileCards.length;
-      const fileCountEl = document.getElementById('fileCount');
-      if (fileCountEl && fileCount > 0) {
-        fileCountEl.textContent = `(${fileCount} file${fileCount === 1 ? '' : 's'})`;
-      }
+      updateFileCount(fileCount);
+      lastFileCount = fileCount; // Initialize lastFileCount for auto-refresh tracking
+    } else {
+      // No file grid means no files
+      updateFileCount(0);
+      lastFileCount = 0;
     }
     
     // Set up event listeners after DOM cache is ready
@@ -2900,6 +3157,8 @@ Device Session will reset when browser is closed
         resumeAutoRefresh();
         // Force refresh when page becomes visible again
         setTimeout(refreshFileList, 1000);
+        // Also refresh file count immediately
+        refreshFileCountOnly();
       }
     });
 
@@ -3185,14 +3444,14 @@ function autoUpload(files) {
     return;
   }
 
-  // � Log current upload queue state before adding new files
+  // 📝 Log current upload queue state before adding new files
   const currentActiveUploads = uploadQueue.filter(item => 
     ['uploading'].includes(item.status)
   ).length;
   
   console.log(`📤 Current upload state: ${currentActiveUploads} active uploads, adding ${files.length} new files`);
 
-  // �🚀 NEW: Add files to upload manager without interfering with active uploads
+  // 🚀 NEW: Add files to upload manager without interfering with active uploads
   addToUploadQueue(Array.from(files));
   
   // 🧹 Clear the file input and preview after adding to queue (safe operation)
@@ -3412,13 +3671,13 @@ async function uploadFilesChunked(files, isAESEnabled) {
   const isGuestDevice = detectGuestDevice();
   const deviceMemoryMB = getDeviceMemory();
   
-  // � Comprehensive retry tracking system
+  // 🔄 Comprehensive retry tracking system
   let totalRetries = 0;
   let totalChunkFailures = 0;
   let totalFinalizeRetries = 0;
   const retryHistory = []; // Track retry events for debugging
   
-  // �🚀 Memory-Aware Network-Adaptive Chunk Sizing System (Using Centralized Config)
+  // 🚀 Memory-Aware Network-Adaptive Chunk Sizing System (Using Centralized Config)
   let CHUNK_SIZE = isGuestDevice ? LANVAN_CONFIG.CHUNK_SIZES.GUEST_INITIAL : LANVAN_CONFIG.CHUNK_SIZES.REGULAR_INITIAL;
   const MIN_CHUNK_SIZE = isGuestDevice ? LANVAN_CONFIG.CHUNK_SIZES.GUEST_MIN : LANVAN_CONFIG.CHUNK_SIZES.REGULAR_MIN;
   const MAX_CHUNK_SIZE = isGuestDevice ? LANVAN_CONFIG.CHUNK_SIZES.GUEST_MAX : LANVAN_CONFIG.CHUNK_SIZES.REGULAR_MAX;
@@ -4508,10 +4767,26 @@ async function showConnectionInfo() {
     </h3>
     
     <div style="margin: 1.5rem 0;">
-      <img src="${qrImageUrl}" 
+      <!-- QR Code Loading Animation -->
+      <div id="qr-loading" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; border: 2px solid #e1e1e1; border-radius: 10px; background: #f8f9fa;">
+        <div style="
+          width: 40px;
+          height: 40px;
+          border: 4px solid #e1e1e1;
+          border-top: 4px solid #007bff;
+          border-radius: 50%;
+          animation: qr-spin 1s linear infinite;
+          margin-bottom: 1rem;
+        "></div>
+        <p style="margin: 0; color: #666; font-size: 0.9rem;">🔄 Generating QR Code...</p>
+      </div>
+      
+      <!-- QR Code Image (initially hidden) -->
+      <img id="qr-image" src="${qrImageUrl}" 
            alt="QR Code for ${fullUrl}" 
-           style="border: 2px solid #e1e1e1; border-radius: 10px; max-width: 200px; height: auto;"
-           onerror="this.style.display='none'; document.getElementById('qr-offline-fallback').style.display='block';">
+           style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; max-width: 200px; height: auto;"
+           onload="showQRCode(this)"
+           onerror="showQRFallback()">
       
       <!-- Offline QR fallback -->
       <div id="qr-offline-fallback" style="display: none; margin: 1rem 0;">
@@ -4644,10 +4919,66 @@ function closeConnectionModal() {
   }
 }
 
+// 🔄 QR Code Loading Functions
+function showQRCode(imgElement) {
+  // Hide loading animation
+  const loadingDiv = document.getElementById('qr-loading');
+  if (loadingDiv) {
+    loadingDiv.style.display = 'none';
+  }
+  
+  // Show QR code with smooth animation
+  imgElement.style.display = 'block';
+  imgElement.classList.add('qr-reveal');
+  
+  console.log('✅ QR Code loaded successfully');
+}
+
+function showQRFallback() {
+  // Hide loading animation and main QR image
+  const loadingDiv = document.getElementById('qr-loading');
+  const qrImage = document.getElementById('qr-image');
+  const fallbackDiv = document.getElementById('qr-offline-fallback');
+  
+  if (loadingDiv) loadingDiv.style.display = 'none';
+  if (qrImage) qrImage.style.display = 'none';
+  if (fallbackDiv) {
+    fallbackDiv.style.display = 'block';
+    
+    // Generate offline QR code
+    const canvas = document.getElementById('offline-qr');
+    if (canvas) {
+      const urlElement = document.getElementById('connection-url');
+      const url = urlElement ? urlElement.textContent : window.location.href;
+      const offlineQR = generateOfflineQR(url, canvas);
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0);
+        canvas.classList.add('qr-reveal'); // Add animation
+      };
+      img.src = offlineQR;
+    }
+  }
+  
+  console.log('⚠️ QR Code fallback activated - using offline generator');
+}
+
 // Make functions globally available
 window.showConnectionInfo = showConnectionInfo;
 window.copyConnectionUrl = copyConnectionUrl;
 window.closeConnectionModal = closeConnectionModal;
+window.showQRCode = showQRCode;
+window.showQRFallback = showQRFallback;
+window.toggleSettingsMenu = toggleSettingsMenu;
+window.cancelAllUploads = cancelAllUploads;
+window.clearAllFiles = clearAllFiles;
+window.showDownloadOptions = showDownloadOptions;
+window.showToast = showToast;
+window.toggleDeviceLogs = toggleDeviceLogs;
+window.showAccessControlSettings = showAccessControlSettings;
+window.downloadAsZip = downloadAsZip;
+window.cancelUpload = cancelUpload;
 
   
 </script>
@@ -4866,7 +5197,7 @@ window.closeConnectionModal = closeConnectionModal;
     }, 100);
   });
 
-// � ULTRA-FAST BACKUP FUNCTIONS (only used if direct download fails)
+// 📁 ULTRA-FAST BACKUP FUNCTIONS (only used if direct download fails)
 
 // 📥 Minimal processing download for emergencies only
 async function downloadFileMinimal(fileUrl, fileName, fileSizeMB, requestStartTime) {
@@ -4906,7 +5237,7 @@ async function downloadFileMinimal(fileUrl, fileName, fileSizeMB, requestStartTi
   }
 }
 
-// �🔄 Ultra-optimized regular download function - supports HTTP & HTTPS (BACKUP ONLY)
+// 🔄 Ultra-optimized regular download function - supports HTTP & HTTPS (BACKUP ONLY)
 async function downloadFileRegular(fileUrl, fileName, fileSizeMB, requestStartTime) {
   try {
     const stopPersistentToast = showPersistentToast('⏳ Requesting file from server...');
@@ -5246,6 +5577,74 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
     };
   }
 </script>
+
+<!-- 📊 Device Logs Modal -->
+<div id="deviceLogsModal" style="
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 10001;
+  padding: 1rem;
+  box-sizing: border-box;
+">
+  <div style="
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    max-width: 900px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    margin: 0 auto;
+    margin-top: 2vh;
+  ">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+      <h3 style="margin: 0; color: #333; font-size: 1.3rem;">📊 Device Logs</h3>
+      <button onclick="closeDeviceLogsModal()" style="
+        background: #e74c3c;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+      ">
+        ✕ Close
+      </button>
+    </div>
+    
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <h4 style="margin: 0; color: #333; font-size: 1.1rem;">📱 This Device Session Only</h4>
+      <div style="display: flex; gap: 0.5rem;">
+        <button onclick="downloadDeviceLogs()" id="downloadLogsBtn" style="background: #28a745; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
+          📄 Download Logs
+        </button>
+        <button onclick="clearDeviceLogs()" id="clearLogsBtn" style="background: #6c757d; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
+          🧹 Clear Logs
+        </button>
+      </div>
+    </div>
+    
+    <div id="deviceLogsStats" style="background: #e9ecef; padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; color: #495057;">
+      <!-- Logs stats will be populated here -->
+    </div>
+    
+    <div id="deviceLogsSection" style="display: block;">
+      <div id="deviceLogsContent" style="max-height: 400px; overflow-y: auto; background: #f9f9f9; padding: 1rem; border-radius: 8px; border: 1px solid #e0e0e0;">
+        <!-- Logs content will be populated here -->
+      </div>
+      <div id="deviceLogsPagination" style="text-align: center; margin-top: 1rem; display: none;">
+        <!-- Pagination controls will be populated here -->
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ✅ Save toggle state when user changes it
 document.addEventListener('DOMContentLoaded', () => {
