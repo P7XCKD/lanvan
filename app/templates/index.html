@@ -594,7 +594,7 @@
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
     <h1 style="margin: 0; font-size: 1.8rem; color: #333;">{{ msg }}</h1>
     
-    <!-- Settings & AES Toggle Block (keep on right side) -->
+    <!-- AES Toggle Block (keep on right side) -->
     <div style="display: flex; align-items: center; gap: 0.5rem;">
       <!-- AES Encryption Toggle -->
       <div style="display: flex; align-items: center; background-color: #f0f0f0; padding: 0.4rem 0.8rem; border-radius: 25px; gap: 0.6rem;">
@@ -604,84 +604,83 @@
           <span class="slider"></span>
         </label>
       </div>
-      
-      <!-- Settings Button -->
-      <div style="position: relative;">
-        <button id="settingsBtn" onclick="toggleSettingsMenu()" style="
-          background: #6c757d;
-          color: white;
-          border: none;
-          padding: 0.5rem 0.8rem;
-          border-radius: 25px;
-          cursor: pointer;
-          font-size: 0.9rem;
-          display: flex;
-          align-items: center;
-          gap: 0.3rem;
-          transition: all 0.3s ease;
-        " onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">
-          ⚙️ Settings
-        </button>
-        
-        <!-- Settings Dropdown Menu -->
-        <div id="settingsMenu" style="
-          display: none;
-          position: absolute;
-          right: 0;
-          top: 100%;
-          margin-top: 0.5rem;
-          background: white;
-          border-radius: 10px;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-          border: 1px solid #e1e5e9;
-          min-width: 200px;
-          z-index: 1000;
-          overflow: hidden;
-        ">
-          <button onclick="toggleDeviceLogs(); toggleSettingsMenu();" style="
-            width: 100%;
-            padding: 0.8rem 1rem;
-            border: none;
-            background: white;
-            text-align: left;
-            cursor: pointer;
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            transition: background-color 0.2s ease;
-          " onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='white'">
-            📊 Device Logs
-          </button>
-          <div style="height: 1px; background: #e1e5e9; margin: 0;"></div>
-          <button onclick="showAccessControlSettings(); toggleSettingsMenu();" style="
-            width: 100%;
-            padding: 0.8rem 1rem;
-            border: none;
-            background: white;
-            text-align: left;
-            cursor: pointer;
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            transition: background-color 0.2s ease;
-            color: #6c757d;
-          " onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='white'" title="Coming soon - Access control features">
-            🔐 Access Control <span style="font-size: 0.7rem; opacity: 0.6;">(Soon)</span>
-          </button>
-        </div>
-      </div>
     </div>
   </div>
   
-  <!-- Protocol Status Below Title -->
-  <div style="display: flex; justify-content: flex-start; align-items: center; gap: 0.5rem;">
+  <!-- Protocol Status and Settings Row -->
+  <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
     <div id="protocolStatus" onclick="showConnectionInfo()" style="display: flex; align-items: center; background-color: #e8f4fd; padding: 0.4rem 0.8rem; border-radius: 20px; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='#d0e9f7'" onmouseout="this.style.backgroundColor='#e8f4fd'">
       <span id="protocolIcon">🌐</span>
       <span id="protocolText" style="color: #2c3e50; font-weight: 500;">HTTP</span>
       <span id="qrHintText" style="color: #2c3e50; font-size: 0.75rem; opacity: 0.8; font-weight: 400; transition: all 0.3s ease;">• Click for QR code</span>
     </div>
+    
+    <!-- Settings Button -->
+    <div style="position: relative;">
+      <button id="settingsBtn" onclick="toggleSettingsMenu()" style="
+        background: #6c757d;
+        color: white;
+        border: none;
+        padding: 0.5rem 0.8rem;
+        border-radius: 25px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        transition: all 0.3s ease;
+      " onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">
+        ⚙️ Settings
+      </button>
+    </div>
+  </div>
+  
+  <!-- Settings Dropdown Menu (positioned below AES toggle) -->
+  <div id="settingsMenu" style="
+    display: none;
+    position: absolute;
+    right: 1rem;
+    top: 6rem;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    border: 1px solid #e1e5e9;
+    min-width: 200px;
+    z-index: 1000;
+    overflow: hidden;
+  ">
+    <button onclick="toggleDeviceLogs(); toggleSettingsMenu();" style="
+      width: 100%;
+      padding: 0.8rem 1rem;
+      border: none;
+      background: white;
+      text-align: left;
+      cursor: pointer;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: background-color 0.2s ease;
+    " onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='white'">
+      📊 Device Logs
+    </button>
+    <div style="height: 1px; background: #e1e5e9; margin: 0;"></div>
+    <button onclick="showAccessControlSettings(); toggleSettingsMenu();" style="
+      width: 100%;
+      padding: 0.8rem 1rem;
+      border: none;
+      background: white;
+      text-align: left;
+      cursor: pointer;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: background-color 0.2s ease;
+      color: #6c757d;
+    " onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='white'" title="Coming soon - Access control features">
+      🔐 Access Control <span style="font-size: 0.7rem; opacity: 0.6;">(Soon)</span>
+    </button>
   </div>
 </header>
 
@@ -2866,8 +2865,22 @@ Device Session will reset when browser is closed
     
     // Update or create file grid
     if (!fileGrid) {
-      // Create file grid if it doesn't exist
-      const container = document.querySelector('.file-section') || document.querySelector('main');
+      // Create file grid if it doesn't exist - find the section with "Available Files" heading
+      let container = null;
+      const sections = document.querySelectorAll('section');
+      for (const section of sections) {
+        const h2 = section.querySelector('h2');
+        if (h2 && h2.textContent.includes('Available Files')) {
+          container = section;
+          break;
+        }
+      }
+      
+      // Fallback to any section if specific one not found
+      if (!container) {
+        container = document.querySelector('section');
+      }
+      
       if (container) {
         const newGrid = document.createElement('div');
         newGrid.className = 'file-grid';
