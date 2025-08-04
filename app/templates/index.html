@@ -4837,13 +4837,13 @@ async function showConnectionInfo() {
       <!-- QR Code Image (initially hidden) -->
       <img id="qr-image" src="${qrImageUrl}" 
            alt="QR Code for ${fullUrl}" 
-           style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; max-width: 200px; height: auto;"
+           style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; max-width: 200px; height: auto; margin: 0 auto; display: block;"
            onload="showQRCode(this)"
            onerror="showQRFallback()">
       
       <!-- Offline QR fallback -->
-      <div id="qr-offline-fallback" style="display: none; margin: 1rem 0;">
-        <canvas id="offline-qr" style="border: 2px solid #e1e1e1; border-radius: 10px;"></canvas>
+      <div id="qr-offline-fallback" style="display: none; margin: 1rem 0; text-align: center;">
+        <canvas id="offline-qr" style="border: 2px solid #e1e1e1; border-radius: 10px; margin: 0 auto; display: block;"></canvas>
         <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">📱 Offline QR Code</p>
       </div>
     </div>
@@ -4980,8 +4980,9 @@ function showQRCode(imgElement) {
     loadingDiv.style.display = 'none';
   }
   
-  // Show QR code with smooth animation
+  // Show QR code with proper centering and smooth animation
   imgElement.style.display = 'block';
+  imgElement.style.margin = '0 auto';
   imgElement.classList.add('qr-reveal');
   
   console.log('✅ QR Code loaded successfully');
