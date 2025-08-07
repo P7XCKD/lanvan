@@ -1,6 +1,6 @@
 # SSL Certificates Directory
 
-This directory contains SSL certificates and keys for HTTPS functionality in LanVan Clipy.
+This directory contains SSL certificates and keys for HTTPS functionality in Lanvan.
 
 ## 🔒 Security Notice
 
