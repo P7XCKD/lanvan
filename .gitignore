@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+venv/
+*.db
+*.sqlite3
+.DS_Store
+
+# Ignore uploaded files
+app/uploads/
+uploads/
+
+# Security: Ignore SSL certificates and private keys
+certs/*.pem
+certs/*.key
+certs/*.crt
+certs/*.cert
+
+# Keep certificate configuration template
+!certs/openssl.conf
+!certs/README.md
+!certs/generate_certs.py
+!certs/generate_certs_python.py
+!certs/cleanup_certs.py
+!certs/test_certificate.py
