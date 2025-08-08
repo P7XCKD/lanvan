@@ -3217,10 +3217,8 @@ Device Session will reset when browser is closed
     // Hide no files message and reset recent uploads flag when files are visible
     if (noFilesMsg) {
       noFilesMsg.style.display = 'none';
+      hasRecentUploads = false; // Reset flag when files become visible
     }
-    
-    // Always reset the hasRecentUploads flag when files are actually visible
-    hasRecentUploads = false;
     
     // Update or create file grid
     if (!fileGrid) {
@@ -3484,8 +3482,7 @@ Device Session will reset when browser is closed
       });
 
       if (response.ok) {
-        // Reset recent uploads flag and update file display immediately
-        hasRecentUploads = false;
+        // Update file display immediately
         updateFileDisplay([]);
         showToast('🧹 All files cleared successfully!', 3000);
         console.log('✅ Files cleared successfully');
