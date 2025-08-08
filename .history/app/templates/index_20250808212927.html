@@ -6442,13 +6442,31 @@ function removeClipboardItem(itemId) {
   });
 }
 
-// Download clipboard history as ZIP file with images or text file if no images
+// Download clipboard history as text file
 async function downloadClipboardHistory() {
   try {
     if (clipboardHistoryData.length === 0) {
       showToast('❌ No clipboard history to download', 3000);
       return;
     }
+    
+    // Show progress for datasets (since we're fetching full content)
+    showToast('� Fetching full clipboard content for download...', 3000);
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `lanvan-clipboard-history-${timestamp}.txt`;
+    
+    // Use array for more efficient string building
+    const reportParts = [];
+    
+    // Header
+    reportParts.push(`LANVAN CLIPBOARD HISTORY REPORT
+========================================
+Generated: ${new Date().toLocaleString()}
+Total Items: ${clipboardHistoryData.length}
+Report Format: Plain Text
+
+`);
     
     // Calculate summary statistics efficiently
     let textItems = 0, fileItems = 0, imageItems = 0, totalSizeBytes = 0;
@@ -6460,24 +6478,7 @@ async function downloadClipboardHistory() {
       totalSizeBytes += (item.size || 0);
     }
     
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const hasImages = imageItems > 0;
-    
-    if (hasImages) {
-      // Create ZIP file with text report and all images
-      showToast('📦 Creating ZIP file with images and text report...', 3000);
-      
-      const zip = new JSZip();
-      
-      // Create text report
-      const reportParts = [];
-      reportParts.push(`LANVAN CLIPBOARD HISTORY REPORT
-========================================
-Generated: ${new Date().toLocaleString()}
-Total Items: ${clipboardHistoryData.length}
-Report Format: ZIP Archive with Images
-
-SUMMARY STATISTICS:
+    reportParts.push(`SUMMARY STATISTICS:
 - Text Items: ${textItems}
 - File Items: ${fileItems} (including ${imageItems} images)
 - Total Size: ${formatClipboardSize(totalSizeBytes)}
@@ -6487,52 +6488,38 @@ DETAILED CLIPBOARD ITEMS:
 ========================================
 
 `);
+    
+    // Process items in chunks to avoid blocking UI
+    const chunkSize = 5; // Smaller chunks since we're fetching full content
+    for (let i = 0; i < clipboardHistoryData.length; i += chunkSize) {
+      const chunk = clipboardHistoryData.slice(i, i + chunkSize);
       
-      // Process items in chunks
-      const chunkSize = 5;
-      const imagePromises = [];
-      
-      for (let i = 0; i < clipboardHistoryData.length; i += chunkSize) {
-        const chunk = clipboardHistoryData.slice(i, i + chunkSize);
+      // Process chunk - fetch full content for each item
+      for (const [chunkIndex, item] of chunk.entries()) {
+        const index = i + chunkIndex;
         
-        for (const [chunkIndex, item] of chunk.entries()) {
-          const index = i + chunkIndex;
-          
-          let content = 'No content available';
-          
-          if (item.type === 'text') {
-            try {
-              const response = await fetch(`/api/clipboard/get/${item.id}`);
-              const data = await response.json();
-              if (data.status === 'success' && data.item && data.item.data) {
-                content = data.item.data;
-              } else {
-                content = item.preview || 'Failed to fetch full content';
-              }
-            } catch (error) {
-              content = item.preview || 'Error fetching full content';
+        let content = 'No content available';
+        
+        // Fetch full content from server for text items
+        if (item.type === 'text') {
+          try {
+            const response = await fetch(`/api/clipboard/get/${item.id}`);
+            const data = await response.json();
+            if (data.status === 'success' && data.item && data.item.data) {
+              content = data.item.data; // Get full text content
+            } else {
+              content = item.preview || 'Failed to fetch full content';
             }
-          } else if (item.type === 'file' && item.filename && item.filename.includes('clipboard-image')) {
-            // For images, add to ZIP and reference in report
-            content = `Image file: ${item.filename} (${formatClipboardSize(item.size || 0)}) - See included image file`;
-            
-            // Add promise to fetch and add image to ZIP
-            imagePromises.push(
-              fetch(`/api/clipboard/get/${item.id}`)
-                .then(response => response.blob())
-                .then(blob => {
-                  zip.file(`images/${item.filename}`, blob);
-                  console.log(`Added image to ZIP: ${item.filename}`);
-                })
-                .catch(error => {
-                  console.error('Error fetching image for ZIP:', item.filename, error);
-                })
-            );
-          } else {
-            content = item.preview || `File: ${item.filename || 'Unknown file'}`;
+          } catch (error) {
+            console.error('Error fetching full content for item', item.id, error);
+            content = item.preview || 'Error fetching full content';
           }
-          
-          reportParts.push(`[${index + 1}] ${item.type.toUpperCase()} ITEM
+        } else {
+          // For file items, use preview/filename info
+          content = item.preview || `File: ${item.filename || 'Unknown file'}`;
+        }
+        
+        reportParts.push(`[${index + 1}] ${item.type.toUpperCase()} ITEM
 Added: ${item.timestamp}
 Type: ${item.content_type || 'Unknown'}
 Size: ${formatClipboardSize(item.size || 0)}
@@ -6545,139 +6532,37 @@ ${content}
 ========================================
 
 `);
-        }
-        
-        if (i + chunkSize < clipboardHistoryData.length) {
-          const processedCount = Math.min(i + chunkSize, clipboardHistoryData.length);
-          showToast(`📄 Processing... ${processedCount}/${clipboardHistoryData.length} items`, 1000);
-          await new Promise(resolve => setTimeout(resolve, 0));
-        }
       }
       
-      reportParts.push(`
-========================================
-End of Report - Generated by Lanvan Clipboard System
-ZIP Archive Contents:
-- clipboard-history-report.txt (this report)
-- images/ folder (containing ${imageItems} clipboard images)
-========================================`);
-      
-      // Add text report to ZIP
-      zip.file('clipboard-history-report.txt', reportParts.join(''));
-      
-      // Wait for all images to be added
-      if (imagePromises.length > 0) {
-        showToast(`🖼️ Adding ${imagePromises.length} images to ZIP...`, 2000);
-        await Promise.all(imagePromises);
+      // Yield control to prevent UI blocking for large datasets
+      if (i + chunkSize < clipboardHistoryData.length) {
+        // Show progress update
+        const processedCount = Math.min(i + chunkSize, clipboardHistoryData.length);
+        showToast(`📄 Processing... ${processedCount}/${clipboardHistoryData.length} items`, 1000);
+        await new Promise(resolve => setTimeout(resolve, 0));
       }
-      
-      // Generate and download ZIP
-      showToast('📦 Generating ZIP file...', 2000);
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      
-      const filename = `lanvan-clipboard-history-${timestamp}.zip`;
-      const url = URL.createObjectURL(zipBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      showToast(`📦 ZIP file downloaded: ${filename} (${clipboardHistoryData.length} items, ${imageItems} images)`, 4000);
-      
-    } else {
-      // No images, create simple text file (existing logic)
-      showToast('📄 Fetching full clipboard content for download...', 3000);
-      
-      const filename = `lanvan-clipboard-history-${timestamp}.txt`;
-      const reportParts = [];
-      
-      reportParts.push(`LANVAN CLIPBOARD HISTORY REPORT
-========================================
-Generated: ${new Date().toLocaleString()}
-Total Items: ${clipboardHistoryData.length}
-Report Format: Plain Text
-
-SUMMARY STATISTICS:
-- Text Items: ${textItems}
-- File Items: ${fileItems}
-- Total Size: ${formatClipboardSize(totalSizeBytes)}
-
-========================================
-DETAILED CLIPBOARD ITEMS:
-========================================
-
-`);
-      
-      // Process text items
-      const chunkSize = 5;
-      for (let i = 0; i < clipboardHistoryData.length; i += chunkSize) {
-        const chunk = clipboardHistoryData.slice(i, i + chunkSize);
-        
-        for (const [chunkIndex, item] of chunk.entries()) {
-          const index = i + chunkIndex;
-          
-          let content = 'No content available';
-          
-          if (item.type === 'text') {
-            try {
-              const response = await fetch(`/api/clipboard/get/${item.id}`);
-              const data = await response.json();
-              if (data.status === 'success' && data.item && data.item.data) {
-                content = data.item.data;
-              } else {
-                content = item.preview || 'Failed to fetch full content';
-              }
-            } catch (error) {
-              content = item.preview || 'Error fetching full content';
-            }
-          } else {
-            content = item.preview || `File: ${item.filename || 'Unknown file'}`;
-          }
-          
-          reportParts.push(`[${index + 1}] ${item.type.toUpperCase()} ITEM
-Added: ${item.timestamp}
-Type: ${item.content_type || 'Unknown'}
-Size: ${formatClipboardSize(item.size || 0)}
-${item.filename ? `Filename: ${item.filename}` : ''}
-
-Contents:
-========================================
-${content}
-
-========================================
-
-`);
-        }
-        
-        if (i + chunkSize < clipboardHistoryData.length) {
-          const processedCount = Math.min(i + chunkSize, clipboardHistoryData.length);
-          showToast(`📄 Processing... ${processedCount}/${clipboardHistoryData.length} items`, 1000);
-          await new Promise(resolve => setTimeout(resolve, 0));
-        }
-      }
-      
-      reportParts.push(`
-========================================
-End of Report - Generated by Lanvan Clipboard System
-========================================`);
-      
-      // Create and download text file
-      const reportContent = reportParts.join('');
-      const blob = new Blob([reportContent], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      showToast(`📄 Clipboard history downloaded: ${filename} (${clipboardHistoryData.length} items)`, 4000);
     }
+    
+    reportParts.push(`
+========================================
+End of Report - Generated by Lanvan Clipboard System
+========================================`);
+    
+    // Join all parts efficiently
+    const reportContent = reportParts.join('');
+    
+    // Create and download the file
+    const blob = new Blob([reportContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showToast(`📄 Clipboard history downloaded: ${filename} (${clipboardHistoryData.length} items)`, 4000);
     
   } catch (error) {
     console.error('Error downloading clipboard history:', error);
