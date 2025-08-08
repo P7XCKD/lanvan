@@ -1837,47 +1837,7 @@ Device Session will reset when browser is closed
       </div>
     `;
     
-    // 📊 Insert in sorted order: Incomplete/In-Progress first, then queued
-    insertUploadItemInOrder(queue, itemDiv, uploadItem);
-  }
-
-  // 📊 Smart insertion based on upload priority
-  function insertUploadItemInOrder(queue, newItemDiv, newUploadItem) {
-    const existingItems = Array.from(queue.children);
-    let inserted = false;
-    
-    for (let i = 0; i < existingItems.length; i++) {
-      const existingItem = existingItems[i];
-      const existingId = parseInt(existingItem.id.replace('upload-', ''));
-      const existingUploadItem = uploadQueue.find(item => item.id === existingId);
-      
-      if (existingUploadItem && shouldInsertBefore(newUploadItem, existingUploadItem)) {
-        queue.insertBefore(newItemDiv, existingItem);
-        inserted = true;
-        break;
-      }
-    }
-    
-    if (!inserted) {
-      queue.appendChild(newItemDiv);
-    }
-  }
-
-  // 📊 Determine if new item should be inserted before existing item
-  function shouldInsertBefore(newItem, existingItem) {
-    // Priority 1: Incomplete/Failed uploads first
-    const newIncomplete = ['failed', 'paused'].includes(newItem.status);
-    const existingIncomplete = ['failed', 'paused'].includes(existingItem.status);
-    
-    if (newIncomplete && !existingIncomplete) return true;
-    if (!newIncomplete && existingIncomplete) return false;
-    
-    // Priority 2: AES files get priority within same completion status
-    if (newItem.isAESEnabled && !existingItem.isAESEnabled) return true;
-    if (!newItem.isAESEnabled && existingItem.isAESEnabled) return false;
-    
-    // Priority 3: Smaller files first
-    return newItem.fileSize < existingItem.fileSize;
+    queue.appendChild(itemDiv);
   }
 
   // 🎨 UI UPDATE OPTIMIZATION: Prevent flickering during pause/resume
@@ -5131,10 +5091,6 @@ window.copyConnectionUrl = copyConnectionUrl;
 window.closeConnectionModal = closeConnectionModal;
 window.showQRCode = showQRCode;
 window.showQRFallback = showQRFallback;
-window.showQRSuccess = showQRSuccess;
-window.tryFallbackQR = tryFallbackQR;
-window.showOfflineQR = showOfflineQR;
-window.refreshFileListManually = refreshFileListManually;
 window.toggleSettingsMenu = toggleSettingsMenu;
 window.cancelAllUploads = cancelAllUploads;
 window.clearAllFiles = clearAllFiles;

@@ -741,7 +741,6 @@
       <span id="fileCount" class="file-count" style="color: #666; font-size: 0.9em; margin-left: 0.5rem;"></span>
     </div>
     <div style="display: flex; gap: 0.5rem;">
-      <button onclick="refreshFileListManually()" class="download-btn" style="background-color: #17a2b8; margin-right: 0.5rem;" title="Refresh file list">🔄 Refresh</button>
       <button onclick="showDownloadOptions(event)" class="download-btn" style="margin-right: 0.5rem;">⬇ Download All</button>
       <button onclick="clearAllFiles()" class="download-btn" style="background-color: #e74c3c;">🧹 Clear History</button>
     </div>
@@ -1837,47 +1836,7 @@ Device Session will reset when browser is closed
       </div>
     `;
     
-    // 📊 Insert in sorted order: Incomplete/In-Progress first, then queued
-    insertUploadItemInOrder(queue, itemDiv, uploadItem);
-  }
-
-  // 📊 Smart insertion based on upload priority
-  function insertUploadItemInOrder(queue, newItemDiv, newUploadItem) {
-    const existingItems = Array.from(queue.children);
-    let inserted = false;
-    
-    for (let i = 0; i < existingItems.length; i++) {
-      const existingItem = existingItems[i];
-      const existingId = parseInt(existingItem.id.replace('upload-', ''));
-      const existingUploadItem = uploadQueue.find(item => item.id === existingId);
-      
-      if (existingUploadItem && shouldInsertBefore(newUploadItem, existingUploadItem)) {
-        queue.insertBefore(newItemDiv, existingItem);
-        inserted = true;
-        break;
-      }
-    }
-    
-    if (!inserted) {
-      queue.appendChild(newItemDiv);
-    }
-  }
-
-  // 📊 Determine if new item should be inserted before existing item
-  function shouldInsertBefore(newItem, existingItem) {
-    // Priority 1: Incomplete/Failed uploads first
-    const newIncomplete = ['failed', 'paused'].includes(newItem.status);
-    const existingIncomplete = ['failed', 'paused'].includes(existingItem.status);
-    
-    if (newIncomplete && !existingIncomplete) return true;
-    if (!newIncomplete && existingIncomplete) return false;
-    
-    // Priority 2: AES files get priority within same completion status
-    if (newItem.isAESEnabled && !existingItem.isAESEnabled) return true;
-    if (!newItem.isAESEnabled && existingItem.isAESEnabled) return false;
-    
-    // Priority 3: Smaller files first
-    return newItem.fileSize < existingItem.fileSize;
+    queue.appendChild(itemDiv);
   }
 
   // 🎨 UI UPDATE OPTIMIZATION: Prevent flickering during pause/resume
@@ -2168,23 +2127,16 @@ Device Session will reset when browser is closed
       return;
     }
     
-    // 📊 Enhanced prioritization: Incomplete/In-Progress uploads first, then queued
+    // Prioritize files by upload strategy (smaller files first for better concurrency)
     const prioritizedItems = queuedItems.sort((a, b) => {
-      // Priority 1: Incomplete/Failed uploads first (resume priority)
-      const aIncomplete = a.status === 'failed' || a.status === 'paused';
-      const bIncomplete = b.status === 'failed' || b.status === 'paused';
-      
-      if (aIncomplete && !bIncomplete) return -1;
-      if (!aIncomplete && bIncomplete) return 1;
-      
-      // Priority 2: AES files get priority within same completion status
+      // AES files get priority to respect AES logic
       const aHasAES = a.isAESEnabled;
       const bHasAES = b.isAESEnabled;
       
       if (aHasAES && !bHasAES) return -1;
       if (!aHasAES && bHasAES) return 1;
       
-      // Priority 3: Sort by file size (smaller files first for better throughput)
+      // Then sort by file size (smaller files first for better throughput)
       return a.fileSize - b.fileSize;
     });
     
@@ -2781,20 +2733,6 @@ Device Session will reset when browser is closed
       setTimeout(() => {
         location.reload();
       }, 1000);
-    }
-  }
-
-  // 🔄 Manual refresh with user feedback
-  async function refreshFileListManually() {
-    showToast('🔄 Refreshing file list...', 2000);
-    
-    try {
-      await refreshFileList();
-      showToast('✅ File list refreshed successfully!', 3000);
-    } catch (error) {
-      console.error('❌ Manual refresh failed:', error);
-      showToast('❌ Refresh failed - reloading page...', 3000);
-      setTimeout(() => location.reload(), 1000);
     }
   }
 
@@ -5131,10 +5069,6 @@ window.copyConnectionUrl = copyConnectionUrl;
 window.closeConnectionModal = closeConnectionModal;
 window.showQRCode = showQRCode;
 window.showQRFallback = showQRFallback;
-window.showQRSuccess = showQRSuccess;
-window.tryFallbackQR = tryFallbackQR;
-window.showOfflineQR = showOfflineQR;
-window.refreshFileListManually = refreshFileListManually;
 window.toggleSettingsMenu = toggleSettingsMenu;
 window.cancelAllUploads = cancelAllUploads;
 window.clearAllFiles = clearAllFiles;
@@ -5273,35 +5207,6 @@ function handleImagePaste(blob) {
   .then(data => {
     if (data.status === 'success') {
       showToast(`�️ Image added to clipboard: ${filename}`, 3000);
-      refreshClipboardHistory();
-    } else {
-      showToast(`❌ Failed to add image: ${data.msg}`, 4000);
-    }
-  })
-  .catch(error => {
-    console.error('Error adding image to clipboard:', error);
-    showToast('❌ Failed to add image to clipboard', 4000);
-  });
-}
-
-// Enhanced image upload function for clipboard with better quality handling
-function uploadImageToClipboard(blob) {
-  // Create file object with proper naming
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const filename = `clipboard-image-${timestamp}.png`;
-  
-  // Add to clipboard via API
-  const formData = new FormData();
-  formData.append('file', blob, filename);
-  
-  fetch('/api/clipboard/add', {
-    method: 'POST',
-    body: formData
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.status === 'success') {
-      showToast(`🖼️ Image added to clipboard: ${filename}`, 3000);
       refreshClipboardHistory();
     } else {
       showToast(`❌ Failed to add image: ${data.msg}`, 4000);
