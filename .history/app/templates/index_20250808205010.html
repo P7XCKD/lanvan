@@ -2520,39 +2520,8 @@ Device Session will reset when browser is closed
             const sessionTime = ((Date.now() - Math.min(...completedUploads.map(item => item.startTime))) / 1000).toFixed(1);
             const sessionSpeed = (totalSizeMB / sessionTime).toFixed(1);
             
-            // Only show completion toast with smart refresh detection - individual files are already logged separately
-            const currentFileCount = document.querySelectorAll('.file-card').length;
+            // Only show completion toast - individual files are already logged separately
             showToast(`🎉 All ${totalFiles} files uploaded successfully! (${totalSizeMB} MB total in ${sessionTime}s @ ${sessionSpeed} MB/s)`, 6000);
-            
-            // 🔍 Check if file display needs manual refresh after a brief delay
-            setTimeout(() => {
-              const updatedFileCount = document.querySelectorAll('.file-card').length;
-              if (updatedFileCount === currentFileCount) {
-                // File display hasn't updated, suggest manual refresh
-                showToast(
-                  `📁 ${totalFiles} new files uploaded but not visible yet - Click here to refresh file list`,
-                  8000,
-                  null,
-                  'info'
-                );
-                
-                // Make the toast clickable to trigger refresh
-                const toast = DOM_CACHE.toast;
-                if (toast) {
-                  toast.style.cursor = 'pointer';
-                  toast.title = 'Click to refresh file list';
-                  
-                  // Add click handler for refresh
-                  const refreshHandler = () => {
-                    refreshFileListManually();
-                    toast.removeEventListener('click', refreshHandler);
-                    toast.style.cursor = 'default';
-                    toast.title = 'Click to keep visible';
-                  };
-                  toast.addEventListener('click', refreshHandler);
-                }
-              }
-            }, 3000); // Wait 3 seconds for auto-refresh to potentially work
           }
         }
         
@@ -2844,41 +2813,10 @@ Device Session will reset when browser is closed
           
           endUpload();
           
-          // Show completion toast with smart refresh detection
+          // Show completion toast
           const fileSize = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
           const uploadTime = ((Date.now() - uploadItem.startTime) / 1000).toFixed(1);
-          const currentFileCount = document.querySelectorAll('.file-card').length;
           showToast(`✅ ${uploadItem.fileName} uploaded successfully via chunked upload (${fileSize} MB, ${uploadItem.totalChunks} chunks)`, 5000);
-          
-          // 🔍 Check if file display needs manual refresh after a brief delay
-          setTimeout(() => {
-            const updatedFileCount = document.querySelectorAll('.file-card').length;
-            if (updatedFileCount === currentFileCount) {
-              // File display hasn't updated, suggest manual refresh
-              showToast(
-                `📁 New file uploaded but not visible yet - Click here to refresh file list`,
-                8000,
-                null,
-                'info'
-              );
-              
-              // Make the toast clickable to trigger refresh
-              const toast = DOM_CACHE.toast;
-              if (toast) {
-                toast.style.cursor = 'pointer';
-                toast.title = 'Click to refresh file list';
-                
-                // Add click handler for refresh
-                const refreshHandler = () => {
-                  refreshFileListManually();
-                  toast.removeEventListener('click', refreshHandler);
-                  toast.style.cursor = 'default';
-                  toast.title = 'Click to keep visible';
-                };
-                toast.addEventListener('click', refreshHandler);
-              }
-            }
-          }, 2000); // Wait 2 seconds for auto-refresh to potentially work
           
           // Save enhanced chunked upload stats
           const uploadStats = {
@@ -4592,15 +4530,6 @@ function showToast(message, duration = 3000, transferData = null, type = 'defaul
       backgroundColor = '#ffc107'; // Yellow for warning
     } else {
       backgroundColor = '#27ae60'; // Green for success/default persistent
-    }
-  } else {
-    // Non-persistent toasts can also have colors based on type
-    if (type === 'info') {
-      backgroundColor = '#17a2b8'; // Blue for info
-    } else if (type === 'warning') {
-      backgroundColor = '#ffc107'; // Yellow for warning  
-    } else if (type === 'error') {
-      backgroundColor = '#dc3545'; // Red for error
     }
   }
   

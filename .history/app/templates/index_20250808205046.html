@@ -4593,15 +4593,6 @@ function showToast(message, duration = 3000, transferData = null, type = 'defaul
     } else {
       backgroundColor = '#27ae60'; // Green for success/default persistent
     }
-  } else {
-    // Non-persistent toasts can also have colors based on type
-    if (type === 'info') {
-      backgroundColor = '#17a2b8'; // Blue for info
-    } else if (type === 'warning') {
-      backgroundColor = '#ffc107'; // Yellow for warning  
-    } else if (type === 'error') {
-      backgroundColor = '#dc3545'; // Red for error
-    }
   }
   
   // 🚀 PERFORMANCE: Batch style changes with Object.assign
