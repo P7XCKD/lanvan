@@ -6205,7 +6205,6 @@ function showImagePreview(imageSrc, filename) {
     if (e.touches.length === 2) {
       // Pinch zoom
       e.preventDefault();
-      e.stopPropagation(); // Prevent modal close
       const currentDistance = Math.hypot(
         e.touches[0].pageX - e.touches[1].pageX,
         e.touches[0].pageY - e.touches[1].pageY
@@ -6219,14 +6218,8 @@ function showImagePreview(imageSrc, filename) {
     } else if (e.touches.length === 1 && isDragging && scale > 1) {
       // Single touch pan
       e.preventDefault();
-      e.stopPropagation(); // Prevent modal close
       const deltaX = e.touches[0].clientX - startX;
       const deltaY = e.touches[0].clientY - startY;
-      
-      // Check if drag has moved enough to be considered a drag
-      if (!hasDragged && (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)) {
-        hasDragged = true;
-      }
       
       translateX = startTranslateX + deltaX / scale;
       translateY = startTranslateY + deltaY / scale;

@@ -706,6 +706,69 @@
   .qr-reveal {
     animation: qr-fade-in 0.5s ease-in-out;
   }
+
+  /* Clean Button System - Matching AES Encryption Style */
+  .clean-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 25px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+  }
+  
+  .clean-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  
+  .clean-btn:active {
+    transform: translateY(0);
+  }
+  
+  /* Button Colors */
+  .clean-btn-primary { background: #007bff; color: white; }
+  .clean-btn-primary:hover { background: #0056b3; }
+  
+  .clean-btn-success { background: #28a745; color: white; }
+  .clean-btn-success:hover { background: #1e7e34; }
+  
+  .clean-btn-info { background: #17a2b8; color: white; }
+  .clean-btn-info:hover { background: #117a8b; }
+  
+  .clean-btn-warning { background: #ffc107; color: #212529; }
+  .clean-btn-warning:hover { background: #e0a800; }
+  
+  .clean-btn-danger { background: #dc3545; color: white; }
+  .clean-btn-danger:hover { background: #c82333; }
+  
+  .clean-btn-secondary { background: #6c757d; color: white; }
+  .clean-btn-secondary:hover { background: #5a6268; }
+  
+  .clean-btn-light { background: #f8f9fa; color: #495057; border: 1px solid #dee2e6; }
+  .clean-btn-light:hover { background: #e2e6ea; }
+  
+  .clean-btn-dark { background: #343a40; color: white; }
+  .clean-btn-dark:hover { background: #23272b; }
+
+  /* Small button variant */
+  .clean-btn-sm {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    border-radius: 20px;
+  }
+  
+  /* Large button variant */
+  .clean-btn-lg {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    border-radius: 30px;
+  }
   
   /* Device Logs Modal Text Override */
   #deviceLogsModal * {
@@ -3331,16 +3394,7 @@ Device Session will reset when browser is closed
               <p style="text-align: center; color: #007bff; font-style: italic; margin-bottom: 0.5rem;">
                 📁 New files detected, you can check them directly with manual refresh
               </p>
-              <button onclick="refreshFileListManually()" style="
-                background: #007bff;
-                color: white;
-                border: none;
-                padding: 0.5rem 1rem;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 0.9rem;
-                margin: 0.5rem;
-              ">
+              <button onclick="refreshFileListManually()" class="clean-btn clean-btn-primary" style="margin: 0.5rem;">
                 🔄 Manual Refresh
               </button>
             `;
@@ -3357,16 +3411,7 @@ Device Session will reset when browser is closed
             <p style="text-align: center; color: #007bff; font-style: italic; margin-bottom: 0.5rem;">
               📁 New files detected, you can check them directly with manual refresh
             </p>
-            <button onclick="refreshFileListManually()" style="
-              background: #007bff;
-              color: white;
-              border: none;
-              padding: 0.5rem 1rem;
-              border-radius: 6px;
-              cursor: pointer;
-              font-size: 0.9rem;
-              margin: 0.5rem;
-            ">
+            <button onclick="refreshFileListManually()" class="clean-btn clean-btn-primary" style="margin: 0.5rem;">
               🔄 Manual Refresh
             </button>
           `;
@@ -5992,7 +6037,6 @@ function showImagePreview(imageSrc, filename) {
   let translateX = 0;
   let translateY = 0;
   let isDragging = false;
-  let hasDragged = false; // Track if user actually dragged
   let startX = 0;
   let startY = 0;
   let startTranslateX = 0;
@@ -6151,20 +6195,14 @@ function showImagePreview(imageSrc, filename) {
     updateImageTransform();
   };
   
-  // Double-click to zoom (only if not dragging)
+  // Double-click to zoom
   imageContainer.addEventListener('dblclick', (e) => {
     e.preventDefault();
-    e.stopPropagation(); // Prevent any parent handlers
-    
-    // Only zoom if user wasn't dragging
-    if (!hasDragged) {
-      if (scale === 1) {
-        zoomImage(2); // Zoom to 200%
-      } else {
-        window.resetZoom();
-      }
+    if (scale === 1) {
+      zoomImage(2); // Zoom to 200%
+    } else {
+      window.resetZoom();
     }
-    hasDragged = false; // Reset for next interaction
   });
   
   // Mouse wheel zoom
@@ -6187,17 +6225,14 @@ function showImagePreview(imageSrc, filename) {
       );
       lastScale = scale;
       e.preventDefault();
-      e.stopPropagation(); // Prevent modal close
     } else if (e.touches.length === 1 && scale > 1) {
       // Single touch pan start
       isDragging = true;
-      hasDragged = false; // Reset drag flag
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
       startTranslateX = translateX;
       startTranslateY = translateY;
       imageContainer.style.cursor = 'grabbing';
-      e.stopPropagation(); // Prevent modal close
     }
   });
   
@@ -6205,7 +6240,6 @@ function showImagePreview(imageSrc, filename) {
     if (e.touches.length === 2) {
       // Pinch zoom
       e.preventDefault();
-      e.stopPropagation(); // Prevent modal close
       const currentDistance = Math.hypot(
         e.touches[0].pageX - e.touches[1].pageX,
         e.touches[0].pageY - e.touches[1].pageY
@@ -6219,14 +6253,8 @@ function showImagePreview(imageSrc, filename) {
     } else if (e.touches.length === 1 && isDragging && scale > 1) {
       // Single touch pan
       e.preventDefault();
-      e.stopPropagation(); // Prevent modal close
       const deltaX = e.touches[0].clientX - startX;
       const deltaY = e.touches[0].clientY - startY;
-      
-      // Check if drag has moved enough to be considered a drag
-      if (!hasDragged && (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)) {
-        hasDragged = true;
-      }
       
       translateX = startTranslateX + deltaX / scale;
       translateY = startTranslateY + deltaY / scale;
@@ -6246,14 +6274,12 @@ function showImagePreview(imageSrc, filename) {
   imageContainer.addEventListener('mousedown', (e) => {
     if (scale > 1) {
       isDragging = true;
-      hasDragged = false; // Reset drag flag
       startX = e.clientX;
       startY = e.clientY;
       startTranslateX = translateX;
       startTranslateY = translateY;
       imageContainer.style.cursor = 'grabbing';
       e.preventDefault();
-      e.stopPropagation(); // Prevent modal close
     }
   });
   
@@ -6261,11 +6287,6 @@ function showImagePreview(imageSrc, filename) {
     if (isDragging && scale > 1) {
       const deltaX = e.clientX - startX;
       const deltaY = e.clientY - startY;
-      
-      // If moved more than 5 pixels, consider it a drag
-      if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
-        hasDragged = true;
-      }
       
       translateX = startTranslateX + deltaX / scale;
       translateY = startTranslateY + deltaY / scale;
@@ -6299,10 +6320,9 @@ function showImagePreview(imageSrc, filename) {
   
   document.addEventListener('keydown', keyHandler);
   
-  // Close on background click (but not when interacting with image)
+  // Close on background click
   modal.addEventListener('click', (e) => {
-    // Only close if clicking on the modal background, not on image container or image itself
-    if (e.target === modal) {
+    if (e.target === modal || e.target === imageContainer) {
       modal.remove();
       document.removeEventListener('keydown', keyHandler);
     }
@@ -6423,7 +6443,7 @@ function removeClipboardItem(itemId) {
   });
 }
 
-// Download clipboard history as text file
+// Download clipboard history as text file or ZIP with images
 async function downloadClipboardHistory() {
   try {
     if (clipboardHistoryData.length === 0) {
@@ -6431,11 +6451,236 @@ async function downloadClipboardHistory() {
       return;
     }
     
+    // Check if there are any images in the clipboard
+    const hasImages = clipboardHistoryData.some(item => 
+      item.type === 'file' && 
+      (item.filename && item.filename.includes('clipboard-image')) ||
+      (item.content_type && item.content_type.startsWith('image/'))
+    );
+    
+    if (hasImages) {
+      // Create ZIP file with all images and no text file
+      await downloadClipboardAsZip();
+    } else {
+      // Create regular text file
+      await downloadClipboardAsText();
+    }
+    
+  } catch (error) {
+    console.error('Error downloading clipboard history:', error);
+    showToast('❌ Failed to download clipboard history', 3000);
+  }
+}
+
+// Download only images as ZIP file
+async function downloadClipboardAsZip() {
+  try {
+    // Import JSZip library if not already loaded
+    if (typeof JSZip === 'undefined') {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+      script.onload = () => downloadClipboardAsZip(); // Retry after loading
+      document.head.appendChild(script);
+      showToast('📦 Loading ZIP library...', 2000);
+      return;
+    }
+
+    showToast('📦 Creating ZIP file with images...', 3000);
+    
+    const zip = new JSZip();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    let imageCount = 0;
+    
+    // Add all images to ZIP
+    for (const item of clipboardHistoryData) {
+      if (item.type === 'file' && 
+          ((item.filename && item.filename.includes('clipboard-image')) ||
+           (item.content_type && item.content_type.startsWith('image/')))) {
+        
+        try {
+          // Fetch the image data
+          const response = await fetch(`/api/clipboard/get/${item.id}`);
+          const data = await response.json();
+          
+          if (data.status === 'success' && data.item && data.item.data) {
+            // Convert base64 data to blob
+            const base64Data = data.item.data.split(',')[1]; // Remove data URL prefix
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            
+            // Determine file extension from content type or filename
+            let extension = 'png'; // default
+            if (item.content_type) {
+              extension = item.content_type.split('/')[1];
+            } else if (item.filename) {
+              const parts = item.filename.split('.');
+              if (parts.length > 1) {
+                extension = parts[parts.length - 1];
+              }
+            }
+            
+            const filename = `clipboard-image-${imageCount + 1}-${item.timestamp.replace(/[:.]/g, '-')}.${extension}`;
+            zip.file(filename, bytes);
+            imageCount++;
+          }
+        } catch (error) {
+          console.error('Error adding image to ZIP:', error);
+        }
+      }
+    }
+    
+    if (imageCount === 0) {
+      showToast('❌ No images found in clipboard history', 3000);
+      return;
+    }
+    
+    // Generate ZIP file
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const zipFilename = `lanvan-clipboard-images-${timestamp}.zip`;
+    
+    // Download ZIP file
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = zipFilename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showToast(`📦 ZIP downloaded: ${zipFilename} (${imageCount} images)`, 4000);
+    
+  } catch (error) {
+    console.error('Error creating ZIP file:', error);
+    showToast('❌ Failed to create ZIP file', 3000);
+  }
+}
+
+// Download text-only clipboard history
+async function downloadClipboardAsText() {
+  try {
     // Show progress for datasets (since we're fetching full content)
-    showToast('� Fetching full clipboard content for download...', 3000);
+    showToast('📄 Fetching full clipboard content for download...', 3000);
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `lanvan-clipboard-history-${timestamp}.txt`;
+    
+    // Use array for more efficient string building
+    const reportParts = [];
+    
+    // Header
+    reportParts.push(`LANVAN CLIPBOARD HISTORY REPORT
+========================================
+Generated: ${new Date().toLocaleString()}
+Total Items: ${clipboardHistoryData.length}
+Report Format: Plain Text
+
+`);
+    
+    // Calculate summary statistics efficiently
+    let textItems = 0, fileItems = 0, imageItems = 0, totalSizeBytes = 0;
+    
+    for (const item of clipboardHistoryData) {
+      if (item.type === 'text') textItems++;
+      if (item.type === 'file') fileItems++;
+      if (item.filename && item.filename.includes('clipboard-image')) imageItems++;
+      totalSizeBytes += (item.size || 0);
+    }
+    
+    reportParts.push(`SUMMARY STATISTICS:
+- Text Items: ${textItems}
+- File Items: ${fileItems} (including ${imageItems} images)
+- Total Size: ${formatClipboardSize(totalSizeBytes)}
+
+========================================
+DETAILED CLIPBOARD ITEMS:
+========================================
+
+`);
+    
+    // Process items in chunks to avoid blocking UI
+    const chunkSize = 5; // Smaller chunks since we're fetching full content
+    for (let i = 0; i < clipboardHistoryData.length; i += chunkSize) {
+      const chunk = clipboardHistoryData.slice(i, i + chunkSize);
+      
+      // Process chunk - fetch full content for each item
+      for (const [chunkIndex, item] of chunk.entries()) {
+        const index = i + chunkIndex;
+        
+        let content = 'No content available';
+        
+        // Fetch full content from server for text items
+        if (item.type === 'text') {
+          try {
+            const response = await fetch(`/api/clipboard/get/${item.id}`);
+            const data = await response.json();
+            if (data.status === 'success' && data.item && data.item.data) {
+              content = data.item.data; // Get full text content
+            } else {
+              content = item.preview || 'Failed to fetch full content';
+            }
+          } catch (error) {
+            console.error('Error fetching full content for item', item.id, error);
+            content = item.preview || 'Error fetching full content';
+          }
+        } else {
+          // For file items, use preview/filename info
+          content = item.preview || `File: ${item.filename || 'Unknown file'}`;
+        }
+        
+        reportParts.push(`[${index + 1}] ${item.type.toUpperCase()} ITEM
+Added: ${item.timestamp}
+Type: ${item.content_type || 'Unknown'}
+Size: ${formatClipboardSize(item.size || 0)}
+${item.filename ? `Filename: ${item.filename}` : ''}
+
+Contents:
+========================================
+${content}
+
+========================================
+
+`);
+      }
+      
+      // Yield control to prevent UI blocking for large datasets
+      if (i + chunkSize < clipboardHistoryData.length) {
+        // Show progress update
+        const processedCount = Math.min(i + chunkSize, clipboardHistoryData.length);
+        showToast(`📄 Processing... ${processedCount}/${clipboardHistoryData.length} items`, 1000);
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    }
+    
+    reportParts.push(`
+========================================
+End of Report - Generated by Lanvan Clipboard System
+========================================`);
+    
+    // Join all parts efficiently
+    const reportContent = reportParts.join('');
+    
+    // Create and download the file
+    const blob = new Blob([reportContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showToast(`📄 Clipboard history downloaded: ${filename} (${clipboardHistoryData.length} items)`, 4000);
+    
+  } catch (error) {
+    console.error('Error downloading clipboard history:', error);
+    showToast('❌ Failed to download clipboard history', 3000);
+  }
+}
     
     // Use array for more efficient string building
     const reportParts = [];
@@ -7319,26 +7564,10 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
         
         <!-- Action Buttons -->
         <div style="display: flex; gap: 0.5rem;">
-          <button onclick="addTextToClipboard()" style="
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9rem;
-          ">
+          <button onclick="addTextToClipboard()" class="clean-btn clean-btn-success">
             📝 Add Text
           </button>
-          <button onclick="clearClipboardInput()" style="
-            background: #6c757d;
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9rem;
-          ">
+          <button onclick="clearClipboardInput()" class="clean-btn clean-btn-secondary">
             🧹 Clear Input
           </button>
         </div>
@@ -7350,37 +7579,13 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
         <h4 style="margin: 0; color: #333;">📚 Clipboard History</h4>
         <div style="display: flex; gap: 0.5rem;">
-          <button onclick="refreshClipboardHistory()" style="
-            background: #17a2b8;
-            color: white;
-            border: none;
-            padding: 0.4rem 0.8rem;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            cursor: pointer;
-          ">
+          <button onclick="refreshClipboardHistory()" class="clean-btn clean-btn-info clean-btn-sm">
             🔄 Refresh
           </button>
-          <button onclick="downloadClipboardHistory()" style="
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 0.4rem 0.8rem;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            cursor: pointer;
-          ">
-            📄 Download History
+          <button onclick="downloadClipboardHistory()" class="clean-btn clean-btn-success clean-btn-sm">
+            � Download
           </button>
-          <button onclick="clearAllClipboardHistory()" style="
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 0.4rem 0.8rem;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            cursor: pointer;
-          ">
+          <button onclick="clearAllClipboardHistory()" class="clean-btn clean-btn-danger clean-btn-sm">
             🧹 Clear All
           </button>
         </div>

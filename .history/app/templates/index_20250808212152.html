@@ -6187,17 +6187,14 @@ function showImagePreview(imageSrc, filename) {
       );
       lastScale = scale;
       e.preventDefault();
-      e.stopPropagation(); // Prevent modal close
     } else if (e.touches.length === 1 && scale > 1) {
       // Single touch pan start
       isDragging = true;
-      hasDragged = false; // Reset drag flag
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
       startTranslateX = translateX;
       startTranslateY = translateY;
       imageContainer.style.cursor = 'grabbing';
-      e.stopPropagation(); // Prevent modal close
     }
   });
   
@@ -6205,7 +6202,6 @@ function showImagePreview(imageSrc, filename) {
     if (e.touches.length === 2) {
       // Pinch zoom
       e.preventDefault();
-      e.stopPropagation(); // Prevent modal close
       const currentDistance = Math.hypot(
         e.touches[0].pageX - e.touches[1].pageX,
         e.touches[0].pageY - e.touches[1].pageY
@@ -6219,14 +6215,8 @@ function showImagePreview(imageSrc, filename) {
     } else if (e.touches.length === 1 && isDragging && scale > 1) {
       // Single touch pan
       e.preventDefault();
-      e.stopPropagation(); // Prevent modal close
       const deltaX = e.touches[0].clientX - startX;
       const deltaY = e.touches[0].clientY - startY;
-      
-      // Check if drag has moved enough to be considered a drag
-      if (!hasDragged && (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)) {
-        hasDragged = true;
-      }
       
       translateX = startTranslateX + deltaX / scale;
       translateY = startTranslateY + deltaY / scale;
@@ -6246,14 +6236,12 @@ function showImagePreview(imageSrc, filename) {
   imageContainer.addEventListener('mousedown', (e) => {
     if (scale > 1) {
       isDragging = true;
-      hasDragged = false; // Reset drag flag
       startX = e.clientX;
       startY = e.clientY;
       startTranslateX = translateX;
       startTranslateY = translateY;
       imageContainer.style.cursor = 'grabbing';
       e.preventDefault();
-      e.stopPropagation(); // Prevent modal close
     }
   });
   
@@ -6261,11 +6249,6 @@ function showImagePreview(imageSrc, filename) {
     if (isDragging && scale > 1) {
       const deltaX = e.clientX - startX;
       const deltaY = e.clientY - startY;
-      
-      // If moved more than 5 pixels, consider it a drag
-      if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
-        hasDragged = true;
-      }
       
       translateX = startTranslateX + deltaX / scale;
       translateY = startTranslateY + deltaY / scale;
