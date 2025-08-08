@@ -189,13 +189,13 @@
       background: #fdfdfd;
       border: 1px solid #e1e1e1;
       border-radius: 12px;
-      padding: 1rem;
+      padding: 1.25rem;
       text-align: center;
       box-shadow: 0 2px 6px rgba(0,0,0,0.05);
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      min-height: 140px;
+      min-height: 160px;
       max-width: 320px;
       transition: all 0.2s ease-in-out;
       position: relative;
@@ -209,35 +209,28 @@
     }
 
     .file-icon {
-      font-size: 1.8rem;
+      font-size: 2rem;
       margin-bottom: 0.5rem;
-      opacity: 0.7;
     }
 
     .file-name {
-      font-size: 0.9rem;
+      font-size: 0.95rem;
       color: #333;
-      margin-bottom: 0.8rem;
+      margin-bottom: 0.5rem;
       overflow: hidden;
       white-space: nowrap;
       text-overflow: ellipsis;
-      line-height: 1.3;
     }
 
     .download-btn {
       display: inline-block;
-      padding: 0.6rem 1rem;
+      padding: 0.4rem 0.6rem;
       font-size: 0.85rem;
       background-color: #4a90e2;
       color: white;
       text-decoration: none;
-      border-radius: 8px;
+      border-radius: 5px;
       transition: background-color 0.2s ease-in-out;
-      min-height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      touch-action: manipulation;
     }
 
     .download-btn:hover {
@@ -539,116 +532,55 @@
       
       /* 📊 Upload History mobile responsive styles */
       #uploadHistorySection {
-        margin-top: 1rem !important;
+        margin-top: 0.5rem !important;
       }
       
       #uploadHistoryContent {
-        max-height: 200px !important;
-        padding: 0.8rem !important;
+        max-height: 250px !important;
+        padding: 0.5rem !important;
         font-size: 0.8rem !important;
-        overflow-y: auto;
       }
       
       /* History item grid responsive */
       #uploadHistoryContent div[style*="grid-template-columns"] {
-        grid-template-columns: 1fr !important;
-        gap: 0.4rem !important;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)) !important;
+        gap: 0.3rem !important;
         font-size: 0.75rem !important;
-      }
-      
-      /* Clipboard system mobile improvements */
-      .clipboard-textarea {
-        min-height: 80px !important;
-        font-size: 0.85rem !important;
-        padding: 0.8rem !important;
-        border-radius: 8px !important;
-      }
-      
-      .clipboard-buttons {
-        gap: 0.5rem;
-        flex-wrap: wrap;
-        margin-top: 0.8rem;
-      }
-      
-      .clipboard-buttons button {
-        flex: 1;
-        min-width: 120px;
-      }
-      
-      /* File count display */
-      .file-section h2 {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-      }
-      
-      #fileCount {
-        font-weight: normal;
-        font-size: 0.85rem;
-        color: #666;
-      }
-      
-      /* Action buttons spacing */
-      .action-buttons {
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-        margin-top: 0.8rem;
-      }
-      
-      .action-buttons button {
-        flex: 1;
-        min-width: 100px;
       }
     }
     
     /* 📱 Tablet breakpoint for toast and upload manager */
     @media (max-width: 900px) and (min-width: 601px) {
-      body {
-        padding: 0.8rem;
-      }
-      
       .upload-manager {
-        margin: 0.8rem 0;
+        margin: 0.8rem;
         padding: 1.2rem;
       }
       
       .upload-item {
         padding: 1rem;
         gap: 0.8rem;
-        flex-direction: row;
-      }
-      
-      .upload-file-info {
-        flex: 1;
-        margin-right: 1rem;
       }
       
       .upload-controls {
         gap: 0.6rem;
-        flex-direction: column;
-        flex-shrink: 0;
       }
       
       .upload-control-btn {
         padding: 0.5rem 0.8rem;
         font-size: 0.85rem;
-        min-width: 80px;
+        min-width: 40px;
         min-height: 36px;
       }
       
       #toast {
-        bottom: 20px !important;
+        bottom: 15px !important;
         left: 50% !important;
         right: auto !important;
         transform: translateX(-50%) !important;
         -webkit-transform: translateX(-50%) !important;
-        max-width: 500px !important;
+        max-width: 400px !important;
         margin: 0 !important;
         font-size: 0.85rem !important;
-        padding: 0.8rem 1.2rem !important;
-        border-radius: 10px !important;
       }
     }
   </style><style>
