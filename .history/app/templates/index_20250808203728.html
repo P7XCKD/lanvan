@@ -1918,10 +1918,11 @@ Device Session will reset when browser is closed
       case 'queued':
         return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
       case 'completed':
-        return ``; // No individual remove button for completed uploads
+        return `<button class="upload-control-btn remove" onclick="removeCompletedUpload(${uploadItem.id})" title="Remove from list">Remove</button>`;
       case 'error':
       case 'cancelled':
-        return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
+        return `<button class="upload-control-btn retry" onclick="retryUpload(${uploadItem.id})" title="Retry upload">Retry</button>
+                <button class="upload-control-btn remove" onclick="removeCompletedUpload(${uploadItem.id})" title="Remove from list">Remove</button>`;
       default:
         return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
     }
@@ -5276,7 +5277,6 @@ window.downloadDeviceLogs = downloadDeviceLogs;
 window.clearDeviceLogs = clearDeviceLogs;
 window.closeDeviceLogsModal = closeDeviceLogsModal;
 window.removeCompletedUpload = removeCompletedUpload;
-window.clearCompletedUploads = clearCompletedUploads;
 window.showImagePreview = showImagePreview;
 window.uploadClipboardItem = uploadClipboardItem;
 

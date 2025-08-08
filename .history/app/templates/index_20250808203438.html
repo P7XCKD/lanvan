@@ -1918,10 +1918,11 @@ Device Session will reset when browser is closed
       case 'queued':
         return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
       case 'completed':
-        return ``; // No individual remove button for completed uploads
+        return `<button class="upload-control-btn remove" onclick="removeCompletedUpload(${uploadItem.id})" title="Remove from list">Remove</button>`;
       case 'error':
       case 'cancelled':
-        return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
+        return `<button class="upload-control-btn retry" onclick="retryUpload(${uploadItem.id})" title="Retry upload">Retry</button>
+                <button class="upload-control-btn remove" onclick="removeCompletedUpload(${uploadItem.id})" title="Remove from list">Remove</button>`;
       default:
         return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
     }
@@ -2228,48 +2229,6 @@ Device Session will reset when browser is closed
     }, 500);
     
     console.log(`🧹 Cleared ${itemsToRemove.length} completed uploads`);
-  }
-
-  function removeCompletedUpload(itemId) {
-    // Find the upload item in queue
-    const item = uploadQueue.find(upload => upload.id === itemId);
-    if (!item) {
-      console.warn(`❌ Upload item ${itemId} not found in queue`);
-      return;
-    }
-
-    // Only allow removal of completed, cancelled, or error items
-    if (!['completed', 'cancelled', 'error'].includes(item.status)) {
-      console.warn(`❌ Cannot remove upload ${itemId} with status: ${item.status}`);
-      return;
-    }
-
-    // Remove from DOM
-    const itemDiv = document.getElementById(`upload-${itemId}`);
-    if (itemDiv) {
-      itemDiv.remove();
-    }
-
-    // Remove from queue
-    uploadQueue = uploadQueue.filter(upload => upload.id !== itemId);
-
-    // Update the upload manager display
-    updateUploadManager();
-
-    console.log(`🗑️ Removed completed upload: ${item.file ? item.file.name : item.text || 'clipboard item'}`);
-
-    // If this was the last completed item, hide the clear all button
-    const clearBtn = document.getElementById('clearCompletedBtn');
-    if (clearBtn && uploadQueue.filter(item => ['completed', 'cancelled', 'error'].includes(item.status)).length === 0) {
-      clearBtn.style.display = 'none';
-    }
-
-    // Refresh file list if we removed a completed file upload
-    if (item.status === 'completed' && item.file) {
-      setTimeout(() => {
-        refreshFileList();
-      }, 500);
-    }
   }
 
   function startNextUpload() {
@@ -5276,7 +5235,7 @@ window.downloadDeviceLogs = downloadDeviceLogs;
 window.clearDeviceLogs = clearDeviceLogs;
 window.closeDeviceLogsModal = closeDeviceLogsModal;
 window.removeCompletedUpload = removeCompletedUpload;
-window.clearCompletedUploads = clearCompletedUploads;
+window.retryUpload = retryUpload;
 window.showImagePreview = showImagePreview;
 window.uploadClipboardItem = uploadClipboardItem;
 

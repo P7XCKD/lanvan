@@ -1918,10 +1918,11 @@ Device Session will reset when browser is closed
       case 'queued':
         return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
       case 'completed':
-        return ``; // No individual remove button for completed uploads
+        return `<button class="upload-control-btn remove" onclick="removeCompletedUpload(${uploadItem.id})" title="Remove from list">Remove</button>`;
       case 'error':
       case 'cancelled':
-        return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
+        return `<button class="upload-control-btn retry" onclick="retryUpload(${uploadItem.id})" title="Retry upload">Retry</button>
+                <button class="upload-control-btn remove" onclick="removeCompletedUpload(${uploadItem.id})" title="Remove from list">Remove</button>`;
       default:
         return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
     }
@@ -2228,48 +2229,6 @@ Device Session will reset when browser is closed
     }, 500);
     
     console.log(`🧹 Cleared ${itemsToRemove.length} completed uploads`);
-  }
-
-  function removeCompletedUpload(itemId) {
-    // Find the upload item in queue
-    const item = uploadQueue.find(upload => upload.id === itemId);
-    if (!item) {
-      console.warn(`❌ Upload item ${itemId} not found in queue`);
-      return;
-    }
-
-    // Only allow removal of completed, cancelled, or error items
-    if (!['completed', 'cancelled', 'error'].includes(item.status)) {
-      console.warn(`❌ Cannot remove upload ${itemId} with status: ${item.status}`);
-      return;
-    }
-
-    // Remove from DOM
-    const itemDiv = document.getElementById(`upload-${itemId}`);
-    if (itemDiv) {
-      itemDiv.remove();
-    }
-
-    // Remove from queue
-    uploadQueue = uploadQueue.filter(upload => upload.id !== itemId);
-
-    // Update the upload manager display
-    updateUploadManager();
-
-    console.log(`🗑️ Removed completed upload: ${item.file ? item.file.name : item.text || 'clipboard item'}`);
-
-    // If this was the last completed item, hide the clear all button
-    const clearBtn = document.getElementById('clearCompletedBtn');
-    if (clearBtn && uploadQueue.filter(item => ['completed', 'cancelled', 'error'].includes(item.status)).length === 0) {
-      clearBtn.style.display = 'none';
-    }
-
-    // Refresh file list if we removed a completed file upload
-    if (item.status === 'completed' && item.file) {
-      setTimeout(() => {
-        refreshFileList();
-      }, 500);
-    }
   }
 
   function startNextUpload() {
@@ -5275,10 +5234,6 @@ window.cancelUpload = cancelUpload;
 window.downloadDeviceLogs = downloadDeviceLogs;
 window.clearDeviceLogs = clearDeviceLogs;
 window.closeDeviceLogsModal = closeDeviceLogsModal;
-window.removeCompletedUpload = removeCompletedUpload;
-window.clearCompletedUploads = clearCompletedUploads;
-window.showImagePreview = showImagePreview;
-window.uploadClipboardItem = uploadClipboardItem;
 
 // === 📋 CLIPBOARD SYSTEM FUNCTIONS ===
 
@@ -5416,11 +5371,11 @@ function handleImagePaste(blob) {
   });
 }
 
-// Enhanced image upload function for clipboard with simple naming and better quality
+// Enhanced image upload function for clipboard with better quality handling
 function uploadImageToClipboard(blob) {
-  // Get next image number for simple naming
-  const imageCount = getClipboardImageCount() + 1;
-  const filename = `${imageCount}.png`;
+  // Create file object with proper naming
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `clipboard-image-${timestamp}.png`;
   
   // Add to clipboard via API
   const formData = new FormData();
@@ -5443,14 +5398,6 @@ function uploadImageToClipboard(blob) {
     console.error('Error adding image to clipboard:', error);
     showToast('❌ Failed to add image to clipboard', 4000);
   });
-}
-
-// Get count of images in clipboard for simple numbering
-function getClipboardImageCount() {
-  return clipboardHistoryData.filter(item => 
-    item.type === 'file' && 
-    item.content_type === 'image'
-  ).length;
 }
 
 // Add text content to clipboard
@@ -5514,7 +5461,7 @@ function refreshClipboardHistory() {
     });
 }
 
-// Render clipboard history with image previews
+// Render clipboard history
 function renderClipboardHistory(items) {
   const container = document.getElementById('clipboardHistoryContent');
   
@@ -5532,27 +5479,6 @@ function renderClipboardHistory(items) {
   container.innerHTML = items.map(item => {
     const typeIcon = getClipboardItemIcon(item);
     const sizeText = formatClipboardSize(item.size);
-    const isImage = item.type === 'file' && item.content_type === 'image';
-    
-    // Create image preview for image files
-    const imagePreview = isImage ? `
-      <div style="margin: 0.5rem 0; text-align: center;">
-        <img 
-          src="/api/clipboard/get/${item.id}" 
-          alt="${item.filename}"
-          style="
-            max-width: 200px; 
-            max-height: 150px; 
-            border-radius: 4px; 
-            border: 1px solid #ddd;
-            object-fit: cover;
-            cursor: pointer;
-          "
-          onclick="showImagePreview('/api/clipboard/get/${item.id}', '${item.filename}')"
-          title="Click to view full size"
-        />
-      </div>
-    ` : '';
     
     return `
       <div style="
@@ -5574,9 +5500,8 @@ function renderClipboardHistory(items) {
             </strong>
             <span style="color: #666; font-size: 0.8rem;">(${sizeText})</span>
           </div>
-          ${imagePreview}
           <div style="color: #666; font-size: 0.9rem; margin-bottom: 0.5rem;">
-            ${isImage ? `Image dimensions and preview above` : item.preview}
+            ${item.preview}
           </div>
           <div style="color: #999; font-size: 0.8rem;">
             Added: ${item.timestamp}
@@ -5584,15 +5509,6 @@ function renderClipboardHistory(items) {
         </div>
         <div style="display: flex; flex-direction: column; gap: 0.3rem;">
           ${item.type === 'file' ? `
-            <button onclick="uploadClipboardItem(${item.id})" style="
-              background: #28a745;
-              color: white;
-              border: none;
-              padding: 0.3rem 0.6rem;
-              border-radius: 4px;
-              cursor: pointer;
-              font-size: 0.8rem;
-            ">📤 Upload</button>
             <button onclick="downloadClipboardItem(${item.id})" style="
               background: #17a2b8;
               color: white;
@@ -5651,92 +5567,6 @@ function formatClipboardSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-}
-
-// Show full size image preview
-function showImagePreview(imageSrc, filename) {
-  const modal = document.createElement('div');
-  modal.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.8);
-    z-index: 10001;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem;
-    box-sizing: border-box;
-  `;
-  
-  modal.innerHTML = `
-    <div style="
-      position: relative;
-      max-width: 90%;
-      max-height: 90%;
-      background: white;
-      border-radius: 8px;
-      overflow: hidden;
-    ">
-      <div style="
-        padding: 1rem;
-        background: #f8f9fa;
-        border-bottom: 1px solid #ddd;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      ">
-        <h4 style="margin: 0; color: #333;">${filename}</h4>
-        <button onclick="this.closest('.modal').remove()" style="
-          background: #dc3545;
-          color: white;
-          border: none;
-          padding: 0.5rem 1rem;
-          border-radius: 4px;
-          cursor: pointer;
-        ">Close</button>
-      </div>
-      <div style="padding: 1rem; text-align: center;">
-        <img src="${imageSrc}" alt="${filename}" style="
-          max-width: 100%;
-          max-height: 70vh;
-          object-fit: contain;
-        " />
-      </div>
-    </div>
-  `;
-  
-  modal.className = 'modal';
-  document.body.appendChild(modal);
-  
-  // Close on background click
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      modal.remove();
-    }
-  });
-}
-
-// Upload clipboard item to main file storage
-function uploadClipboardItem(itemId) {
-  fetch(`/api/clipboard/upload/${itemId}`, {
-    method: 'POST'
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.status === 'success') {
-      showToast(`✅ Uploaded: ${data.filename}`, 3000);
-      refreshFileListManually(); // Refresh the file list to show new file
-    } else {
-      showToast(`❌ Upload failed: ${data.msg}`, 4000);
-    }
-  })
-  .catch(error => {
-    console.error('Error uploading from clipboard:', error);
-    showToast('❌ Failed to upload from clipboard', 4000);
-  });
 }
 
 // Download clipboard item
