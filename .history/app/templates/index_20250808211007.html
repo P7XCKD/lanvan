@@ -5978,327 +5978,61 @@ function showImagePreview(imageSrc, filename) {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0,0,0,0.9);
-    z-index: 10002;
+    background: rgba(0,0,0,0.8);
+    z-index: 10001;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1rem;
+    padding: 2rem;
     box-sizing: border-box;
-    user-select: none;
   `;
-  
-  let scale = 1;
-  let translateX = 0;
-  let translateY = 0;
-  let isDragging = false;
-  let startX = 0;
-  let startY = 0;
-  let startTranslateX = 0;
-  let startTranslateY = 0;
   
   modal.innerHTML = `
     <div style="
       position: relative;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      max-width: 95%;
-      max-height: 95%;
+      max-width: 90%;
+      max-height: 90%;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
     ">
-      <!-- Header -->
       <div style="
         padding: 1rem;
-        background: rgba(255,255,255,0.95);
-        border-radius: 8px 8px 0 0;
+        background: #f8f9fa;
+        border-bottom: 1px solid #ddd;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        backdrop-filter: blur(10px);
-        flex-shrink: 0;
       ">
-        <div style="display: flex; align-items: center; gap: 1rem;">
-          <h4 style="margin: 0; color: #333; font-size: 1.1rem;">${filename}</h4>
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <button class="zoom-btn" onclick="zoomImage(0.8)" style="
-              background: #6c757d;
-              color: white;
-              border: none;
-              padding: 0.4rem 0.8rem;
-              border-radius: 4px;
-              cursor: pointer;
-              font-size: 0.9rem;
-            " title="Zoom Out">🔍−</button>
-            <span id="zoomLevel" style="color: #666; font-size: 0.9rem; min-width: 50px; text-align: center;">100%</span>
-            <button class="zoom-btn" onclick="zoomImage(1.25)" style="
-              background: #6c757d;
-              color: white;
-              border: none;
-              padding: 0.4rem 0.8rem;
-              border-radius: 4px;
-              cursor: pointer;
-              font-size: 0.9rem;
-            " title="Zoom In">🔍+</button>
-            <button onclick="resetZoom()" style="
-              background: #17a2b8;
-              color: white;
-              border: none;
-              padding: 0.4rem 0.8rem;
-              border-radius: 4px;
-              cursor: pointer;
-              font-size: 0.9rem;
-            " title="Reset Zoom">Reset</button>
-          </div>
-        </div>
-        <button onclick="this.closest('.image-modal').remove()" style="
+        <h4 style="margin: 0; color: #333;">${filename}</h4>
+        <button onclick="this.closest('.modal').remove()" style="
           background: #dc3545;
           color: white;
           border: none;
           padding: 0.5rem 1rem;
           border-radius: 4px;
           cursor: pointer;
-          font-size: 0.9rem;
-        ">✕ Close</button>
+        ">Close</button>
       </div>
-      
-      <!-- Image Container -->
-      <div class="image-container" style="
-        flex: 1;
-        background: #000;
-        border-radius: 0 0 8px 8px;
-        overflow: hidden;
-        position: relative;
-        cursor: grab;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      ">
-        <img id="zoomableImage" src="${imageSrc}" alt="${filename}" style="
+      <div style="padding: 1rem; text-align: center;">
+        <img src="${imageSrc}" alt="${filename}" style="
           max-width: 100%;
-          max-height: 100%;
+          max-height: 70vh;
           object-fit: contain;
-          transition: transform 0.2s ease-out;
-          transform: scale(1) translate(0px, 0px);
-          pointer-events: none;
         " />
-        <div class="zoom-instructions" style="
-          position: absolute;
-          bottom: 10px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: rgba(0,0,0,0.7);
-          color: white;
-          padding: 0.5rem 1rem;
-          border-radius: 20px;
-          font-size: 0.8rem;
-          opacity: 0.8;
-        ">
-          💡 Double-click to zoom • Drag to pan • Scroll to zoom
-        </div>
       </div>
     </div>
   `;
   
-  modal.className = 'image-modal';
+  modal.className = 'modal';
   document.body.appendChild(modal);
-  
-  const imageContainer = modal.querySelector('.image-container');
-  const image = modal.querySelector('#zoomableImage');
-  const zoomLevelDisplay = modal.querySelector('#zoomLevel');
-  const instructions = modal.querySelector('.zoom-instructions');
-  
-  // Hide instructions after 3 seconds
-  setTimeout(() => {
-    if (instructions) instructions.style.opacity = '0';
-  }, 3000);
-  
-  function updateImageTransform() {
-    image.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
-    zoomLevelDisplay.textContent = Math.round(scale * 100) + '%';
-    
-    // Update cursor based on zoom level
-    if (scale > 1) {
-      imageContainer.style.cursor = isDragging ? 'grabbing' : 'grab';
-    } else {
-      imageContainer.style.cursor = 'grab';
-    }
-  }
-  
-  // Zoom function
-  window.zoomImage = function(factor) {
-    const newScale = Math.min(Math.max(scale * factor, 0.1), 5); // Min 10%, Max 500%
-    
-    if (newScale !== scale) {
-      scale = newScale;
-      
-      // Reset pan if zooming out to fit
-      if (scale <= 1) {
-        translateX = 0;
-        translateY = 0;
-      }
-      
-      updateImageTransform();
-    }
-  };
-  
-  // Reset zoom function
-  window.resetZoom = function() {
-    scale = 1;
-    translateX = 0;
-    translateY = 0;
-    updateImageTransform();
-  };
-  
-  // Double-click to zoom
-  imageContainer.addEventListener('dblclick', (e) => {
-    e.preventDefault();
-    if (scale === 1) {
-      zoomImage(2); // Zoom to 200%
-    } else {
-      window.resetZoom();
-    }
-  });
-  
-  // Mouse wheel zoom
-  imageContainer.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const factor = e.deltaY > 0 ? 0.9 : 1.1;
-    zoomImage(factor);
-  });
-  
-  // Touch gestures for mobile
-  let initialDistance = 0;
-  let lastScale = 1;
-  
-  imageContainer.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) {
-      // Pinch zoom start
-      initialDistance = Math.hypot(
-        e.touches[0].pageX - e.touches[1].pageX,
-        e.touches[0].pageY - e.touches[1].pageY
-      );
-      lastScale = scale;
-      e.preventDefault();
-    } else if (e.touches.length === 1 && scale > 1) {
-      // Single touch pan start
-      isDragging = true;
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      startTranslateX = translateX;
-      startTranslateY = translateY;
-      imageContainer.style.cursor = 'grabbing';
-    }
-  });
-  
-  imageContainer.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2) {
-      // Pinch zoom
-      e.preventDefault();
-      const currentDistance = Math.hypot(
-        e.touches[0].pageX - e.touches[1].pageX,
-        e.touches[0].pageY - e.touches[1].pageY
-      );
-      
-      if (initialDistance > 0) {
-        const newScale = Math.min(Math.max(lastScale * (currentDistance / initialDistance), 0.1), 5);
-        scale = newScale;
-        updateImageTransform();
-      }
-    } else if (e.touches.length === 1 && isDragging && scale > 1) {
-      // Single touch pan
-      e.preventDefault();
-      const deltaX = e.touches[0].clientX - startX;
-      const deltaY = e.touches[0].clientY - startY;
-      
-      translateX = startTranslateX + deltaX / scale;
-      translateY = startTranslateY + deltaY / scale;
-      updateImageTransform();
-    }
-  });
-  
-  imageContainer.addEventListener('touchend', (e) => {
-    if (e.touches.length === 0) {
-      isDragging = false;
-      initialDistance = 0;
-      updateImageTransform();
-    }
-  });
-  
-  // Mouse drag for desktop
-  imageContainer.addEventListener('mousedown', (e) => {
-    if (scale > 1) {
-      isDragging = true;
-      startX = e.clientX;
-      startY = e.clientY;
-      startTranslateX = translateX;
-      startTranslateY = translateY;
-      imageContainer.style.cursor = 'grabbing';
-      e.preventDefault();
-    }
-  });
-  
-  document.addEventListener('mousemove', (e) => {
-    if (isDragging && scale > 1) {
-      const deltaX = e.clientX - startX;
-      const deltaY = e.clientY - startY;
-      
-      translateX = startTranslateX + deltaX / scale;
-      translateY = startTranslateY + deltaY / scale;
-      updateImageTransform();
-    }
-  });
-  
-  document.addEventListener('mouseup', () => {
-    if (isDragging) {
-      isDragging = false;
-      updateImageTransform();
-    }
-  });
-  
-  // Keyboard shortcuts
-  const keyHandler = (e) => {
-    if (e.key === 'Escape') {
-      modal.remove();
-      document.removeEventListener('keydown', keyHandler);
-    } else if (e.key === '+' || e.key === '=') {
-      e.preventDefault();
-      zoomImage(1.25);
-    } else if (e.key === '-') {
-      e.preventDefault();
-      zoomImage(0.8);
-    } else if (e.key === '0') {
-      e.preventDefault();
-      window.resetZoom();
-    }
-  };
-  
-  document.addEventListener('keydown', keyHandler);
   
   // Close on background click
   modal.addEventListener('click', (e) => {
-    if (e.target === modal || e.target === imageContainer) {
+    if (e.target === modal) {
       modal.remove();
-      document.removeEventListener('keydown', keyHandler);
     }
   });
-  
-  // Clean up when modal is removed
-  const observer = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      mutation.removedNodes.forEach((node) => {
-        if (node === modal) {
-          document.removeEventListener('keydown', keyHandler);
-          // Clean up global functions
-          delete window.zoomImage;
-          delete window.resetZoom;
-          observer.disconnect();
-        }
-      });
-    });
-  });
-  
-  observer.observe(document.body, { childList: true });
 }
 
 // Upload clipboard item to main file storage
