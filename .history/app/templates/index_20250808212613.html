@@ -6300,17 +6300,17 @@ function showImagePreview(imageSrc, filename) {
   document.addEventListener('keydown', keyHandler);
   
   // Prevent clicks on header and image container from closing modal
-  const headerElement = modal.querySelector('div[style*="backdrop-filter"]');
-  const imageContainerElement = modal.querySelector('.image-container');
+  const header = modal.querySelector('div[style*="backdrop-filter"]');
+  const imageContainer = modal.querySelector('.image-container');
   
-  if (headerElement) {
-    headerElement.addEventListener('click', (e) => {
+  if (header) {
+    header.addEventListener('click', (e) => {
       e.stopPropagation();
     });
   }
   
-  if (imageContainerElement) {
-    imageContainerElement.addEventListener('click', (e) => {
+  if (imageContainer) {
+    imageContainer.addEventListener('click', (e) => {
       e.stopPropagation();
     });
   }
