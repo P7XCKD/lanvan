@@ -25,3 +25,30 @@ certs/*.cert
 !certs/generate_certs_python.py
 !certs/cleanup_certs.py
 !certs/test_certificate.py
+
+# VS Code and IDE files
+.vscode/
+.history/
+*.swp
+*.swo
+*~
+
+# OS generated files
+Thumbs.db
+.DS_Store?
+ehthumbs.db
+
+# Temporary and backup files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Log files
+*.log
+logs/
+
+# Runtime files
+*.pid
+*.seed
+*.lock
