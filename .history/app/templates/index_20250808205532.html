@@ -2439,8 +2439,7 @@ Device Session will reset when browser is closed
         setTimeout(() => {
           const updatedFileCount = document.querySelectorAll('.file-card').length;
           if (updatedFileCount === currentFileCount) {
-            // File display hasn't updated, set flag and suggest manual refresh
-            hasRecentUploads = true; // Set flag for new files message
+            // File display hasn't updated, suggest manual refresh
             showToast(
               `📁 New file uploaded but not visible yet - Click here to refresh file list`,
               8000,
@@ -2537,8 +2536,7 @@ Device Session will reset when browser is closed
             setTimeout(() => {
               const updatedFileCount = document.querySelectorAll('.file-card').length;
               if (updatedFileCount === currentFileCount) {
-                // File display hasn't updated, set flag and suggest manual refresh
-                hasRecentUploads = true; // Set flag for new files message
+                // File display hasn't updated, suggest manual refresh
                 showToast(
                   `📁 ${totalFiles} new files uploaded but not visible yet - Click here to refresh file list`,
                   8000,
@@ -2864,8 +2862,7 @@ Device Session will reset when browser is closed
           setTimeout(() => {
             const updatedFileCount = document.querySelectorAll('.file-card').length;
             if (updatedFileCount === currentFileCount) {
-              // File display hasn't updated, set flag and suggest manual refresh
-              hasRecentUploads = true; // Set flag for new files message
+              // File display hasn't updated, suggest manual refresh
               showToast(
                 `📁 New file uploaded but not visible yet - Click here to refresh file list`,
                 8000,
@@ -3022,7 +3019,6 @@ Device Session will reset when browser is closed
     
     try {
       await refreshFileList();
-      hasRecentUploads = false; // Reset flag after manual refresh
       showToast('✅ File list refreshed successfully!', 3000);
     } catch (error) {
       console.error('❌ Manual refresh failed:', error);
@@ -3064,7 +3060,6 @@ Device Session will reset when browser is closed
         if (currentFileCount !== lastFileCount) {
           console.log(`🔄 File count changed: ${lastFileCount} → ${currentFileCount}, refreshing...`);
           updateFileDisplay(data.files);
-          hasRecentUploads = false; // Reset flag when files are successfully loaded
           
           // Show subtle notification for file changes from other devices
           if (currentFileCount > lastFileCount) {
@@ -3167,65 +3162,17 @@ Device Session will reset when browser is closed
         if (container) {
           const msg = document.createElement('div');
           msg.className = 'no-files-message';
-          
-          // Check if files have been uploaded recently but aren't visible
-          if (hasRecentUploads) {
-            msg.innerHTML = `
-              <p style="text-align: center; color: #007bff; font-style: italic; margin-bottom: 0.5rem;">
-                📁 New files detected, you can check them directly with manual refresh
-              </p>
-              <button onclick="refreshFileListManually()" style="
-                background: #007bff;
-                color: white;
-                border: none;
-                padding: 0.5rem 1rem;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 0.9rem;
-                margin: 0.5rem;
-              ">
-                🔄 Manual Refresh
-              </button>
-            `;
-          } else {
-            msg.innerHTML = '<p style="text-align: center; color: #666; font-style: italic;">No files uploaded yet. Drag & drop or click to upload!</p>';
-          }
-          
+          msg.innerHTML = '<p style="text-align: center; color: #666; font-style: italic;">No files uploaded yet. Drag & drop or click to upload!</p>';
           container.appendChild(msg);
         }
       } else {
-        // Update existing message
-        if (hasRecentUploads) {
-          noFilesMsg.innerHTML = `
-            <p style="text-align: center; color: #007bff; font-style: italic; margin-bottom: 0.5rem;">
-              📁 New files detected, you can check them directly with manual refresh
-            </p>
-            <button onclick="refreshFileListManually()" style="
-              background: #007bff;
-              color: white;
-              border: none;
-              padding: 0.5rem 1rem;
-              border-radius: 6px;
-              cursor: pointer;
-              font-size: 0.9rem;
-              margin: 0.5rem;
-            ">
-              🔄 Manual Refresh
-            </button>
-          `;
-        } else {
-          noFilesMsg.innerHTML = '<p style="text-align: center; color: #666; font-style: italic;">No files uploaded yet. Drag & drop or click to upload!</p>';
-        }
         noFilesMsg.style.display = 'block';
       }
       return;
     }
 
-    // Hide no files message and reset recent uploads flag when files are visible
-    if (noFilesMsg) {
-      noFilesMsg.style.display = 'none';
-      hasRecentUploads = false; // Reset flag when files become visible
-    }
+    // Hide no files message
+    if (noFilesMsg) noFilesMsg.style.display = 'none';
     
     // Update or create file grid
     if (!fileGrid) {

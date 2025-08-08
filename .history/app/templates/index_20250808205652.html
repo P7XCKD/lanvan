@@ -3064,7 +3064,6 @@ Device Session will reset when browser is closed
         if (currentFileCount !== lastFileCount) {
           console.log(`🔄 File count changed: ${lastFileCount} → ${currentFileCount}, refreshing...`);
           updateFileDisplay(data.files);
-          hasRecentUploads = false; // Reset flag when files are successfully loaded
           
           // Show subtle notification for file changes from other devices
           if (currentFileCount > lastFileCount) {

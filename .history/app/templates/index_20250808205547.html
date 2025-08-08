@@ -2439,8 +2439,7 @@ Device Session will reset when browser is closed
         setTimeout(() => {
           const updatedFileCount = document.querySelectorAll('.file-card').length;
           if (updatedFileCount === currentFileCount) {
-            // File display hasn't updated, set flag and suggest manual refresh
-            hasRecentUploads = true; // Set flag for new files message
+            // File display hasn't updated, suggest manual refresh
             showToast(
               `📁 New file uploaded but not visible yet - Click here to refresh file list`,
               8000,
@@ -2537,8 +2536,7 @@ Device Session will reset when browser is closed
             setTimeout(() => {
               const updatedFileCount = document.querySelectorAll('.file-card').length;
               if (updatedFileCount === currentFileCount) {
-                // File display hasn't updated, set flag and suggest manual refresh
-                hasRecentUploads = true; // Set flag for new files message
+                // File display hasn't updated, suggest manual refresh
                 showToast(
                   `📁 ${totalFiles} new files uploaded but not visible yet - Click here to refresh file list`,
                   8000,
@@ -2864,8 +2862,7 @@ Device Session will reset when browser is closed
           setTimeout(() => {
             const updatedFileCount = document.querySelectorAll('.file-card').length;
             if (updatedFileCount === currentFileCount) {
-              // File display hasn't updated, set flag and suggest manual refresh
-              hasRecentUploads = true; // Set flag for new files message
+              // File display hasn't updated, suggest manual refresh
               showToast(
                 `📁 New file uploaded but not visible yet - Click here to refresh file list`,
                 8000,
@@ -3022,7 +3019,6 @@ Device Session will reset when browser is closed
     
     try {
       await refreshFileList();
-      hasRecentUploads = false; // Reset flag after manual refresh
       showToast('✅ File list refreshed successfully!', 3000);
     } catch (error) {
       console.error('❌ Manual refresh failed:', error);
@@ -3064,7 +3060,6 @@ Device Session will reset when browser is closed
         if (currentFileCount !== lastFileCount) {
           console.log(`🔄 File count changed: ${lastFileCount} → ${currentFileCount}, refreshing...`);
           updateFileDisplay(data.files);
-          hasRecentUploads = false; // Reset flag when files are successfully loaded
           
           // Show subtle notification for file changes from other devices
           if (currentFileCount > lastFileCount) {
