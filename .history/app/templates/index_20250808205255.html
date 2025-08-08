@@ -1977,8 +1977,6 @@ Device Session will reset when browser is closed
     // Throttle UI updates to prevent flickering, except for important state changes
     const isImportantUpdate = 
       uploadItem.status === 'uploading' || 
-      uploadItem.status === 'cancelled' || 
-      uploadItem.status === 'error' ||
       uploadItem.progress === 100;
     
     if (!isImportantUpdate && (now - lastUpdate) < UI_UPDATE_THROTTLE) {
@@ -2077,7 +2075,7 @@ Device Session will reset when browser is closed
     // Force immediate UI update to show cancel status
     updateUploadItem(uploadItem);
     
-    // Also force update the progress text and button visibility with immediate styling
+    // Also force update the progress text and button visibility
     const statusText = document.getElementById(`status-${uploadItem.id}`);
     const speedText = document.getElementById(`speed-${uploadItem.id}`);
     const remainingText = document.getElementById(`remaining-${uploadItem.id}`);
@@ -2088,13 +2086,7 @@ Device Session will reset when browser is closed
     if (speedText) speedText.textContent = 'Cancelled';
     if (remainingText) remainingText.textContent = '';
     if (cancelBtn) cancelBtn.style.display = 'none';
-    
-    // Force immediate red styling application
-    if (itemDiv) {
-      itemDiv.className = 'upload-item cancelled';
-      // Force CSS update by triggering reflow
-      itemDiv.offsetHeight;
-    }
+    if (itemDiv) itemDiv.className = 'upload-item cancelled';
     
     // Keep the current progress - don't reset it to show how much was uploaded
     console.log(`❌ Upload cancelled: ${uploadItem.fileName} at ${uploadItem.progress.toFixed(1)}%`);
@@ -6804,8 +6796,6 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
             resize: vertical;
             font-family: monospace;
             font-size: 0.9rem;
-            white-space: pre-wrap;
-            word-wrap: break-word;
           " onpaste="handleClipboardPaste(event)"></textarea>
           <small style="color: #666; font-size: 0.8rem;">
             💡 Supports: Text content and images (paste images directly with Ctrl+V)
