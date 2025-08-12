@@ -5335,9 +5335,9 @@ window.closeDownloadModal = closeDownloadModal;
 
 // 📡 Enhanced QR Code Generation for Connection Info - Faster & More Reliable
 function generateQRCode(text, size = 200) {
-  // Use smaller QR for faster loading, especially for guest devices
+  // Use larger QR for better visibility, but still optimized for guests
   const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
-  const qrSize = isGuest ? 120 : size;
+  const qrSize = isGuest ? 180 : size;
   const services = [
     `https://quickchart.io/qr?text=${encodeURIComponent(text)}&size=${qrSize}&format=png&margin=1`,
     `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(text)}&margin=10&format=png`,
@@ -5458,7 +5458,7 @@ async function showConnectionInfo() {
   
   // 🚀 ENHANCED: Multiple QR generation strategies for reliability
   const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
-  const qrSize = isGuest ? 120 : 200;
+  const qrSize = isGuest ? 180 : 200;
   const qrServices = [
     `https://quickchart.io/qr?text=${encodeURIComponent(fullUrl)}&size=${qrSize}&format=png&margin=1`,
     `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(fullUrl)}&margin=10&format=png`,
@@ -5490,12 +5490,12 @@ async function showConnectionInfo() {
       <div id="qr-container" style="text-align: center; min-height: 220px; position: relative;">
         <!-- Primary QR Code -->
      <img id="qr-primary" 
-       style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; max-width: 120px; height: auto; margin: 0 auto;"
+       style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; max-width: 180px; height: auto; margin: 0 auto;"
        onload="showQRSuccess(this, 'primary')"
        onerror="showOfflineQR()">
      <!-- Fallback QR Code (skip for guest devices, use offline QR instantly) -->
      <img id="qr-fallback" 
-       style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; max-width: 120px; height: auto; margin: 0 auto;"
+       style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; max-width: 180px; height: auto; margin: 0 auto;"
        onload="showQRSuccess(this, 'fallback')"
        onerror="showOfflineQR()">
         
