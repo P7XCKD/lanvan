@@ -5345,6 +5345,39 @@ function generateQRCode(text, size = 200) {
   return services[0];
 }
 
+// 🚀 Preload QR code image as soon as the page loads for instant display
+document.addEventListener('DOMContentLoaded', function() {
+  // Get the URL to encode (same as used in showConnectionInfo)
+  let protocol = location.protocol;
+  let hostname = location.hostname;
+  let port = location.port;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    // Try to get actual LAN IP from server (async, fallback to hostname)
+    fetch('/api/network-info').then(response => response.json()).then(networkInfo => {
+      if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
+        hostname = networkInfo.lan_ip;
+      }
+      preloadQR(protocol, hostname, port);
+    }).catch(() => {
+      preloadQR(protocol, hostname, port);
+    });
+  } else {
+    preloadQR(protocol, hostname, port);
+  }
+  function preloadQR(protocol, hostname, port) {
+    let fullUrl = `${protocol}//${hostname}`;
+    if (port && port !== '80' && port !== '443') {
+      fullUrl += `:${port}`;
+    }
+    const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
+    const qrSize = isGuest ? 180 : 200;
+    const qrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(fullUrl)}&size=${qrSize}&format=png&margin=1`;
+    const img = new window.Image();
+    img.src = qrUrl;
+    window._preloadedQR = { url: qrUrl, img: img };
+  }
+});
+
 // 🌐 Enhanced offline QR code generator (backup method)
 function generateOfflineQR(text, canvas) {
   // Create a simple grid-based QR code for offline use
@@ -5463,6 +5496,24 @@ async function showConnectionInfo() {
     `https://quickchart.io/qr?text=${encodeURIComponent(fullUrl)}&size=${qrSize}&format=png&margin=1`,
     `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(fullUrl)}&margin=10&format=png`,
   ];
+  // If preloaded QR matches, use it instantly
+  setTimeout(() => {
+    const primaryQR = document.getElementById('qr-primary');
+    if (primaryQR) {
+      if (window._preloadedQR && window._preloadedQR.url === qrServices[0]) {
+        primaryQR.src = window._preloadedQR.img.src;
+      } else {
+        primaryQR.src = qrServices[0];
+      }
+      if (isGuest) {
+        setTimeout(() => {
+          if (primaryQR.style.display === 'none') {
+            showOfflineQR();
+          }
+        }, 1000);
+      }
+    }
+  }, 10);
   
   const lanInstructions = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') && hostname === location.hostname ? `
     <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
