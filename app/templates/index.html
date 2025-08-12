@@ -565,15 +565,30 @@
       }
       
       .clipboard-buttons {
-        gap: 0.5rem;
-        flex-wrap: wrap;
-        margin-top: 0.8rem;
+          display: flex;
+          gap: 0.5rem;
+          flex-wrap: wrap;
+          margin-top: 0.8rem;
+          justify-content: flex-end;
+          width: 100%;
       }
       
       .clipboard-buttons button {
-        flex: 1;
-        min-width: 120px;
+          flex: 1 1 120px;
+          min-width: 120px;
+          max-width: 100%;
+          box-sizing: border-box;
       }
+        @media (max-width: 600px) {
+          .clipboard-buttons {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .clipboard-buttons button {
+            min-width: 0;
+            width: 100%;
+          }
+        }
       
       /* File count display */
       .file-section h2 {
