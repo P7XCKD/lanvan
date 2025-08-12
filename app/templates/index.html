@@ -5335,13 +5335,14 @@ window.closeDownloadModal = closeDownloadModal;
 
 // 📡 Enhanced QR Code Generation for Connection Info - Faster & More Reliable
 function generateQRCode(text, size = 200) {
-  // Use multiple QR services for better reliability and speed
+  // Use smaller QR for faster loading, especially for guest devices
+  const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
+  const qrSize = isGuest ? 120 : size;
   const services = [
-    `https://quickchart.io/qr?text=${encodeURIComponent(text)}&size=${size}&format=png&margin=1`,
-    `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}&margin=10&format=png`,
+    `https://quickchart.io/qr?text=${encodeURIComponent(text)}&size=${qrSize}&format=png&margin=1`,
+    `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(text)}&margin=10&format=png`,
   ];
-  
-  return services[0]; // Start with fastest service
+  return services[0];
 }
 
 // 🌐 Enhanced offline QR code generator (backup method)
@@ -5456,9 +5457,11 @@ async function showConnectionInfo() {
   `;
   
   // 🚀 ENHANCED: Multiple QR generation strategies for reliability
+  const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
+  const qrSize = isGuest ? 120 : 200;
   const qrServices = [
-    `https://quickchart.io/qr?text=${encodeURIComponent(fullUrl)}&size=200&format=png&margin=1`,
-    `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(fullUrl)}&margin=10&format=png`,
+    `https://quickchart.io/qr?text=${encodeURIComponent(fullUrl)}&size=${qrSize}&format=png&margin=1`,
+    `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(fullUrl)}&margin=10&format=png`,
   ];
   
   const lanInstructions = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') && hostname === location.hostname ? `
@@ -5486,16 +5489,15 @@ async function showConnectionInfo() {
       <!-- QR Code Container with Immediate Loading -->
       <div id="qr-container" style="text-align: center; min-height: 220px; position: relative;">
         <!-- Primary QR Code -->
-        <img id="qr-primary" 
-             style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; max-width: 200px; height: auto; margin: 0 auto;"
-             onload="showQRSuccess(this, 'primary')"
-             onerror="tryFallbackQR()">
-        
-        <!-- Fallback QR Code -->
-        <img id="qr-fallback" 
-             style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; max-width: 200px; height: auto; margin: 0 auto;"
-             onload="showQRSuccess(this, 'fallback')"
-             onerror="showOfflineQR()">
+     <img id="qr-primary" 
+       style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; max-width: 120px; height: auto; margin: 0 auto;"
+       onload="showQRSuccess(this, 'primary')"
+       onerror="showOfflineQR()">
+     <!-- Fallback QR Code (skip for guest devices, use offline QR instantly) -->
+     <img id="qr-fallback" 
+       style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; max-width: 120px; height: auto; margin: 0 auto;"
+       onload="showQRSuccess(this, 'fallback')"
+       onerror="showOfflineQR()">
         
         <!-- Loading Animation -->
         <div id="qr-loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
@@ -5531,8 +5533,16 @@ async function showConnectionInfo() {
     const primaryQR = document.getElementById('qr-primary');
     if (primaryQR) {
       primaryQR.src = qrServices[0];
+      // For guest devices, if not loaded in 1s, show offline QR immediately
+      if (isGuest) {
+        setTimeout(() => {
+          if (primaryQR.style.display === 'none') {
+            showOfflineQR();
+          }
+        }, 1000);
+      }
     }
-  }, 50); // Small delay to ensure DOM is ready
+  }, 10); // Even smaller delay for instant QR
   
   // Close on background click
   modal.addEventListener('click', (e) => {
