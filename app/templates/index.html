@@ -954,36 +954,31 @@
 {% endif %}
 
 {% if show_clipboard_only %}
-<!-- 📋 Clipboard System (Full Page) -->
-<div style="max-width: 800px; margin: 2rem auto; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 2rem;">
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-    <h3 style="margin: 0; color: #333; font-size: 1.3rem;">📋 Clipboard System</h3>
+<!-- 📋 Clipboard System (Unified Layout) -->
+<section>
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <h2>Clipboard System</h2>
+    </div>
     <div style="display: flex; gap: 0.5rem; align-items: center;">
       <div style="position: relative;">
-        <button onclick="showSwitchDropdown(event, 'switchDropdownClipboard')" class="clipboard-btn" style="background: linear-gradient(135deg, #6c5ce7, #a29bfe); color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(108, 92, 231, 0.3);" title="Switch between File Sharing and Clipboard">
-          🔄 Switch
-        </button>
+        <button onclick="showSwitchDropdown(event, 'switchDropdownClipboard')" class="clipboard-btn" style="background: linear-gradient(135deg, #6c5ce7, #a29bfe); color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(108, 92, 231, 0.3);" title="Switch between File Sharing and Clipboard">🔄 Switch</button>
         <div id="switchDropdownClipboard" style="display:none; position:absolute; right:0; top:110%; background:white; border:1px solid #ccc; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); min-width:150px; z-index:10001;">
           <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem;" onclick="switchToPage('file')">
-            <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;">
-              <span style="font-size: 1.3em;">📁</span>
-              <span>File Sharing</span>
-            </span>
+            <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;"><span style="font-size: 1.3em;">📁</span><span>File Sharing</span></span>
             {% if not show_clipboard_only %}<span style="color: #7c3aed; font-size: 1.3em; margin-left: 10px;">✔️</span>{% endif %}
           </div>
           <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem;" onclick="switchToPage('clipboard')">
-            <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;">
-              <span style="font-size: 1.3em;">📋</span>
-              <span>Clipboard</span>
-            </span>
+            <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;"><span style="font-size: 1.3em;">📋</span><span>Clipboard</span></span>
             {% if show_clipboard_only %}<span style="color: #7c3aed; font-size: 1.3em; margin-left: 10px;">✔️</span>{% endif %}
           </div>
         </div>
       </div>
     </div>
   </div>
+
   <!-- Clipboard Input Section -->
-  <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+  <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin: 1.5rem 0;">
     <h4 style="margin: 0 0 1rem 0; color: #333;">Add to Clipboard</h4>
     <div style="margin-bottom: 1rem;">
       <label style="display: block; margin-bottom: 0.5rem; font-weight: bold; color: #555;">Paste Text/Content:</label>
@@ -991,18 +986,19 @@
       <small style="color: #666; font-size: 0.8rem;">💡 Supports: Text content and images (paste images directly with Ctrl+V)</small>
     </div>
     <div style="display: flex; gap: 0.5rem;">
-      <button onclick="addTextToClipboard()" style="background: #28a745; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">📝 Add Text</button>
-      <button onclick="clearClipboardInput()" style="background: #6c757d; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">🧹 Clear Input</button>
+      <button onclick="addTextToClipboard()" class="download-btn" style="background: #28a745;">📝 Add Text</button>
+      <button onclick="clearClipboardInput()" class="download-btn" style="background: #6c757d;">🧹 Clear Input</button>
     </div>
   </div>
+
   <!-- Clipboard History Section -->
   <div style="background: #fff; padding: 1rem; border-radius: 8px; border: 1px solid #e0e0e0;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
       <h4 style="margin: 0; color: #333;">📚 Clipboard History</h4>
       <div style="display: flex; gap: 0.5rem;">
-        <button onclick="refreshClipboardHistory()" style="background: #17a2b8; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">🔄 Refresh</button>
-        <button onclick="downloadClipboardHistory()" style="background: #28a745; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">📄 Download History</button>
-        <button onclick="clearAllClipboardHistory()" style="background: #dc3545; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">🧹 Clear All</button>
+        <button onclick="refreshClipboardHistory()" class="download-btn" style="background: #17a2b8;">🔄 Refresh</button>
+        <button onclick="downloadClipboardHistory()" class="download-btn" style="background: #28a745;">📄 Download History</button>
+        <button onclick="clearAllClipboardHistory()" class="download-btn" style="background: #dc3545;">🧹 Clear All</button>
       </div>
     </div>
     <div id="clipboardHistoryContent" style="max-height: 300px; overflow-y: auto; background: #f9f9f9; padding: 1rem; border-radius: 8px; border: 1px solid #e0e0e0;">
@@ -1013,8 +1009,39 @@
       </div>
     </div>
   </div>
-</div>
+</section>
 {% endif %}
+
+<!-- 📋 Clipboard Real-Time WebSocket Auto-Refresh -->
+<script>
+  if (typeof show_clipboard_only !== 'undefined' && show_clipboard_only) {
+    let ws = null;
+    function connectClipboardWS() {
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsUrl = `${protocol}://${window.location.host}/ws/clipboard`;
+      ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        //console.log('📡 Clipboard WebSocket connected');
+      };
+      ws.onmessage = (event) => {
+        if (event.data === 'refresh') {
+          if (typeof refreshClipboardHistory === 'function') refreshClipboardHistory();
+        }
+      };
+      ws.onclose = () => {
+        // Try to reconnect after 2s if disconnected
+        setTimeout(connectClipboardWS, 2000);
+      };
+      ws.onerror = () => {
+        ws.close();
+      };
+    }
+    document.addEventListener('DOMContentLoaded', connectClipboardWS);
+    window.addEventListener('beforeunload', () => {
+      if (ws) ws.close();
+    });
+  }
+</script>
 
 <!-- 📡 Auto Upload JS -->
 <script>

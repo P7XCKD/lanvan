@@ -12,6 +12,7 @@ from fastapi.responses import (
     JSONResponse, Response
 )
 from fastapi.templating import Jinja2Templates
+from app.clipboard_ws import clipboard_ws_manager
 from starlette.status import HTTP_302_FOUND, HTTP_400_BAD_REQUEST
 
 from app.aes_utils import encrypt_session_data, decrypt_session_data
@@ -1152,11 +1153,18 @@ async def add_to_clipboard(
         
         # Add to clipboard history (newest first)
         clipboard_history.insert(0, clipboard_item)
-        
+
         # Keep only last 50 items to prevent memory bloat
         if len(clipboard_history) > 50:
             clipboard_history = clipboard_history[:50]
-        
+
+        # Notify all websocket clients (real-time clipboard update)
+        try:
+            import asyncio
+            asyncio.create_task(clipboard_ws_manager.broadcast("refresh"))
+        except Exception:
+            pass
+
         return JSONResponse(content={
             "status": "success",
             "msg": f"Added to clipboard: {clipboard_item['type']}",

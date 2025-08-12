@@ -42,7 +42,10 @@ class ConnectionManager:
 
 connection_manager = ConnectionManager()
 
+
 # 🎯 Console command monitor for "close" command
+from app.clipboard_ws import clipboard_ws_router
+
 def console_command_monitor():
     """Monitor console for 'close' command"""
     while not shutdown_event.is_set():
@@ -190,3 +193,4 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # ✅ Register app routes
 app.include_router(router)
+app.include_router(clipboard_ws_router)
