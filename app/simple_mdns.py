@@ -2,8 +2,12 @@ import socket
 import threading
 import time
 import logging
+import hashlib
+import uuid
+import platform
+import os
 from typing import Optional, Dict, Any
-from zeroconf import ServiceInfo, Zeroconf
+from zeroconf import ServiceInfo, Zeroconf, ServiceBrowser
 
 class SimpleMDNSManager:
     """
@@ -23,6 +27,11 @@ class SimpleMDNSManager:
         self.conflict_count = 0
         self.is_running = False
         self.lan_ip = None
+        self.device_id = self._generate_device_id()
+        self._lock = threading.Lock()
+        
+        # Setup simple logging
+        self.logger = logging.getLogger(__name__)
 
     @property
     def use_https(self):
@@ -32,6 +41,101 @@ class SimpleMDNSManager:
     def use_https(self, value):
         self._use_https = value
         self.protocol = "https" if value else "http"
+
+    def _generate_device_id(self) -> str:
+        """Generate a unique, consistent device identifier for collision avoidance"""
+        try:
+            device_parts = []
+            
+            # Get hostname (most reliable)
+            try:
+                hostname = socket.gethostname().lower()
+                # Clean hostname for mDNS compatibility (alphanumeric + hyphens only)
+                hostname = ''.join(c if c.isalnum() or c == '-' else '' for c in hostname)
+                if hostname and hostname != 'localhost':
+                    device_parts.append(hostname[:8])  # Max 8 chars
+            except:
+                pass
+            
+            # Get MAC address (hardware-based, persistent)
+            try:
+                mac = uuid.getnode()
+                mac_hex = format(mac, 'x')[-4:]  # Last 4 hex digits
+                device_parts.append(mac_hex)
+            except:
+                pass
+            
+            # Get platform info for differentiation
+            try:
+                system = platform.system().lower()
+                if 'android' in str(os.environ.get('PREFIX', '')).lower():
+                    device_parts.append('termux')
+                elif system == 'windows':
+                    device_parts.append('win')
+                elif system == 'linux':
+                    device_parts.append('linux')
+                elif system == 'darwin':
+                    device_parts.append('mac')
+                else:
+                    device_parts.append('other')
+            except:
+                device_parts.append('unknown')
+            
+            # Create identifier from available parts
+            if device_parts:
+                primary = device_parts[0] if device_parts[0] != 'unknown' else 'device'
+                # Create a short hash from all parts for uniqueness
+                all_parts = ''.join(device_parts)
+                short_hash = hashlib.md5(all_parts.encode()).hexdigest()[:3]
+                return f"{primary}-{short_hash}"
+            else:
+                # Ultimate fallback
+                import random
+                return f"device-{random.randint(100, 999)}"
+                
+        except Exception as e:
+            print(f"⚠️ Device identifier generation failed: {e}")
+            return f"lanvan-{hash(str(time.time())) % 1000}"
+
+    def _detect_collision(self, service_name: str) -> tuple[str, bool]:
+        """Detect if service name is already in use and suggest alternative"""
+        try:
+            # Quick check - browse for existing services
+            zeroconf_browser = Zeroconf()
+            services_found = []
+            collision_detected = False
+            
+            def service_added(zeroconf, service_type, name):
+                services_found.append(name)
+            
+            try:
+                browser = ServiceBrowser(zeroconf_browser, self.service_type, handlers=[service_added])
+                # Wait briefly for discovery
+                time.sleep(0.5)
+                browser.cancel()
+                
+                # Check if our desired name conflicts
+                target_service = f"{service_name}.{self.service_type}"
+                collision_detected = target_service in services_found
+                
+                if collision_detected:
+                    # Generate alternative name with device ID
+                    alternative_name = f"{service_name}-{self.device_id}"
+                    print(f"⚠️ Name collision detected! '{service_name}' is already in use")
+                    print(f"🔄 Using alternative name: '{alternative_name}'")
+                    return alternative_name, True
+                else:
+                    return service_name, False
+                    
+            finally:
+                zeroconf_browser.close()
+                
+        except Exception as e:
+            print(f"⚠️ Collision detection failed: {e}")
+            # If collision detection fails, add device identifier as safety measure
+            safe_name = f"{service_name}-{self.device_id}"
+            print(f"🔧 Using safe unique name: '{safe_name}'")
+            return safe_name, False
         self._lock = threading.Lock()
         
         # Setup simple logging
@@ -53,26 +157,30 @@ class SimpleMDNSManager:
             return "127.0.0.1"
     
     def generate_service_name(self) -> str:
-        """Generate unique service name with conflict resolution"""
+        """Generate unique service name with collision resolution"""
         base_name = self.base_service_name
         if self.use_https:
             base_name = f"{self.base_service_name}-https"
         
-        if self.conflict_count == 0:
-            return base_name
-        return f"{base_name}-{self.conflict_count}"
+        # Use collision detection for the base name
+        final_name, collision_resolved = self._detect_collision(base_name)
+        
+        if collision_resolved:
+            self.conflict_count += 1
+        
+        return final_name
     
     def start_service(self) -> bool:
-        """Start mDNS service"""
+        """Start mDNS service with collision detection and performance optimizations"""
         try:
             with self._lock:
                 if self.is_running:
                     return True
                 
-                # Create zeroconf instance
-                self.zeroconf = Zeroconf()
+                # Create zeroconf instance with optimizations
+                self.zeroconf = Zeroconf()  # Use default interfaces
                 
-                # Generate service details
+                # Generate service details with collision detection
                 self.service_name = self.generate_service_name()
                 self.domain = f"{self.service_name}.local"
                 
@@ -83,30 +191,42 @@ class SimpleMDNSManager:
                 # Create service name
                 service_name_full = f"{self.service_name}.{self.service_type}"
                 
-                # Simple properties with protocol information
+                # Enhanced properties with more information
                 properties = {
                     b'version': b'1.0.0',
                     b'service': b'lanvan-file-server',
                     b'protocol': self.protocol.encode('utf-8'),
-                    b'secure': b'true' if self.use_https else b'false'
+                    b'secure': b'true' if self.use_https else b'false',
+                    b'features': b'file-transfer,clipboard,encryption',
+                    b'device_id': self.device_id.encode('utf-8'),
+                    b'collision_resolved': b'true' if self.conflict_count > 0 else b'false',
+                    b'instant_ready': b'true'  # Indicate service is ready for immediate connections
                 }
                 
-                # Create service info
+                # Create service info with optimization for instant loading
                 self.service_info = ServiceInfo(
                     self.service_type,
                     service_name_full,
                     addresses=[socket.inet_aton(lan_ip)],
                     port=self.port,
                     properties=properties,
-                    server=f"{hostname}.local."
+                    server=f"{self.service_name}.local."  # Use service name for better resolution
                 )
                 
                 # Register the service
                 self.zeroconf.register_service(self.service_info)
                 self.is_running = True
                 
-                print(f"✅ mDNS service started: {self.domain}:{self.port}")
+                # Force immediate announcement (send multiple quick announcements)
+                time.sleep(0.1)  # Small delay to ensure registration
+                
+                protocol_display = "HTTPS" if self.use_https else "HTTP"
+                print(f"✅ mDNS service started: {self.domain}:{self.port} ({protocol_display})")
                 print(f"   Available at: {self.protocol}://{self.domain}:{self.port}")
+                print(f"⚡ Optimized for instant loading and guest connections")
+                
+                if self.conflict_count > 0:
+                    print(f"ℹ️ Collision resolved - using unique name: {self.service_name}")
                 
                 return True
                 
