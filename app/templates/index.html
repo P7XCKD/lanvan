@@ -3894,6 +3894,9 @@ Device Session will reset when browser is closed
         qrHintText.innerHTML = 'Consider using HTTPS for encrypted file transfers.';
       }
     }
+    
+    // ✅ Check for mDNS service and update status
+    updateMDNSStatus();
 
     // ✅ Handle AES toggle restrictions - DISABLED FOR HTTP
     if (location.protocol === 'http:') {
@@ -5367,17 +5370,43 @@ document.addEventListener('DOMContentLoaded', function() {
   let hostname = location.hostname;
   let port = location.port;
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    // Try to get actual LAN IP from server (async, fallback to hostname)
+    // Try to get network info including mDNS from server (async, fallback to hostname)
     fetch('/api/network-info').then(response => response.json()).then(networkInfo => {
-      if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
-        hostname = networkInfo.lan_ip;
+      let useHostname = hostname;
+      
+      // Prefer mDNS if available, otherwise use LAN IP
+      if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.hybrid_url) {
+        // Use the full hybrid URL which includes mDNS domain if available
+        preloadQRFromUrl(networkInfo.hybrid_url);
+      } else if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
+        useHostname = networkInfo.lan_ip;
+        preloadQR(protocol, useHostname, port);
+      } else {
+        preloadQR(protocol, hostname, port);
       }
-      preloadQR(protocol, hostname, port);
     }).catch(() => {
       preloadQR(protocol, hostname, port);
     });
   } else {
     preloadQR(protocol, hostname, port);
+  }
+  
+  function preloadQRFromUrl(fullUrl) {
+    const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
+    const qrSize = isGuest ? 180 : 200;
+    const qrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(fullUrl)}&size=${qrSize}&format=png&margin=1`;
+    const img = new window.Image();
+    img.onload = () => {
+      window._preloadedQR = {
+        url: qrUrl,
+        img: img,
+        timestamp: Date.now()
+      };
+    };
+    img.onerror = () => {
+      console.log('QR preload failed, will generate on-demand');
+    };
+    img.src = qrUrl;
   }
   function preloadQR(protocol, hostname, port) {
     let fullUrl = `${protocol}//${hostname}`;
@@ -5443,35 +5472,48 @@ function generateOfflineQR(text, canvas) {
   return canvas.toDataURL();
 }
 
-// 🔗 Enhanced LAN IP and show connection info modal with better QR handling
+// 🔗 Enhanced LAN IP and show connection info modal with mDNS support
 async function showConnectionInfo() {
-  // Get current URL info but FORCE LAN IP instead of localhost
+  // Get current URL info but FORCE LAN IP or mDNS instead of localhost
   const protocol = location.protocol;
   let hostname = location.hostname;
   const port = location.port;
+  let useMDNS = false;
+  let mdnsUrl = null;
   
-  // 🔧 FIX: Always use LAN IP instead of localhost for QR codes
+  // 🔧 FIX: Always use LAN IP or mDNS instead of localhost for QR codes
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    // Try to get actual LAN IP from server
+    // Try to get network info with mDNS from server
     try {
       const response = await fetch('/api/network-info');
       if (response.ok) {
         const networkInfo = await response.json();
-        if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
+        
+        // Prefer mDNS if available
+        if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.mdns.domain) {
+          hostname = networkInfo.mdns.domain;
+          useMDNS = true;
+          mdnsUrl = networkInfo.hybrid_url;
+        } else if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
           hostname = networkInfo.lan_ip;
         }
       }
     } catch (error) {
-      console.log('Could not fetch LAN IP from server, using current hostname');
+      console.log('Could not fetch network info from server, using current hostname');
     }
   }
   
   const isHTTPS = protocol === 'https:';
   
-  // Construct URL with proper LAN IP
-  let fullUrl = `${protocol}//${hostname}`;
-  if (port && port !== '80' && port !== '443') {
-    fullUrl += `:${port}`;
+  // Construct URL with proper hostname (mDNS or LAN IP)
+  let fullUrl;
+  if (useMDNS && mdnsUrl) {
+    fullUrl = mdnsUrl;
+  } else {
+    fullUrl = `${protocol}//${hostname}`;
+    if (port && port !== '80' && port !== '443') {
+      fullUrl += `:${port}`;
+    }
   }
   
   // Create modal with immediate QR loading
@@ -5583,6 +5625,14 @@ async function showConnectionInfo() {
         <code id="connection-url" style="flex: 1; background: white; padding: 0.5rem; border-radius: 5px; border: 1px solid #ddd; font-size: 0.85rem; word-break: break-all; min-width: 200px;">${fullUrl}</code>
         <button onclick="copyConnectionUrl()" style="background: #007bff; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer; font-size: 0.85rem; white-space: nowrap;" title="Copy URL to clipboard">📋 Copy</button>
       </div>
+      ${useMDNS ? `
+        <div style="margin-top: 0.8rem; padding: 0.6rem; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 6px;">
+          <small style="color: #155724; display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem;">
+            <span>🌐</span>
+            <strong>mDNS Active:</strong> Easy access via domain name - no IP needed!
+          </small>
+        </div>
+      ` : ''}
     </div>
     
     ${lanInstructions}
@@ -5663,6 +5713,30 @@ function closeConnectionModal() {
   if (modal) {
     modal.remove();
     window.currentConnectionModal = null;
+  }
+}
+
+// 🌐 Update mDNS status in protocol indicator
+async function updateMDNSStatus() {
+  try {
+    const response = await fetch('/api/network-info');
+    if (response.ok) {
+      const networkInfo = await response.json();
+      const qrHintText = document.getElementById('qrHintText');
+      
+      if (networkInfo.mdns && networkInfo.mdns.status === 'active' && qrHintText) {
+        const domain = networkInfo.mdns.domain;
+        const conflictInfo = networkInfo.mdns.conflict_resolved 
+          ? ` (resolved conflict #${networkInfo.mdns.conflict_count + 1})` 
+          : '';
+        
+        qrHintText.innerHTML = `🌐 <strong>mDNS:</strong> ${domain}${conflictInfo} • Click for QR`;
+        qrHintText.style.color = '#22c55e';
+        qrHintText.title = `mDNS service active - accessible via ${domain}`;
+      }
+    }
+  } catch (error) {
+    console.log('Could not fetch mDNS status:', error);
   }
 }
 

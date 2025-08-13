@@ -11,6 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from app.routes import router
 
+# Import mDNS manager for service discovery
+from app.mdns_manager import mdns_manager
+
 # 🚨 Global shutdown event for immediate server termination
 shutdown_event = asyncio.Event()
 active_connections = set()
@@ -113,12 +116,31 @@ async def lifespan(app: FastAPI):
     print("🚀 Server starting up with enhanced shutdown handling...")
     print("💡 Press Ctrl+C or type 'close' in console to shutdown gracefully")
     
+    # Start mDNS service
+    port = int(os.environ.get('PORT', 5000))
+    mdns_manager.port = port
+    
+    print("🔍 Starting mDNS service discovery...")
+    if mdns_manager.start_service():
+        mdns_info = mdns_manager.get_mdns_info()
+        print(f"✅ mDNS service active: {mdns_info['domain']}")
+        print(f"   Access via: {mdns_info['url']}")
+        if mdns_info['conflict_resolved']:
+            print(f"   🔧 Conflict resolved (attempt #{mdns_info['conflict_count'] + 1})")
+    else:
+        print("⚠️  mDNS service failed to start - using IP access only")
+    
     # Store shutdown state in app for access from routes
     app.state.graceful_shutdown_initiated = False
     app.state.shutdown_countdown = 0
     
     yield
     print("🚨 Server shutting down immediately...")
+    
+    # Stop mDNS service
+    print("🔴 Stopping mDNS service...")
+    mdns_manager.stop_service()
+    
     # Force close all active connections
     await connection_manager.disconnect_all()
     # Set shutdown event

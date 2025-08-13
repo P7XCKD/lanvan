@@ -23,6 +23,7 @@ from app.validation import (
     is_allowed_file,
     FileValidator
 )
+from app.mdns_manager import mdns_manager
 
 # === Setup ===
 router = APIRouter()
@@ -1017,7 +1018,7 @@ async def server_status():
 
 @router.get("/api/network-info", name="network_info")
 async def get_network_info():
-    """Get network information including LAN IP"""
+    """Get network information including LAN IP and mDNS info"""
     try:
         import socket
         
@@ -1027,10 +1028,15 @@ async def get_network_info():
         lan_ip = s.getsockname()[0]
         s.close()
         
+        # Get mDNS info
+        mdns_info = mdns_manager.get_mdns_info()
+        
         return JSONResponse(content={
             "status": "success",
             "lan_ip": lan_ip,
-            "hostname": socket.gethostname()
+            "hostname": socket.gethostname(),
+            "mdns": mdns_info,
+            "hybrid_url": mdns_manager.get_hybrid_url()
         })
     except Exception as e:
         return JSONResponse(
@@ -1038,7 +1044,9 @@ async def get_network_info():
             content={
                 "status": "error",
                 "error": str(e),
-                "lan_ip": "127.0.0.1"
+                "lan_ip": "127.0.0.1",
+                "mdns": {"status": "error", "domain": None},
+                "hybrid_url": f"http://127.0.0.1:{mdns_manager.port}"
             }
         )
 
