@@ -119,9 +119,11 @@ async def lifespan(app: FastAPI):
     
     # Start mDNS service
     port = int(os.environ.get('PORT', 5000))
+    use_https = port == 5001  # Detect HTTPS mode based on port
     mdns_manager.port = port
+    mdns_manager.use_https = use_https  # Configure HTTPS mode
     
-    print("🔍 Starting mDNS service discovery...")
+    print(f"🔍 Starting mDNS service discovery ({'HTTPS' if use_https else 'HTTP'} mode)...")
     
     # Start mDNS in background thread to not block server startup
     def start_mdns_background():
