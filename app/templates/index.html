@@ -5483,36 +5483,42 @@ async function showConnectionInfo() {
   let networkInfo = null;
   let lanIpUrl = null;
   
-  // 🔧 FIX: Always use LAN IP or mDNS instead of localhost for QR codes
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    // Try to get network info with mDNS from server
-    try {
-      const response = await fetch('/api/network-info');
-      if (response.ok) {
-        networkInfo = await response.json();
-        
-        // Always prepare the LAN IP URL as fallback
-        if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
-          lanIpUrl = `${protocol}//${networkInfo.lan_ip}`;
-          if (port && port !== '80' && port !== '443') {
-            lanIpUrl += `:${port}`;
-          }
-        }
-        
-        // Prefer mDNS if available
-        if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.mdns.domain) {
-          hostname = networkInfo.mdns.domain;
-          useMDNS = true;
-          mdnsUrl = networkInfo.hybrid_url;
-          console.log('✅ mDNS detected:', networkInfo.mdns.domain, 'URL:', networkInfo.hybrid_url);
-        } else if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
-          hostname = networkInfo.lan_ip;
-          console.log('⚠️ mDNS not available, using IP:', networkInfo.lan_ip);
+  // 🔧 ALWAYS fetch network info to check for mDNS availability
+  try {
+    const response = await fetch('/api/network-info');
+    if (response.ok) {
+      networkInfo = await response.json();
+      console.log('📡 Network info received:', networkInfo);
+      
+      // Always prepare the LAN IP URL as fallback
+      if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
+        lanIpUrl = `${protocol}//${networkInfo.lan_ip}`;
+        if (port && port !== '80' && port !== '443') {
+          lanIpUrl += `:${port}`;
         }
       }
-    } catch (error) {
-      console.log('Could not fetch network info from server, using current hostname');
+      
+      // Prefer mDNS if available
+      if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.mdns.domain) {
+        hostname = networkInfo.mdns.domain;
+        useMDNS = true;
+        mdnsUrl = networkInfo.hybrid_url;
+        console.log('✅ mDNS detected:', networkInfo.mdns.domain, 'URL:', networkInfo.hybrid_url);
+      } else {
+        // Use current hostname if mDNS not available
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+          // Fallback to LAN IP for localhost access
+          if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
+            hostname = networkInfo.lan_ip;
+          }
+        }
+        console.log('⚠️ mDNS not available, using hostname:', hostname);
+      }
+    } else {
+      console.log('❌ Failed to fetch network info:', response.status);
     }
+  } catch (error) {
+    console.log('❌ Network info fetch error:', error);
   }
   
   const isHTTPS = protocol === 'https:';
