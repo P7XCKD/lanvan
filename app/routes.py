@@ -23,7 +23,7 @@ from app.validation import (
     is_allowed_file,
     FileValidator
 )
-from app.mdns_manager import mdns_manager
+from app.simple_mdns import mdns_manager
 
 # === Setup ===
 router = APIRouter()

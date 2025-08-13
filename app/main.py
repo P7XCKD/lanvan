@@ -2,6 +2,7 @@ import os
 import signal
 import asyncio
 import threading
+import time
 import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -12,7 +13,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from app.routes import router
 
 # Import mDNS manager for service discovery
-from app.mdns_manager import mdns_manager
+from app.simple_mdns import mdns_manager
 
 # 🚨 Global shutdown event for immediate server termination
 shutdown_event = asyncio.Event()
@@ -121,14 +122,25 @@ async def lifespan(app: FastAPI):
     mdns_manager.port = port
     
     print("🔍 Starting mDNS service discovery...")
-    if mdns_manager.start_service():
-        mdns_info = mdns_manager.get_mdns_info()
-        print(f"✅ mDNS service active: {mdns_info['domain']}")
-        print(f"   Access via: {mdns_info['url']}")
-        if mdns_info['conflict_resolved']:
-            print(f"   🔧 Conflict resolved (attempt #{mdns_info['conflict_count'] + 1})")
-    else:
-        print("⚠️  mDNS service failed to start - using IP access only")
+    
+    # Start mDNS in background thread to not block server startup
+    def start_mdns_background():
+        try:
+            time.sleep(1)  # Give server time to start
+            if mdns_manager.start_service():
+                mdns_info = mdns_manager.get_mdns_info()
+                print(f"✅ mDNS service active: {mdns_info['domain']}")
+                print(f"   Access via: {mdns_info['url']}")
+                if mdns_info['conflict_resolved']:
+                    print(f"   🔧 Conflict resolved (attempt #{mdns_info['conflict_count'] + 1})")
+            else:
+                print("⚠️  mDNS service failed to start - using IP access only")
+        except Exception as e:
+            print(f"⚠️  mDNS service error: {e} - using IP access only")
+    
+    # Start mDNS in background thread
+    mdns_thread = threading.Thread(target=start_mdns_background, daemon=True)
+    mdns_thread.start()
     
     # Store shutdown state in app for access from routes
     app.state.graceful_shutdown_initiated = False

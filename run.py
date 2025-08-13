@@ -218,6 +218,9 @@ if __name__ == "__main__":
     if is_android_termux():
         print("[*] Android (Termux) detected: launching Uvicorn...")
         
+        # Set environment variable for the FastAPI app
+        os.environ['PORT'] = str(port)
+        
         # ⛔️ Waitress removed: FastAPI is ASGI and no longer supports WSGI servers like Waitress.
         # subprocess.run([
         #     "waitress-serve",
@@ -238,6 +241,10 @@ if __name__ == "__main__":
 
     else:
         print("[*] PC detected: launching Uvicorn with auto-reload...")
+        
+        # Set environment variable for the FastAPI app
+        os.environ['PORT'] = str(port)
+        
         open_browser(ip, port, use_https)
         
         # Enhanced shutdown handling
