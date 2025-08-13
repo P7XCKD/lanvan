@@ -5480,6 +5480,8 @@ async function showConnectionInfo() {
   const port = location.port;
   let useMDNS = false;
   let mdnsUrl = null;
+  let networkInfo = null;
+  let lanIpUrl = null;
   
   // 🔧 FIX: Always use LAN IP or mDNS instead of localhost for QR codes
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -5487,7 +5489,15 @@ async function showConnectionInfo() {
     try {
       const response = await fetch('/api/network-info');
       if (response.ok) {
-        const networkInfo = await response.json();
+        networkInfo = await response.json();
+        
+        // Always prepare the LAN IP URL as fallback
+        if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
+          lanIpUrl = `${protocol}//${networkInfo.lan_ip}`;
+          if (port && port !== '80' && port !== '443') {
+            lanIpUrl += `:${port}`;
+          }
+        }
         
         // Prefer mDNS if available
         if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.mdns.domain) {
@@ -5515,6 +5525,9 @@ async function showConnectionInfo() {
       fullUrl += `:${port}`;
     }
   }
+  
+  // Store network info globally for copy functions
+  window._currentNetworkInfo = { networkInfo, lanIpUrl, useMDNS, fullUrl };
   
   // Create modal with immediate QR loading
   const modal = document.createElement('div');
@@ -5620,19 +5633,36 @@ async function showConnectionInfo() {
     </div>
     
     <div style="background: #f8f9fa; border-radius: 10px; padding: 1rem; margin: 1rem 0;">
-      <h4 style="margin: 0 0 0.5rem 0; color: #333;">🔗 Connection URL:</h4>
-      <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-        <code id="connection-url" style="flex: 1; background: white; padding: 0.5rem; border-radius: 5px; border: 1px solid #ddd; font-size: 0.85rem; word-break: break-all; min-width: 200px;">${fullUrl}</code>
-        <button onclick="copyConnectionUrl()" style="background: #007bff; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer; font-size: 0.85rem; white-space: nowrap;" title="Copy URL to clipboard">📋 Copy</button>
-      </div>
       ${useMDNS ? `
-        <div style="margin-top: 0.8rem; padding: 0.6rem; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 6px;">
+        <h4 style="margin: 0 0 0.5rem 0; color: #333;">🌐 mDNS Connection URL:</h4>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
+          <code id="connection-url" style="flex: 1; background: #d4edda; padding: 0.5rem; border-radius: 5px; border: 1px solid #c3e6cb; font-size: 0.85rem; word-break: break-all; min-width: 200px; color: #155724;">${fullUrl}</code>
+          <button onclick="copyConnectionUrl()" style="background: #28a745; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer; font-size: 0.85rem; white-space: nowrap;" title="Copy mDNS URL to clipboard">📋 Copy</button>
+        </div>
+        <div style="padding: 0.6rem; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 6px; margin-bottom: 0.8rem;">
           <small style="color: #155724; display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem;">
-            <span>🌐</span>
+            <span>✅</span>
             <strong>mDNS Active:</strong> Easy access via domain name - no IP needed!
           </small>
         </div>
-      ` : ''}
+        <h4 style="margin: 0 0 0.5rem 0; color: #666; font-size: 0.9rem;">📱 Alternative IP Connection:</h4>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          <code id="alternative-url" style="flex: 1; background: #fff; padding: 0.4rem; border-radius: 5px; border: 1px solid #ddd; font-size: 0.8rem; word-break: break-all; min-width: 200px; color: #666;">${lanIpUrl || protocol + '//' + (networkInfo?.lan_ip || '192.168.x.x') + (port && port !== '80' && port !== '443' ? ':' + port : '')}</code>
+          <button onclick="copyAlternativeUrl()" style="background: #6c757d; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 5px; cursor: pointer; font-size: 0.8rem; white-space: nowrap;" title="Copy IP URL to clipboard">📋</button>
+        </div>
+      ` : `
+        <h4 style="margin: 0 0 0.5rem 0; color: #333;">🔗 Connection URL:</h4>
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          <code id="connection-url" style="flex: 1; background: white; padding: 0.5rem; border-radius: 5px; border: 1px solid #ddd; font-size: 0.85rem; word-break: break-all; min-width: 200px;">${fullUrl}</code>
+          <button onclick="copyConnectionUrl()" style="background: #007bff; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer; font-size: 0.85rem; white-space: nowrap;" title="Copy URL to clipboard">📋 Copy</button>
+        </div>
+        <div style="margin-top: 0.8rem; padding: 0.6rem; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px;">
+          <small style="color: #856404; display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem;">
+            <span>⚠️</span>
+            <strong>Using IP Address:</strong> mDNS not available - consider using domain names
+          </small>
+        </div>
+      `}
     </div>
     
     ${lanInstructions}
@@ -5700,6 +5730,63 @@ async function copyConnectionUrl() {
       document.execCommand('copy');
       document.body.removeChild(textArea);
       showToast('📋 Connection URL copied to clipboard!', 3000);
+    }
+  } catch (err) {
+    console.error('Copy failed:', err);
+    showToast('❌ Copy failed. Please copy manually.', 4000);
+  }
+}
+
+// 📋 Copy alternative IP URL to clipboard
+async function copyAlternativeUrl() {
+  const urlElement = document.getElementById('alternative-url');
+  if (!urlElement) {
+    // Fallback to stored network info
+    const networkInfo = window._currentNetworkInfo;
+    if (networkInfo && networkInfo.lanIpUrl) {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(networkInfo.lanIpUrl);
+          showToast('📋 Alternative IP URL copied to clipboard!', 3000);
+        } else {
+          const textArea = document.createElement('textarea');
+          textArea.value = networkInfo.lanIpUrl;
+          textArea.style.position = 'fixed';
+          textArea.style.opacity = '0';
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+          showToast('📋 Alternative IP URL copied to clipboard!', 3000);
+        }
+      } catch (err) {
+        console.error('Copy failed:', err);
+        showToast('❌ Copy failed. Please copy manually.', 4000);
+      }
+    }
+    return;
+  }
+  
+  const url = urlElement.textContent;
+  
+  try {
+    // Modern clipboard API
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(url);
+      showToast('📋 Alternative IP URL copied to clipboard!', 3000);
+    } else {
+      // Fallback for older browsers or HTTP
+      const textArea = document.createElement('textarea');
+      textArea.value = url;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      showToast('📋 Alternative IP URL copied to clipboard!', 3000);
     }
   } catch (err) {
     console.error('Copy failed:', err);
@@ -5846,6 +5933,7 @@ function showQRFallback() {
 // Make functions globally available
 window.showConnectionInfo = showConnectionInfo;
 window.copyConnectionUrl = copyConnectionUrl;
+window.copyAlternativeUrl = copyAlternativeUrl;
 window.closeConnectionModal = closeConnectionModal;
 window.showQRCode = showQRCode;
 window.showQRFallback = showQRFallback;
