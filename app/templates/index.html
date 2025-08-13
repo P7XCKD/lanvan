@@ -5504,8 +5504,10 @@ async function showConnectionInfo() {
           hostname = networkInfo.mdns.domain;
           useMDNS = true;
           mdnsUrl = networkInfo.hybrid_url;
+          console.log('✅ mDNS detected:', networkInfo.mdns.domain, 'URL:', networkInfo.hybrid_url);
         } else if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
           hostname = networkInfo.lan_ip;
+          console.log('⚠️ mDNS not available, using IP:', networkInfo.lan_ip);
         }
       }
     } catch (error) {
@@ -5528,6 +5530,15 @@ async function showConnectionInfo() {
   
   // Store network info globally for copy functions
   window._currentNetworkInfo = { networkInfo, lanIpUrl, useMDNS, fullUrl };
+  
+  // Debug logging
+  console.log('🔍 Connection Info Debug:', {
+    useMDNS: useMDNS,
+    fullUrl: fullUrl,
+    mdnsUrl: mdnsUrl,
+    lanIpUrl: lanIpUrl,
+    networkInfo: networkInfo
+  });
   
   // Create modal with immediate QR loading
   const modal = document.createElement('div');
@@ -5642,13 +5653,18 @@ async function showConnectionInfo() {
         <div style="padding: 0.6rem; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 6px; margin-bottom: 0.8rem;">
           <small style="color: #155724; display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem;">
             <span>✅</span>
-            <strong>mDNS Active:</strong> Easy access via domain name - no IP needed!
+            <strong>mDNS Active:</strong> Easy access via domain name - guests can use ${networkInfo?.mdns?.domain || 'lanvan.local'}!
           </small>
         </div>
         <h4 style="margin: 0 0 0.5rem 0; color: #666; font-size: 0.9rem;">📱 Alternative IP Connection:</h4>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
           <code id="alternative-url" style="flex: 1; background: #fff; padding: 0.4rem; border-radius: 5px; border: 1px solid #ddd; font-size: 0.8rem; word-break: break-all; min-width: 200px; color: #666;">${lanIpUrl || protocol + '//' + (networkInfo?.lan_ip || '192.168.x.x') + (port && port !== '80' && port !== '443' ? ':' + port : '')}</code>
           <button onclick="copyAlternativeUrl()" style="background: #6c757d; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 5px; cursor: pointer; font-size: 0.8rem; white-space: nowrap;" title="Copy IP URL to clipboard">📋</button>
+        </div>
+        <div style="margin-top: 0.5rem;">
+          <small style="color: #666; font-size: 0.75rem;">
+            💡 <strong>For guests:</strong> Try mDNS first (${networkInfo?.mdns?.domain || 'lanvan.local'}), use IP if that fails
+          </small>
         </div>
       ` : `
         <h4 style="margin: 0 0 0.5rem 0; color: #333;">🔗 Connection URL:</h4>
@@ -5659,7 +5675,7 @@ async function showConnectionInfo() {
         <div style="margin-top: 0.8rem; padding: 0.6rem; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px;">
           <small style="color: #856404; display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem;">
             <span>⚠️</span>
-            <strong>Using IP Address:</strong> mDNS not available - consider using domain names
+            <strong>Using IP Address:</strong> mDNS not available - guests must use IP to connect
           </small>
         </div>
       `}
