@@ -202,9 +202,7 @@ class SimpleMDNSManager:
     
     def generate_service_name(self) -> str:
         """Generate unique service name with collision resolution"""
-        base_name = self.base_service_name
-        if self.use_https:
-            base_name = f"{self.base_service_name}-https"
+        base_name = self.base_service_name  # Use same base name for both HTTP and HTTPS
         
         # Use collision detection for the base name
         final_name, collision_resolved = self._detect_collision(base_name)
