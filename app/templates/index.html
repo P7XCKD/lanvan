@@ -5390,6 +5390,10 @@ document.addEventListener('DOMContentLoaded', function() {
   } else {
     preloadQR(protocol, hostname, port);
   }
+
+  // Start real-time mDNS monitoring for instant updates and toast notifications
+  updateMDNSStatus();
+  setInterval(updateMDNSStatus, 2000);
   
   function preloadQRFromUrl(fullUrl) {
     const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
@@ -5913,6 +5917,75 @@ async function updateMDNSStatus() {
     const response = await fetch('/api/network-info');
     if (response.ok) {
       const networkInfo = await response.json();
+      
+      // Check if mDNS status changed
+      const previousStatus = window._lastMDNSStatus;
+      const currentStatus = networkInfo.mdns?.status || 'disabled';
+      
+      // Update stored status
+      window._lastMDNSStatus = currentStatus;
+      
+      // Show toast notification on status change
+      if (previousStatus && previousStatus !== currentStatus) {
+        if (currentStatus === 'active') {
+          showToast('🌐 mDNS Active: Guests can use ' + (networkInfo.mdns?.domain || 'lanvan.local'), 4000);
+          console.log('✅ mDNS became active:', networkInfo.mdns?.domain);
+        } else {
+          showToast('⚠️ mDNS Unavailable: Guests must use IP address', 4000);
+          console.log('❌ mDNS became unavailable');
+        }
+        
+        // Auto-refresh QR codes and connection info
+        refreshConnectionInfo();
+      }
+      
+      // Update protocol status indicator if needed
+      const protocolStatus = document.getElementById('protocolStatus');
+      if (protocolStatus && currentStatus === 'active') {
+        // Add mDNS indicator to protocol status
+        const qrHintText = protocolStatus.querySelector('#qrHintText');
+        if (qrHintText && !qrHintText.innerHTML.includes('mDNS')) {
+          qrHintText.innerHTML = '🌐 mDNS Ready • Click for QR codes';
+        }
+      }
+    }
+  } catch (error) {
+    console.log('mDNS status check failed:', error);
+  }
+}
+
+// 🔄 Refresh connection info and QR codes
+function refreshConnectionInfo() {
+  // Refresh preloaded QR codes
+  if (typeof preloadQRFromNetworkInfo === 'function') {
+    fetch('/api/network-info')
+      .then(response => response.json())
+      .then(networkInfo => {
+        if (networkInfo.mdns?.status === 'active' && networkInfo.hybrid_url) {
+          preloadQRFromUrl(networkInfo.hybrid_url);
+          console.log('🔄 QR codes refreshed for mDNS URL:', networkInfo.hybrid_url);
+        }
+      })
+      .catch(() => {});
+  }
+  
+  // If connection modal is open, refresh it
+  if (window.currentConnectionModal) {
+    window.currentConnectionModal.remove();
+    window.currentConnectionModal = null;
+    // Small delay then reopen
+    setTimeout(() => {
+      showConnectionInfo();
+    }, 200);
+  }
+}
+
+// 📡 Real-time mDNS status monitoring with toast notifications
+async function updateMDNSStatus() {
+  try {
+    const response = await fetch('/api/network-info');
+    if (response.ok) {
+      const networkInfo = await response.json();
       const qrHintText = document.getElementById('qrHintText');
       
       if (networkInfo.mdns && networkInfo.mdns.status === 'active' && qrHintText) {
@@ -5921,9 +5994,26 @@ async function updateMDNSStatus() {
           ? ` (resolved conflict #${networkInfo.mdns.conflict_count + 1})` 
           : '';
         
-        qrHintText.innerHTML = `🌐 <strong>mDNS:</strong> ${domain}${conflictInfo} • Click for QR`;
-        qrHintText.style.color = '#22c55e';
-        qrHintText.title = `mDNS service active - accessible via ${domain}`;
+        // Update QR hint if not already showing mDNS status
+        if (!qrHintText.innerHTML.includes('mDNS:')) {
+          qrHintText.innerHTML = `🌐 <strong>mDNS:</strong> ${domain}${conflictInfo} • Click for QR`;
+          qrHintText.style.color = '#22c55e';
+          qrHintText.title = `mDNS service active - accessible via ${domain}`;
+          
+          // Show success toast
+          showToast(`🎉 mDNS service is now active! Accessible via ${domain}${conflictInfo}`, 4000);
+          
+          // Refresh connection info to update QR codes
+          refreshConnectionInfo();
+        }
+      } else if (qrHintText && qrHintText.innerHTML.includes('mDNS:')) {
+        // mDNS was active but now inactive - revert to default
+        qrHintText.innerHTML = '• Click for QR code';
+        qrHintText.style.color = '#2c3e50';
+        qrHintText.title = '';
+        
+        // Show info toast
+        showToast('ℹ️ mDNS service is not active - using IP address', 3000);
       }
     }
   } catch (error) {
@@ -6039,6 +6129,8 @@ window.showConnectionInfo = showConnectionInfo;
 window.copyConnectionUrl = copyConnectionUrl;
 window.copyAlternativeUrl = copyAlternativeUrl;
 window.showIPQRCode = showIPQRCode;
+window.updateMDNSStatus = updateMDNSStatus;
+window.refreshConnectionInfo = refreshConnectionInfo;
 window.closeConnectionModal = closeConnectionModal;
 window.showQRCode = showQRCode;
 window.showQRFallback = showQRFallback;

@@ -29,6 +29,8 @@ class SimpleMDNSManager:
         self.lan_ip = None
         self.device_id = self._generate_device_id()
         self._lock = threading.Lock()
+        self._announcement_thread = None
+        self._stop_announcements = False
         
         # Setup simple logging
         self.logger = logging.getLogger(__name__)
@@ -96,6 +98,48 @@ class SimpleMDNSManager:
         except Exception as e:
             print(f"⚠️ Device identifier generation failed: {e}")
             return f"lanvan-{hash(str(time.time())) % 1000}"
+
+    def _start_announcement_thread(self):
+        """Start background thread for periodic mDNS announcements (instant guest loading)"""
+        if self._announcement_thread and self._announcement_thread.is_alive():
+            return
+            
+        self._stop_announcements = False
+        self._announcement_thread = threading.Thread(target=self._announcement_worker, daemon=True)
+        self._announcement_thread.start()
+        
+    def _announcement_worker(self):
+        """Background worker for periodic mDNS announcements"""
+        try:
+            announcement_count = 0
+            while not self._stop_announcements and self.is_running:
+                time.sleep(1)
+                announcement_count += 1
+                
+                # Announce every 10 seconds for first minute (instant loading)
+                if announcement_count <= 60 and announcement_count % 10 == 0:
+                    try:
+                        if self.service_info and self.zeroconf:
+                            self.zeroconf.register_service(self.service_info)
+                    except:
+                        pass  # Ignore re-registration errors
+                        
+                # Then announce every 30 seconds (maintenance)
+                elif announcement_count > 60 and announcement_count % 30 == 0:
+                    try:
+                        if self.service_info and self.zeroconf:
+                            self.zeroconf.register_service(self.service_info)
+                    except:
+                        pass
+                        
+        except Exception as e:
+            print(f"⚠️ Announcement thread error: {e}")
+
+    def _stop_announcement_thread(self):
+        """Stop the announcement thread"""
+        self._stop_announcements = True
+        if self._announcement_thread and self._announcement_thread.is_alive():
+            self._announcement_thread.join(timeout=1.0)
 
     def _detect_collision(self, service_name: str) -> tuple[str, bool]:
         """Detect if service name is already in use and suggest alternative"""
@@ -217,8 +261,17 @@ class SimpleMDNSManager:
                 self.zeroconf.register_service(self.service_info)
                 self.is_running = True
                 
-                # Force immediate announcement (send multiple quick announcements)
+                # Force immediate announcement with multiple broadcasts for instant loading
                 time.sleep(0.1)  # Small delay to ensure registration
+                
+                # Send multiple quick announcements for faster guest discovery
+                try:
+                    # Re-announce the service multiple times for instant discovery
+                    for i in range(3):
+                        time.sleep(0.05)  # 50ms between announcements
+                        self.zeroconf.register_service(self.service_info)
+                except:
+                    pass  # Ignore re-registration errors
                 
                 protocol_display = "HTTPS" if self.use_https else "HTTP"
                 print(f"✅ mDNS service started: {self.domain}:{self.port} ({protocol_display})")
@@ -227,6 +280,9 @@ class SimpleMDNSManager:
                 
                 if self.conflict_count > 0:
                     print(f"ℹ️ Collision resolved - using unique name: {self.service_name}")
+                
+                # Start background thread for periodic announcements (instant guest loading)
+                self._start_announcement_thread()
                 
                 return True
                 
@@ -246,6 +302,9 @@ class SimpleMDNSManager:
             with self._lock:
                 if not self.is_running:
                     return
+                
+                # Stop announcement thread first
+                self._stop_announcement_thread()
                 
                 if self.service_info and self.zeroconf:
                     self.zeroconf.unregister_service(self.service_info)
