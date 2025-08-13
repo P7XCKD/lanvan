@@ -5663,9 +5663,22 @@ async function showConnectionInfo() {
           </small>
         </div>
         <h4 style="margin: 0 0 0.5rem 0; color: #666; font-size: 0.9rem;">📱 Alternative IP Connection:</h4>
-        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.8rem;">
           <code id="alternative-url" style="flex: 1; background: #fff; padding: 0.4rem; border-radius: 5px; border: 1px solid #ddd; font-size: 0.8rem; word-break: break-all; min-width: 200px; color: #666;">${lanIpUrl || protocol + '//' + (networkInfo?.lan_ip || '192.168.x.x') + (port && port !== '80' && port !== '443' ? ':' + port : '')}</code>
-          <button onclick="copyAlternativeUrl()" style="background: #6c757d; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 5px; cursor: pointer; font-size: 0.8rem; white-space: nowrap;" title="Copy IP URL to clipboard">📋</button>
+          <button onclick="copyAlternativeUrl()" style="background: #6c757d; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 5px; cursor: pointer; font-size: 0.8rem; white-space: nowrap;" title="Copy IP URL to clipboard">📋 Copy</button>
+        </div>
+        
+        <!-- IP QR Code Section -->
+        <div style="text-align: center; margin: 1rem 0; padding: 1rem; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
+          <div style="margin-bottom: 0.5rem;">
+            <small style="color: #666; font-size: 0.8rem; font-weight: 500;">📱 IP Access QR Code</small>
+          </div>
+          <img src="https://quickchart.io/qr?text=${encodeURIComponent(lanIpUrl || protocol + '//' + (networkInfo?.lan_ip || '192.168.0.106') + (port && port !== '80' && port !== '443' ? ':' + port : ''))}&size=160&format=png&margin=1" 
+               style="border: 2px solid #ddd; border-radius: 8px; max-width: 160px; height: auto; background: white;" 
+               alt="IP QR Code">
+          <div style="margin-top: 0.5rem;">
+            <small style="color: #666; font-size: 0.75rem;">Scan if mDNS doesn't work</small>
+          </div>
         </div>
         <div style="margin-top: 0.5rem;">
           <small style="color: #666; font-size: 0.75rem;">
@@ -5816,7 +5829,76 @@ async function copyAlternativeUrl() {
   }
 }
 
-// 🚪 Close connection info modal
+// � Show IP QR Code in a popup
+function showIPQRCode() {
+  const networkInfo = window._currentNetworkInfo;
+  if (!networkInfo || !networkInfo.lanIpUrl) {
+    showToast('❌ IP URL not available', 3000);
+    return;
+  }
+  
+  // Create QR popup modal
+  const qrModal = document.createElement('div');
+  qrModal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    box-sizing: border-box;
+  `;
+  
+  const qrDialog = document.createElement('div');
+  qrDialog.style.cssText = `
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  `;
+  
+  qrDialog.innerHTML = `
+    <h3 style="margin: 0 0 1rem 0; color: #333;">📱 IP Access QR Code</h3>
+    <div style="margin: 1rem 0;">
+      <img src="https://quickchart.io/qr?text=${encodeURIComponent(networkInfo.lanIpUrl)}&size=200&format=png&margin=1" 
+           style="border: 2px solid #ddd; border-radius: 10px; max-width: 200px; height: auto;" 
+           alt="IP QR Code">
+    </div>
+    <p style="margin: 0.5rem 0; font-size: 0.9rem; color: #666; word-break: break-all;">
+      ${networkInfo.lanIpUrl}
+    </p>
+    <div style="margin-top: 1.5rem;">
+      <button onclick="this.closest('.qr-modal').remove()" 
+              style="background: #6c757d; color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 8px; cursor: pointer; font-size: 0.9rem;">
+        Close
+      </button>
+    </div>
+  `;
+  
+  qrModal.className = 'qr-modal';
+  qrModal.appendChild(qrDialog);
+  
+  // Close on background click
+  qrModal.addEventListener('click', (e) => {
+    if (e.target === qrModal) {
+      qrModal.remove();
+    }
+  });
+  
+  document.body.appendChild(qrModal);
+  
+  showToast('📱 IP QR Code displayed', 2000);
+}
+
+// �🚪 Close connection info modal
 function closeConnectionModal() {
   const modal = window.currentConnectionModal;
   if (modal) {
@@ -5956,6 +6038,7 @@ function showQRFallback() {
 window.showConnectionInfo = showConnectionInfo;
 window.copyConnectionUrl = copyConnectionUrl;
 window.copyAlternativeUrl = copyAlternativeUrl;
+window.showIPQRCode = showIPQRCode;
 window.closeConnectionModal = closeConnectionModal;
 window.showQRCode = showQRCode;
 window.showQRFallback = showQRFallback;
