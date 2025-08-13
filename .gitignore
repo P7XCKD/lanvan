@@ -47,6 +47,9 @@ app/uploads/temp_downloads/
 temp/
 tmp/
 
+# Unused static directory (root level only - app/static contains needed files)
+/static/
+
 # Security: Ignore SSL certificates and private keys
 certs/*.pem
 certs/*.key
@@ -77,6 +80,12 @@ certs/*.cert
 .#*
 #*#
 
+# VS Code workspace files (project-specific - usually not needed in repo)
+*.code-workspace
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+
 # OS generated files
 Thumbs.db
 ehthumbs.db
@@ -104,9 +113,10 @@ error.log
 *.mdns_cache
 .zeroconf/
 
-# P2P session data
+# P2P session data and empty directories
 .p2p_sessions/
 p2p_cache/
+app/p2p/__pycache__/
 
 # Development and testing
 test_files/

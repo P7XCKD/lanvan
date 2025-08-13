@@ -30,9 +30,7 @@ def clean_upload_temp():
     
     temp_dirs = [
         'app/uploads/temp_chunks',
-        'app/uploads/temp_downloads',
-        'uploads/temp_chunks',
-        'uploads/temp_downloads'
+        'app/uploads/temp_downloads'
     ]
     
     for temp_dir in temp_dirs:
@@ -70,6 +68,17 @@ def clean_certificates():
                 print(f"   Removing {cert_file}")
                 cert_file.unlink(missing_ok=True)
 
+def clean_workspace_files():
+    """Clean IDE and workspace files"""
+    print("🛠️  Cleaning workspace and IDE files...")
+    
+    patterns = ['*.code-workspace', '.vscode/settings.json']
+    
+    for pattern in patterns:
+        for workspace_file in Path('.').glob(pattern):
+            print(f"   Removing {workspace_file}")
+            workspace_file.unlink(missing_ok=True)
+
 def main():
     """Run cleanup operations"""
     print("🚀 LANVAN Cleanup Utility")
@@ -79,6 +88,7 @@ def main():
         clean_python_cache()
         clean_upload_temp()
         clean_logs()
+        clean_workspace_files()
         
         # Ask before cleaning certificates
         response = input("\n🔒 Clean generated certificates? (y/N): ").strip().lower()
