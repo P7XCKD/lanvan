@@ -1106,6 +1106,10 @@
       ws = new WebSocket(wsUrl);
       ws.onopen = () => {
         //console.log('📡 Clipboard WebSocket connected');
+        // Refresh clipboard history when WebSocket (re)connects
+        if (typeof refreshClipboardHistory === 'function') {
+          setTimeout(() => refreshClipboardHistory(), 100);
+        }
       };
       ws.onmessage = (event) => {
         if (event.data === 'refresh') {
@@ -8295,6 +8299,17 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('aes_enabled', aesToggle.checked ? '1' : '0');
     }
   });
+
+  // 📋 Auto-load clipboard history for clipboard-only pages
+  if (typeof show_clipboard_only !== 'undefined' && show_clipboard_only) {
+    // Load clipboard history immediately after page loads
+    setTimeout(() => {
+      if (typeof refreshClipboardHistory === 'function') {
+        refreshClipboardHistory();
+        console.log('📋 Auto-loaded clipboard history after page refresh');
+      }
+    }, 500);
+  }
 
   // Show welcome message based on protocol (only once per session)
   if (!sessionStorage.getItem('welcome_shown')) {
