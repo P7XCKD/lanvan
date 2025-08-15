@@ -470,6 +470,46 @@
         margin-bottom: 1rem;
       }
       
+      /* Mobile header layout fixes - maintain original horizontal layout */
+      header > div:first-child {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+        gap: 0.5rem !important;
+      }
+      
+      header > div:first-child h1 {
+        font-size: 1.3rem !important;
+        margin: 0 !important;
+        flex-shrink: 1 !important;
+      }
+      
+      /* Keep toggles side by side like original */
+      header > div:first-child > div:last-child {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 0.4rem !important;
+        flex-shrink: 0 !important;
+        align-items: center !important;
+      }
+      
+      .toggle-container {
+        padding: 0.3rem 0.5rem !important;
+        min-height: 32px !important;
+        border-radius: 20px !important;
+      }
+      
+      .toggle-container span {
+        font-size: 0.75rem !important;
+        white-space: nowrap !important;
+      }
+      
+      /* Make toggle switches smaller on mobile */
+      .toggle-switch {
+        transform: scale(0.8) !important;
+      }
+      
       h1 {
         font-size: 1.6rem;
         margin: 0.5rem 0;
@@ -647,6 +687,59 @@
           min-width: 120px;
           max-width: 100%;
           box-sizing: border-box;
+      }
+      
+      /* Section headers mobile responsive fixes - keep horizontal */
+      section > div:first-child {
+        flex-wrap: wrap !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        gap: 0.5rem !important;
+      }
+      
+      /* Section title responsive */
+      section > div:first-child h2 {
+        font-size: 1.2rem !important;
+        margin: 0 !important;
+        flex-shrink: 0 !important;
+      }
+      
+      /* Switch button responsive */
+      section > div:first-child > div {
+        flex-shrink: 0 !important;
+      }
+      
+      /* Button containers in sections - keep horizontal but responsive */
+      section div[style*="display: flex"][style*="gap"] {
+        flex-wrap: wrap !important;
+        gap: 0.5rem !important;
+        justify-content: center !important;
+      }
+      
+      /* Make individual buttons more touch-friendly */
+      section button, section .download-btn {
+        min-height: 40px !important;
+        padding: 0.5rem 0.8rem !important;
+        font-size: 0.85rem !important;
+        flex: 1 1 auto !important;
+        min-width: 80px !important;
+        max-width: 120px !important;
+      }
+      
+      /* Clipboard buttons horizontal but responsive */
+      .clipboard-buttons {
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        gap: 0.5rem !important;
+      }
+      
+      .clipboard-buttons button {
+        flex: 1 1 auto !important;
+        min-width: 80px !important;
+        max-width: 120px !important;
+        min-height: 40px !important;
+        font-size: 0.85rem !important;
+        padding: 0.5rem 0.7rem !important;
       }
         @media (max-width: 600px) {
           .clipboard-buttons {
