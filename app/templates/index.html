@@ -7,6 +7,26 @@
   <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  
+  <!-- 🚀 INSTANT DARK MODE - NO FLASH! -->
+  <script>
+    // Apply dark mode IMMEDIATELY before page renders to prevent flash
+    (function() {
+      const savedDarkMode = localStorage.getItem('dark_mode_enabled');
+      let isDarkMode = false;
+      
+      if (savedDarkMode !== null) {
+        isDarkMode = savedDarkMode === '1';
+      } else if (window.matchMedia) {
+        isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+      
+      if (isDarkMode) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  
   <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
   <style>
     /* iOS Safari safe area and touch improvements */
@@ -689,57 +709,89 @@
           box-sizing: border-box;
       }
       
-      /* Section headers mobile responsive fixes - keep horizontal */
+      /* Mobile clipboard buttons - compact for fitting text - FINAL VERSION */
+      @media (max-width: 600px) {
+        .clipboard-buttons {
+          display: flex !important;
+          flex-direction: row !important;
+          flex-wrap: nowrap !important;
+          gap: 0.08rem !important;
+          justify-content: flex-start !important;
+          align-items: center !important;
+          margin-top: 0 !important;
+        }
+        
+        .clipboard-buttons button {
+          flex: 1 !important;
+          min-width: 0 !important;
+          max-width: none !important;
+          min-height: 32px !important;
+          font-size: 0.6rem !important;
+          padding: 0.2rem 0.3rem !important;
+          white-space: nowrap !important;
+          border-radius: 4px !important;
+        }
+      }
+      
+      /* Section headers mobile responsive - fix switch button visibility */
       section > div:first-child {
-        flex-wrap: wrap !important;
+        display: flex !important;
         justify-content: space-between !important;
         align-items: center !important;
-        gap: 0.5rem !important;
+        flex-wrap: nowrap !important;
+        gap: 0.3rem !important;
       }
       
-      /* Section title responsive */
+      /* Section title - allow more shrinking to make room for switch button */
       section > div:first-child h2 {
-        font-size: 1.2rem !important;
+        font-size: 1rem !important;
         margin: 0 !important;
-        flex-shrink: 0 !important;
+        flex-shrink: 2 !important;
+        min-width: 0 !important;
       }
       
-      /* Switch button responsive */
+      /* Switch button - ensure it stays visible and properly sized */
       section > div:first-child > div {
         flex-shrink: 0 !important;
+        min-width: 80px !important;
       }
       
-      /* Button containers in sections - keep horizontal but responsive */
-      section div[style*="display: flex"][style*="gap"] {
-        flex-wrap: wrap !important;
-        gap: 0.5rem !important;
-        justify-content: center !important;
+      /* Button containers - fix clipboard history button spacing (NO SCROLLBARS!) */
+      section div[style*="display: flex"][style*="gap"]:not(.toggle-container) {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 0.25rem !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
       }
       
-      /* Make individual buttons more touch-friendly */
+      /* Individual buttons - make them fit naturally */
       section button, section .download-btn {
-        min-height: 40px !important;
-        padding: 0.5rem 0.8rem !important;
-        font-size: 0.85rem !important;
-        flex: 1 1 auto !important;
-        min-width: 80px !important;
-        max-width: 120px !important;
+        min-height: 32px !important;
+        padding: 0.25rem 0.4rem !important;
+        font-size: 0.65rem !important;
+        white-space: nowrap !important;
+        flex: 1 !important;
+        min-width: 0 !important;
+        border-radius: 4px !important;
       }
       
-      /* Clipboard buttons horizontal but responsive */
-      .clipboard-buttons {
-        flex-wrap: wrap !important;
-        justify-content: center !important;
-        gap: 0.5rem !important;
+      /* Fix switch dropdown items - keep checkmark inline */
+      div[id*="switchDropdown"] > div {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        white-space: nowrap !important;
+        padding: 0.4rem 0.8rem !important;
+        min-height: 40px !important;
       }
       
-      .clipboard-buttons button {
-        flex: 1 1 auto !important;
-        min-width: 80px !important;
-        max-width: 120px !important;
-        min-height: 40px !important;
-        font-size: 0.85rem !important;
-        padding: 0.5rem 0.7rem !important;
+      div[id*="switchDropdown"] > div > span {
+        display: flex !important;
+        align-items: center !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
       }
         @media (max-width: 600px) {
           .clipboard-buttons {
@@ -903,7 +955,7 @@
     --mdns-green: #22c55e;
   }
 
-  [data-theme="dark"] {
+  html[data-theme="dark"] {
     --bg-color: #1a1a1a;
     --text-color: #e0e0e0;
     --section-bg: #2d2d2d;
@@ -1419,9 +1471,9 @@
   <div style="background: #fff; padding: 1rem; border-radius: 8px; border: 1px solid #e0e0e0;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
       <h4 style="margin: 0; color: var(--text-color);">📚 Clipboard History</h4>
-      <div style="display: flex; gap: 0.5rem;">
+      <div class="clipboard-buttons">
         <button onclick="refreshClipboardHistory()" class="download-btn" style="background: #17a2b8;">🔄 Refresh</button>
-        <button onclick="downloadClipboardHistory()" class="download-btn" style="background: #28a745;">📄 Download History</button>
+        <button onclick="downloadClipboardHistory()" class="download-btn" style="background: #28a745;">📄 Download</button>
         <button onclick="clearAllClipboardHistory()" class="download-btn" style="background: #dc3545;">🧹 Clear All</button>
       </div>
     </div>
@@ -8694,9 +8746,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // 🌙 Apply Dark Mode Function
   function applyDarkMode(isDarkMode) {
     if (isDarkMode) {
-      document.body.setAttribute('data-theme', 'dark');
+      document.documentElement.setAttribute('data-theme', 'dark');
     } else {
-      document.body.removeAttribute('data-theme');
+      document.documentElement.removeAttribute('data-theme');
     }
     
     // Update dark mode toggle text based on current mode
