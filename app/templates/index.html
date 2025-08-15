@@ -230,7 +230,7 @@
 
     .file-name {
       font-size: 0.9rem;
-      color: #333;
+      color: var(--text-color);
       margin-bottom: 0.8rem;
       overflow: hidden;
       white-space: nowrap;
@@ -780,6 +780,237 @@
     transform: translateX(30px);
   }
 
+  /* Dark Mode Toggle Styling */
+  .dark-mode-slider {
+    background-color: #2196F3 !important; /* Blue background when off */
+  }
+  
+  .toggle-switch input:checked + .dark-mode-slider {
+    background-color: #1a1a1a !important; /* Dark background when on */
+  }
+
+  /* Dark Mode Styles */
+  :root {
+    --bg-color: #f2f3f7;
+    --text-color: #333;
+    --section-bg: #fff;
+    --header-bg: #ffffff;
+    --border-color: rgba(0, 0, 0, 0.05);
+    --toggle-bg: #f0f0f0;
+    --toggle-text: #333;
+    --protocol-bg: #e8f4fd;
+    --protocol-text: #2c3e50;
+    --settings-bg: #6c757d;
+    --file-item-bg: #fff;
+    --file-item-border: #ddd;
+    --button-bg: #007bff;
+    --button-hover-bg: #0056b3;
+    --input-bg: #fff;
+    --input-border: #ddd;
+  }
+
+  [data-theme="dark"] {
+    --bg-color: #1a1a1a;
+    --text-color: #e0e0e0;
+    --section-bg: #2d2d2d;
+    --header-bg: #2d2d2d;
+    --border-color: rgba(255, 255, 255, 0.1);
+    --toggle-bg: #404040;
+    --toggle-text: #e0e0e0;
+    --protocol-bg: #1e3a8a;
+    --protocol-text: #93c5fd;
+    --settings-bg: #4a5568;
+    --file-item-bg: #383838;
+    --file-item-border: #555;
+    --button-bg: #0d6efd;
+    --button-hover-bg: #0b5ed7;
+    --input-bg: #383838;
+    --input-border: #555;
+  }
+
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  section {
+    background-color: var(--section-bg);
+    box-shadow: 0 2px 8px var(--border-color);
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  header {
+    background-color: var(--header-bg) !important;
+    transition: background-color 0.3s ease;
+  }
+
+  /* Fix title visibility in dark mode */
+  [data-theme="dark"] h1 {
+    color: var(--text-color) !important;
+  }
+
+  [data-theme="dark"] h2 {
+    color: var(--text-color) !important;
+  }
+
+  [data-theme="dark"] h3 {
+    color: var(--text-color) !important;
+  }
+
+  /* Fix all section headings and text */
+  [data-theme="dark"] section h2,
+  [data-theme="dark"] section h3,
+  [data-theme="dark"] section p,
+  [data-theme="dark"] section span,
+  [data-theme="dark"] section div {
+    color: var(--text-color) !important;
+  }
+
+  /* Dark mode file item styling */
+  [data-theme="dark"] .file-item {
+    background-color: var(--file-item-bg) !important;
+    border-color: var(--file-item-border) !important;
+    color: var(--text-color) !important;
+  }
+
+  /* Dark mode button styling */
+  [data-theme="dark"] button {
+    background-color: var(--button-bg) !important;
+    color: white !important;
+    border-color: var(--button-bg) !important;
+  }
+
+  [data-theme="dark"] button:hover {
+    background-color: var(--button-hover-bg) !important;
+  }
+
+  /* Dark mode input styling */
+  [data-theme="dark"] input[type="text"], 
+  [data-theme="dark"] input[type="file"],
+  [data-theme="dark"] textarea {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--text-color) !important;
+  }
+
+  /* Dark mode dropdown and modal styling */
+  [data-theme="dark"] .dropdown-menu,
+  [data-theme="dark"] .modal-content {
+    background-color: var(--section-bg) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+  }
+
+  /* Dark mode toast styling */
+  [data-theme="dark"] #toast {
+    background-color: var(--section-bg) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+  }
+
+  /* Dark mode toggle container styling */
+  [data-theme="dark"] .toggle-container {
+    background-color: var(--toggle-bg);
+  }
+
+  [data-theme="dark"] .toggle-container span {
+    color: var(--toggle-text) !important;
+  }
+
+  /* Fix white background patches in dark mode */
+  [data-theme="dark"] * {
+    background-color: inherit;
+  }
+
+  [data-theme="dark"] body,
+  [data-theme="dark"] html {
+    background-color: var(--bg-color) !important;
+  }
+
+  /* Force dark backgrounds on all containers */
+  [data-theme="dark"] div,
+  [data-theme="dark"] section,
+  [data-theme="dark"] main,
+  [data-theme="dark"] article {
+    background-color: var(--section-bg) !important;
+  }
+
+  /* Ensure drop zones and upload areas are dark */
+  [data-theme="dark"] #drop-zone,
+  [data-theme="dark"] .upload-section,
+  [data-theme="dark"] .file-preview {
+    background-color: var(--section-bg) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-color) !important;
+  }
+
+  /* Fix file list and available files section */
+  [data-theme="dark"] .file-list,
+  [data-theme="dark"] .available-files,
+  [data-theme="dark"] .file-manager {
+    background-color: var(--section-bg) !important;
+    color: var(--text-color) !important;
+  }
+
+  /* Fix progress bars and status elements */
+  [data-theme="dark"] .progress,
+  [data-theme="dark"] .progress-bar,
+  [data-theme="dark"] .status-text {
+    background-color: var(--input-bg) !important;
+    color: var(--text-color) !important;
+  }
+
+  /* Fix any remaining white backgrounds */
+  [data-theme="dark"] .white-bg,
+  [data-theme="dark"] .bg-white,
+  [data-theme="dark"] [style*="background-color: white"],
+  [data-theme="dark"] [style*="background-color: #fff"],
+  [data-theme="dark"] [style*="background-color: #ffffff"],
+  [data-theme="dark"] [style*="background: #fff"],
+  [data-theme="dark"] [style*="background: #f8f9fa"] {
+    background-color: var(--section-bg) !important;
+    color: var(--text-color) !important;
+  }
+
+  /* Fix specific clipboard sections */
+  [data-theme="dark"] div[style*="background: #f8f9fa"],
+  [data-theme="dark"] div[style*="background: #fff"] {
+    background: var(--input-bg) !important;
+    border-color: var(--border-color) !important;
+  }
+
+  /* Force all text elements to use theme colors */
+  [data-theme="dark"] label,
+  [data-theme="dark"] span:not(.slider):not(.toggle-text),
+  [data-theme="dark"] p,
+  [data-theme="dark"] div {
+    color: var(--text-color) !important;
+  }
+
+  /* Specific fix for file names and clipboard items */
+  [data-theme="dark"] .file-name,
+  [data-theme="dark"] .upload-file-name,
+  [data-theme="dark"] .file-card,
+  [data-theme="dark"] .clipboard-item {
+    color: var(--text-color) !important;
+    background-color: var(--section-bg) !important;
+  }
+
+  /* Fix timestamp and metadata text */
+  [data-theme="dark"] [style*="color: #999"],
+  [data-theme="dark"] [style*="color: #666"],
+  [data-theme="dark"] [style*="color: #333"] {
+    color: var(--text-color) !important;
+  }
+
+  /* Fix small text and secondary info */
+  [data-theme="dark"] small,
+  [data-theme="dark"] .text-muted,
+  [data-theme="dark"] .secondary-text {
+    color: #ccc !important;
+  }
+
   /* QR Code Loading Animation */
   @keyframes qr-spin {
     0% { transform: rotate(0deg); }
@@ -843,13 +1074,22 @@
 <header style="padding: 1rem; background-color: #ffffff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); margin-bottom: 1rem;">
   <!-- Title -->
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
-    <h1 style="margin: 0; font-size: 1.8rem; color: #333;">{{ msg }}</h1>
+    <h1 style="margin: 0; font-size: 1.8rem; color: var(--text-color);">{{ msg }}</h1>
     
     <!-- AES Toggle Block (keep on right side) -->
-    <div style="display: flex; align-items: center; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.8rem;">
+      <!-- Dark Mode Toggle -->
+      <div class="toggle-container" style="display: flex; align-items: center; background-color: var(--toggle-bg); padding: 0.5rem 0.8rem; border-radius: 25px; gap: 0.6rem; transition: background-color 0.3s ease;">
+        <span style="font-size: 0.95rem; color: var(--toggle-text); transition: color 0.3s ease;"><b>🌙 Dark Mode</b></span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="enableDarkMode">
+          <span class="slider dark-mode-slider"></span>
+        </label>
+      </div>
+      
       <!-- AES Encryption Toggle -->
-      <div style="display: flex; align-items: center; background-color: #f0f0f0; padding: 0.5rem 0.8rem; border-radius: 25px; gap: 0.6rem;">
-        <span style="font-size: 0.95rem; color: #333;"><b>AES Encryption</b></span>
+      <div class="toggle-container" style="display: flex; align-items: center; background-color: var(--toggle-bg); padding: 0.5rem 0.8rem; border-radius: 25px; gap: 0.6rem; transition: background-color 0.3s ease;">
+        <span style="font-size: 0.95rem; color: var(--toggle-text); transition: color 0.3s ease;"><b>AES Encryption</b></span>
         <label class="toggle-switch">
           <input type="checkbox" id="enableEncryption">
           <span class="slider"></span>
@@ -860,16 +1100,16 @@
   
   <!-- Protocol Status and Settings Row -->
   <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-    <div id="protocolStatus" onclick="showConnectionInfo()" style="display: flex; align-items: center; background-color: #e8f4fd; padding: 0.5rem 0.8rem; border-radius: 20px; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='#d0e9f7'" onmouseout="this.style.backgroundColor='#e8f4fd'">
+    <div id="protocolStatus" onclick="showConnectionInfo()" style="display: flex; align-items: center; background-color: var(--protocol-bg); padding: 0.5rem 0.8rem; border-radius: 20px; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='#d0e9f7'" onmouseout="this.style.backgroundColor='var(--protocol-bg)'">
       <span id="protocolIcon">🌐</span>
-      <span id="protocolText" style="color: #2c3e50; font-weight: 500;">HTTP</span>
-      <span id="qrHintText" style="color: #2c3e50; font-size: 0.75rem; opacity: 0.8; font-weight: 400; transition: all 0.3s ease;">• Click for QR code</span>
+      <span id="protocolText" style="color: var(--protocol-text); font-weight: 500; transition: color 0.3s ease;">HTTP</span>
+      <span id="qrHintText" style="color: var(--protocol-text); font-size: 0.75rem; opacity: 0.8; font-weight: 400; transition: all 0.3s ease;">• Click for QR code</span>
     </div>
     
     <!-- Settings Button -->
     <div style="position: relative;">
       <button id="settingsBtn" onclick="toggleSettingsMenu()" style="
-        background: #6c757d;
+        background: var(--settings-bg);
         color: white;
         border: none;
         padding: 0.5rem 0.8rem;
@@ -880,7 +1120,7 @@
         align-items: center;
         gap: 0.3rem;
         transition: all 0.3s ease;
-      " onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">
+      " onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='var(--settings-bg)'">
         ⚙️ Settings
       </button>
     </div>
@@ -940,7 +1180,7 @@
 <!--  Upload Files & Manager (Merged Section) -->
 <section>
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-    <h2 style="margin: 0;">📤 Upload Files & Manager</h2>
+    <h2 style="margin: 0; color: var(--text-color);">📤 Upload Files & Manager</h2>
     <div style="position: relative;">
       <button onclick="showSwitchDropdown(event, 'switchDropdownMain')" class="clipboard-btn" style="
         background: linear-gradient(135deg, #6c5ce7, #a29bfe);
@@ -991,7 +1231,7 @@
   <!-- Upload Manager (Always Visible) -->
   <div id="uploadManager" style="margin-top: 2rem; border-top: 2px solid #e0e0e0; padding-top: 1.5rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-      <h3 style="margin: 0; color: #333;">🚀 Active Uploads <span id="uploadCount" style="color: #666; font-size: 0.9rem;">(0)</span></h3>
+      <h3 style="margin: 0; color: var(--text-color);">🚀 Active Uploads <span id="uploadCount" style="color: #666; font-size: 0.9rem;">(0)</span></h3>
       <div style="display: flex; gap: 0.5rem;">
         <button onclick="cancelAllUploads()" class="upload-manager-btn" style="background: #dc3545;">❌ Cancel All</button>
       </div>
@@ -1009,7 +1249,7 @@
 <section>
   <div style="display: flex; justify-content: space-between; align-items: center;">
     <div>
-      <h2>Available Files</h2>
+      <h2 style="color: var(--text-color);">Available Files</h2>
       <span id="fileCount" class="file-count" style="color: #666; font-size: 0.9em; margin-left: 0.5rem;"></span>
     </div>
     <div style="display: flex; gap: 0.5rem;">
@@ -1063,7 +1303,7 @@
 
   <!-- Clipboard Input Section -->
   <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin: 1.5rem 0;">
-    <h4 style="margin: 0 0 1rem 0; color: #333;">Add to Clipboard</h4>
+    <h4 style="margin: 0 0 1rem 0; color: var(--text-color);">Add to Clipboard</h4>
     <div style="margin-bottom: 1rem;">
       <label style="display: block; margin-bottom: 0.5rem; font-weight: bold; color: #555;">Paste Text/Content:</label>
       <textarea id="clipboardTextInput" placeholder="Type or paste text content here..." style="width: 100%; height: 100px; padding: 0.5rem; border: 2px dashed #ddd; border-radius: 6px; resize: vertical; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap; word-wrap: break-word;" onpaste="handleClipboardPaste(event)"></textarea>
@@ -1078,7 +1318,7 @@
   <!-- Clipboard History Section -->
   <div style="background: #fff; padding: 1rem; border-radius: 8px; border: 1px solid #e0e0e0;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-      <h4 style="margin: 0; color: #333;">📚 Clipboard History</h4>
+      <h4 style="margin: 0; color: var(--text-color);">📚 Clipboard History</h4>
       <div style="display: flex; gap: 0.5rem;">
         <button onclick="refreshClipboardHistory()" class="download-btn" style="background: #17a2b8;">🔄 Refresh</button>
         <button onclick="downloadClipboardHistory()" class="download-btn" style="background: #28a745;">📄 Download History</button>
@@ -3894,7 +4134,8 @@ Device Session will reset when browser is closed
       protocolIcon: document.getElementById('protocolIcon'),
       protocolText: document.getElementById('protocolText'),
       protocolStatus: document.getElementById('protocolStatus'),
-      aesToggle: document.getElementById('enableEncryption')
+      aesToggle: document.getElementById('enableEncryption'),
+      darkModeToggle: document.getElementById('enableDarkMode')
     };
     
     // Debug DOM cache - check if all elements are found
@@ -3904,7 +4145,8 @@ Device Session will reset when browser is closed
         protocolIcon: !!DOM_CACHE.protocolIcon,
         protocolText: !!DOM_CACHE.protocolText,
         protocolStatus: !!DOM_CACHE.protocolStatus,
-        aesToggle: !!DOM_CACHE.aesToggle
+        aesToggle: !!DOM_CACHE.aesToggle,
+        darkModeToggle: !!DOM_CACHE.darkModeToggle
       });
     } else {
       console.log('🔍 DOM Cache Status (File Sharing Mode):', {
@@ -3917,7 +4159,8 @@ Device Session will reset when browser is closed
         protocolIcon: !!DOM_CACHE.protocolIcon,
       protocolText: !!DOM_CACHE.protocolText,
       protocolStatus: !!DOM_CACHE.protocolStatus,
-      aesToggle: !!DOM_CACHE.aesToggle
+      aesToggle: !!DOM_CACHE.aesToggle,
+      darkModeToggle: !!DOM_CACHE.darkModeToggle
     });
     
     // Legacy variables for backward compatibility
@@ -6515,7 +6758,7 @@ function renderClipboardHistory(items) {
   
   if (!items.length) {
     container.innerHTML = `
-      <div style="text-align: center; color: #666; padding: 2rem;">
+      <div style="text-align: center; color: var(--text-color); padding: 2rem;">
         <div style="font-size: 3rem; margin-bottom: 1rem;">📋</div>
         <div>No clipboard items yet</div>
         <div style="font-size: 0.9rem; margin-top: 0.5rem;">Add content above to get started</div>
@@ -6539,7 +6782,7 @@ function renderClipboardHistory(items) {
             max-width: 200px; 
             max-height: 150px; 
             border-radius: 4px; 
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             object-fit: cover;
             cursor: pointer;
           "
@@ -6551,8 +6794,8 @@ function renderClipboardHistory(items) {
     
     return `
       <div style="
-        background: white;
-        border: 1px solid #e0e0e0;
+        background: var(--section-bg);
+        border: 1px solid var(--border-color);
         border-radius: 8px;
         padding: 1rem;
         margin-bottom: 0.5rem;
@@ -6560,17 +6803,18 @@ function renderClipboardHistory(items) {
         justify-content: space-between;
         align-items: flex-start;
         gap: 1rem;
+        color: var(--text-color);
       ">
         <div style="flex: 1;">
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
             <span style="font-size: 1.2rem;">${typeIcon}</span>
-            <strong style="color: #333;">
+            <strong style="color: var(--text-color);">
               ${item.type === 'file' ? item.filename : `${item.content_type} content`}
             </strong>
-            <span style="color: #666; font-size: 0.8rem;">(${sizeText})</span>
+            <span style="color: #888; font-size: 0.8rem;">(${sizeText})</span>
           </div>
           ${imagePreview}
-          <div style="color: #666; font-size: 0.9rem; margin-bottom: 0.5rem;">
+          <div style="color: #aaa; font-size: 0.9rem; margin-bottom: 0.5rem;">
             ${isImage ? `Image dimensions and preview above` : item.preview}
           </div>
           <div style="color: #999; font-size: 0.8rem;">
@@ -6612,6 +6856,13 @@ function renderClipboardHistory(items) {
       </div>
     `;
   }).join('');
+  
+  // Apply dark mode colors if currently in dark mode
+  if (document.body.hasAttribute('data-theme') && document.body.getAttribute('data-theme') === 'dark') {
+    setTimeout(() => {
+      fixRemainingColors(true);
+    }, 50);
+  }
 }
 
 // Get appropriate icon for clipboard item type
@@ -8299,6 +8550,126 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('aes_enabled', aesToggle.checked ? '1' : '0');
     }
   });
+
+  // 🌙 Dark Mode Toggle Functionality
+  const darkModeToggle = DOM_CACHE.darkModeToggle;
+  if (darkModeToggle) {
+    // Load saved dark mode preference
+    const savedDarkMode = localStorage.getItem('dark_mode_enabled');
+    if (savedDarkMode !== null) {
+      const isDarkMode = savedDarkMode === '1';
+      darkModeToggle.checked = isDarkMode;
+      applyDarkMode(isDarkMode);
+    } else {
+      // Check system preference
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      darkModeToggle.checked = prefersDark;
+      applyDarkMode(prefersDark);
+    }
+
+    // Save state on change
+    darkModeToggle.addEventListener('change', () => {
+      const isDarkMode = darkModeToggle.checked;
+      localStorage.setItem('dark_mode_enabled', isDarkMode ? '1' : '0');
+      applyDarkMode(isDarkMode);
+      
+      // Show toast notification
+      showToast(isDarkMode ? '🌙 Dark mode enabled' : '☀️ Light mode enabled', 2000);
+    });
+
+    // Listen for system theme changes
+    if (window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        // Only auto-switch if user hasn't manually set preference
+        if (localStorage.getItem('dark_mode_enabled') === null) {
+          darkModeToggle.checked = e.matches;
+          applyDarkMode(e.matches);
+        }
+      });
+    }
+  }
+
+  // 🌙 Apply Dark Mode Function
+  function applyDarkMode(isDarkMode) {
+    if (isDarkMode) {
+      document.body.setAttribute('data-theme', 'dark');
+    } else {
+      document.body.removeAttribute('data-theme');
+    }
+    
+    // Update protocol status hover colors for dark mode
+    updateProtocolStatusHover(isDarkMode);
+    
+    // Fix any remaining hardcoded colors dynamically
+    fixRemainingColors(isDarkMode);
+  }
+
+  // Fix remaining hardcoded colors that CSS might miss
+  function fixRemainingColors(isDarkMode) {
+    if (isDarkMode) {
+      // Fix any elements with hardcoded #333 color
+      const darkTextElements = document.querySelectorAll('[style*="color: #333"], [style*="color:#333"], [style*="color: #666"], [style*="color:#666"], [style*="color: #999"], [style*="color:#999"]');
+      darkTextElements.forEach(el => {
+        el.style.color = 'var(--text-color)';
+      });
+      
+      // Fix any white background divs
+      const whiteBgElements = document.querySelectorAll('[style*="background: #fff"], [style*="background-color: #fff"], [style*="background: #f8f9fa"], [style*="background: white"]');
+      whiteBgElements.forEach(el => {
+        el.style.backgroundColor = 'var(--section-bg)';
+        el.style.color = 'var(--text-color)';
+      });
+      
+      // Fix file names and clipboard items specifically
+      const fileNameElements = document.querySelectorAll('.file-name, .upload-file-name');
+      fileNameElements.forEach(el => {
+        el.style.color = 'var(--text-color)';
+      });
+      
+      // Fix clipboard items
+      const clipboardElements = document.querySelectorAll('#clipboardHistoryContent div');
+      clipboardElements.forEach(el => {
+        if (el.style.color && (el.style.color.includes('#333') || el.style.color.includes('#666') || el.style.color.includes('#999'))) {
+          el.style.color = 'var(--text-color)';
+        }
+      });
+      
+      // Fix labels and other text elements
+      const textElements = document.querySelectorAll('label, span:not(.slider), .file-name, strong');
+      textElements.forEach(el => {
+        if (!el.classList.contains('slider') && !el.classList.contains('toggle-text')) {
+          if (el.style.color && (el.style.color.includes('#333') || el.style.color.includes('#666'))) {
+            el.style.color = 'var(--text-color)';
+          }
+        }
+      });
+    } else {
+      // Reset to light mode colors
+      const allElements = document.querySelectorAll('*');
+      allElements.forEach(el => {
+        if (el.style.color && el.style.color.includes('var(--text-color)')) {
+          el.style.color = '';
+        }
+        if (el.style.backgroundColor && el.style.backgroundColor.includes('var(--')) {
+          el.style.backgroundColor = '';
+        }
+      });
+    }
+  }
+
+  // Update protocol status hover behavior for dark mode
+  function updateProtocolStatusHover(isDarkMode) {
+    const protocolStatus = DOM_CACHE.protocolStatus;
+    if (protocolStatus) {
+      if (isDarkMode) {
+        protocolStatus.onmouseover = function() { this.style.backgroundColor = '#1e40af'; };
+        protocolStatus.onmouseout = function() { this.style.backgroundColor = 'var(--protocol-bg)'; };
+      } else {
+        protocolStatus.onmouseover = function() { this.style.backgroundColor = '#d0e9f7'; };
+        protocolStatus.onmouseout = function() { this.style.backgroundColor = 'var(--protocol-bg)'; };
+      }
+    }
+  }
 
   // 📋 Auto-load clipboard history for clipboard-only pages
   if (typeof show_clipboard_only !== 'undefined' && show_clipboard_only) {
