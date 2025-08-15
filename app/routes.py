@@ -13,15 +13,17 @@ from fastapi.responses import (
 )
 from fastapi.templating import Jinja2Templates
 from app.clipboard_ws import clipboard_ws_manager
-from starlette.status import HTTP_302_FOUND, HTTP_400_BAD_REQUEST
+from starlette.status import HTTP_302_FOUND, HTTP_400_BAD_REQUEST, HTTP_403_FORBIDDEN, HTTP_500_INTERNAL_SERVER_ERROR
 
 from app.aes_utils import encrypt_session_data, decrypt_session_data
 from app.aes_config import AESConfig
 from app.validation import (
     validate_upload_files, 
+    validate_upload_files_enhanced,
     secure_filename,
     is_allowed_file,
-    FileValidator
+    FileValidator,
+    AdvancedFileValidator
 )
 from app.simple_mdns import mdns_manager
 
@@ -167,13 +169,18 @@ async def upload_auto_file(
     # 🔐 Protocol detection
     is_https = request.url.scheme == "https"
     
-    # 🔍 Comprehensive input validation
-    is_valid, error_messages, validated_files = validate_upload_files(files, encrypt, is_https)
+    # 🔍 ENHANCED SECURITY: Comprehensive input validation with content analysis
+    is_valid, error_messages, validated_files, security_warnings = validate_upload_files_enhanced(files, encrypt, is_https)
     if not is_valid:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
-            "status": "error",
-            "msg": "; ".join(error_messages)
+            "status": "error", 
+            "msg": "; ".join(error_messages),
+            "security_blocked": True
         })
+    
+    # 🚨 Log security warnings if any
+    if security_warnings:
+        print(f"⚠️ Security warnings for upload: {'; '.join(security_warnings)}")
 
     # 🚫 Enforce encryption restrictions using centralized config
     if encrypt:
@@ -681,6 +688,17 @@ async def upload_chunk(
                 content={"status": "error", "msg": f"Validation failed: {validation_result['error']}"}
             )
         
+        # 🛡️ PRELIMINARY SECURITY: Basic extension check (full validation at finalization)
+        extension = os.path.splitext(filename)[1].lower()
+        if extension in AdvancedFileValidator.BLOCKED_EXTENSIONS:
+            return JSONResponse(
+                status_code=HTTP_403_FORBIDDEN,
+                content={
+                    "status": "security_blocked",
+                    "msg": f"🛡️ Blocked file type: {extension} files are not allowed for security reasons"
+                }
+            )
+        
         # 🔍 Enhanced validation: Check part number validity
         if part_number < 1:
             return JSONResponse(
@@ -910,16 +928,61 @@ async def finalize_upload(
             if chunk_path.exists():
                 chunk_path.unlink()
         
+        # 🛡️ ENHANCED SECURITY: Validate the assembled file before finalizing
+        try:
+            # Perform comprehensive security validation on the assembled file
+            security_check = AdvancedFileValidator.validate_uploaded_file(final_path)
+            
+            if not security_check['valid']:
+                # File failed security validation - delete it immediately
+                if final_path.exists():
+                    final_path.unlink()
+                    
+                return JSONResponse(
+                    status_code=HTTP_403_FORBIDDEN,
+                    content={
+                        "status": "security_blocked",
+                        "msg": f"🛡️ Security Check Failed: {security_check['error']}",
+                        "security_details": {
+                            "blocked_reason": security_check.get('error', 'Unknown security violation'),
+                            "detected_type": security_check.get('detected_type'),
+                            "claimed_extension": security_check.get('claimed_extension'),
+                            "file_deleted": True
+                        }
+                    }
+                )
+                
+        except Exception as validation_error:
+            print(f"⚠️ Security validation error for {final_path.name}: {validation_error}")
+            # If validation fails, delete the file as a precaution
+            if final_path.exists():
+                final_path.unlink()
+                
+            return JSONResponse(
+                status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+                content={
+                    "status": "error", 
+                    "msg": f"Security validation failed: {str(validation_error)}",
+                    "file_deleted": True
+                }
+            )
+        
         # Add background scan task
         background_tasks.add_task(scan_file, final_path)
         
+        # Success response with security confirmation
+        success_msg = f"File '{final_path.name}' uploaded successfully via {'HTTPS' if is_https else 'HTTP'} ({actual_chunks} chunks combined)"
+        if security_check.get('warnings'):
+            success_msg += f" ⚠️ Security Notes: {'; '.join(security_check['warnings'])}"
+        
         return JSONResponse(content={
             "status": "success",
-            "msg": f"File '{final_path.name}' uploaded successfully via {'HTTPS' if is_https else 'HTTP'} ({actual_chunks} chunks combined)",
+            "msg": success_msg,
             "filename": final_path.name,
             "actual_chunks": actual_chunks,
             "estimated_chunks": total_parts,
-            "protocol": "HTTPS" if is_https else "HTTP"
+            "protocol": "HTTPS" if is_https else "HTTP",
+            "security_validated": True
         })
         
     except Exception as e:
