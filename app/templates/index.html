@@ -807,6 +807,7 @@
     --button-hover-bg: #0056b3;
     --input-bg: #fff;
     --input-border: #ddd;
+    --mdns-green: #22c55e;
   }
 
   [data-theme="dark"] {
@@ -826,6 +827,7 @@
     --button-hover-bg: #0b5ed7;
     --input-bg: #383838;
     --input-border: #555;
+    --mdns-green: #22c55e;
   }
 
   body {
@@ -6360,7 +6362,7 @@ async function updateMDNSStatus() {
         // Update QR hint if not already showing mDNS status
         if (!qrHintText.innerHTML.includes('mDNS:')) {
           qrHintText.innerHTML = `🌐 <strong>mDNS:</strong> ${domain}${conflictInfo} • Click for QR`;
-          qrHintText.style.color = '#22c55e';
+          qrHintText.style.color = 'var(--mdns-green)';
           qrHintText.title = `mDNS service active - accessible via ${domain}`;
           
           // Show success toast
