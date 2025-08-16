@@ -695,36 +695,30 @@
       
       .clipboard-buttons {
           display: flex;
+          flex-direction: row;
           gap: 0.5rem;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
           margin-top: 0.8rem;
           justify-content: flex-end;
           width: 100%;
       }
       
       .clipboard-buttons button {
-          flex: 1 1 120px;
-          min-width: 120px;
-          max-width: 100%;
+          flex: 0 0 auto;
+          min-width: auto;
+          max-width: none;
           box-sizing: border-box;
       }
       
-      /* Mobile clipboard buttons - compact for fitting text - FINAL VERSION */
       @media (max-width: 600px) {
         .clipboard-buttons {
-          display: flex !important;
-          flex-direction: row !important;
-          flex-wrap: nowrap !important;
-          gap: 0.08rem !important;
-          justify-content: flex-start !important;
-          align-items: center !important;
-          margin-top: 0 !important;
+          flex-direction: row;
+          align-items: center;
+          gap: 0.3rem;
         }
-        
         .clipboard-buttons button {
-          flex: 1 !important;
-          min-width: 0 !important;
-          max-width: none !important;
+          flex: 1;
+          min-width: 0;
           min-height: 32px !important;
           font-size: 0.6rem !important;
           padding: 0.2rem 0.3rem !important;
