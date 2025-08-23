@@ -1085,21 +1085,34 @@ async def get_network_info():
     try:
         import socket
         
-        # Get LAN IP
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        lan_ip = s.getsockname()[0]
-        s.close()
+        # Use mDNS manager's offline-capable method to get LAN IP
+        lan_ip = mdns_manager.get_lan_ip()
         
         # Get mDNS info
         mdns_info = mdns_manager.get_mdns_info()
         
+        # Get hybrid URL (mDNS first, fallback to IP)
+        hybrid_url = mdns_manager.get_hybrid_url()
+        
+        # Also provide separate URL components for QR code generation
+        protocol = "https" if mdns_manager.use_https else "http"
+        port = mdns_manager.port
+        
+        # Format LAN IP URL using the same logic as mDNS URLs
+        if (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
+            lan_ip_url = f"{protocol}://{lan_ip}"
+        else:
+            lan_ip_url = f"{protocol}://{lan_ip}:{port}"
+        
         return JSONResponse(content={
             "status": "success",
             "lan_ip": lan_ip,
+            "lan_ip_url": lan_ip_url,
             "hostname": socket.gethostname(),
             "mdns": mdns_info,
-            "hybrid_url": mdns_manager.get_hybrid_url()
+            "hybrid_url": hybrid_url,
+            "protocol": protocol,
+            "port": port
         })
     except Exception as e:
         # Create fallback URL using the same format logic as mdns_manager
@@ -1107,8 +1120,10 @@ async def get_network_info():
         port = mdns_manager.port
         if (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
             fallback_url = f"{protocol}://127.0.0.1"
+            lan_ip_fallback = f"{protocol}://127.0.0.1"
         else:
             fallback_url = f"{protocol}://127.0.0.1:{port}"
+            lan_ip_fallback = f"{protocol}://127.0.0.1:{port}"
         
         return JSONResponse(
             status_code=500,
@@ -1116,8 +1131,11 @@ async def get_network_info():
                 "status": "error",
                 "error": str(e),
                 "lan_ip": "127.0.0.1",
+                "lan_ip_url": lan_ip_fallback,
                 "mdns": {"status": "error", "domain": None},
-                "hybrid_url": fallback_url
+                "hybrid_url": fallback_url,
+                "protocol": protocol,
+                "port": port
             }
         )
 
