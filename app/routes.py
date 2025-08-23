@@ -145,7 +145,9 @@ async def home(request: Request):
             "protocol": protocol,
             "host": host,
             "port": "5000" if ":5000" in host else "unknown"
-        }
+        },
+        "show_both_sections": True,  # Show both file transfer and clipboard
+        "default_view": "file"       # Default to file transfer view
     })
 
 @router.get("/api/files", name="api_files")
@@ -1200,12 +1202,15 @@ async def generate_offline_qr(text: str, size: int = 200):
 # === FULL PAGE CLIPBOARD ROUTE ===
 @router.get("/clipboard", response_class=HTMLResponse, name="clipboard_page")
 async def clipboard_page(request: Request):
-    # Render the same template, but with a flag to show only the clipboard system
+    files = get_file_list()  # Include files for seamless switching
+    
+    # Render the same template, but with clipboard as default view
     return templates.TemplateResponse("index.html", {
         "request": request,
         "msg": "Lanvan",
-        "files": [],
-        "show_clipboard_only": True
+        "files": [f["name"] for f in files],
+        "show_both_sections": True,  # Show both sections
+        "default_view": "clipboard"  # Default to clipboard view
     })
 
 # === CLIPBOARD SYSTEM ENDPOINTS ===

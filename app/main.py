@@ -5,11 +5,13 @@ import threading
 import time
 import sys
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
+from starlette.requests import ClientDisconnect
 from app.routes import router
 
 # Import mDNS manager for service discovery
@@ -317,6 +319,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         return RedirectResponse(url="/loading?redirect=/", status_code=302)
     # Otherwise, let the validation error be handled normally
     raise exc
+
+@app.exception_handler(ClientDisconnect)
+async def client_disconnect_handler(request: Request, exc: ClientDisconnect):
+    """Handle client disconnections gracefully"""
+    # Log the disconnect but don't treat it as an error
+    print(f"ℹ️ Client disconnected during request to {request.url.path}")
+    # Client disconnections are normal - don't raise an error
+    # The response will naturally fail since the client is gone
+    return None
 
 @app.exception_handler(500)
 async def smart_internal_error_handler(request: Request, exc):

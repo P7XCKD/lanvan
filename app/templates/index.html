@@ -1322,9 +1322,9 @@
   </div>
 </header>
 
-{% if not show_clipboard_only %}
+{% if not show_clipboard_only or show_both_sections %}
 <!--  Upload Files & Manager (Merged Section) -->
-<section>
+<section id="fileTransferSection" style="{% if default_view == 'clipboard' %}display: none;{% endif %}">>
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
     <h2 style="margin: 0; color: var(--text-color);">📤 Upload Files & Manager</h2>
     <div style="position: relative;">
@@ -1390,9 +1390,9 @@
   </section>
 {% endif %}
 
-{% if not show_clipboard_only %}
+{% if not show_clipboard_only or show_both_sections %}
 <!-- 📂 File List -->
-<section>
+<section id="fileListSection" style="{% if default_view == 'clipboard' %}display: none;{% endif %}">
   <div style="display: flex; justify-content: space-between; align-items: center;">
     <div>
       <h2 style="color: var(--text-color);">Available Files</h2>
@@ -1423,9 +1423,9 @@
 </section>
 {% endif %}
 
-{% if show_clipboard_only %}
+{% if show_clipboard_only or show_both_sections %}
 <!-- 📋 Clipboard System (Unified Layout) -->
-<section>
+<section id="clipboardSection" style="{% if default_view == 'file' %}display: none;{% endif %}">
   <div style="display: flex; justify-content: space-between; align-items: center;">
     <div>
       <h2>Clipboard System</h2>
@@ -8669,7 +8669,7 @@ function showSwitchDropdown(event, dropdownId) {
   }
 }
 function switchToPage(page) {
-  // Hide all switch dropdowns before navigating
+  // Hide all switch dropdowns before switching
   var dropdowns = [
     document.getElementById('switchDropdownMain'),
     document.getElementById('switchDropdownClipboard')
@@ -8677,12 +8677,73 @@ function switchToPage(page) {
   dropdowns.forEach(function(dd) {
     if (dd) dd.style.display = 'none';
   });
+  
+  // Get the sections by ID
+  const fileTransferSection = document.getElementById('fileTransferSection');
+  const fileListSection = document.getElementById('fileListSection');
+  const clipboardSection = document.getElementById('clipboardSection');
+  
   if (page === 'clipboard') {
-    window.location.href = '/clipboard';
+    // Show clipboard section, hide file sections
+    if (fileTransferSection) fileTransferSection.style.display = 'none';
+    if (fileListSection) fileListSection.style.display = 'none';
+    if (clipboardSection) clipboardSection.style.display = 'block';
+    
+    // Update page title/URL without navigation (preserves uploads)
+    history.pushState({page: 'clipboard'}, 'LANVan - Clipboard', '/clipboard');
+    document.title = 'LANVan - Clipboard';
+    
   } else if (page === 'file') {
-    window.location.href = '/';
+    // Show file sections, hide clipboard section
+    if (fileTransferSection) fileTransferSection.style.display = 'block';
+    if (fileListSection) fileListSection.style.display = 'block';
+    if (clipboardSection) clipboardSection.style.display = 'none';
+    
+    // Update page title/URL without navigation (preserves uploads)
+    history.pushState({page: 'file'}, 'LANVan - File Transfer', '/');
+    document.title = 'LANVan - File Transfer';
+  }
+  
+  // Trigger any necessary updates for the visible section
+  if (page === 'file') {
+    if (typeof updateFileList === 'function') {
+      updateFileList();
+    }
+  } else if (page === 'clipboard') {
+    if (typeof refreshClipboardHistory === 'function') {
+      refreshClipboardHistory();
+    }
+  }
+  
+  // Show a brief toast notification
+  if (typeof showToast === 'function') {
+    const sectionName = page === 'clipboard' ? 'Clipboard' : 'File Transfer';
+    showToast(`📱 Switched to ${sectionName}`, 1500);
   }
 }
+
+// Handle browser back/forward buttons to preserve upload state
+window.addEventListener('popstate', function(event) {
+  if (event.state && event.state.page) {
+    // Switch to the page without updating history (since we're handling popstate)
+    const targetPage = event.state.page;
+    const fileTransferSection = document.getElementById('fileTransferSection');
+    const fileListSection = document.getElementById('fileListSection');
+    const clipboardSection = document.getElementById('clipboardSection');
+    
+    if (targetPage === 'clipboard') {
+      if (fileTransferSection) fileTransferSection.style.display = 'none';
+      if (fileListSection) fileListSection.style.display = 'none';
+      if (clipboardSection) clipboardSection.style.display = 'block';
+      document.title = 'LANVan - Clipboard';
+    } else {
+      if (fileTransferSection) fileTransferSection.style.display = 'block';
+      if (fileListSection) fileListSection.style.display = 'block';
+      if (clipboardSection) clipboardSection.style.display = 'none';
+      document.title = 'LANVan - File Transfer';
+    }
+  }
+});
 </script>
 <script>
 // ✅ Save toggle state when user changes it
