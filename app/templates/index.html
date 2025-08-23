@@ -464,6 +464,16 @@
       pointer-events: auto;
     }
 
+    /* 🔄 Smooth section switching transitions */
+    #fileTransferSection, #fileListSection, #clipboardSection {
+      transition: opacity 0.2s ease-in-out;
+    }
+    
+    /* 🎯 Smooth tick indicator transitions */
+    #fileTickMain, #clipboardTickMain, #fileTickClipboard, #clipboardTickClipboard {
+      transition: opacity 0.15s ease-in-out;
+    }
+
     /* iOS Safari specific fixes - minimal changes to prevent cramped look */
     @media screen and (max-width: 600px) {
       body {
@@ -1350,14 +1360,14 @@
             <span style="font-size: 1.3em;">📁</span>
             <span>File Sharing</span>
           </span>
-          {% if not show_clipboard_only %}<span style="color: #7c3aed; font-size: 1.3em; margin-left: 10px;">✔️</span>{% endif %}
+          <span id="fileTickMain" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if not show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
         </div>
         <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem;" onclick="switchToPage('clipboard')">
           <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;">
             <span style="font-size: 1.3em;">📋</span>
             <span>Clipboard</span>
           </span>
-          {% if show_clipboard_only %}<span style="color: #7c3aed; font-size: 1.3em; margin-left: 10px;">✔️</span>{% endif %}
+          <span id="clipboardTickMain" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
         </div>
       </div>
     </div>
@@ -1436,11 +1446,11 @@
         <div id="switchDropdownClipboard" style="display:none; position:absolute; right:0; top:110%; background:white; border:1px solid #ccc; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); min-width:150px; z-index:10001;">
           <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem;" onclick="switchToPage('file')">
             <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;"><span style="font-size: 1.3em;">📁</span><span>File Sharing</span></span>
-            {% if not show_clipboard_only %}<span style="color: #7c3aed; font-size: 1.3em; margin-left: 10px;">✔️</span>{% endif %}
+            <span id="fileTickClipboard" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if not show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
           </div>
           <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem;" onclick="switchToPage('clipboard')">
             <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;"><span style="font-size: 1.3em;">📋</span><span>Clipboard</span></span>
-            {% if show_clipboard_only %}<span style="color: #7c3aed; font-size: 1.3em; margin-left: 10px;">✔️</span>{% endif %}
+            <span id="clipboardTickClipboard" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
           </div>
         </div>
       </div>
@@ -8550,37 +8560,84 @@ function switchToPage(page) {
   const fileListSection = document.getElementById('fileListSection');
   const clipboardSection = document.getElementById('clipboardSection');
   
-  if (page === 'clipboard') {
-    // Show clipboard section, hide file sections
-    if (fileTransferSection) fileTransferSection.style.display = 'none';
-    if (fileListSection) fileListSection.style.display = 'none';
-    if (clipboardSection) clipboardSection.style.display = 'block';
-    
-    // Update page title/URL without navigation (preserves uploads)
-    history.pushState({page: 'clipboard'}, 'LANVan - Clipboard', '/clipboard');
-    document.title = 'LANVan - Clipboard';
-    
-  } else if (page === 'file') {
-    // Show file sections, hide clipboard section
-    if (fileTransferSection) fileTransferSection.style.display = 'block';
-    if (fileListSection) fileListSection.style.display = 'block';
-    if (clipboardSection) clipboardSection.style.display = 'none';
-    
-    // Update page title/URL without navigation (preserves uploads)
-    history.pushState({page: 'file'}, 'LANVan - File Transfer', '/');
-    document.title = 'LANVan - File Transfer';
-  }
+  // Get all tick indicators
+  const fileTickMain = document.getElementById('fileTickMain');
+  const clipboardTickMain = document.getElementById('clipboardTickMain');
+  const fileTickClipboard = document.getElementById('fileTickClipboard');
+  const clipboardTickClipboard = document.getElementById('clipboardTickClipboard');
+  
+  // Add smooth transition effect with opacity
+  const sections = [fileTransferSection, fileListSection, clipboardSection];
+  sections.forEach(section => {
+    if (section) section.style.opacity = '0.7';
+  });
+  
+  // Use setTimeout to allow smooth transition
+  setTimeout(() => {
+    if (page === 'clipboard') {
+      // Show clipboard section, hide file sections
+      if (fileTransferSection) {
+        fileTransferSection.style.display = 'none';
+        fileTransferSection.style.opacity = '1';
+      }
+      if (fileListSection) {
+        fileListSection.style.display = 'none';
+        fileListSection.style.opacity = '1';
+      }
+      if (clipboardSection) {
+        clipboardSection.style.display = 'block';
+        clipboardSection.style.opacity = '1';
+      }
+      
+      // Update tick indicators - show clipboard ticks, hide file ticks
+      if (fileTickMain) fileTickMain.style.display = 'none';
+      if (fileTickClipboard) fileTickClipboard.style.display = 'none';
+      if (clipboardTickMain) clipboardTickMain.style.display = 'inline';
+      if (clipboardTickClipboard) clipboardTickClipboard.style.display = 'inline';
+      
+      // Update page title/URL without navigation (preserves uploads)
+      history.pushState({page: 'clipboard'}, 'LANVan - Clipboard', '/clipboard');
+      document.title = 'LANVan - Clipboard';
+      
+    } else if (page === 'file') {
+      // Show file sections, hide clipboard section
+      if (fileTransferSection) {
+        fileTransferSection.style.display = 'block';
+        fileTransferSection.style.opacity = '1';
+      }
+      if (fileListSection) {
+        fileListSection.style.display = 'block';
+        fileListSection.style.opacity = '1';
+      }
+      if (clipboardSection) {
+        clipboardSection.style.display = 'none';
+        clipboardSection.style.opacity = '1';
+      }
+      
+      // Update tick indicators - show file ticks, hide clipboard ticks
+      if (fileTickMain) fileTickMain.style.display = 'inline';
+      if (fileTickClipboard) fileTickClipboard.style.display = 'inline';
+      if (clipboardTickMain) clipboardTickMain.style.display = 'none';
+      if (clipboardTickClipboard) clipboardTickClipboard.style.display = 'none';
+      
+      // Update page title/URL without navigation (preserves uploads)
+      history.pushState({page: 'file'}, 'LANVan - File Transfer', '/');
+      document.title = 'LANVan - File Transfer';
+    }
+  }, 100); // Small delay for smooth transition
   
   // Trigger any necessary updates for the visible section
-  if (page === 'file') {
-    if (typeof updateFileList === 'function') {
-      updateFileList();
+  setTimeout(() => {
+    if (page === 'file') {
+      if (typeof updateFileList === 'function') {
+        updateFileList();
+      }
+    } else if (page === 'clipboard') {
+      if (typeof refreshClipboardHistory === 'function') {
+        refreshClipboardHistory();
+      }
     }
-  } else if (page === 'clipboard') {
-    if (typeof refreshClipboardHistory === 'function') {
-      refreshClipboardHistory();
-    }
-  }
+  }, 150); // Slight delay to ensure sections are visible
   
   // Show a brief toast notification
   if (typeof showToast === 'function') {
@@ -8598,15 +8655,35 @@ window.addEventListener('popstate', function(event) {
     const fileListSection = document.getElementById('fileListSection');
     const clipboardSection = document.getElementById('clipboardSection');
     
+    // Get all tick indicators
+    const fileTickMain = document.getElementById('fileTickMain');
+    const clipboardTickMain = document.getElementById('clipboardTickMain');
+    const fileTickClipboard = document.getElementById('fileTickClipboard');
+    const clipboardTickClipboard = document.getElementById('clipboardTickClipboard');
+    
     if (targetPage === 'clipboard') {
       if (fileTransferSection) fileTransferSection.style.display = 'none';
       if (fileListSection) fileListSection.style.display = 'none';
       if (clipboardSection) clipboardSection.style.display = 'block';
+      
+      // Update tick indicators for clipboard
+      if (fileTickMain) fileTickMain.style.display = 'none';
+      if (fileTickClipboard) fileTickClipboard.style.display = 'none';
+      if (clipboardTickMain) clipboardTickMain.style.display = 'inline';
+      if (clipboardTickClipboard) clipboardTickClipboard.style.display = 'inline';
+      
       document.title = 'LANVan - Clipboard';
     } else {
       if (fileTransferSection) fileTransferSection.style.display = 'block';
       if (fileListSection) fileListSection.style.display = 'block';
       if (clipboardSection) clipboardSection.style.display = 'none';
+      
+      // Update tick indicators for file transfer
+      if (fileTickMain) fileTickMain.style.display = 'inline';
+      if (fileTickClipboard) fileTickClipboard.style.display = 'inline';
+      if (clipboardTickMain) clipboardTickMain.style.display = 'none';
+      if (clipboardTickClipboard) clipboardTickClipboard.style.display = 'none';
+      
       document.title = 'LANVan - File Transfer';
     }
   }
