@@ -2679,8 +2679,9 @@ Device Session will reset when browser is closed
       case 'completed':
         return ``; // No individual remove button for completed uploads
       case 'error':
+        return ``; // No cancel button for error state
       case 'cancelled':
-        return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
+        return ``; // No cancel button for already cancelled uploads
       default:
         return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
     }
