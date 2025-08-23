@@ -120,7 +120,8 @@ async def lifespan(app: FastAPI):
     
     # Start mDNS service
     port = int(os.environ.get('PORT', 5000))
-    use_https = port == 5001  # Detect HTTPS mode based on port
+    # Get HTTPS mode from environment variable set by run.py
+    use_https = os.environ.get('USE_HTTPS', 'false').lower() == 'true'
     mdns_manager.port = port
     mdns_manager.use_https = use_https  # Configure HTTPS mode
     

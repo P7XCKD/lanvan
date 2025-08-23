@@ -338,6 +338,7 @@ if __name__ == "__main__":
         
         # Set environment variable for the FastAPI app
         os.environ['PORT'] = str(port)
+        os.environ['USE_HTTPS'] = str(use_https).lower()
         
         # ⛔️ Waitress removed: FastAPI is ASGI and no longer supports WSGI servers like Waitress.
         # subprocess.run([
@@ -362,6 +363,7 @@ if __name__ == "__main__":
         
         # Set environment variable for the FastAPI app
         os.environ['PORT'] = str(port)
+        os.environ['USE_HTTPS'] = str(use_https).lower()
         
         open_browser(ip, port, use_https)
         
