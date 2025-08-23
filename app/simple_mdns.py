@@ -9,12 +9,66 @@ import os
 from typing import Optional, Dict, Any
 from zeroconf import ServiceInfo, Zeroconf, ServiceBrowser
 
+def check_mdns_dependencies() -> tuple[bool, str]:
+    """Check if mDNS dependencies are available, especially for Termux"""
+    try:
+        from zeroconf import Zeroconf
+        
+        # Test basic Zeroconf functionality
+        test_zc = Zeroconf()
+        test_zc.close()
+        
+        # Check for Android/Termux specific requirements
+        is_android = ("ANDROID_STORAGE" in os.environ or 
+                     os.path.exists("/data/data/com.termux") or 
+                     "TERMUX_VERSION" in os.environ)
+        
+        if is_android:
+            # Check if avahi is available (recommended for Termux)
+            try:
+                import subprocess
+                result = subprocess.run(['which', 'avahi-daemon'], 
+                                      capture_output=True, text=True)
+                if result.returncode != 0:
+                    return True, "⚠️ mDNS available but avahi-daemon not found. Install with: pkg install avahi"
+            except:
+                pass
+        
+        return True, "✅ mDNS dependencies available"
+    
+    except ImportError as e:
+        return False, f"❌ mDNS not available: {e}. Install with: pip install zeroconf"
+    except Exception as e:
+        return False, f"❌ mDNS test failed: {e}"
+
+def force_cleanup_mdns_resources():
+    """Force cleanup of any lingering mDNS resources (useful for Termux restarts)"""
+    try:
+        import gc
+        import threading
+        
+        # Force garbage collection
+        gc.collect()
+        
+        # Log any daemon threads that might be lingering
+        daemon_threads = [t for t in threading.enumerate() 
+                         if t.daemon and 'zeroconf' in str(t).lower()]
+        
+        if daemon_threads:
+            print(f"🧹 Found {len(daemon_threads)} zeroconf daemon threads (will be cleaned up on exit)")
+        
+        print("🧹 Forced cleanup of mDNS resources")
+        return True
+    except Exception as e:
+        print(f"⚠️ Cleanup warning: {e}")
+        return False
+
 class SimpleMDNSManager:
     """
     Simple, robust mDNS service manager for LANVAN
     """
     
-    def __init__(self, port: int = 5000, use_https: bool = False):
+    def __init__(self, port: int = 80, use_https: bool = False):
         self.port = port
         self._use_https = use_https
         self.protocol = "https" if use_https else "http"
@@ -34,6 +88,13 @@ class SimpleMDNSManager:
         
         # Setup simple logging
         self.logger = logging.getLogger(__name__)
+        
+        # Check mDNS availability on init
+        self.mdns_available, self.mdns_status = check_mdns_dependencies()
+        if not self.mdns_available:
+            self.logger.warning(self.mdns_status)
+        elif "avahi-daemon not found" in self.mdns_status:
+            self.logger.warning(self.mdns_status)
 
     @property
     def use_https(self):
@@ -199,11 +260,29 @@ class SimpleMDNSManager:
         self.logger = logging.getLogger(__name__)
         
     def get_lan_ip(self) -> str:
-        """Get the LAN IP address - works offline by scanning local interfaces"""
+        """Get the LAN IP address - works offline by scanning local interfaces, optimized for Termux"""
         try:
+            # Return cached IP if available and still valid
             if self.lan_ip:
-                return self.lan_ip
+                # Quick test to see if IP is still valid
+                try:
+                    import socket
+                    test_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    test_socket.bind((self.lan_ip, 0))
+                    test_socket.close()
+                    return self.lan_ip
+                except:
+                    # IP no longer valid, clear cache
+                    self.lan_ip = None
             
+            # Check if we're on Android/Termux for special handling
+            is_android = ("ANDROID_STORAGE" in os.environ or 
+                         os.path.exists("/data/data/com.termux") or 
+                         "TERMUX_VERSION" in os.environ)
+            
+            if is_android:
+                print("📱 Detecting network interface on Android/Termux...")
+                
             # Method 1: Try to get IP without external connection (offline-compatible)
             # Get all network interfaces
             import socket
@@ -220,30 +299,27 @@ class SimpleMDNSManager:
                 pass
             
             # Method 2: Scan network interfaces manually (offline-compatible)
-            try:
-                # Create a socket and bind to get local IP
-                temp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                # Try connecting to a local network address (doesn't require internet)
-                temp_socket.connect(("192.168.1.1", 80))  # Local router IP
-                local_ip = temp_socket.getsockname()[0]
-                temp_socket.close()
-                
-                if local_ip and not local_ip.startswith('127.'):
-                    self.lan_ip = local_ip
-                    return self.lan_ip
-            except:
-                pass
+            # Try multiple router addresses for better Termux compatibility
+            router_addresses = [
+                "192.168.1.1",   # Most common
+                "192.168.0.1",   # Common alternative
+                "10.0.0.1",      # Some networks
+                "172.16.0.1",    # Corporate networks
+                "192.168.43.1"   # Android hotspot default
+            ]
             
-            # Method 3: Try different local network ranges (offline-compatible)
-            for network_range in ["10.0.0.1", "172.16.0.1", "192.168.0.1"]:
+            for router_ip in router_addresses:
                 try:
                     temp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    temp_socket.connect((network_range, 80))
+                    temp_socket.settimeout(1.0)  # Quick timeout for faster detection
+                    temp_socket.connect((router_ip, 80))
                     local_ip = temp_socket.getsockname()[0]
                     temp_socket.close()
                     
                     if local_ip and not local_ip.startswith('127.'):
                         self.lan_ip = local_ip
+                        if is_android:
+                            print(f"📱 Android IP detected: {local_ip}")
                         return self.lan_ip
                 except:
                     continue
@@ -285,26 +361,59 @@ class SimpleMDNSManager:
         return final_name
     
     def start_service(self) -> bool:
-        """Start mDNS service with offline support and collision detection"""
+        """Start mDNS service with offline support, collision detection, and Termux compatibility"""
         try:
             with self._lock:
                 if self.is_running:
+                    print("ℹ️ mDNS service already running")
                     return True
                 
-                print("🔍 Starting mDNS service (offline-compatible)...")
+                # Check if mDNS is available
+                if not self.mdns_available:
+                    print(f"❌ {self.mdns_status}")
+                    return False
                 
-                # Create zeroconf instance with offline optimizations
+                print("🔍 Starting mDNS service (offline-compatible, Termux-optimized)...")
+                print(f"   {self.mdns_status}")
+                
+                # Check if we're on Android/Termux for special handling
+                is_android = ("ANDROID_STORAGE" in os.environ or 
+                             os.path.exists("/data/data/com.termux") or 
+                             "TERMUX_VERSION" in os.environ)
+                
+                # Enhanced cleanup before start (important for Termux restarts)
+                force_cleanup_mdns_resources()
+                
+                if self.zeroconf:
+                    try:
+                        self.zeroconf.close()
+                    except:
+                        pass
+                    self.zeroconf = None
+                
+                # Create zeroconf instance with Android/Termux optimizations
                 try:
+                    if is_android:
+                        print("📱 Android/Termux detected - using optimized mDNS settings")
+                        # Use more conservative settings for Android
+                        time.sleep(0.5)  # Give time for network interfaces to stabilize
+                    
                     # Initialize with local interfaces only for offline support
                     self.zeroconf = Zeroconf()
+                    
                 except Exception as zc_error:
                     print(f"⚠️ Zeroconf initialization warning: {zc_error}")
                     print("🔧 Attempting alternative zeroconf setup...")
                     try:
+                        # Brief pause for Android/Termux network stability
+                        time.sleep(1.0)
                         # Fallback zeroconf initialization
                         self.zeroconf = Zeroconf()
                     except Exception as zc_fallback_error:
                         print(f"❌ mDNS service failed to initialize: {zc_fallback_error}")
+                        if is_android:
+                            print("💡 On Android/Termux, try: pkg install avahi")
+                            print("💡 Or restart Termux and try again")
                         return False
                 
                 # Generate service details with collision detection
@@ -398,28 +507,57 @@ class SimpleMDNSManager:
             return False
     
     def stop_service(self):
-        """Stop the mDNS service"""
+        """Stop the mDNS service with enhanced cleanup for Termux/Android"""
         try:
             with self._lock:
                 if not self.is_running:
                     return
                 
+                print("🔴 Stopping mDNS service...")
+                
                 # Stop announcement thread first
                 self._stop_announcement_thread()
                 
+                # Unregister service with retry for Termux compatibility
                 if self.service_info and self.zeroconf:
-                    self.zeroconf.unregister_service(self.service_info)
-                    print(f"🔴 mDNS service stopped: {self.domain}")
+                    try:
+                        self.zeroconf.unregister_service(self.service_info)
+                        print(f"✅ mDNS service unregistered: {self.domain}")
+                    except Exception as unreg_error:
+                        print(f"⚠️ Unregister warning (non-critical): {unreg_error}")
                 
+                # Close zeroconf with enhanced cleanup for Android/Termux
                 if self.zeroconf:
-                    self.zeroconf.close()
+                    try:
+                        # Force close all sockets and cleanup
+                        self.zeroconf.close()
+                        print("✅ Zeroconf resources cleaned up")
+                    except Exception as close_error:
+                        print(f"⚠️ Zeroconf close warning: {close_error}")
                     
+                    # Additional cleanup for Android/Termux
+                    try:
+                        # Force garbage collection to free network resources
+                        import gc
+                        gc.collect()
+                    except:
+                        pass
+                
+                # Reset all state
                 self.is_running = False
                 self.service_info = None
                 self.zeroconf = None
+                self.lan_ip = None  # Reset IP cache for next run
+                
+                print("🔴 mDNS service stopped and cleaned up")
                 
         except Exception as e:
             print(f"❌ Error stopping mDNS service: {e}")
+            # Force reset even if there were errors
+            self.is_running = False
+            self.service_info = None
+            self.zeroconf = None
+            self.lan_ip = None
     
     def get_mdns_info(self) -> Dict[str, Any]:
         """Get mDNS service information"""
@@ -435,7 +573,7 @@ class SimpleMDNSManager:
         return {
             "status": "active",
             "domain": self.domain,
-            "url": f"{self.protocol}://{self.domain}:{self.port}",
+            "url": self._format_url(self.domain),
             "service_name": self.service_name,
             "conflict_resolved": self.conflict_count > 0,
             "conflict_count": self.conflict_count,
@@ -443,14 +581,21 @@ class SimpleMDNSManager:
             "port": self.port
         }
     
+    def _format_url(self, host: str) -> str:
+        """Format URL correctly, omitting standard ports"""
+        protocol = self.protocol
+        # Don't include port for standard HTTP/HTTPS ports
+        if (self.port == 80 and protocol == "http") or (self.port == 443 and protocol == "https"):
+            return f"{protocol}://{host}"
+        else:
+            return f"{protocol}://{host}:{self.port}"
+    
     def get_hybrid_url(self) -> str:
         """Get the best URL for QR code generation (mDNS first, fallback to IP)"""
         if self.is_running and self.domain:
-            protocol = "https" if self.use_https else "http"
-            return f"{protocol}://{self.domain}:{self.port}"
+            return self._format_url(self.domain)
         else:
-            protocol = "https" if self.use_https else "http"
-            return f"{protocol}://{self.get_lan_ip()}:{self.port}"
+            return self._format_url(self.get_lan_ip())
 
 # Global simple mDNS manager instance
 mdns_manager = SimpleMDNSManager()

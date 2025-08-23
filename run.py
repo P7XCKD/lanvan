@@ -59,8 +59,18 @@ except ImportError as e:
 # SSL Certificate paths (can be overridden by environment variables)
 SSL_CERT_PATH = os.getenv("SSL_CERT_PATH", "certs/cert.pem")
 SSL_KEY_PATH = os.getenv("SSL_KEY_PATH", "certs/key.pem")
-HTTP_PORT = 5000
-HTTPS_PORT = 5001
+
+# Default ports - use standard HTTP/HTTPS ports when possible
+# On Windows/most systems: requires admin privileges for ports < 1024
+# Fallback to non-privileged ports if needed
+DEFAULT_HTTP_PORT = 80
+DEFAULT_HTTPS_PORT = 443
+FALLBACK_HTTP_PORT = 5000
+FALLBACK_HTTPS_PORT = 5001
+
+# Use environment variables to allow port override
+HTTP_PORT = int(os.getenv("HTTP_PORT", DEFAULT_HTTP_PORT))
+HTTPS_PORT = int(os.getenv("HTTPS_PORT", DEFAULT_HTTPS_PORT))
 
 # === UTILITY FUNCTIONS ===
 def get_ip():
@@ -99,6 +109,31 @@ def get_ip():
     
     # Fallback to localhost
     return "127.0.0.1"
+
+def can_bind_privileged_port(port):
+    """Check if we can bind to a privileged port (< 1024)"""
+    if port >= 1024:
+        return True
+    
+    try:
+        # Try to bind to the port briefly
+        test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        test_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        test_socket.bind(('0.0.0.0', port))
+        test_socket.close()
+        return True
+    except (OSError, PermissionError):
+        return False
+
+def get_safe_port(preferred_port, fallback_port):
+    """Get a safe port to use, falling back if privileged port can't be bound"""
+    if can_bind_privileged_port(preferred_port):
+        return preferred_port
+    else:
+        if preferred_port < 1024:
+            print(f"[WARNING] Cannot bind to privileged port {preferred_port} (requires admin/root)")
+            print(f"[INFO] Using fallback port {fallback_port}")
+        return fallback_port
 
 def is_android_termux():
     return "ANDROID_STORAGE" in os.environ or os.path.exists("/data/data/com.termux")
@@ -146,15 +181,28 @@ def generate_certs_if_needed():
 
 def print_banner(ip, port, use_https):
     scheme = "https" if use_https else "http"
+    
+    # Don't show port for standard HTTP/HTTPS ports
+    show_port = not ((port == 80 and scheme == "http") or (port == 443 and scheme == "https"))
+    
     print(f"\n[OK] Server running at:")
-    print(f"Local:  {scheme}://127.0.0.1:{port}")
-    print(f"LAN:    {scheme}://{ip}:{port}\n")
+    if show_port:
+        print(f"Local:  {scheme}://127.0.0.1:{port}")
+        print(f"LAN:    {scheme}://{ip}:{port}")
+    else:
+        print(f"Local:  {scheme}://127.0.0.1")
+        print(f"LAN:    {scheme}://{ip}")
+    print()
 
 def open_browser(ip, port, use_https):
     scheme = "https" if use_https else "http"
     try:
         import webbrowser
-        webbrowser.open(f"{scheme}://{ip}:{port}")
+        # Don't include port in URL for standard ports
+        if (port == 80 and scheme == "http") or (port == 443 and scheme == "https"):
+            webbrowser.open(f"{scheme}://{ip}")
+        else:
+            webbrowser.open(f"{scheme}://{ip}:{port}")
     except:
         print("[!] Failed to open browser.")
 
@@ -163,13 +211,13 @@ def kill_servers_on_port(port):
     try:
         for proc in psutil.process_iter(['pid', 'name']):
             try:
-                # Fix: Use connections() instead of net_connections()
+                # Fix: Use net_connections() instead of deprecated connections()
                 try:
-                    connections = proc.connections()
+                    connections = proc.net_connections()
                 except (psutil.AccessDenied, AttributeError):
-                    # If connections() fails, try the old method
+                    # If net_connections() fails, try the old method as fallback
                     try:
-                        connections = proc.net_connections()
+                        connections = proc.connections()
                     except AttributeError:
                         # Skip this process if we can't get connections
                         continue
@@ -195,9 +243,9 @@ def signal_handler(signum, frame):
     print(f"\n🚨 IMMEDIATE SHUTDOWN REQUESTED (signal {signum})")
     print("⚠️ Killing all server processes immediately...")
     
-    # Kill servers on both ports immediately
-    kill_servers_on_port(HTTP_PORT)
-    kill_servers_on_port(HTTPS_PORT)
+    # Kill servers on all possible ports immediately
+    for port in [DEFAULT_HTTP_PORT, DEFAULT_HTTPS_PORT, FALLBACK_HTTP_PORT, FALLBACK_HTTPS_PORT]:
+        kill_servers_on_port(port)
     
     # Also kill any uvicorn processes
     try:
@@ -227,18 +275,18 @@ if __name__ == "__main__":
     
     # Parse arguments
     use_https = False
-    port = HTTP_PORT
+    port = get_safe_port(HTTP_PORT, FALLBACK_HTTP_PORT)
     ios_mode = False
     
     # Check for arguments
     for arg in [a.lower() for a in args[1:]]:
         if arg in ["https", "--https"]:
             use_https = True
-            port = HTTPS_PORT
+            port = get_safe_port(HTTPS_PORT, FALLBACK_HTTPS_PORT)
         elif arg in ["ios", "--ios", "--safari"]:
             ios_mode = True
             use_https = False  # Force HTTP for iOS compatibility
-            port = HTTP_PORT
+            port = get_safe_port(HTTP_PORT, FALLBACK_HTTP_PORT)
     
     # Check for custom port
     for i, arg in enumerate(args):
@@ -259,19 +307,30 @@ if __name__ == "__main__":
         else:
             print("[WARNING] Failed to generate certificates. Falling back to HTTP.")
             use_https = False
-            port = HTTP_PORT
+            port = get_safe_port(HTTP_PORT, FALLBACK_HTTP_PORT)
 
     print_banner(ip, port, use_https)
     
-    # iOS Safari compatibility notices
+    # Display connection information based on actual ports used
     if ios_mode:
         print("🍎 iOS Safari Mode: HTTP optimized for maximum compatibility")
-        print(f"📱 Connect with: http://{ip}:5000")
+        if port == 80:
+            print(f"📱 Connect with: http://{ip}")
+        else:
+            print(f"📱 Connect with: http://{ip}:{port}")
     elif use_https:
         print("📱 iOS/Safari Users:")
-        print(f"   If Safari can't connect to https://lanvan.local:5001")
-        print(f"   Try: http://{ip}:5000 (HTTP fallback)")
-        print(f"   Or: https://{ip}:5001 (direct IP)")
+        if port == 443:
+            print(f"   Primary: https://lanvan.local")
+            print(f"   Fallback: http://{ip}")
+        else:
+            print(f"   If Safari can't connect to https://lanvan.local:{port}")
+            fallback_http_port = get_safe_port(HTTP_PORT, FALLBACK_HTTP_PORT)
+            if fallback_http_port == 80:
+                print(f"   Try: http://{ip} (HTTP fallback)")
+            else:
+                print(f"   Try: http://{ip}:{fallback_http_port} (HTTP fallback)")
+            print(f"   Or: https://{ip}:{port} (direct IP)")
         print(f"   Or run: python run.py ios (iOS mode)")
 
     if is_android_termux():
@@ -279,6 +338,7 @@ if __name__ == "__main__":
         
         # Set environment variable for the FastAPI app
         os.environ['PORT'] = str(port)
+        os.environ['USE_HTTPS'] = str(use_https).lower()
         
         # ⛔️ Waitress removed: FastAPI is ASGI and no longer supports WSGI servers like Waitress.
         # subprocess.run([
@@ -303,6 +363,7 @@ if __name__ == "__main__":
         
         # Set environment variable for the FastAPI app
         os.environ['PORT'] = str(port)
+        os.environ['USE_HTTPS'] = str(use_https).lower()
         
         open_browser(ip, port, use_https)
         

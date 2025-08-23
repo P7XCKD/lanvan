@@ -19,5 +19,8 @@ pycryptodome==3.19.0
 # System monitoring
 psutil==5.9.6
 
+# QR Code generation for offline use
+qrcode[pil]==7.4.2
+
 # mDNS service discovery
 zeroconf==0.132.2

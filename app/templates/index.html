@@ -464,6 +464,16 @@
       pointer-events: auto;
     }
 
+    /* 🔄 Smooth section switching transitions */
+    #fileTransferSection, #fileListSection, #clipboardSection {
+      transition: opacity 0.2s ease-in-out;
+    }
+    
+    /* 🎯 Smooth tick indicator transitions */
+    #fileTickMain, #clipboardTickMain, #fileTickClipboard, #clipboardTickClipboard {
+      transition: opacity 0.15s ease-in-out;
+    }
+
     /* iOS Safari specific fixes - minimal changes to prevent cramped look */
     @media screen and (max-width: 600px) {
       body {
@@ -1322,9 +1332,9 @@
   </div>
 </header>
 
-{% if not show_clipboard_only %}
+{% if not show_clipboard_only or show_both_sections %}
 <!--  Upload Files & Manager (Merged Section) -->
-<section>
+<section id="fileTransferSection" style="{% if default_view == 'clipboard' %}display: none;{% endif %}">>
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
     <h2 style="margin: 0; color: var(--text-color);">📤 Upload Files & Manager</h2>
     <div style="position: relative;">
@@ -1350,14 +1360,14 @@
             <span style="font-size: 1.3em;">📁</span>
             <span>File Sharing</span>
           </span>
-          {% if not show_clipboard_only %}<span style="color: #7c3aed; font-size: 1.3em; margin-left: 10px;">✔️</span>{% endif %}
+          <span id="fileTickMain" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if not show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
         </div>
         <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem;" onclick="switchToPage('clipboard')">
           <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;">
             <span style="font-size: 1.3em;">📋</span>
             <span>Clipboard</span>
           </span>
-          {% if show_clipboard_only %}<span style="color: #7c3aed; font-size: 1.3em; margin-left: 10px;">✔️</span>{% endif %}
+          <span id="clipboardTickMain" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
         </div>
       </div>
     </div>
@@ -1390,9 +1400,9 @@
   </section>
 {% endif %}
 
-{% if not show_clipboard_only %}
+{% if not show_clipboard_only or show_both_sections %}
 <!-- 📂 File List -->
-<section>
+<section id="fileListSection" style="{% if default_view == 'clipboard' %}display: none;{% endif %}">
   <div style="display: flex; justify-content: space-between; align-items: center;">
     <div>
       <h2 style="color: var(--text-color);">Available Files</h2>
@@ -1423,9 +1433,9 @@
 </section>
 {% endif %}
 
-{% if show_clipboard_only %}
+{% if show_clipboard_only or show_both_sections %}
 <!-- 📋 Clipboard System (Unified Layout) -->
-<section>
+<section id="clipboardSection" style="{% if default_view == 'file' %}display: none;{% endif %}">
   <div style="display: flex; justify-content: space-between; align-items: center;">
     <div>
       <h2>Clipboard System</h2>
@@ -1436,11 +1446,11 @@
         <div id="switchDropdownClipboard" style="display:none; position:absolute; right:0; top:110%; background:white; border:1px solid #ccc; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); min-width:150px; z-index:10001;">
           <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem;" onclick="switchToPage('file')">
             <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;"><span style="font-size: 1.3em;">📁</span><span>File Sharing</span></span>
-            {% if not show_clipboard_only %}<span style="color: #7c3aed; font-size: 1.3em; margin-left: 10px;">✔️</span>{% endif %}
+            <span id="fileTickClipboard" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if not show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
           </div>
           <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem;" onclick="switchToPage('clipboard')">
             <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;"><span style="font-size: 1.3em;">📋</span><span>Clipboard</span></span>
-            {% if show_clipboard_only %}<span style="color: #7c3aed; font-size: 1.3em; margin-left: 10px;">✔️</span>{% endif %}
+            <span id="clipboardTickClipboard" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
           </div>
         </div>
       </div>
@@ -2669,8 +2679,9 @@ Device Session will reset when browser is closed
       case 'completed':
         return ``; // No individual remove button for completed uploads
       case 'error':
+        return ``; // No cancel button for error state
       case 'cancelled':
-        return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
+        return ``; // No cancel button for already cancelled uploads
       default:
         return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
     }
@@ -3184,36 +3195,7 @@ Device Session will reset when browser is closed
         const currentFileCount = document.querySelectorAll('.file-card').length;
         showToast(`✅ ${uploadItem.file.name} uploaded successfully (${fileSize} MB in ${uploadTime}s @ ${avgSpeed} MB/s)`, 4000);
         
-        // 🔍 Check if file display needs manual refresh after a brief delay
-        setTimeout(() => {
-          const updatedFileCount = document.querySelectorAll('.file-card').length;
-          if (updatedFileCount === currentFileCount) {
-            // File display hasn't updated, set flag and suggest manual refresh
-            hasRecentUploads = true; // Set flag for new files message
-            showToast(
-              `📁 New file uploaded but not visible yet - Click here to refresh file list`,
-              8000,
-              null,
-              'info'
-            );
-            
-            // Make the toast clickable to trigger refresh
-            const toast = DOM_CACHE.toast;
-            if (toast) {
-              toast.style.cursor = 'pointer';
-              toast.title = 'Click to refresh file list';
-              
-              // Add click handler for refresh
-              const refreshHandler = () => {
-                refreshFileListManually();
-                toast.removeEventListener('click', refreshHandler);
-                toast.style.cursor = 'default';
-                toast.title = 'Click to keep visible';
-              };
-              toast.addEventListener('click', refreshHandler);
-            }
-          }
-        }, 2000); // Wait 2 seconds for auto-refresh to potentially work
+        // Files will auto-load via the auto-refresh system, no manual intervention needed
         
         // 📊 Save individual upload stats to history with enhanced metadata
         const uploadStats = {
@@ -3282,36 +3264,7 @@ Device Session will reset when browser is closed
             const currentFileCount = document.querySelectorAll('.file-card').length;
             showToast(`🎉 All ${totalFiles} files uploaded successfully! (${totalSizeMB} MB total in ${sessionTime}s @ ${sessionSpeed} MB/s)`, 6000);
             
-            // 🔍 Check if file display needs manual refresh after a brief delay
-            setTimeout(() => {
-              const updatedFileCount = document.querySelectorAll('.file-card').length;
-              if (updatedFileCount === currentFileCount) {
-                // File display hasn't updated, set flag and suggest manual refresh
-                hasRecentUploads = true; // Set flag for new files message
-                showToast(
-                  `📁 ${totalFiles} new files uploaded but not visible yet - Click here to refresh file list`,
-                  8000,
-                  null,
-                  'info'
-                );
-                
-                // Make the toast clickable to trigger refresh
-                const toast = DOM_CACHE.toast;
-                if (toast) {
-                  toast.style.cursor = 'pointer';
-                  toast.title = 'Click to refresh file list';
-                  
-                  // Add click handler for refresh
-                  const refreshHandler = () => {
-                    refreshFileListManually();
-                    toast.removeEventListener('click', refreshHandler);
-                    toast.style.cursor = 'default';
-                    toast.title = 'Click to keep visible';
-                  };
-                  toast.addEventListener('click', refreshHandler);
-                }
-              }
-            }, 3000); // Wait 3 seconds for auto-refresh to potentially work
+            // Files will auto-load via the auto-refresh system, no manual intervention needed
           }
         }
         
@@ -3609,36 +3562,7 @@ Device Session will reset when browser is closed
           const currentFileCount = document.querySelectorAll('.file-card').length;
           showToast(`✅ ${uploadItem.fileName} uploaded successfully via chunked upload (${fileSize} MB, ${uploadItem.totalChunks} chunks)`, 5000);
           
-          // 🔍 Check if file display needs manual refresh after a brief delay
-          setTimeout(() => {
-            const updatedFileCount = document.querySelectorAll('.file-card').length;
-            if (updatedFileCount === currentFileCount) {
-              // File display hasn't updated, set flag and suggest manual refresh
-              hasRecentUploads = true; // Set flag for new files message
-              showToast(
-                `📁 New file uploaded but not visible yet - Click here to refresh file list`,
-                8000,
-                null,
-                'info'
-              );
-              
-              // Make the toast clickable to trigger refresh
-              const toast = DOM_CACHE.toast;
-              if (toast) {
-                toast.style.cursor = 'pointer';
-                toast.title = 'Click to refresh file list';
-                
-                // Add click handler for refresh
-                const refreshHandler = () => {
-                  refreshFileListManually();
-                  toast.removeEventListener('click', refreshHandler);
-                  toast.style.cursor = 'default';
-                  toast.title = 'Click to keep visible';
-                };
-                toast.addEventListener('click', refreshHandler);
-              }
-            }
-          }, 2000); // Wait 2 seconds for auto-refresh to potentially work
+          // Files will auto-load via the auto-refresh system, no manual intervention needed
           
           // Save enhanced chunked upload stats
           const uploadStats = {
@@ -3771,7 +3695,6 @@ Device Session will reset when browser is closed
     
     try {
       await refreshFileList();
-      hasRecentUploads = false; // Reset flag after manual refresh
       showToast('✅ File list refreshed successfully!', 3000);
     } catch (error) {
       console.error('❌ Manual refresh failed:', error);
@@ -3784,7 +3707,6 @@ Device Session will reset when browser is closed
   let autoRefreshInterval;
   let lastFileCount = 0;
   let autoRefreshActive = true;
-  let hasRecentUploads = false; // Track when files have been uploaded but might not be visible yet
 
   function startAutoRefresh() {
     console.log('🔄 Starting auto-refresh for cross-device file sync...');
@@ -3811,15 +3733,14 @@ Device Session will reset when browser is closed
         
         // Only update if file count changed (indicating new uploads/deletions)
         if (currentFileCount !== lastFileCount) {
-          console.log(`🔄 File count changed: ${lastFileCount} → ${currentFileCount}, refreshing...`);
+          console.log(`🔄 File count changed: ${lastFileCount} → ${currentFileCount}, auto-loading...`);
           updateFileDisplay(data.files);
-          hasRecentUploads = false; // Reset flag when files are successfully loaded
           
-          // Show subtle notification for file changes from other devices
+          // Silently auto-load new files without showing toast notifications
           if (currentFileCount > lastFileCount) {
-            showToast(`📁 ${currentFileCount - lastFileCount} new file(s) detected from other device(s)`, 3000);
+            console.log(`📁 ${currentFileCount - lastFileCount} new file(s) auto-loaded from other device(s)`);
           } else if (currentFileCount < lastFileCount) {
-            showToast(`📁 ${lastFileCount - currentFileCount} file(s) removed from other device(s)`, 3000);
+            console.log(`📁 ${lastFileCount - currentFileCount} file(s) removed from other device(s)`);
           }
           
           // lastFileCount is updated inside updateFileDisplay now
@@ -3918,53 +3839,14 @@ Device Session will reset when browser is closed
           msg.className = 'no-files-message';
           
           // Check if files have been uploaded recently but aren't visible
-          if (hasRecentUploads) {
-            msg.innerHTML = `
-              <p style="text-align: center; color: #007bff; font-style: italic; margin-bottom: 0.5rem;">
-                📁 New files detected, you can check them directly with manual refresh
-              </p>
-              <button onclick="refreshFileListManually()" style="
-                background: #007bff;
-                color: white;
-                border: none;
-                padding: 0.5rem 1rem;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 0.9rem;
-                margin: 0.5rem;
-              ">
-                🔄 Manual Refresh
-              </button>
-            `;
-          } else {
-            msg.innerHTML = '<p style="text-align: center; color: #666; font-style: italic;">No files uploaded yet. Drag & drop or click to upload!</p>';
-          }
+          // Since we now auto-load files, just show the standard message
+          msg.innerHTML = '<p style="text-align: center; color: #666; font-style: italic;">No files uploaded yet. Drag & drop or click to upload!</p>';
           
           container.appendChild(msg);
         }
       } else {
-        // Update existing message
-        if (hasRecentUploads) {
-          noFilesMsg.innerHTML = `
-            <p style="text-align: center; color: #007bff; font-style: italic; margin-bottom: 0.5rem;">
-              📁 New files detected, you can check them directly with manual refresh
-            </p>
-            <button onclick="refreshFileListManually()" style="
-              background: #007bff;
-              color: white;
-              border: none;
-              padding: 0.5rem 1rem;
-              border-radius: 6px;
-              cursor: pointer;
-              font-size: 0.9rem;
-              margin: 0.5rem;
-            ">
-              🔄 Manual Refresh
-            </button>
-          `;
-        } else {
-          noFilesMsg.innerHTML = '<p style="text-align: center; color: #666; font-style: italic;">No files uploaded yet. Drag & drop or click to upload!</p>';
-        }
+        // Update existing message - always show standard message since we auto-load
+        noFilesMsg.innerHTML = '<p style="text-align: center; color: #666; font-style: italic;">No files uploaded yet. Drag & drop or click to upload!</p>';
         noFilesMsg.style.display = 'block';
       }
       return;
@@ -3974,9 +3856,6 @@ Device Session will reset when browser is closed
     if (noFilesMsg) {
       noFilesMsg.style.display = 'none';
     }
-    
-    // Always reset the hasRecentUploads flag when files are actually visible
-    hasRecentUploads = false;
     
     // Update or create file grid
     if (!fileGrid) {
@@ -4240,8 +4119,7 @@ Device Session will reset when browser is closed
       });
 
       if (response.ok) {
-        // Reset recent uploads flag and update file display immediately
-        hasRecentUploads = false;
+        // Update file display immediately
         updateFileDisplay([]);
         showToast('🧹 All files cleared successfully!', 3000);
         console.log('✅ Files cleared successfully');
@@ -5860,16 +5738,27 @@ window.downloadAsZip = downloadAsZip;
 window.downloadIndividually = downloadIndividually;
 window.closeDownloadModal = closeDownloadModal;
 
-// 📡 Enhanced QR Code Generation for Connection Info - Faster & More Reliable
+// 📡 Enhanced QR Code Generation for Connection Info - Offline-First
 function generateQRCode(text, size = 200) {
   // Use larger QR for better visibility, but still optimized for guests
   const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
   const qrSize = isGuest ? 180 : size;
-  const services = [
+  
+  // Primary: Use our offline QR generator (works without internet)
+  const offlineQR = `/api/qr-code?text=${encodeURIComponent(text)}&size=${qrSize}`;
+  
+  // Fallback services (only if offline generator fails)
+  const fallbackServices = [
     `https://quickchart.io/qr?text=${encodeURIComponent(text)}&size=${qrSize}&format=png&margin=1`,
     `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(text)}&margin=10&format=png`,
   ];
-  return services[0];
+  
+  return {
+    primary: offlineQR,
+    fallbacks: fallbackServices,
+    // For backward compatibility, return the offline URL directly
+    toString: () => offlineQR
+  };
 }
 
 // 🚀 Preload QR code image as soon as the page loads for instant display
@@ -5907,7 +5796,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function preloadQRFromUrl(fullUrl) {
     const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
     const qrSize = isGuest ? 180 : 200;
-    const qrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(fullUrl)}&size=${qrSize}&format=png&margin=1`;
+    const qrUrl = `/api/qr-code?text=${encodeURIComponent(fullUrl)}&size=${qrSize}`;
     const img = new window.Image();
     img.onload = () => {
       window._preloadedQR = {
@@ -5928,7 +5817,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
     const qrSize = isGuest ? 180 : 200;
-    const qrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(fullUrl)}&size=${qrSize}&format=png&margin=1`;
+    const qrUrl = `/api/qr-code?text=${encodeURIComponent(fullUrl)}&size=${qrSize}`;
     const img = new window.Image();
     img.src = qrUrl;
     window._preloadedQR = { url: qrUrl, img: img };
@@ -6003,12 +5892,9 @@ async function showConnectionInfo() {
       networkInfo = await response.json();
       console.log('📡 Network info received:', networkInfo);
       
-      // Always prepare the LAN IP URL as fallback
-      if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
-        lanIpUrl = `${protocol}//${networkInfo.lan_ip}`;
-        if (port && port !== '80' && port !== '443') {
-          lanIpUrl += `:${port}`;
-        }
+      // Use backend-provided LAN IP URL for consistency
+      if (networkInfo.lan_ip_url) {
+        lanIpUrl = networkInfo.lan_ip_url;
       }
       
       // Prefer mDNS if available
@@ -6089,21 +5975,26 @@ async function showConnectionInfo() {
     padding: 2rem;
   `;
   
-  // 🚀 ENHANCED: Multiple QR generation strategies for reliability
+  // 🚀 ENHANCED: Offline-first QR generation for reliability
   const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
   const qrSize = isGuest ? 180 : 200;
-  const qrServices = [
+  
+  // Use our offline QR generator as primary
+  const qrResult = generateQRCode(fullUrl, qrSize);
+  const primaryQRUrl = qrResult.primary || qrResult.toString();
+  const fallbackQRUrls = qrResult.fallbacks || [
     `https://quickchart.io/qr?text=${encodeURIComponent(fullUrl)}&size=${qrSize}&format=png&margin=1`,
     `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(fullUrl)}&margin=10&format=png`,
   ];
-  // If preloaded QR matches, use it instantly
+  
+  // If preloaded QR matches, use it instantly, otherwise use offline generator
   setTimeout(() => {
     const primaryQR = document.getElementById('qr-primary');
     if (primaryQR) {
-      if (window._preloadedQR && window._preloadedQR.url === qrServices[0]) {
+      if (window._preloadedQR && window._preloadedQR.url === primaryQRUrl) {
         primaryQR.src = window._preloadedQR.img.src;
       } else {
-        primaryQR.src = qrServices[0];
+        primaryQR.src = primaryQRUrl; // This will use our offline generator
       }
       if (isGuest) {
         setTimeout(() => {
@@ -6177,7 +6068,7 @@ async function showConnectionInfo() {
         </div>
         <h4 style="margin: 0 0 0.5rem 0; color: #666; font-size: 0.9rem;">📱 Alternative IP Connection:</h4>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.8rem;">
-          <code id="alternative-url" style="flex: 1; background: #fff; padding: 0.4rem; border-radius: 5px; border: 1px solid #ddd; font-size: 0.8rem; word-break: break-all; min-width: 200px; color: #666;">${lanIpUrl || protocol + '//' + (networkInfo?.lan_ip || '192.168.x.x') + (port && port !== '80' && port !== '443' ? ':' + port : '')}</code>
+          <code id="alternative-url" style="flex: 1; background: #fff; padding: 0.4rem; border-radius: 5px; border: 1px solid #ddd; font-size: 0.8rem; word-break: break-all; min-width: 200px; color: #666;">${lanIpUrl || 'http://192.168.x.x'}</code>
           <button onclick="copyAlternativeUrl()" style="background: #6c757d; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 5px; cursor: pointer; font-size: 0.8rem; white-space: nowrap;" title="Copy IP URL to clipboard">📋 Copy</button>
         </div>
         
@@ -6186,9 +6077,14 @@ async function showConnectionInfo() {
           <div style="margin-bottom: 0.5rem;">
             <small style="color: #666; font-size: 0.8rem; font-weight: 500;">📱 IP Access QR Code</small>
           </div>
-          <img src="https://quickchart.io/qr?text=${encodeURIComponent(lanIpUrl || protocol + '//' + (networkInfo?.lan_ip || '192.168.0.106') + (port && port !== '80' && port !== '443' ? ':' + port : ''))}&size=160&format=png&margin=1" 
+          <img src="/api/qr-code?text=${encodeURIComponent(lanIpUrl || 'http://192.168.0.106')}&size=160" 
                style="border: 2px solid #ddd; border-radius: 8px; max-width: 160px; height: auto; background: white;" 
-               alt="IP QR Code">
+               alt="IP QR Code"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+               onload="this.style.display='block';">
+          <div style="display: none; padding: 0.5rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; color: #721c24; font-size: 0.8rem;">
+            QR code generation failed
+          </div>
           <div style="margin-top: 0.5rem;">
             <small style="color: #666; font-size: 0.75rem;">Scan if mDNS doesn't work</small>
           </div>
@@ -8651,7 +8547,7 @@ function showSwitchDropdown(event, dropdownId) {
   }
 }
 function switchToPage(page) {
-  // Hide all switch dropdowns before navigating
+  // Hide all switch dropdowns before switching
   var dropdowns = [
     document.getElementById('switchDropdownMain'),
     document.getElementById('switchDropdownClipboard')
@@ -8659,12 +8555,140 @@ function switchToPage(page) {
   dropdowns.forEach(function(dd) {
     if (dd) dd.style.display = 'none';
   });
-  if (page === 'clipboard') {
-    window.location.href = '/clipboard';
-  } else if (page === 'file') {
-    window.location.href = '/';
+  
+  // Get the sections by ID
+  const fileTransferSection = document.getElementById('fileTransferSection');
+  const fileListSection = document.getElementById('fileListSection');
+  const clipboardSection = document.getElementById('clipboardSection');
+  
+  // Get all tick indicators
+  const fileTickMain = document.getElementById('fileTickMain');
+  const clipboardTickMain = document.getElementById('clipboardTickMain');
+  const fileTickClipboard = document.getElementById('fileTickClipboard');
+  const clipboardTickClipboard = document.getElementById('clipboardTickClipboard');
+  
+  // Add smooth transition effect with opacity
+  const sections = [fileTransferSection, fileListSection, clipboardSection];
+  sections.forEach(section => {
+    if (section) section.style.opacity = '0.7';
+  });
+  
+  // Use setTimeout to allow smooth transition
+  setTimeout(() => {
+    if (page === 'clipboard') {
+      // Show clipboard section, hide file sections
+      if (fileTransferSection) {
+        fileTransferSection.style.display = 'none';
+        fileTransferSection.style.opacity = '1';
+      }
+      if (fileListSection) {
+        fileListSection.style.display = 'none';
+        fileListSection.style.opacity = '1';
+      }
+      if (clipboardSection) {
+        clipboardSection.style.display = 'block';
+        clipboardSection.style.opacity = '1';
+      }
+      
+      // Update tick indicators - show clipboard ticks, hide file ticks
+      if (fileTickMain) fileTickMain.style.display = 'none';
+      if (fileTickClipboard) fileTickClipboard.style.display = 'none';
+      if (clipboardTickMain) clipboardTickMain.style.display = 'inline';
+      if (clipboardTickClipboard) clipboardTickClipboard.style.display = 'inline';
+      
+      // Update page title/URL without navigation (preserves uploads)
+      history.pushState({page: 'clipboard'}, 'LANVan - Clipboard', '/clipboard');
+      document.title = 'LANVan - Clipboard';
+      
+    } else if (page === 'file') {
+      // Show file sections, hide clipboard section
+      if (fileTransferSection) {
+        fileTransferSection.style.display = 'block';
+        fileTransferSection.style.opacity = '1';
+      }
+      if (fileListSection) {
+        fileListSection.style.display = 'block';
+        fileListSection.style.opacity = '1';
+      }
+      if (clipboardSection) {
+        clipboardSection.style.display = 'none';
+        clipboardSection.style.opacity = '1';
+      }
+      
+      // Update tick indicators - show file ticks, hide clipboard ticks
+      if (fileTickMain) fileTickMain.style.display = 'inline';
+      if (fileTickClipboard) fileTickClipboard.style.display = 'inline';
+      if (clipboardTickMain) clipboardTickMain.style.display = 'none';
+      if (clipboardTickClipboard) clipboardTickClipboard.style.display = 'none';
+      
+      // Update page title/URL without navigation (preserves uploads)
+      history.pushState({page: 'file'}, 'LANVan - File Transfer', '/');
+      document.title = 'LANVan - File Transfer';
+    }
+  }, 100); // Small delay for smooth transition
+  
+  // Trigger any necessary updates for the visible section
+  setTimeout(() => {
+    if (page === 'file') {
+      if (typeof updateFileList === 'function') {
+        updateFileList();
+      }
+    } else if (page === 'clipboard') {
+      if (typeof refreshClipboardHistory === 'function') {
+        refreshClipboardHistory();
+      }
+    }
+  }, 150); // Slight delay to ensure sections are visible
+  
+  // Show a brief toast notification
+  if (typeof showToast === 'function') {
+    const sectionName = page === 'clipboard' ? 'Clipboard' : 'File Transfer';
+    showToast(`📱 Switched to ${sectionName}`, 1500);
   }
 }
+
+// Handle browser back/forward buttons to preserve upload state
+window.addEventListener('popstate', function(event) {
+  if (event.state && event.state.page) {
+    // Switch to the page without updating history (since we're handling popstate)
+    const targetPage = event.state.page;
+    const fileTransferSection = document.getElementById('fileTransferSection');
+    const fileListSection = document.getElementById('fileListSection');
+    const clipboardSection = document.getElementById('clipboardSection');
+    
+    // Get all tick indicators
+    const fileTickMain = document.getElementById('fileTickMain');
+    const clipboardTickMain = document.getElementById('clipboardTickMain');
+    const fileTickClipboard = document.getElementById('fileTickClipboard');
+    const clipboardTickClipboard = document.getElementById('clipboardTickClipboard');
+    
+    if (targetPage === 'clipboard') {
+      if (fileTransferSection) fileTransferSection.style.display = 'none';
+      if (fileListSection) fileListSection.style.display = 'none';
+      if (clipboardSection) clipboardSection.style.display = 'block';
+      
+      // Update tick indicators for clipboard
+      if (fileTickMain) fileTickMain.style.display = 'none';
+      if (fileTickClipboard) fileTickClipboard.style.display = 'none';
+      if (clipboardTickMain) clipboardTickMain.style.display = 'inline';
+      if (clipboardTickClipboard) clipboardTickClipboard.style.display = 'inline';
+      
+      document.title = 'LANVan - Clipboard';
+    } else {
+      if (fileTransferSection) fileTransferSection.style.display = 'block';
+      if (fileListSection) fileListSection.style.display = 'block';
+      if (clipboardSection) clipboardSection.style.display = 'none';
+      
+      // Update tick indicators for file transfer
+      if (fileTickMain) fileTickMain.style.display = 'inline';
+      if (fileTickClipboard) fileTickClipboard.style.display = 'inline';
+      if (clipboardTickMain) clipboardTickMain.style.display = 'none';
+      if (clipboardTickClipboard) clipboardTickClipboard.style.display = 'none';
+      
+      document.title = 'LANVan - File Transfer';
+    }
+  }
+});
 </script>
 <script>
 // ✅ Save toggle state when user changes it
@@ -8857,6 +8881,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 2000);
   }
 });
+
+// Mark that the main page loaded successfully (for loading page optimization)
+try {
+  sessionStorage.setItem('lanvan_page_loaded_successfully', Date.now().toString());
+  // Also set a flag that resources are working
+  sessionStorage.setItem('lanvan_resources_ready', 'true');
+} catch (e) {
+  // Ignore storage errors
+}
 </script>
 
 </body>

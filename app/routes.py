@@ -5,6 +5,10 @@ from typing import List, Optional
 from pathlib import Path
 from mimetypes import guess_type
 from zipfile import ZipFile
+import base64
+
+import qrcode
+from PIL import Image
 
 from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form
 from fastapi.responses import (
@@ -117,6 +121,14 @@ def scan_file(path: Path):
 
 # === Routes ===
 
+@router.get("/loading", response_class=HTMLResponse, name="loading")
+async def loading_page(request: Request, redirect: str = "/"):
+    """Loading page shown while resources are being prepared"""
+    return templates.TemplateResponse("loading.html", {
+        "request": request,
+        "redirect_url": redirect
+    })
+
 @router.get("/", response_class=HTMLResponse, name="home")
 async def home(request: Request):
     files = get_file_list()
@@ -133,7 +145,9 @@ async def home(request: Request):
             "protocol": protocol,
             "host": host,
             "port": "5000" if ":5000" in host else "unknown"
-        }
+        },
+        "show_both_sections": True,  # Show both file transfer and clipboard
+        "default_view": "file"       # Default to file transfer view
     })
 
 @router.get("/api/files", name="api_files")
@@ -1076,7 +1090,8 @@ async def server_status():
     return JSONResponse({
         "status": "online",
         "message": "✅ Server is running normally",
-        "shutdown": False
+        "shutdown": False,
+        "resources_ready": True  # If we can respond to this request, resources are ready
     })
 
 @router.get("/api/network-info", name="network_info")
@@ -1085,43 +1100,117 @@ async def get_network_info():
     try:
         import socket
         
-        # Get LAN IP
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        lan_ip = s.getsockname()[0]
-        s.close()
+        # Use mDNS manager's offline-capable method to get LAN IP
+        lan_ip = mdns_manager.get_lan_ip()
         
         # Get mDNS info
         mdns_info = mdns_manager.get_mdns_info()
         
+        # Get hybrid URL (mDNS first, fallback to IP)
+        hybrid_url = mdns_manager.get_hybrid_url()
+        
+        # Also provide separate URL components for QR code generation
+        protocol = "https" if mdns_manager.use_https else "http"
+        port = mdns_manager.port
+        
+        # Format LAN IP URL using the same logic as mDNS URLs
+        if (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
+            lan_ip_url = f"{protocol}://{lan_ip}"
+        else:
+            lan_ip_url = f"{protocol}://{lan_ip}:{port}"
+        
         return JSONResponse(content={
             "status": "success",
             "lan_ip": lan_ip,
+            "lan_ip_url": lan_ip_url,
             "hostname": socket.gethostname(),
             "mdns": mdns_info,
-            "hybrid_url": mdns_manager.get_hybrid_url()
+            "hybrid_url": hybrid_url,
+            "protocol": protocol,
+            "port": port
         })
     except Exception as e:
+        # Create fallback URL using the same format logic as mdns_manager
+        protocol = "https" if mdns_manager.use_https else "http"
+        port = mdns_manager.port
+        if (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
+            fallback_url = f"{protocol}://127.0.0.1"
+            lan_ip_fallback = f"{protocol}://127.0.0.1"
+        else:
+            fallback_url = f"{protocol}://127.0.0.1:{port}"
+            lan_ip_fallback = f"{protocol}://127.0.0.1:{port}"
+        
         return JSONResponse(
             status_code=500,
             content={
                 "status": "error",
                 "error": str(e),
                 "lan_ip": "127.0.0.1",
+                "lan_ip_url": lan_ip_fallback,
                 "mdns": {"status": "error", "domain": None},
-                "hybrid_url": f"http://127.0.0.1:{mdns_manager.port}"
+                "hybrid_url": fallback_url,
+                "protocol": protocol,
+                "port": port
             }
+        )
+
+@router.get("/api/qr-code", name="offline_qr")
+async def generate_offline_qr(text: str, size: int = 200):
+    """Generate QR code locally without internet dependency"""
+    try:
+        # Create QR code with dynamic sizing
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.ERROR_CORRECT_L,
+            box_size=max(1, size // 25),  # Dynamic box size based on requested size
+            border=4,
+        )
+        qr.add_data(text)
+        qr.make(fit=True)
+
+        # Create image - let qrcode handle the sizing
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert to bytes
+        img_buffer = io.BytesIO()
+        
+        # Save using the qrcode image's save method
+        try:
+            qr_img.save(img_buffer, 'PNG')
+        except Exception:
+            # Fallback: try without format specification
+            try:
+                qr_img.save(img_buffer)
+            except Exception as e:
+                # If all else fails, let it raise to be caught by outer handler
+                raise Exception(f"QR image save failed: {e}")
+        
+        img_buffer.seek(0)
+
+        return StreamingResponse(
+            io.BytesIO(img_buffer.getvalue()),
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=3600"}
+        )
+    except Exception as e:
+        # Return a simple text-based error response
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"QR generation failed: {str(e)}"}
         )
 
 # === FULL PAGE CLIPBOARD ROUTE ===
 @router.get("/clipboard", response_class=HTMLResponse, name="clipboard_page")
 async def clipboard_page(request: Request):
-    # Render the same template, but with a flag to show only the clipboard system
+    files = get_file_list()  # Include files for seamless switching
+    
+    # Render the same template, but with clipboard as default view
     return templates.TemplateResponse("index.html", {
         "request": request,
         "msg": "Lanvan",
-        "files": [],
-        "show_clipboard_only": True
+        "files": [f["name"] for f in files],
+        "show_both_sections": True,  # Show both sections
+        "default_view": "clipboard"  # Default to clipboard view
     })
 
 # === CLIPBOARD SYSTEM ENDPOINTS ===

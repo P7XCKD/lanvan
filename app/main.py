@@ -4,16 +4,57 @@ import asyncio
 import threading
 import time
 import sys
+import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
+from starlette.requests import ClientDisconnect
 from app.routes import router
 
 # Import mDNS manager for service discovery
 from app.simple_mdns import mdns_manager
+
+# 🔇 Suppress noisy ClientDisconnect errors in logs
+class ClientDisconnectFilter(logging.Filter):
+    def filter(self, record):
+        if hasattr(record, 'exc_info') and record.exc_info:
+            exc_type, exc_value, exc_traceback = record.exc_info
+            if isinstance(exc_value, ClientDisconnect):
+                return False
+            # Also filter HTTPException with "parsing the body" message
+            if isinstance(exc_value, HTTPException) and "parsing the body" in str(exc_value.detail):
+                return False
+            # Filter out static file 404s and other noise
+            if isinstance(exc_value, HTTPException) and exc_value.status_code == 404:
+                return False
+        # Filter out the string-based error messages too
+        if hasattr(record, 'getMessage'):
+            msg = record.getMessage()
+            if any(phrase in msg for phrase in [
+                "ClientDisconnect",
+                "parsing the body", 
+                "There was an error parsing the body",
+                "'NoneType' object is not callable",
+                "404: Not Found",
+                "Exception in ASGI application",
+                "ExceptionGroup: unhandled errors in a TaskGroup",
+                "HTTPException: 404",
+                "HTTPException: 400: There was an error parsing the body"
+            ]):
+                return False
+        return True
+
+# Apply filter to uvicorn and starlette loggers
+logging.getLogger("uvicorn.error").addFilter(ClientDisconnectFilter())
+logging.getLogger("uvicorn").addFilter(ClientDisconnectFilter())
+logging.getLogger("starlette").addFilter(ClientDisconnectFilter())
+logging.getLogger("fastapi").addFilter(ClientDisconnectFilter())
+logging.getLogger().addFilter(ClientDisconnectFilter())
 
 # 🚨 Global shutdown event for immediate server termination
 shutdown_event = asyncio.Event()
@@ -119,8 +160,10 @@ async def lifespan(app: FastAPI):
     print("💡 Use Ctrl+C to shutdown gracefully (console commands disabled)")
     
     # Start mDNS service
-    port = int(os.environ.get('PORT', 5000))
-    use_https = port == 5001  # Detect HTTPS mode based on port
+    # Get the actual port being used (80/443 or fallback ports)
+    port = int(os.environ.get('PORT', 80))  # Default to HTTP port 80
+    # Get HTTPS mode from environment variable set by run.py
+    use_https = os.environ.get('USE_HTTPS', 'false').lower() == 'true'
     mdns_manager.port = port
     mdns_manager.use_https = use_https  # Configure HTTPS mode
     
@@ -144,6 +187,16 @@ async def lifespan(app: FastAPI):
     # Start mDNS in background thread
     mdns_thread = threading.Thread(target=start_mdns_background, daemon=True)
     mdns_thread.start()
+    
+    # Mark resources as ready after startup
+    def mark_resources_ready():
+        global resources_ready
+        time.sleep(2)  # Give time for initial setup
+        resources_ready = True
+        print("✅ Server resources are ready")
+    
+    ready_thread = threading.Thread(target=mark_resources_ready, daemon=True)
+    ready_thread.start()
     
     # Store shutdown state in app for access from routes
     app.state.graceful_shutdown_initiated = False
@@ -231,3 +284,108 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # ✅ Register app routes
 app.include_router(router)
 app.include_router(clipboard_ws_router)
+
+# ✅ Exception handlers for smart loading page system
+from fastapi import HTTPException, Request
+from fastapi.responses import RedirectResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+import time
+
+# Track when the server started and if resources are ready
+server_start_time = time.time()
+resources_ready = False
+startup_grace_period = 5  # seconds
+
+def are_resources_ready():
+    """Check if server resources are ready"""
+    global resources_ready, server_start_time
+    
+    # If we've explicitly marked resources as ready, return True
+    if resources_ready:
+        return True
+    
+    # If it's been more than grace period since startup, consider ready
+    if time.time() - server_start_time > startup_grace_period:
+        resources_ready = True
+        return True
+    
+    # During startup grace period, check if essential services are available
+    try:
+        # Check if templates directory exists and is accessible
+        template_dir = "app/templates"
+        static_dir = "app/static"
+        if os.path.exists(template_dir) and os.path.exists(static_dir):
+            resources_ready = True
+            return True
+    except:
+        pass
+    
+    return False
+
+@app.exception_handler(404)
+@app.exception_handler(StarletteHTTPException)
+async def smart_404_handler(request: Request, exc):
+    """Redirect 404s to loading page only if resources aren't ready"""
+    if hasattr(exc, 'status_code') and exc.status_code == 404:
+        # Get the original path
+        original_path = str(request.url.path)
+        
+        # Never redirect loading page to itself
+        if original_path == '/loading':
+            raise exc
+        
+        # Don't redirect API calls or static resources
+        if (original_path.startswith('/api/') or 
+            original_path.startswith('/static/') or
+            original_path.startswith('/_')):
+            raise exc
+        
+        # Only redirect to loading page if resources aren't ready
+        if not are_resources_ready():
+            return RedirectResponse(
+                url=f"/loading?redirect={original_path}",
+                status_code=302
+            )
+    
+    # For everything else, let the normal 404 happen
+    raise exc
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle validation errors - only use loading page if resources not ready"""
+    if not are_resources_ready():
+        return RedirectResponse(url="/loading?redirect=/", status_code=302)
+    # Otherwise, let the validation error be handled normally
+    raise exc
+
+@app.exception_handler(500)
+async def smart_internal_error_handler(request: Request, exc):
+    """Handle server errors smartly"""
+    # Check if this is a ClientDisconnect wrapped in other exceptions
+    if _is_client_disconnect_error(exc):
+        print(f"ℹ️ Client disconnected during request to {request.url.path} (wrapped)")
+        from starlette.responses import PlainTextResponse
+        return PlainTextResponse("Client disconnected", status_code=400)
+    
+    # Only redirect to loading page during startup period
+    if not are_resources_ready():
+        return RedirectResponse(url="/loading?redirect=/", status_code=302)
+    # Otherwise, let the error be handled normally
+    raise exc
+
+def _is_client_disconnect_error(exc) -> bool:
+    """Check if exception is caused by client disconnect"""
+    # Check the exception chain for ClientDisconnect
+    current = exc
+    while current:
+        if isinstance(current, ClientDisconnect):
+            return True
+        # Check if it's an HTTPException with ClientDisconnect as cause
+        if hasattr(current, '__cause__') and isinstance(current.__cause__, ClientDisconnect):
+            return True
+        # Check if error message indicates client disconnect
+        if hasattr(current, 'detail') and 'parsing the body' in str(current.detail):
+            return True
+        current = getattr(current, '__cause__', None)
+    return False
