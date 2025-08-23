@@ -68,7 +68,7 @@ class SimpleMDNSManager:
     Simple, robust mDNS service manager for LANVAN
     """
     
-    def __init__(self, port: int = 5000, use_https: bool = False):
+    def __init__(self, port: int = 80, use_https: bool = False):
         self.port = port
         self._use_https = use_https
         self.protocol = "https" if use_https else "http"

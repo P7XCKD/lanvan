@@ -119,7 +119,8 @@ async def lifespan(app: FastAPI):
     print("💡 Use Ctrl+C to shutdown gracefully (console commands disabled)")
     
     # Start mDNS service
-    port = int(os.environ.get('PORT', 5000))
+    # Get the actual port being used (80/443 or fallback ports)
+    port = int(os.environ.get('PORT', 80))  # Default to HTTP port 80
     # Get HTTPS mode from environment variable set by run.py
     use_https = os.environ.get('USE_HTTPS', 'false').lower() == 'true'
     mdns_manager.port = port

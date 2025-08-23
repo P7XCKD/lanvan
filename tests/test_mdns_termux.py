@@ -6,7 +6,9 @@ Run this to verify the enhanced mDNS system works properly
 
 import sys
 import os
-sys.path.append('.')
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from app.simple_mdns import SimpleMDNSManager, check_mdns_dependencies, force_cleanup_mdns_resources
 import time
@@ -34,7 +36,7 @@ def test_mdns_lifecycle():
     
     # 3. Test network detection
     print("\n3️⃣ Testing Network Detection...")
-    manager = SimpleMDNSManager(port=5000, use_https=False)
+    manager = SimpleMDNSManager(port=80, use_https=False)
     ip = manager.get_lan_ip()
     print(f"   Detected IP: {ip}")
     
@@ -43,8 +45,8 @@ def test_mdns_lifecycle():
     for i in range(3):
         print(f"\n   --- Iteration {i+1} ---")
         
-        # Create fresh manager
-        test_manager = SimpleMDNSManager(port=5000 + i, use_https=False)
+        # Create fresh manager with different ports to avoid conflicts
+        test_manager = SimpleMDNSManager(port=8000 + i, use_https=False)
         
         # Start service
         start_result = test_manager.start_service()

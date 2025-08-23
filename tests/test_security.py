@@ -9,10 +9,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-# Add the app directory to the Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+# Add the parent directory to the Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from validation import AdvancedFileValidator
+from app.validation import FileValidator
 
 def test_blocked_extensions():
     """Test that dangerous file extensions are properly blocked"""
@@ -33,11 +33,12 @@ def test_blocked_extensions():
             temp_path = Path(tmp.name)
         
         try:
-            result = AdvancedFileValidator.validate_uploaded_file(temp_path)
+            result = FileValidator.validate_uploaded_file(temp_path, filename)
             if result['valid']:
                 print(f"❌ SECURITY FAIL: {filename} was allowed through!")
             else:
-                print(f"✅ BLOCKED: {filename} - {result['error']}")
+                errors = result.get('errors', ['Unknown error'])
+                print(f"✅ BLOCKED: {filename} - {'; '.join(errors)}")
         finally:
             temp_path.unlink()
     
@@ -61,18 +62,20 @@ def test_extension_spoofing():
             temp_path = Path(tmp.name)
         
         try:
-            result = AdvancedFileValidator.validate_uploaded_file(temp_path)
+            result = FileValidator.validate_uploaded_file(temp_path, f"fake.{extension}")
             
             if should_detect:
                 if not result['valid']:
-                    print(f"✅ DETECTED: Extension spoofing for {extension} - {result['error']}")
+                    errors = result.get('errors', ['Unknown error'])
+                    print(f"✅ DETECTED: Extension spoofing for {extension} - {'; '.join(errors)}")
                 else:
                     print(f"❌ MISSED: Failed to detect spoofed {extension}")
             else:
                 if result['valid']:
                     print(f"✅ ALLOWED: Legitimate {extension} file")
                 else:
-                    print(f"⚠️ FALSE POSITIVE: Legitimate {extension} blocked - {result['error']}")
+                    errors = result.get('errors', ['Unknown error'])
+                    print(f"⚠️ FALSE POSITIVE: Legitimate {extension} blocked - {'; '.join(errors)}")
         finally:
             temp_path.unlink()
 
@@ -94,13 +97,14 @@ def test_legitimate_files():
             temp_path = Path(tmp.name)
         
         try:
-            result = AdvancedFileValidator.validate_uploaded_file(temp_path)
+            result = FileValidator.validate_uploaded_file(temp_path, f"test.{extension}")
             if result['valid']:
                 print(f"✅ ALLOWED: {extension} file passed validation")
                 if result.get('warnings'):
                     print(f"   ⚠️ Warnings: {'; '.join(result['warnings'])}")
             else:
-                print(f"❌ BLOCKED: Legitimate {extension} file was rejected - {result['error']}")
+                errors = result.get('errors', ['Unknown error'])
+                print(f"❌ BLOCKED: Legitimate {extension} file was rejected - {'; '.join(errors)}")
         finally:
             temp_path.unlink()
 
