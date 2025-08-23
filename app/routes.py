@@ -5,6 +5,10 @@ from typing import List, Optional
 from pathlib import Path
 from mimetypes import guess_type
 from zipfile import ZipFile
+import base64
+
+import qrcode
+from PIL import Image
 
 from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form
 from fastapi.responses import (
@@ -116,6 +120,14 @@ def scan_file(path: Path):
     # time.sleep(1)
 
 # === Routes ===
+
+@router.get("/loading", response_class=HTMLResponse, name="loading")
+async def loading_page(request: Request, redirect: str = "/"):
+    """Loading page shown while resources are being prepared"""
+    return templates.TemplateResponse("loading.html", {
+        "request": request,
+        "redirect_url": redirect
+    })
 
 @router.get("/", response_class=HTMLResponse, name="home")
 async def home(request: Request):
@@ -1137,6 +1149,52 @@ async def get_network_info():
                 "protocol": protocol,
                 "port": port
             }
+        )
+
+@router.get("/api/qr-code", name="offline_qr")
+async def generate_offline_qr(text: str, size: int = 200):
+    """Generate QR code locally without internet dependency"""
+    try:
+        # Create QR code with dynamic sizing
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.ERROR_CORRECT_L,
+            box_size=max(1, size // 25),  # Dynamic box size based on requested size
+            border=4,
+        )
+        qr.add_data(text)
+        qr.make(fit=True)
+
+        # Create image - let qrcode handle the sizing
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert to bytes
+        img_buffer = io.BytesIO()
+        
+        # Save using the qrcode image's save method
+        if hasattr(qr_img, 'save'):
+            qr_img.save(img_buffer, 'PNG')
+        else:
+            # Fallback conversion
+            from PIL import Image as PILImage
+            if hasattr(qr_img, '_img'):
+                pil_img = qr_img._img
+            else:
+                pil_img = qr_img
+            pil_img.save(img_buffer, 'PNG')
+        
+        img_buffer.seek(0)
+
+        return StreamingResponse(
+            io.BytesIO(img_buffer.getvalue()),
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=3600"}
+        )
+    except Exception as e:
+        # Return a simple text-based error response
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"QR generation failed: {str(e)}"}
         )
 
 # === FULL PAGE CLIPBOARD ROUTE ===

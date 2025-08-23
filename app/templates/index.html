@@ -5860,16 +5860,27 @@ window.downloadAsZip = downloadAsZip;
 window.downloadIndividually = downloadIndividually;
 window.closeDownloadModal = closeDownloadModal;
 
-// 📡 Enhanced QR Code Generation for Connection Info - Faster & More Reliable
+// 📡 Enhanced QR Code Generation for Connection Info - Offline-First
 function generateQRCode(text, size = 200) {
   // Use larger QR for better visibility, but still optimized for guests
   const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
   const qrSize = isGuest ? 180 : size;
-  const services = [
+  
+  // Primary: Use our offline QR generator (works without internet)
+  const offlineQR = `/api/qr-code?text=${encodeURIComponent(text)}&size=${qrSize}`;
+  
+  // Fallback services (only if offline generator fails)
+  const fallbackServices = [
     `https://quickchart.io/qr?text=${encodeURIComponent(text)}&size=${qrSize}&format=png&margin=1`,
     `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(text)}&margin=10&format=png`,
   ];
-  return services[0];
+  
+  return {
+    primary: offlineQR,
+    fallbacks: fallbackServices,
+    // For backward compatibility, return the offline URL directly
+    toString: () => offlineQR
+  };
 }
 
 // 🚀 Preload QR code image as soon as the page loads for instant display
@@ -5907,7 +5918,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function preloadQRFromUrl(fullUrl) {
     const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
     const qrSize = isGuest ? 180 : 200;
-    const qrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(fullUrl)}&size=${qrSize}&format=png&margin=1`;
+    const qrUrl = `/api/qr-code?text=${encodeURIComponent(fullUrl)}&size=${qrSize}`;
     const img = new window.Image();
     img.onload = () => {
       window._preloadedQR = {
@@ -5928,7 +5939,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
     const qrSize = isGuest ? 180 : 200;
-    const qrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(fullUrl)}&size=${qrSize}&format=png&margin=1`;
+    const qrUrl = `/api/qr-code?text=${encodeURIComponent(fullUrl)}&size=${qrSize}`;
     const img = new window.Image();
     img.src = qrUrl;
     window._preloadedQR = { url: qrUrl, img: img };
@@ -6086,21 +6097,26 @@ async function showConnectionInfo() {
     padding: 2rem;
   `;
   
-  // 🚀 ENHANCED: Multiple QR generation strategies for reliability
+  // 🚀 ENHANCED: Offline-first QR generation for reliability
   const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
   const qrSize = isGuest ? 180 : 200;
-  const qrServices = [
+  
+  // Use our offline QR generator as primary
+  const qrResult = generateQRCode(fullUrl, qrSize);
+  const primaryQRUrl = qrResult.primary || qrResult.toString();
+  const fallbackQRUrls = qrResult.fallbacks || [
     `https://quickchart.io/qr?text=${encodeURIComponent(fullUrl)}&size=${qrSize}&format=png&margin=1`,
     `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(fullUrl)}&margin=10&format=png`,
   ];
-  // If preloaded QR matches, use it instantly
+  
+  // If preloaded QR matches, use it instantly, otherwise use offline generator
   setTimeout(() => {
     const primaryQR = document.getElementById('qr-primary');
     if (primaryQR) {
-      if (window._preloadedQR && window._preloadedQR.url === qrServices[0]) {
+      if (window._preloadedQR && window._preloadedQR.url === primaryQRUrl) {
         primaryQR.src = window._preloadedQR.img.src;
       } else {
-        primaryQR.src = qrServices[0];
+        primaryQR.src = primaryQRUrl; // This will use our offline generator
       }
       if (isGuest) {
         setTimeout(() => {
@@ -6183,9 +6199,14 @@ async function showConnectionInfo() {
           <div style="margin-bottom: 0.5rem;">
             <small style="color: #666; font-size: 0.8rem; font-weight: 500;">📱 IP Access QR Code</small>
           </div>
-          <img src="https://quickchart.io/qr?text=${encodeURIComponent(lanIpUrl || 'http://192.168.0.106')}&size=160&format=png&margin=1" 
+          <img src="/api/qr-code?text=${encodeURIComponent(lanIpUrl || 'http://192.168.0.106')}&size=160" 
                style="border: 2px solid #ddd; border-radius: 8px; max-width: 160px; height: auto; background: white;" 
-               alt="IP QR Code">
+               alt="IP QR Code"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+               onload="this.style.display='block';">
+          <div style="display: none; padding: 0.5rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; color: #721c24; font-size: 0.8rem;">
+            QR code generation failed
+          </div>
           <div style="margin-top: 0.5rem;">
             <small style="color: #666; font-size: 0.75rem;">Scan if mDNS doesn't work</small>
           </div>

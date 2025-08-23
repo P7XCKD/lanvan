@@ -233,3 +233,36 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # ✅ Register app routes
 app.include_router(router)
 app.include_router(clipboard_ws_router)
+
+# ✅ Exception handlers for loading page system
+from fastapi import HTTPException, Request
+from fastapi.responses import RedirectResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+@app.exception_handler(404)
+@app.exception_handler(StarletteHTTPException)
+async def custom_404_handler(request: Request, exc):
+    """Redirect 404s to loading page instead of showing error"""
+    if hasattr(exc, 'status_code') and exc.status_code == 404:
+        # Get the original path to redirect back to after loading
+        original_path = str(request.url.path)
+        if original_path != '/loading':
+            # Redirect to loading page with original path as parameter
+            return RedirectResponse(
+                url=f"/loading?redirect={original_path}",
+                status_code=302
+            )
+    
+    # For other errors, let them pass through
+    raise exc
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle validation errors gracefully"""
+    return RedirectResponse(url="/loading?redirect=/", status_code=302)
+
+@app.exception_handler(500)
+async def internal_error_handler(request: Request, exc):
+    """Handle server errors by redirecting to loading page"""
+    return RedirectResponse(url="/loading?redirect=/", status_code=302)
