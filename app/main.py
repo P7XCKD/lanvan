@@ -4,9 +4,11 @@ import asyncio
 import threading
 import time
 import sys
+import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +18,34 @@ from app.routes import router
 
 # Import mDNS manager for service discovery
 from app.simple_mdns import mdns_manager
+
+# 🔇 Suppress noisy ClientDisconnect errors in logs
+class ClientDisconnectFilter(logging.Filter):
+    def filter(self, record):
+        if hasattr(record, 'exc_info') and record.exc_info:
+            exc_type, exc_value, exc_traceback = record.exc_info
+            if isinstance(exc_value, ClientDisconnect):
+                return False
+            # Also filter HTTPException with "parsing the body" message
+            if isinstance(exc_value, HTTPException) and "parsing the body" in str(exc_value.detail):
+                return False
+        # Filter out the string-based error messages too
+        if hasattr(record, 'getMessage'):
+            msg = record.getMessage()
+            if any(phrase in msg for phrase in [
+                "ClientDisconnect",
+                "parsing the body", 
+                "There was an error parsing the body",
+                "'NoneType' object is not callable"
+            ]):
+                return False
+        return True
+
+# Apply filter to uvicorn and starlette loggers
+logging.getLogger("uvicorn.error").addFilter(ClientDisconnectFilter())
+logging.getLogger("starlette").addFilter(ClientDisconnectFilter())
+logging.getLogger("fastapi").addFilter(ClientDisconnectFilter())
+logging.getLogger().addFilter(ClientDisconnectFilter())
 
 # 🚨 Global shutdown event for immediate server termination
 shutdown_event = asyncio.Event()
@@ -320,20 +350,33 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     # Otherwise, let the validation error be handled normally
     raise exc
 
-@app.exception_handler(ClientDisconnect)
-async def client_disconnect_handler(request: Request, exc: ClientDisconnect):
-    """Handle client disconnections gracefully"""
-    # Log the disconnect but don't treat it as an error
-    print(f"ℹ️ Client disconnected during request to {request.url.path}")
-    # Client disconnections are normal - don't raise an error
-    # The response will naturally fail since the client is gone
-    return None
-
 @app.exception_handler(500)
 async def smart_internal_error_handler(request: Request, exc):
     """Handle server errors smartly"""
+    # Check if this is a ClientDisconnect wrapped in other exceptions
+    if _is_client_disconnect_error(exc):
+        print(f"ℹ️ Client disconnected during request to {request.url.path} (wrapped)")
+        from starlette.responses import PlainTextResponse
+        return PlainTextResponse("Client disconnected", status_code=400)
+    
     # Only redirect to loading page during startup period
     if not are_resources_ready():
         return RedirectResponse(url="/loading?redirect=/", status_code=302)
     # Otherwise, let the error be handled normally
     raise exc
+
+def _is_client_disconnect_error(exc) -> bool:
+    """Check if exception is caused by client disconnect"""
+    # Check the exception chain for ClientDisconnect
+    current = exc
+    while current:
+        if isinstance(current, ClientDisconnect):
+            return True
+        # Check if it's an HTTPException with ClientDisconnect as cause
+        if hasattr(current, '__cause__') and isinstance(current.__cause__, ClientDisconnect):
+            return True
+        # Check if error message indicates client disconnect
+        if hasattr(current, 'detail') and 'parsing the body' in str(current.detail):
+            return True
+        current = getattr(current, '__cause__', None)
+    return False
