@@ -435,7 +435,7 @@ class SimpleMDNSManager:
         return {
             "status": "active",
             "domain": self.domain,
-            "url": f"{self.protocol}://{self.domain}:{self.port}",
+            "url": self._format_url(self.domain),
             "service_name": self.service_name,
             "conflict_resolved": self.conflict_count > 0,
             "conflict_count": self.conflict_count,
@@ -443,14 +443,21 @@ class SimpleMDNSManager:
             "port": self.port
         }
     
+    def _format_url(self, host: str) -> str:
+        """Format URL correctly, omitting standard ports"""
+        protocol = self.protocol
+        # Don't include port for standard HTTP/HTTPS ports
+        if (self.port == 80 and protocol == "http") or (self.port == 443 and protocol == "https"):
+            return f"{protocol}://{host}"
+        else:
+            return f"{protocol}://{host}:{self.port}"
+    
     def get_hybrid_url(self) -> str:
         """Get the best URL for QR code generation (mDNS first, fallback to IP)"""
         if self.is_running and self.domain:
-            protocol = "https" if self.use_https else "http"
-            return f"{protocol}://{self.domain}:{self.port}"
+            return self._format_url(self.domain)
         else:
-            protocol = "https" if self.use_https else "http"
-            return f"{protocol}://{self.get_lan_ip()}:{self.port}"
+            return self._format_url(self.get_lan_ip())
 
 # Global simple mDNS manager instance
 mdns_manager = SimpleMDNSManager()

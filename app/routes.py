@@ -1102,6 +1102,14 @@ async def get_network_info():
             "hybrid_url": mdns_manager.get_hybrid_url()
         })
     except Exception as e:
+        # Create fallback URL using the same format logic as mdns_manager
+        protocol = "https" if mdns_manager.use_https else "http"
+        port = mdns_manager.port
+        if (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
+            fallback_url = f"{protocol}://127.0.0.1"
+        else:
+            fallback_url = f"{protocol}://127.0.0.1:{port}"
+        
         return JSONResponse(
             status_code=500,
             content={
@@ -1109,7 +1117,7 @@ async def get_network_info():
                 "error": str(e),
                 "lan_ip": "127.0.0.1",
                 "mdns": {"status": "error", "domain": None},
-                "hybrid_url": f"http://127.0.0.1:{mdns_manager.port}"
+                "hybrid_url": fallback_url
             }
         )
 
