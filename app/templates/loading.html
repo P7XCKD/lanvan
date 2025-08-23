@@ -262,6 +262,84 @@
 
     let currentStep = 0;
 
+    // Check if we can skip the loading process
+    function shouldSkipLoading() {
+      try {
+        const lastLoaded = sessionStorage.getItem('lanvan_page_loaded_successfully');
+        const resourcesReady = sessionStorage.getItem('lanvan_resources_ready');
+        
+        if (lastLoaded && resourcesReady === 'true') {
+          const lastLoadTime = parseInt(lastLoaded);
+          const now = Date.now();
+          
+          // If page loaded successfully within last 5 minutes, skip loading
+          if (now - lastLoadTime < 5 * 60 * 1000) {
+            return true;
+          }
+        }
+      } catch (e) {
+        // Ignore storage errors
+      }
+      return false;
+    }
+
+    // Quick check if server is immediately available
+    function quickServerCheck() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const originalPath = urlParams.get('redirect') || '/';
+      
+      // If we should skip loading, go directly to the page
+      if (shouldSkipLoading() && originalPath !== '/loading') {
+        statusElement.textContent = 'Already ready! Redirecting...';
+        setTimeout(() => {
+          window.location.href = originalPath;
+        }, 200);
+        return true;
+      }
+      
+      // Try a quick fetch to see if server responds immediately
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1000);
+      
+      fetch('/api/server-status', { 
+        signal: controller.signal,
+        cache: 'no-cache'
+      })
+        .then(response => {
+          clearTimeout(timeoutId);
+          if (response.ok) {
+            return response.json();
+          }
+          throw new Error('Server not ready');
+        })
+        .then(data => {
+          if (data.status === 'online' && data.resources_ready !== false) {
+            statusElement.textContent = 'Server ready! Redirecting...';
+            
+            // Test if the target page actually loads
+            fetch(originalPath, { method: 'HEAD', cache: 'no-cache' })
+              .then(() => {
+                setTimeout(() => {
+                  window.location.href = originalPath;
+                }, 300);
+              })
+              .catch(() => {
+                // If target page fails, continue with loading sequence
+                setTimeout(updateStatus, 500);
+              });
+          } else {
+            // Continue with loading sequence
+            setTimeout(updateStatus, 500);
+          }
+        })
+        .catch(() => {
+          // Server not immediately available, continue with loading
+          setTimeout(updateStatus, 800);
+        });
+      
+      return false;
+    }
+
     function updateStatus() {
       if (currentStep < statusMessages.length) {
         statusElement.textContent = statusMessages[currentStep];
@@ -285,15 +363,26 @@
         })
         .then(data => {
           if (data.status === 'online') {
-            statusElement.textContent = 'Redirecting...';
+            statusElement.textContent = 'Server ready! Redirecting...';
             
             // Get the original path or default to home
             const urlParams = new URLSearchParams(window.location.search);
             const originalPath = urlParams.get('redirect') || '/';
             
-            setTimeout(() => {
-              window.location.href = originalPath;
-            }, 500);
+            // Try to fetch the original path to make sure it's actually available
+            fetch(originalPath, { method: 'HEAD' })
+              .then(response => {
+                // If the page exists, redirect to it
+                setTimeout(() => {
+                  window.location.href = originalPath;
+                }, 500);
+              })
+              .catch(() => {
+                // If original path doesn't exist, go to home
+                setTimeout(() => {
+                  window.location.href = '/';
+                }, 500);
+              });
           } else {
             throw new Error('Server status not ready');
           }
@@ -327,8 +416,11 @@
       setTimeout(updateStatus, 500);
     }
 
-    // Start the loading process
-    setTimeout(updateStatus, 1000);
+    // Start the loading process - but try quick check first
+    if (!quickServerCheck()) {
+      // Only start full loading if quick check didn't redirect us
+      setTimeout(updateStatus, 1000);
+    }
 
     // Show retry option after 15 seconds if still loading
     setTimeout(() => {

@@ -8875,6 +8875,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 2000);
   }
 });
+
+// Mark that the main page loaded successfully (for loading page optimization)
+try {
+  sessionStorage.setItem('lanvan_page_loaded_successfully', Date.now().toString());
+  // Also set a flag that resources are working
+  sessionStorage.setItem('lanvan_resources_ready', 'true');
+} catch (e) {
+  // Ignore storage errors
+}
 </script>
 
 </body>

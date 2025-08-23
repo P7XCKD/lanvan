@@ -147,6 +147,16 @@ async def lifespan(app: FastAPI):
     mdns_thread = threading.Thread(target=start_mdns_background, daemon=True)
     mdns_thread.start()
     
+    # Mark resources as ready after startup
+    def mark_resources_ready():
+        global resources_ready
+        time.sleep(2)  # Give time for initial setup
+        resources_ready = True
+        print("✅ Server resources are ready")
+    
+    ready_thread = threading.Thread(target=mark_resources_ready, daemon=True)
+    ready_thread.start()
+    
     # Store shutdown state in app for access from routes
     app.state.graceful_shutdown_initiated = False
     app.state.shutdown_countdown = 0
@@ -234,35 +244,85 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(router)
 app.include_router(clipboard_ws_router)
 
-# ✅ Exception handlers for loading page system
+# ✅ Exception handlers for smart loading page system
 from fastapi import HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+import time
+
+# Track when the server started and if resources are ready
+server_start_time = time.time()
+resources_ready = False
+startup_grace_period = 5  # seconds
+
+def are_resources_ready():
+    """Check if server resources are ready"""
+    global resources_ready, server_start_time
+    
+    # If we've explicitly marked resources as ready, return True
+    if resources_ready:
+        return True
+    
+    # If it's been more than grace period since startup, consider ready
+    if time.time() - server_start_time > startup_grace_period:
+        resources_ready = True
+        return True
+    
+    # During startup grace period, check if essential services are available
+    try:
+        # Check if templates directory exists and is accessible
+        template_dir = "app/templates"
+        static_dir = "app/static"
+        if os.path.exists(template_dir) and os.path.exists(static_dir):
+            resources_ready = True
+            return True
+    except:
+        pass
+    
+    return False
 
 @app.exception_handler(404)
 @app.exception_handler(StarletteHTTPException)
-async def custom_404_handler(request: Request, exc):
-    """Redirect 404s to loading page instead of showing error"""
+async def smart_404_handler(request: Request, exc):
+    """Redirect 404s to loading page only if resources aren't ready"""
     if hasattr(exc, 'status_code') and exc.status_code == 404:
-        # Get the original path to redirect back to after loading
+        # Get the original path
         original_path = str(request.url.path)
-        if original_path != '/loading':
-            # Redirect to loading page with original path as parameter
+        
+        # Never redirect loading page to itself
+        if original_path == '/loading':
+            raise exc
+        
+        # Don't redirect API calls or static resources
+        if (original_path.startswith('/api/') or 
+            original_path.startswith('/static/') or
+            original_path.startswith('/_')):
+            raise exc
+        
+        # Only redirect to loading page if resources aren't ready
+        if not are_resources_ready():
             return RedirectResponse(
                 url=f"/loading?redirect={original_path}",
                 status_code=302
             )
     
-    # For other errors, let them pass through
+    # For everything else, let the normal 404 happen
     raise exc
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handle validation errors gracefully"""
-    return RedirectResponse(url="/loading?redirect=/", status_code=302)
+    """Handle validation errors - only use loading page if resources not ready"""
+    if not are_resources_ready():
+        return RedirectResponse(url="/loading?redirect=/", status_code=302)
+    # Otherwise, let the validation error be handled normally
+    raise exc
 
 @app.exception_handler(500)
-async def internal_error_handler(request: Request, exc):
-    """Handle server errors by redirecting to loading page"""
-    return RedirectResponse(url="/loading?redirect=/", status_code=302)
+async def smart_internal_error_handler(request: Request, exc):
+    """Handle server errors smartly"""
+    # Only redirect to loading page during startup period
+    if not are_resources_ready():
+        return RedirectResponse(url="/loading?redirect=/", status_code=302)
+    # Otherwise, let the error be handled normally
+    raise exc

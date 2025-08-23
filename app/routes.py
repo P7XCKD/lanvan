@@ -1088,7 +1088,8 @@ async def server_status():
     return JSONResponse({
         "status": "online",
         "message": "✅ Server is running normally",
-        "shutdown": False
+        "shutdown": False,
+        "resources_ready": True  # If we can respond to this request, resources are ready
     })
 
 @router.get("/api/network-info", name="network_info")
@@ -1172,16 +1173,15 @@ async def generate_offline_qr(text: str, size: int = 200):
         img_buffer = io.BytesIO()
         
         # Save using the qrcode image's save method
-        if hasattr(qr_img, 'save'):
+        try:
             qr_img.save(img_buffer, 'PNG')
-        else:
-            # Fallback conversion
-            from PIL import Image as PILImage
-            if hasattr(qr_img, '_img'):
-                pil_img = qr_img._img
-            else:
-                pil_img = qr_img
-            pil_img.save(img_buffer, 'PNG')
+        except Exception:
+            # Fallback: try without format specification
+            try:
+                qr_img.save(img_buffer)
+            except Exception as e:
+                # If all else fails, let it raise to be caught by outer handler
+                raise Exception(f"QR image save failed: {e}")
         
         img_buffer.seek(0)
 
