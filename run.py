@@ -211,13 +211,13 @@ def kill_servers_on_port(port):
     try:
         for proc in psutil.process_iter(['pid', 'name']):
             try:
-                # Fix: Use connections() instead of net_connections()
+                # Fix: Use net_connections() instead of deprecated connections()
                 try:
-                    connections = proc.connections()
+                    connections = proc.net_connections()
                 except (psutil.AccessDenied, AttributeError):
-                    # If connections() fails, try the old method
+                    # If net_connections() fails, try the old method as fallback
                     try:
-                        connections = proc.net_connections()
+                        connections = proc.connections()
                     except AttributeError:
                         # Skip this process if we can't get connections
                         continue

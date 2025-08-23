@@ -29,6 +29,9 @@ class ClientDisconnectFilter(logging.Filter):
             # Also filter HTTPException with "parsing the body" message
             if isinstance(exc_value, HTTPException) and "parsing the body" in str(exc_value.detail):
                 return False
+            # Filter out static file 404s and other noise
+            if isinstance(exc_value, HTTPException) and exc_value.status_code == 404:
+                return False
         # Filter out the string-based error messages too
         if hasattr(record, 'getMessage'):
             msg = record.getMessage()
@@ -36,13 +39,19 @@ class ClientDisconnectFilter(logging.Filter):
                 "ClientDisconnect",
                 "parsing the body", 
                 "There was an error parsing the body",
-                "'NoneType' object is not callable"
+                "'NoneType' object is not callable",
+                "404: Not Found",
+                "Exception in ASGI application",
+                "ExceptionGroup: unhandled errors in a TaskGroup",
+                "HTTPException: 404",
+                "HTTPException: 400: There was an error parsing the body"
             ]):
                 return False
         return True
 
 # Apply filter to uvicorn and starlette loggers
 logging.getLogger("uvicorn.error").addFilter(ClientDisconnectFilter())
+logging.getLogger("uvicorn").addFilter(ClientDisconnectFilter())
 logging.getLogger("starlette").addFilter(ClientDisconnectFilter())
 logging.getLogger("fastapi").addFilter(ClientDisconnectFilter())
 logging.getLogger().addFilter(ClientDisconnectFilter())
