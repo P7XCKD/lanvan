@@ -1881,6 +1881,10 @@
     let uploadIdCounter = 0;
     let isUploadManagerVisible = false;
     
+    // Clipboard operation queue to prevent blocking during uploads
+    let clipboardOperationQueue = [];
+    let isProcessingClipboardQueue = false;
+    
     // 🔒 AES Configuration (matches backend)
     const AES_CONFIG = {
       MAX_FILE_SIZE_MB: 200,
@@ -3073,12 +3077,28 @@ Device Session will reset when browser is closed
       uploadItem.status === 'uploading' || 
       uploadItem.status === 'cancelled' || 
       uploadItem.status === 'error' ||
+      uploadItem.status === 'processing' ||
       uploadItem.progress === 100;
     
+    // Use requestIdleCallback for non-critical updates to prevent blocking
     if (!isImportantUpdate && (now - lastUpdate) < UI_UPDATE_THROTTLE) {
       return; // Skip this update to prevent flickering
     }
     
+    // For processing updates, use async to prevent blocking other operations
+    if (uploadItem.status === 'processing') {
+      if (window.requestIdleCallback) {
+        requestIdleCallback(() => performUIUpdate(uploadItem));
+        return;
+      }
+    }
+    
+    performUIUpdate(uploadItem);
+  }
+
+  // Separated UI update logic to allow async processing
+  function performUIUpdate(uploadItem) {
+    const now = Date.now();
     lastUIUpdate[uploadItem.id] = now;
 
     const progressFill = document.getElementById(`progress-fill-${uploadItem.id}`);
@@ -3878,15 +3898,24 @@ Device Session will reset when browser is closed
           updateUploadItem(uploadItem);
           
           const fileSizeMB = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
-          // Show toast for chunked processing
-          showToast(`⚙️ Processing ${uploadItem.totalChunks} chunks for ${uploadItem.fileName}... (${fileSizeMB} MB)`, 4000);
+          // Show toast for chunked processing with better messaging
+          showToast(`⚙️ Processing ${uploadItem.totalChunks} chunks for ${uploadItem.fileName}... (${fileSizeMB} MB) - Other operations may continue`, 4000);
           
           // Show processing for chunked files (longer processing time)
-          setTimeout(() => {
+          // Use requestIdleCallback to prevent blocking other uploads and UI
+          const processAsync = () => {
             uploadItem.status = 'completed';
             uploadItem.progress = 100;
             updateUploadItem(uploadItem);
-          }, 2000); // 2 second processing indicator for chunked files
+          };
+          
+          if (window.requestIdleCallback) {
+            requestIdleCallback(() => {
+              setTimeout(processAsync, 2000);
+            }, { timeout: 5000 });
+          } else {
+            setTimeout(processAsync, 2000);
+          }
           
           endUpload();
           
@@ -3947,6 +3976,11 @@ Device Session will reset when browser is closed
             
             // Unblock QR generation after all chunked uploads complete
             window._qrBlocked = false;
+            
+            // Process any queued clipboard operations
+            if (clipboardOperationQueue.length > 0) {
+              setTimeout(() => processClipboardQueue(), 500);
+            }
             
             // 🔄 Refresh file count immediately to show new total
             setTimeout(() => {
@@ -5052,12 +5086,23 @@ function uploadFilesRegular(files, isAESEnabled) {
       // Unblock QR generation after successful upload
       window._qrBlocked = false;
       
+      // Process any queued clipboard operations
+      if (clipboardOperationQueue.length > 0) {
+        setTimeout(() => processClipboardQueue(), 500);
+      }
+      
       // End upload tracking
       endUpload();
     } else {
       showToast('❌ Upload failed • Click anywhere to dismiss', 0);
       // Unblock QR generation after failed upload
       window._qrBlocked = false;
+      
+      // Process any queued clipboard operations even after failure
+      if (clipboardOperationQueue.length > 0) {
+        setTimeout(() => processClipboardQueue(), 500);
+      }
+      
       endUpload(); // End upload tracking on failure
     }
   };
@@ -7223,7 +7268,7 @@ function getClipboardImageCount() {
 }
 
 // Add text content to clipboard
-function addTextToClipboard() {
+async function addTextToClipboard() {
   const textInput = document.getElementById('clipboardTextInput');
   const text = textInput.value; // Preserve original formatting - no trim()
   
@@ -7232,27 +7277,86 @@ function addTextToClipboard() {
     return;
   }
   
+  // Check if uploads are in progress and queue if needed
+  if (window._qrBlocked || window.uploadQueue?.some(item => item.status === 'uploading' || item.status === 'processing')) {
+    showToast('⏸️ Upload in progress - clipboard operation queued...', 2000);
+    
+    // Add to queue instead of blocking
+    clipboardOperationQueue.push({
+      type: 'add',
+      data: text
+    });
+    
+    textInput.value = ''; // Clear input immediately
+    return;
+  }
+  
   const formData = new FormData();
   formData.append('data', text);
   
-  fetch('/api/clipboard/add', {
-    method: 'POST',
-    body: formData
-  })
-  .then(response => response.json())
-  .then(data => {
+  try {
+    const response = await fetch('/api/clipboard/add', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await response.json();
+    
     if (data.status === 'success') {
       showToast(`📋 Text added to clipboard (${data.item.size} bytes)`, 3000);
       textInput.value = ''; // Clear input
-      refreshClipboardHistory();
+      
+      // Use requestIdleCallback for refresh to prevent blocking
+      if (window.requestIdleCallback) {
+        requestIdleCallback(() => refreshClipboardHistory());
+      } else {
+        setTimeout(() => refreshClipboardHistory(), 100);
+      }
     } else {
       showToast(`❌ Failed to add text: ${data.msg}`, 4000);
     }
-  })
-  .catch(error => {
+  } catch (error) {
     console.error('Error adding text to clipboard:', error);
     showToast('❌ Failed to add text to clipboard', 4000);
-  });
+  }
+}
+
+// Process queued clipboard operations when uploads complete
+async function processClipboardQueue() {
+  if (isProcessingClipboardQueue || clipboardOperationQueue.length === 0) return;
+  
+  isProcessingClipboardQueue = true;
+  
+  while (clipboardOperationQueue.length > 0) {
+    const operation = clipboardOperationQueue.shift();
+    
+    try {
+      if (operation.type === 'refresh') {
+        await refreshClipboardHistory();
+      } else if (operation.type === 'add' && operation.data) {
+        // Re-execute the add operation
+        const formData = new FormData();
+        formData.append('data', operation.data);
+        
+        const response = await fetch('/api/clipboard/add', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          showToast(`📋 Queued text added to clipboard (${data.item.size} bytes)`, 3000);
+          await refreshClipboardHistory();
+        }
+      }
+    } catch (error) {
+      console.error('Error processing clipboard queue:', error);
+    }
+    
+    // Small delay between operations to prevent overwhelming
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
+  isProcessingClipboardQueue = false;
 }
 
 // Clear clipboard input fields
@@ -7265,22 +7369,28 @@ function clearClipboardInput() {
 }
 
 // Refresh clipboard history
-function refreshClipboardHistory() {
-  fetch('/api/clipboard/list')
-    .then(response => response.json())
-    .then(data => {
-      if (data.status === 'success') {
-        clipboardHistoryData = data.items;
-        renderClipboardHistory(data.items);
-      } else {
-        console.error('Failed to load clipboard history:', data.msg);
-        showToast('❌ Failed to load clipboard history', 3000);
-      }
-    })
-    .catch(error => {
-      console.error('Error loading clipboard history:', error);
+async function refreshClipboardHistory() {
+  // Skip if uploads are heavy to prevent UI blocking
+  if (window.uploadQueue?.some(item => item.status === 'uploading' || item.status === 'processing')) {
+    console.log('⏸️ Skipping clipboard refresh during uploads');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/clipboard/list');
+    const data = await response.json();
+    
+    if (data.status === 'success') {
+      clipboardHistoryData = data.items;
+      renderClipboardHistory(data.items);
+    } else {
+      console.error('Failed to load clipboard history:', data.msg);
       showToast('❌ Failed to load clipboard history', 3000);
-    });
+    }
+  } catch (error) {
+    console.error('Error loading clipboard history:', error);
+    showToast('❌ Failed to load clipboard history', 3000);
+  }
 }
 
 // Render clipboard history with image previews
