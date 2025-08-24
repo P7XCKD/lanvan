@@ -3707,6 +3707,7 @@ Device Session will reset when browser is closed
   let autoRefreshInterval;
   let lastFileCount = 0;
   let autoRefreshActive = true;
+  let currentActiveSection = 'file'; // Track which section is currently active
 
   function startAutoRefresh() {
     console.log('🔄 Starting auto-refresh for cross-device file sync...');
@@ -3723,6 +3724,12 @@ Device Session will reset when browser is closed
     // Set up polling every 5 seconds to check for file changes
     autoRefreshInterval = setInterval(async () => {
       if (!autoRefreshActive) return;
+      
+      // Only refresh files when file section is active, not when in clipboard mode
+      if (currentActiveSection !== 'file') {
+        console.log('🔄 Skipping file refresh - clipboard section is active');
+        return;
+      }
       
       try {
         const response = await fetch('/api/files');
@@ -4143,6 +4150,15 @@ Device Session will reset when browser is closed
     
     // Check if we're on clipboard-only page
     const isClipboardOnly = typeof show_clipboard_only !== 'undefined' && show_clipboard_only;
+    
+    // Initialize current active section based on default view or URL
+    const urlPath = window.location.pathname;
+    if (urlPath === '/clipboard' || '{{ default_view }}' === 'clipboard') {
+      currentActiveSection = 'clipboard';
+    } else {
+      currentActiveSection = 'file';
+    }
+    console.log(`🎯 Initial active section: ${currentActiveSection}`);
     
     DOM_CACHE = {
       // File upload elements (only for file sharing mode)
@@ -8576,6 +8592,9 @@ function switchToPage(page) {
   // Use setTimeout to allow smooth transition
   setTimeout(() => {
     if (page === 'clipboard') {
+      // Update current active section tracker
+      currentActiveSection = 'clipboard';
+      
       // Show clipboard section, hide file sections
       if (fileTransferSection) {
         fileTransferSection.style.display = 'none';
@@ -8601,6 +8620,9 @@ function switchToPage(page) {
       document.title = 'LANVan - Clipboard';
       
     } else if (page === 'file') {
+      // Update current active section tracker
+      currentActiveSection = 'file';
+      
       // Show file sections, hide clipboard section
       if (fileTransferSection) {
         fileTransferSection.style.display = 'block';
@@ -8630,7 +8652,10 @@ function switchToPage(page) {
   // Trigger any necessary updates for the visible section
   setTimeout(() => {
     if (page === 'file') {
-      if (typeof updateFileList === 'function') {
+      // When switching back to file section, refresh the file list to show any new files
+      if (typeof refreshFileList === 'function') {
+        refreshFileList();
+      } else if (typeof updateFileList === 'function') {
         updateFileList();
       }
     } else if (page === 'clipboard') {
@@ -8652,6 +8677,11 @@ window.addEventListener('popstate', function(event) {
   if (event.state && event.state.page) {
     // Switch to the page without updating history (since we're handling popstate)
     const targetPage = event.state.page;
+    
+    // Update current active section tracker
+    currentActiveSection = targetPage;
+    console.log(`🔙 Browser navigation - active section: ${currentActiveSection}`);
+    
     const fileTransferSection = document.getElementById('fileTransferSection');
     const fileListSection = document.getElementById('fileListSection');
     const clipboardSection = document.getElementById('clipboardSection');
@@ -8686,6 +8716,11 @@ window.addEventListener('popstate', function(event) {
       if (clipboardTickClipboard) clipboardTickClipboard.style.display = 'none';
       
       document.title = 'LANVan - File Transfer';
+      
+      // When navigating back to file section, refresh file list to show any new files
+      if (typeof refreshFileList === 'function') {
+        setTimeout(() => refreshFileList(), 100);
+      }
     }
   }
 });
