@@ -2,7 +2,7 @@ import os
 import io
 import time
 import asyncio
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pathlib import Path
 from mimetypes import guess_type
 from zipfile import ZipFile
@@ -617,56 +617,74 @@ async def upload_auto_file(
     
     print(f"🔍 Processing {len(files)} files for concurrent upload...")
 
-    # Prepare destinations and validate all files first
+    # 🚀 CONCURRENT PREPARATION: Prepare all file destinations simultaneously
+    async def prepare_file_for_upload(i: int, file: UploadFile) -> Dict[str, Any]:
+        """Prepare a single file for upload concurrently"""
+        try:
+            print(f"📁 Preparing file {i+1}/{len(files)}: {file.filename}")
+            
+            if not file.filename:
+                return {"error": f"File {i+1}: No filename"}
+
+            # Use validated filename
+            validated_file = validated_files[i] if i < len(validated_files) else None
+            if not validated_file:
+                return {"error": f"File {i+1}: Validation failed"}
+                
+            filename = validated_file['sanitized_name']
+            file_size = validated_file['size']
+            print(f"📋 File {i+1} details: {filename} ({file_size} bytes)")
+
+            # Double-check with existing validation (defense in depth)
+            if not is_allowed_file(filename):
+                return {"error": f"File {i+1}: File type not allowed"}
+
+            # Check size using centralized AES config
+            if encrypt:
+                validation = AESConfig.validate_file_for_aes(file_size, is_https)
+                if not validation['valid']:
+                    return {"error": f"File {i+1} failed AES validation: {validation['error']}"}
+
+            save_name = filename + ".enc" if encrypt else filename
+            filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, save_name)
+
+            print(f"💾 Will save file {i+1} as: {filepath.name}")
+            
+            return {
+                "success": True,
+                "file": file,
+                "destination": filepath,
+                "file_info": {
+                    'original_name': file.filename,
+                    'save_name': save_name,
+                    'filepath': filepath,
+                    'size': file_size
+                }
+            }
+            
+        except Exception as e:
+            return {"error": f"File {i+1}: Preparation failed - {str(e)}"}
+    
+    # 🚀 PREPARE ALL FILES CONCURRENTLY
+    print(f"� Starting concurrent preparation of {len(files)} files...")
+    preparation_tasks = [prepare_file_for_upload(i, file) for i, file in enumerate(files)]
+    preparation_results = await asyncio.gather(*preparation_tasks, return_exceptions=True)
+    
+    # Process preparation results
     destinations = []
     valid_files = []
     file_info = []
     
-    for i, file in enumerate(files):
-        print(f"📁 Preparing file {i+1}/{len(files)}: {file.filename}")
-        
-        if not file.filename:
-            print(f"❌ Skipping file {i+1}: No filename")
-            continue
-
-        # Use validated filename
-        validated_file = validated_files[i] if i < len(validated_files) else None
-        if not validated_file:
-            print(f"❌ Skipping file {i+1}: Validation failed")
-            continue
-            
-        filename = validated_file['sanitized_name']
-        file_size = validated_file['size']
-        print(f"📋 File {i+1} details: {filename} ({file_size} bytes)")
-
-        # Double-check with existing validation (defense in depth)
-        if not is_allowed_file(filename):
-            print(f"❌ Skipping file {i+1}: File type not allowed")
-            continue
-
-        # Check size using centralized AES config
-        if encrypt:
-            validation = AESConfig.validate_file_for_aes(file_size, is_https)
-            if not validation['valid']:
-                print(f"❌ File {i+1} failed AES validation: {validation['error']}")
-                return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
-                    "status": "error",
-                    "msg": validation['error']
-                })
-
-        save_name = filename + ".enc" if encrypt else filename
-        filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, save_name)
-
-        destinations.append(filepath)
-        valid_files.append(file)
-        file_info.append({
-            'original_name': file.filename,
-            'save_name': save_name,
-            'filepath': filepath,
-            'size': file_size
-        })
-        
-        print(f"💾 Will save file {i+1} as: {filepath.name}")
+    for i, result in enumerate(preparation_results):
+        if isinstance(result, Exception):
+            print(f"❌ File {i+1} preparation exception: {str(result)}")
+        elif isinstance(result, dict) and "error" in result:
+            print(f"❌ {result['error']}")
+        elif isinstance(result, dict) and "success" in result:
+            destinations.append(result["destination"])
+            valid_files.append(result["file"])
+            file_info.append(result["file_info"])
+            print(f"✅ File {i+1} prepared successfully")
     
     if not valid_files:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
