@@ -131,9 +131,11 @@ class ConcurrentUploadManager:
                 universal_optimizer.optimize_for_upload(file_size)
             
             # 📝 Process file with streaming
+            print(f"🔍 [{upload_id}] About to start streaming upload...")
             result = await self._stream_upload_async(
                 upload_file, destination, encrypt, chunk_size, upload_id
             )
+            print(f"🔍 [{upload_id}] Streaming upload completed successfully")
             
             # Update final status
             elapsed = time.time() - start_time
@@ -261,6 +263,9 @@ class ConcurrentUploadManager:
                 destination.unlink()
             # 🔧 Enhanced error logging for debugging
             print(f"❌ [{upload_id}] Stream upload error: {type(e).__name__}: {str(e)}")
+            import traceback
+            print(f"🔍 [{upload_id}] Full traceback:")
+            traceback.print_exc()
             raise e
         
         return {
