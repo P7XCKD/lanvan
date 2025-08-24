@@ -1401,15 +1401,16 @@
   
   /* Force device logs content text color for light mode */
   #deviceLogsContent, #deviceLogsContent * {
-    color: #212529 !important;
+    color: var(--text-color) !important;
   }
   
   #deviceLogsContent div, #deviceLogsContent span {
-    color: #212529 !important;
+    color: var(--text-color) !important;
   }
   
   #deviceLogsStats, #deviceLogsStats * {
-    color: #495057 !important;
+    color: var(--text-color) !important;
+    opacity: 0.8;
   }
   
   /* Dark mode overrides for Device Logs Modal */
@@ -1755,7 +1756,7 @@
     </div>
     <div style="display: flex; gap: 0.5rem;">
       <button onclick="addTextToClipboard()" class="download-btn" style="background: #28a745;">📝 Add Text</button>
-      <button onclick="clearClipboardInput()" class="download-btn" style="background: #6c757d;">🧹 Clear Input</button>
+      <button onclick="clearClipboardInput()" class="download-btn" style="background: var(--settings-bg);">🧹 Clear Input</button>
     </div>
   </div>
 
@@ -2294,11 +2295,11 @@
       
       if (deviceUploadLogs.length === 0) {
         logsContent.innerHTML = `
-          <div style="text-align: center; color: #495057 !important; padding: 2rem;">
+          <div style="text-align: center; color: var(--text-color); opacity: 0.6; padding: 2rem;">
             <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
-            <div style="font-size: 1.1rem; color: #212529 !important;">No device logs for this session yet</div>
-            <div style="font-size: 0.9rem; margin-top: 0.5rem; color: #6c757d !important;">Upload some files to see activity logs here</div>
-            <div style="font-size: 0.85rem; margin-top: 1rem; color: #6c757d !important;">
+            <div style="font-size: 1.1rem; color: var(--text-color) !important;">No device logs for this session yet</div>
+            <div style="font-size: 0.9rem; margin-top: 0.5rem; color: var(--text-color) !important; opacity: 0.7;">Upload some files to see activity logs here</div>
+            <div style="font-size: 0.85rem; margin-top: 1rem; color: var(--text-color) !important; opacity: 0.7;">
               📱 Logs are device-specific and clear when you close the browser
             </div>
           </div>
@@ -2643,7 +2644,7 @@
           </div>
           <div style="margin-left: 1rem;">
             ${detailedFiles.map((file, index) => `
-              <div style="background: var(--input-bg); padding: 0.8rem; margin: 0.4rem 0; border-radius: 4px; border-left: 3px solid #6c757d;">
+              <div style="background: var(--input-bg); padding: 0.8rem; margin: 0.4rem 0; border-radius: 4px; border-left: 3px solid var(--settings-bg);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                   <div style="font-weight: bold; color: var(--text-color);">
                     ${file.name} <span style="font-size: 0.8rem; color: var(--text-color); opacity: 0.7;">.${file.extension}</span>
@@ -2657,8 +2658,8 @@
                   <div><strong>⏱️ Time:</strong> ${file.time}</div>
                   <div><strong>🌐 Protocol:</strong> ${file.protocol}</div>
                   <div><strong>⏸️ Pauses:</strong> ${file.paused ? `<span style="color: #ffc107;">${file.pauseCount}x</span>` : '<span style="color: #28a745;">None</span>'}</div>
-                  <div><strong>📦 Chunks:</strong> ${file.chunked ? `<span style="color: #17a2b8;">${file.chunks}</span>` : '<span style="color: #6c757d;">Direct</span>'}</div>
-                  <div><strong>🔒 Encrypted:</strong> ${file.encrypted ? '<span style="color: #dc3545;">Yes</span>' : '<span style="color: #6c757d;">No</span>'}</div>
+                  <div><strong>📦 Chunks:</strong> ${file.chunked ? `<span style="color: #17a2b8;">${file.chunks}</span>` : '<span style="color: var(--text-color); opacity: 0.7;">Direct</span>'}</div>
+                  <div><strong>🔒 Encrypted:</strong> ${file.encrypted ? '<span style="color: #dc3545;">Yes</span>' : '<span style="color: var(--text-color); opacity: 0.7;">No</span>'}</div>
                 </div>
               </div>
             `).join('')}
@@ -2669,7 +2670,7 @@
   }
 
   function renderSingleUpload(log, isEven) {
-    const chunkInfo = log.chunksUsed ? `<span style="color: #0056b3 !important;">📦 ${log.chunkCount || log.chunks || 'Unknown'} chunks</span>` : '<span style="color: #495057 !important;">📄 Direct</span>';
+    const chunkInfo = log.chunksUsed ? `<span style="color: #0056b3 !important;">📦 ${log.chunkCount || log.chunks || 'Unknown'} chunks</span>` : '<span style="color: var(--text-color) !important; opacity: 0.7;">📄 Direct</span>';
     
     return `
       <div style="background: ${isEven ? 'var(--section-bg)' : 'var(--input-bg)'}; padding: 1rem; margin-bottom: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
@@ -2681,14 +2682,14 @@
           <div style="color: var(--text-color) !important; opacity: 0.7; font-size: 0.85rem;">${log.timestamp || 'Unknown Date'}</div>
         </div>
         
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; font-size: 0.9rem; color: #212529 !important;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; font-size: 0.9rem; color: var(--text-color) !important;">
           <div><strong>📊 Size:</strong> ${log.size || 'Unknown'}</div>
           <div><strong>⚡ Speed:</strong> ${log.speed || 'Unknown'}</div>
           <div><strong>⏱️ Time:</strong> ${log.time || 'Unknown'}</div>
           <div><strong>🌐 Protocol:</strong> ${log.protocol || 'Unknown'}</div>
           <div><strong>🔧 Method:</strong> ${log.method || 'Unknown'}</div>
           <div><strong>📦 Chunks:</strong> ${chunkInfo}</div>
-          ${log.encrypted ? '<div><strong>🔒 Encrypted:</strong> <span style="color: #dc3545 !important;">Yes</span></div>' : '<div><strong>🔒 Encrypted:</strong> <span style="color: #6c757d !important;">No</span></div>'}
+          ${log.encrypted ? '<div><strong>🔒 Encrypted:</strong> <span style="color: #dc3545 !important;">Yes</span></div>' : '<div><strong>🔒 Encrypted:</strong> <span style="color: var(--text-color) !important; opacity: 0.7;">No</span></div>'}
         </div>
       </div>
     `;
@@ -3288,7 +3289,7 @@ Device Session will reset when browser is closed
     clearBtn = document.createElement('button');
     clearBtn.id = 'clearCompletedBtn';
     clearBtn.className = 'upload-manager-btn';
-    clearBtn.style.background = '#6c757d';
+    clearBtn.style.background = 'var(--settings-bg)';
     clearBtn.style.marginLeft = '0.5rem';
     clearBtn.textContent = '🧹 Clear All';
     clearBtn.title = 'Clear all completed, cancelled, and failed uploads';
@@ -3944,6 +3945,9 @@ Device Session will reset when browser is closed
             // All uploads complete - DON'T auto-refresh, just show clear button
             showClearCompletedButton();
             
+            // Unblock QR generation after all chunked uploads complete
+            window._qrBlocked = false;
+            
             // 🔄 Refresh file count immediately to show new total
             setTimeout(() => {
               refreshFileCountOnly();
@@ -3952,11 +3956,15 @@ Device Session will reset when browser is closed
           
           resolve(true);
         } else {
+          // Unblock QR generation on chunked upload error
+          window._qrBlocked = false;
           reject(new Error(`Finalization failed: ${xhr.status}`));
         }
       });
       
       xhr.addEventListener('error', () => {
+        // Unblock QR generation on chunked upload network error
+        window._qrBlocked = false;
         reject(new Error('Finalization network error'));
       });
       
@@ -4932,6 +4940,9 @@ function autoUpload(files) {
 
 // 🔄 Regular upload function (original logic) - supports HTTP & HTTPS
 function uploadFilesRegular(files, isAESEnabled) {
+  // Block QR generation during uploads to prevent UI blocking
+  window._qrBlocked = true;
+  
   const formData = new FormData();
   
   // 🚀 PERFORMANCE: Calculate total size efficiently
@@ -5038,10 +5049,15 @@ function uploadFilesRegular(files, isAESEnabled) {
       // Store flag to reload page when toast is dismissed (optional)
       window._shouldReloadAfterToast = false; // Changed to false since we auto-refresh
       
+      // Unblock QR generation after successful upload
+      window._qrBlocked = false;
+      
       // End upload tracking
       endUpload();
     } else {
       showToast('❌ Upload failed • Click anywhere to dismiss', 0);
+      // Unblock QR generation after failed upload
+      window._qrBlocked = false;
       endUpload(); // End upload tracking on failure
     }
   };
@@ -5122,6 +5138,9 @@ function checkDevicePerformance() {
 
 // 📦 Optimized network-adaptive chunked upload function for large files (≥250MB) - supports HTTP & HTTPS
 async function uploadFilesChunked(files, isAESEnabled) {
+  // Block QR generation during uploads to prevent UI blocking
+  window._qrBlocked = true;
+  
   // 🔍 Device capability detection for guest device support
   const isGuestDevice = detectGuestDevice();
   const deviceMemoryMB = getDeviceMemory();
@@ -6220,6 +6239,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // 🌐 Enhanced offline QR code generator (backup method)
 function generateOfflineQR(text, canvas) {
+  // Skip computation if uploads are blocked to prevent UI blocking
+  if (window._qrBlocked) {
+    console.log('⏸️ QR computation blocked during upload');
+    return false;
+  }
+  
   // Create a simple grid-based QR code for offline use
   const ctx = canvas.getContext('2d');
   canvas.width = 200;
@@ -6388,7 +6413,12 @@ async function showConnectionInfo() {
       // Check if QR API was determined to be unavailable during preload
       if (window._qrApiUnavailable) {
         console.log('QR API unavailable, using offline generation immediately');
-        showOfflineQR();
+        // Use requestIdleCallback to prevent blocking during uploads
+        if (window.requestIdleCallback) {
+          requestIdleCallback(() => showOfflineQR());
+        } else {
+          setTimeout(showOfflineQR, 100);
+        }
         return;
       }
       
@@ -6402,7 +6432,12 @@ async function showConnectionInfo() {
       setTimeout(() => {
         if (primaryQR.style.display === 'none') {
           console.log('QR API not responding quickly, trying offline generator immediately...');
-          showOfflineQR();
+          // Use async to prevent blocking uploads
+          if (window.requestIdleCallback) {
+            requestIdleCallback(() => showOfflineQR());
+          } else {
+            setTimeout(showOfflineQR, 50);
+          }
         }
       }, 800); // Further reduced timeout
       
@@ -6417,7 +6452,11 @@ async function showConnectionInfo() {
             setTimeout(() => {
               if (fallbackQR.style.display === 'none') {
                 console.log('All external QR services failed, forcing offline...');
-                showOfflineQR();
+                if (window.requestIdleCallback) {
+                  requestIdleCallback(() => showOfflineQR());
+                } else {
+                  setTimeout(showOfflineQR, 50);
+                }
               }
             }, 800);
           }
@@ -6489,7 +6528,7 @@ async function showConnectionInfo() {
         <h4 style="margin: 0 0 0.5rem 0; color: var(--text-color); opacity: 0.8; font-size: 0.9rem;">📱 Alternative IP Connection:</h4>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.8rem;">
           <code id="alternative-url" style="flex: 1; background: var(--section-bg); color: var(--text-color); padding: 0.4rem; border-radius: 5px; border: 1px solid var(--border-color); font-size: 0.8rem; word-break: break-all; min-width: 200px;">${lanIpUrl || 'http://192.168.x.x'}</code>
-          <button onclick="copyAlternativeUrl()" style="background: #6c757d; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 5px; cursor: pointer; font-size: 0.8rem; white-space: nowrap;" title="Copy IP URL to clipboard">📋 Copy</button>
+          <button onclick="copyAlternativeUrl()" style="background: var(--settings-bg); color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 5px; cursor: pointer; font-size: 0.8rem; white-space: nowrap;" title="Copy IP URL to clipboard">📋 Copy</button>
         </div>
         
         <!-- IP QR Code Section -->
@@ -6706,7 +6745,7 @@ function showIPQRCode() {
     </p>
     <div style="margin-top: 1.5rem;">
       <button onclick="this.closest('.qr-modal').remove()" 
-              style="background: #6c757d; color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 8px; cursor: pointer; font-size: 0.9rem;">
+              style="background: var(--settings-bg); color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 8px; cursor: pointer; font-size: 0.9rem;">
         Close
       </button>
     </div>
@@ -6874,6 +6913,13 @@ function tryFallbackQR() {
 }
 
 function showOfflineQR() {
+  // Skip QR generation if uploads are in progress to prevent UI blocking
+  if (window._qrBlocked) {
+    console.log('⏸️ QR generation blocked during upload - will retry later');
+    setTimeout(() => showOfflineQR(), 1000); // Retry in 1 second
+    return;
+  }
+  
   console.log('⚠️ Using offline QR generator...');
   
   // Hide loading and failed images
@@ -7429,7 +7475,7 @@ function showImagePreview(imageSrc, filename) {
           <h4 style="margin: 0; color: #333; font-size: 1.1rem;">${filename}</h4>
           <div style="display: flex; gap: 0.5rem; align-items: center;">
             <button class="zoom-btn" onclick="event.stopPropagation(); zoomImage(0.8)" style="
-              background: #6c757d;
+              background: var(--settings-bg);
               color: white;
               border: none;
               padding: 0.4rem 0.8rem;
@@ -7439,7 +7485,7 @@ function showImagePreview(imageSrc, filename) {
             " title="Zoom Out">🔍−</button>
             <span id="zoomLevel" style="color: #666; font-size: 0.9rem; min-width: 50px; text-align: center;">100%</span>
             <button class="zoom-btn" onclick="event.stopPropagation(); zoomImage(1.25)" style="
-              background: #6c757d;
+              background: var(--settings-bg);
               color: white;
               border: none;
               padding: 0.4rem 0.8rem;
@@ -8770,13 +8816,13 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
         <button onclick="downloadDeviceLogs()" id="downloadLogsBtn" style="background: #28a745; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
           📄 Download Logs
         </button>
-        <button onclick="clearDeviceLogs()" id="clearLogsBtn" style="background: #6c757d; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
+        <button onclick="clearDeviceLogs()" id="clearLogsBtn" style="background: var(--settings-bg); color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
           🧹 Clear Logs
         </button>
       </div>
     </div>
     
-    <div id="deviceLogsStats" style="background: #e9ecef; padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; color: #495057;">
+    <div id="deviceLogsStats" style="background: var(--input-bg); padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; color: var(--text-color); border: 1px solid var(--border-color);">
       <!-- Logs stats will be populated here -->
     </div>
     
@@ -8893,7 +8939,7 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
             📝 Add Text
           </button>
           <button onclick="clearClipboardInput()" style="
-            background: #6c757d;
+            background: var(--settings-bg);
             color: white;
             border: none;
             padding: 0.5rem 1rem;
