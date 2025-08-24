@@ -1540,16 +1540,6 @@
           <span class="slider"></span>
         </label>
       </div>
-      
-      <!-- HTTP-Safe AES Toggle (only shown when AES is enabled) -->
-      <div id="httpSafeToggle" class="toggle-container" style="display: none; align-items: center; background-color: var(--toggle-bg); padding: 0.5rem 0.8rem; border-radius: 25px; gap: 0.6rem; transition: all 0.3s ease; border-left: 3px solid #4CAF50;">
-        <span style="font-size: 0.9rem; color: var(--toggle-text); transition: color 0.3s ease;"><b>🛡️ HTTP-Safe Mode</b></span>
-        <label class="toggle-switch">
-          <input type="checkbox" id="enableHttpSafe">
-          <span class="slider"></span>
-        </label>
-        <span style="font-size: 0.75rem; color: var(--toggle-text); opacity: 0.8;">Metadata Protection</span>
-      </div>
     </div>
   </div>
   
@@ -4787,12 +4777,10 @@ Device Session will reset when browser is closed
         isEncryptionEnabled = this.checked;
         console.log('🔐 Encryption toggled:', isEncryptionEnabled);
         
-        // Show warning if AES is enabled over HTTP without HTTP-Safe mode
+        // 🛡️ HTTP-Safe mode is now automatic for HTTP connections
         if (location.protocol === 'http:' && this.checked) {
-          const httpSafeToggle = document.getElementById('enableHttpSafe');
-          if (!httpSafeToggle || !httpSafeToggle.checked) {
-            showToast('⚠️ Enable HTTP-Safe Mode for complete security when using AES over HTTP!', 6000);
-          }
+          console.log('🛡️ HTTP-Safe mode automatically enabled for HTTP connection');
+          showToast('🛡️ HTTP-Safe mode automatically enabled for secure encryption!', 4000);
         }
       });
     }
@@ -5088,11 +5076,10 @@ function autoUpload(files) {
   // Size limit check removed - AES now supports multi-gigabyte files
   console.log('🔒 AES enabled - streaming encryption supports any file size');
 
-  // 🚫 Block AES on HTTP (re-enabled for testing)
+  // �️ HTTP-Safe AES: Allow AES over HTTP with metadata protection
   if (isAESEnabled && !isHTTPS) {
-    console.log('❌ AES blocked on HTTP');
-    showToast("❌ AES encryption is only available over HTTPS connections for security.", 5000);
-    return;
+    console.log('🛡️ AES over HTTP - HTTP-Safe mode provides security');
+    // No longer block AES over HTTP - HTTP-Safe mode handles security
   }
 
   // 📝 Log current upload queue state before adding new files
@@ -5128,9 +5115,16 @@ function autoUpload(files) {
 
 // �️ HTTP-Safe AES Functions
 function isHttpSafeEnabled() {
-  const httpSafeToggle = document.getElementById('enableHttpSafe');
   const aesToggle = document.getElementById('enableEncryption');
-  return httpSafeToggle && httpSafeToggle.checked && aesToggle && aesToggle.checked;
+  const isHTTP = location.protocol === 'http:';
+  
+  // Always enable HTTP-Safe mode when AES is used over HTTP
+  if (isHTTP && aesToggle && aesToggle.checked) {
+    return true;
+  }
+  
+  // For HTTPS, HTTP-Safe mode is optional but still beneficial
+  return aesToggle && aesToggle.checked;
 }
 
 async function encryptFileHttpSafe(file) {
@@ -9638,62 +9632,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // Save state on change (for both HTTP and HTTPS)
   aesToggle.addEventListener('change', () => {
     localStorage.setItem('aes_enabled', aesToggle.checked ? '1' : '0');
-    // Show/hide HTTP-Safe toggle based on AES state
-    updateHttpSafeToggleVisibility();
-    // Show HTTP warning if needed
-    updateHttpSecurityWarning();
+    
+    // 🛡️ HTTP-Safe mode is now automatic - no toggle needed
+    if (isHTTP && aesToggle.checked) {
+      console.log('🛡️ HTTP-Safe mode automatically enabled for HTTP connection');
+      showToast('🛡️ HTTP-Safe mode automatically enabled for secure encryption!', 4000);
+    }
   });
 
-  // 🛡️ HTTP-Safe AES Toggle Functionality
-  const httpSafeToggle = document.getElementById('enableHttpSafe');
-  const httpSafeContainer = document.getElementById('httpSafeToggle');
-  
-  if (httpSafeToggle && httpSafeContainer) {
-    // Load saved HTTP-Safe preference
-    const savedHttpSafe = localStorage.getItem('http_safe_enabled');
-    if (savedHttpSafe !== null) {
-      httpSafeToggle.checked = savedHttpSafe === '1';
-    }
-    
-    // Save state on change
-    httpSafeToggle.addEventListener('change', () => {
-      localStorage.setItem('http_safe_enabled', httpSafeToggle.checked ? '1' : '0');
-      updateHttpSafeStatus();
-    });
-    
-    // Initial visibility update
-    updateHttpSafeToggleVisibility();
-    updateHttpSafeStatus();
-  }
-
-  function updateHttpSafeToggleVisibility() {
-    if (httpSafeContainer) {
-      if (aesToggle.checked && !aesToggle.disabled) {
-        httpSafeContainer.style.display = 'flex';
-      } else {
-        httpSafeContainer.style.display = 'none';
-      }
-    }
-  }
-
-  function updateHttpSafeStatus() {
-    // Update UI indicators when HTTP-Safe mode changes
-    if (httpSafeToggle && httpSafeToggle.checked) {
-      console.log('🛡️ HTTP-Safe AES enabled - Metadata protection active');
-    }
-    // Update HTTP security warning
-    updateHttpSecurityWarning();
-  }
+  // 🛡️ HTTP-Safe mode is now automatic - no toggle management needed
 
   function updateHttpSecurityWarning() {
-    const isHTTP = location.protocol === 'http:';
-    const isAESEnabled = aesToggle.checked;
-    const isHttpSafeEnabled = httpSafeToggle && httpSafeToggle.checked;
-    
-    // Show warning if AES is enabled over HTTP without HTTP-Safe mode
-    if (isHTTP && isAESEnabled && !isHttpSafeEnabled) {
-      showToast('⚠️ AES over HTTP detected! Enable HTTP-Safe Mode for complete security protection.', 8000);
-    }
+    // HTTP-Safe mode is automatic when AES is enabled over HTTP
+    console.log('🛡️ HTTP-Safe mode: automatic when AES enabled over HTTP');
   }
 
   // 🌙 Dark Mode Toggle Functionality
