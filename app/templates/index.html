@@ -1178,7 +1178,12 @@
     animation: qr-fade-in 0.5s ease-in-out;
   }
   
-  /* Device Logs Modal Text Override */
+  /* Device Logs Modal Text Override - Theme Aware */
+  #deviceLogsModal {
+    color: #212529;
+  }
+  
+  /* Light mode styles (default) */
   #deviceLogsModal * {
     color: #212529 !important;
   }
@@ -1195,7 +1200,7 @@
     color: #333 !important;
   }
   
-  /* Force device logs content text color */
+  /* Force device logs content text color for light mode */
   #deviceLogsContent, #deviceLogsContent * {
     color: #212529 !important;
   }
@@ -1206,6 +1211,47 @@
   
   #deviceLogsStats, #deviceLogsStats * {
     color: #495057 !important;
+  }
+  
+  /* Dark mode overrides for Device Logs Modal */
+  [data-theme="dark"] #deviceLogsModal * {
+    color: #e0e0e0 !important;
+  }
+  
+  [data-theme="dark"] #deviceLogsModal button {
+    color: white !important;
+  }
+  
+  [data-theme="dark"] #deviceLogsModal .pagination-button {
+    color: #e0e0e0 !important;
+    background-color: var(--section-bg) !important;
+  }
+  
+  [data-theme="dark"] #deviceLogsModal h3, 
+  [data-theme="dark"] #deviceLogsModal h4 {
+    color: #e0e0e0 !important;
+  }
+  
+  /* Force device logs content text color for dark mode */
+  [data-theme="dark"] #deviceLogsContent, 
+  [data-theme="dark"] #deviceLogsContent * {
+    color: #e0e0e0 !important;
+  }
+  
+  [data-theme="dark"] #deviceLogsContent div, 
+  [data-theme="dark"] #deviceLogsContent span {
+    color: #e0e0e0 !important;
+  }
+  
+  [data-theme="dark"] #deviceLogsStats, 
+  [data-theme="dark"] #deviceLogsStats * {
+    color: #ccc !important;
+  }
+  
+  /* Modal background for dark mode */
+  [data-theme="dark"] #deviceLogsModal > div {
+    background: var(--section-bg) !important;
+    color: var(--text-color) !important;
   }
   
   @keyframes qr-fade-in {
@@ -1387,7 +1433,7 @@
   <!-- Upload Manager (Always Visible) -->
   <div id="uploadManager" style="margin-top: 2rem; border-top: 2px solid #e0e0e0; padding-top: 1.5rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-      <h3 style="margin: 0; color: var(--text-color);">🚀 Active Uploads <span id="uploadCount" style="color: #666; font-size: 0.9rem;">(0)</span></h3>
+      <h3 style="margin: 0; color: var(--text-color);">🚀 Active Uploads <span id="uploadCount" style="color: var(--text-color); font-size: 0.9rem;">(0)</span></h3>
       <div style="display: flex; gap: 0.5rem;">
         <button onclick="cancelAllUploads()" class="upload-manager-btn" style="background: #dc3545;">❌ Cancel All</button>
       </div>
@@ -1406,7 +1452,7 @@
   <div style="display: flex; justify-content: space-between; align-items: center;">
     <div>
       <h2 style="color: var(--text-color);">Available Files</h2>
-      <span id="fileCount" class="file-count" style="color: #666; font-size: 0.9em; margin-left: 0.5rem;"></span>
+      <span id="fileCount" class="file-count" style="color: var(--text-color); font-size: 0.9em; margin-left: 0.5rem;"></span>
     </div>
     <div style="display: flex; gap: 0.5rem;">
       <button onclick="refreshFileListManually()" class="download-btn" style="background-color: #17a2b8; margin-right: 0.5rem;" title="Refresh file list">🔄 Refresh</button>
@@ -1461,9 +1507,9 @@
   <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin: 1.5rem 0;">
     <h4 style="margin: 0 0 1rem 0; color: var(--text-color);">Add to Clipboard</h4>
     <div style="margin-bottom: 1rem;">
-      <label style="display: block; margin-bottom: 0.5rem; font-weight: bold; color: #555;">Paste Text/Content:</label>
+      <label style="display: block; margin-bottom: 0.5rem; font-weight: bold; color: var(--text-color);">Paste Text/Content:</label>
       <textarea id="clipboardTextInput" placeholder="Type or paste text content here..." style="width: 100%; height: 100px; padding: 0.5rem; border: 2px dashed #ddd; border-radius: 6px; resize: vertical; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap; word-wrap: break-word;" onpaste="handleClipboardPaste(event)"></textarea>
-      <small style="color: #666; font-size: 0.8rem;">💡 Supports: Text content and images (paste images directly with Ctrl+V)</small>
+      <small style="color: var(--text-color); font-size: 0.8rem;">💡 Supports: Text content and images (paste images directly with Ctrl+V)</small>
     </div>
     <div style="display: flex; gap: 0.5rem;">
       <button onclick="addTextToClipboard()" class="download-btn" style="background: #28a745;">📝 Add Text</button>
@@ -1482,7 +1528,7 @@
       </div>
     </div>
     <div id="clipboardHistoryContent" style="max-height: 300px; overflow-y: auto; background: #f9f9f9; padding: 1rem; border-radius: 8px; border: 1px solid #e0e0e0;">
-      <div style="text-align: center; color: #666; padding: 2rem;">
+      <div style="text-align: center; color: var(--text-color); padding: 2rem;">
         <div style="font-size: 3rem; margin-bottom: 1rem;">📋</div>
         <div>No clipboard items yet</div>
         <div style="font-size: 0.9rem; margin-top: 0.5rem;">Add content above to get started</div>
@@ -8367,7 +8413,8 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
   box-sizing: border-box;
 ">
   <div style="
-    background: white;
+    background: var(--section-bg);
+    color: var(--text-color);
     border-radius: 15px;
     padding: 2rem;
     max-width: 900px;
@@ -8379,7 +8426,7 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
     margin-top: 2vh;
   ">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-      <h3 style="margin: 0; color: #333; font-size: 1.3rem;">📊 Device Logs</h3>
+      <h3 style="margin: 0; color: var(--text-color); font-size: 1.3rem;">📊 Device Logs</h3>
       <button onclick="closeDeviceLogsModal()" style="
         background: #e74c3c;
         color: white;
@@ -8394,7 +8441,7 @@ async function downloadFileChunked(fileUrl, fileName, fileSize, fileSizeMB, requ
     </div>
     
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-      <h4 style="margin: 0; color: #333; font-size: 1.1rem;">📱 This Device Session Only</h4>
+      <h4 style="margin: 0; color: var(--text-color); font-size: 1.1rem;">📱 This Device Session Only</h4>
       <div style="display: flex; gap: 0.5rem;">
         <button onclick="downloadDeviceLogs()" id="downloadLogsBtn" style="background: #28a745; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
           📄 Download Logs
