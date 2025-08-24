@@ -1882,6 +1882,33 @@
     let uploadIdCounter = 0;
     let isUploadManagerVisible = false;
     
+    // 🔄 Progress Update Safety Net - Ensure active uploads never get stuck
+    let progressUpdateInterval = null;
+    
+    function startProgressUpdateSafetyNet() {
+      if (progressUpdateInterval) return; // Already running
+      
+      progressUpdateInterval = setInterval(() => {
+        const activeUploads = uploadQueue.filter(item => 
+          item.status === 'uploading' && item.progress < 100
+        );
+        
+        // Force update active uploads that might be stuck due to processing delays
+        activeUploads.forEach(uploadItem => {
+          if (uploadItem.lastProgressUpdate && (Date.now() - uploadItem.lastProgressUpdate) > 2000) {
+            console.log(`🔄 Safety net: Forcing progress update for ${uploadItem.fileName}`);
+            updateUploadItem(uploadItem);
+          }
+        });
+        
+        // Stop the safety net if no active uploads
+        if (activeUploads.length === 0) {
+          clearInterval(progressUpdateInterval);
+          progressUpdateInterval = null;
+        }
+      }, 1000); // Check every second
+    }
+    
     // 🔒 AES Configuration (matches backend)
     const AES_CONFIG = {
       MAX_FILE_SIZE_MB: 200,
@@ -3078,17 +3105,26 @@ Device Session will reset when browser is closed
       uploadItem.progress === 100;
     
     // Use requestIdleCallback for non-critical updates to prevent blocking
-    if (!isImportantUpdate && (now - lastUpdate) < UI_UPDATE_THROTTLE) {
+    // But NEVER throttle progress updates for actively uploading files
+    const isActiveUpload = uploadItem.status === 'uploading' && uploadItem.progress < 100;
+    if (!isImportantUpdate && !isActiveUpload && (now - lastUpdate) < UI_UPDATE_THROTTLE) {
       return; // Skip this update to prevent flickering
     }
     
-    // For processing updates, use async to prevent blocking other operations
+    // For processing updates, only defer the status text update, not progress bar updates
     if (uploadItem.status === 'processing') {
       console.log(`⚙️ Processing update for ${uploadItem.fileName}`);
+      // Only defer status updates for processing files, allow progress updates to flow normally
       if (window.requestIdleCallback) {
-        requestIdleCallback(() => performUIUpdate(uploadItem));
-        return;
+        requestIdleCallback(() => {
+          // Only update status-related elements, not progress
+          const statusText = document.getElementById(`status-${uploadItem.id}`);
+          if (statusText && statusText.textContent !== '⚙️ Processing...') {
+            statusText.textContent = '⚙️ Processing...';
+          }
+        });
       }
+      // Continue to immediate UI update for progress and other elements
     }
     
     performUIUpdate(uploadItem);
@@ -3492,6 +3528,10 @@ Device Session will reset when browser is closed
         const remaining = speed > 0 ? (e.total - e.loaded) / speed : 0;
 
         uploadItem.progress = progress;
+        uploadItem.lastProgressUpdate = Date.now(); // Track for safety net
+        
+        // Start safety net for active uploads
+        startProgressUpdateSafetyNet();
         uploadItem.uploadedBytes = e.loaded;
         uploadItem.speed = speed;
         uploadItem.timeRemaining = remaining;
@@ -3832,7 +3872,11 @@ Device Session will reset when browser is closed
         // Update progress based on chunks uploaded with accurate speed calculation
         const progress = ((chunkIndex + 1) / totalChunks) * 100;
         uploadItem.progress = progress;
+        uploadItem.lastProgressUpdate = Date.now(); // Track for safety net
         uploadItem.uploadedBytes = Math.min(end, file.size);
+        
+        // Start safety net for active uploads
+        startProgressUpdateSafetyNet();
         
         // 📊 Calculate speed for chunked uploads using adjusted timing
         const effectiveStartTime = uploadItem.resumeAdjustedStartTime || uploadItem.startTime;
