@@ -344,9 +344,9 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
     
     # 🎯 Universal adaptive chunk sizing optimized for each platform
     CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(file_size)
-    print(f"🎯 {platform_name} detected - using adaptive chunk size: {CHUNK_SIZE//1024}KB")
+    print(f"🎯 {platform_name} - chunk size: {CHUNK_SIZE//1024}KB")
     
-    print(f"🔄 ASYNC Streaming upload: {destination.name} ({file_size:,} bytes)")
+    print(f"🔄 ASYNC Upload: {destination.name} ({file_size:,} bytes)")
     
     if encrypt:
         # 🔒 For now, fall back to original method for encrypted files
@@ -406,15 +406,15 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                     await asyncio.sleep(0.001)
                     
                     # Progress for large files (reduce spam)
-                    if bytes_written > 10 * 1024 * 1024 and bytes_written % (5 * 1024 * 1024) == 0:
-                        print(f"📦 Async Progress: {bytes_written // 1024 // 1024}MB written")
+                    if bytes_written > 10 * 1024 * 1024 and bytes_written % (20 * 1024 * 1024) == 0:
+                        print(f"📦 Progress: {bytes_written // 1024 // 1024}MB")
                         
                         # Android memory management during large uploads
                         if is_android and should_run_gc(bytes_written, CHUNK_SIZE):
                             gc.collect()
                             await asyncio.sleep(0.01)  # Brief pause for GC
                 
-                print(f"✅ ASYNC Upload completed: {destination.name} ({bytes_written:,} bytes)")
+                print(f"✅ Upload completed: {destination.name} ({bytes_written:,} bytes)")
                 
         except Exception as e:
             print(f"❌ ASYNC Upload error: {e}")
@@ -424,7 +424,7 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
             if hasattr(universal_optimizer, 'upload_active'):
                 universal_optimizer.upload_active = False
             universal_optimizer.memory_cleanup(force=True)
-            print(f"🔄 Universal async optimizer cleanup completed")
+            print(f"🔄 Universal async cleanup completed")
 
 async def scan_file_async(path: Path):
     """

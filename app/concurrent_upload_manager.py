@@ -99,11 +99,12 @@ class ConcurrentUploadManager:
             }
         
         try:
-            # 📊 Get file size for optimization - FIX: Use UploadFile size property
+            # 📊 Get file size for optimization - FIXED: Use async operations
             try:
-                upload_file.file.seek(0, 2)
-                file_size = upload_file.file.tell()
-                upload_file.file.seek(0)
+                import asyncio
+                await asyncio.to_thread(upload_file.file.seek, 0, 2)
+                file_size = await asyncio.to_thread(upload_file.file.tell)
+                await asyncio.to_thread(upload_file.file.seek, 0)
             except:
                 # Fallback: try to get size from UploadFile.size if seek fails
                 file_size = getattr(upload_file, 'size', 0)
@@ -132,30 +133,40 @@ class ConcurrentUploadManager:
                 universal_optimizer.optimize_for_upload(file_size)
             
             # 📝 Process file with streaming - Enhanced with NEW async function option
-            print(f"🔍 [{upload_id}] About to start streaming upload...")
+            print(f"🔍 [{upload_id}] Starting upload...")
             
             # 🚀 NEW: Option to use optimized async function from routes.py
-            USE_NEW_ASYNC_FUNCTION = True  # Toggle for performance testing
+            USE_NEW_ASYNC_FUNCTION = False  # Temporarily disabled - need to fix return format
             
             if USE_NEW_ASYNC_FUNCTION:
                 # Use the new optimized async function that fixes synchronous bottlenecks
                 try:
                     from .routes import save_upload_file_async
-                    print(f"🚀 [{upload_id}] Using NEW optimized async upload function...")
+                    print(f"🚀 [{upload_id}] Using optimized async upload...")
                     
                     # Call the new async function
                     await save_upload_file_async(upload_file, destination, encrypt)
                     
-                    # Create result dictionary for compatibility
+                    # Create result dictionary matching original format
                     final_size = destination.stat().st_size
+                    
+                    # Calculate hash of uploaded file for verification
+                    import hashlib
+                    hash_calculator = hashlib.sha256()
+                    with open(destination, 'rb') as f:
+                        while chunk := f.read(8192):
+                            hash_calculator.update(chunk)
+                    
                     result = {
-                        'bytes_written': final_size,
-                        'destination': str(destination),
-                        'hash': 'computed_by_async_function'  # Hash is computed inside the function
+                        'success': True,
+                        'filename': upload_file.filename,
+                        'size': final_size,
+                        'hash': hash_calculator.hexdigest(),
+                        'destination': str(destination)
                     }
                     
                 except Exception as e:
-                    print(f"⚠️ [{upload_id}] New async function failed, falling back to original: {e}")
+                    print(f"⚠️ [{upload_id}] New function failed, using original: {e}")
                     # Fall back to original method
                     result = await self._stream_upload_async(
                         upload_file, destination, encrypt, chunk_size, upload_id
@@ -249,7 +260,7 @@ class ConcurrentUploadManager:
                     chunk = await upload_file.read(chunk_size)
                     
                     if not chunk:
-                        print(f"🏁 [{upload_id}] Finished reading after {chunk_count} chunks, {total_written:,} bytes")
+                        print(f"✅ [{upload_id}] Upload completed: {total_written:,} bytes")
                         break
                     
                     chunk_count += 1
@@ -265,9 +276,9 @@ class ConcurrentUploadManager:
                     total_written += len(chunk)
                     hash_calculator.update(chunk)
                     
-                    # Progress logging for large files
-                    if chunk_count % 32 == 0:  # More frequent logging
-                        print(f"📊 [{upload_id}] Progress: {chunk_count} chunks, {total_written//1024//1024}MB written")
+                    # Progress logging for large files - MINIMAL SPAM
+                    if chunk_count % 200 == 0:  # Much less frequent logging
+                        print(f"📊 [{upload_id}] {total_written//1024//1024}MB")
                     
                     # 🧹 Adaptive memory management
                     if universal_optimizer.should_run_gc(total_written, chunk_size):
