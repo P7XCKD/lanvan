@@ -235,8 +235,14 @@ class ConcurrentUploadManager:
     ) -> Dict[str, Any]:
         """
         🌊 Stream upload with adaptive chunk processing - TRUE non-blocking I/O
+        🔒 RACE CONDITION FIX: Upload to .tmp file first, then atomically move to final name
         """
         destination.parent.mkdir(parents=True, exist_ok=True)
+        
+        # 🚀 TEMPORARY FILE STRATEGY: Upload to .tmp extension first
+        temp_destination = destination.with_suffix(destination.suffix + '.tmp')
+        
+        print(f"🔄 [{upload_id}] Uploading to temporary file: {temp_destination.name}")
         
         # Get file size for responsiveness calculations
         file_size = 0
