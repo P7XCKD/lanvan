@@ -615,82 +615,94 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
     
     def stream_file_ultra_optimized(path: Path):
         print(f"🔄 Streaming file: {path}")
+        file_handle = None  # Track file handle for proper cleanup
         
-        if path.suffix == ".enc":
-            print("🔐 Processing encrypted file")
-            # 🔐 Enhanced .enc file handling with streaming decryption and metadata validation
-            try:
-                # Check for metadata file first
-                metadata_path = path.with_suffix('.enc.meta')
-                metadata = None
-                
-                if metadata_path.exists():
-                    with open(metadata_path, "r") as meta_file:
-                        import json
-                        metadata = json.load(meta_file)
-                        print(f"🔒 Found metadata for encrypted file: {metadata.get('encryption_method', 'legacy')}")
-                
-                with open(path, "rb") as file:
-                    encrypted_data = file.read()
-                    print(f"📊 Read {len(encrypted_data)} bytes of encrypted data")
+        try:
+            if path.suffix == ".enc":
+                print("🔐 Processing encrypted file")
+                # 🔐 Enhanced .enc file handling with streaming decryption and metadata validation
+                try:
+                    # Check for metadata file first
+                    metadata_path = path.with_suffix('.enc.meta')
+                    metadata = None
                     
-                    # Use appropriate decryption method based on metadata
-                    if metadata and metadata.get('encryption_method') == 'streaming':
-                        from .aes_utils import decrypt_file_stream
-                        decrypted_data = decrypt_file_stream(encrypted_data, metadata, chunk_size=1024 * 1024)
-                        print(f"🔒 Used streaming decryption for {path.name}")
-                    else:
-                        # Note: Legacy encryption not supported - file may be corrupted
-                        print(f"⚠️ Cannot decrypt {path.name} - legacy encryption no longer supported")
-                        return Response(
-                            content=f"Error: File {path.name} uses unsupported legacy encryption",
-                            status_code=400
-                        )
+                    if metadata_path.exists():
+                        with open(metadata_path, "r") as meta_file:
+                            import json
+                            metadata = json.load(meta_file)
+                            print(f"🔒 Found metadata for encrypted file: {metadata.get('encryption_method', 'legacy')}")
                     
-                    print(f"OK: Decrypted to {len(decrypted_data)} bytes")
-                    
-                    # Validate integrity if metadata available
-                    if metadata and 'original_hash' in metadata:
-                        import hashlib
-                        actual_hash = hashlib.sha256(decrypted_data).hexdigest()
-                        expected_hash = metadata['original_hash']
-                        if actual_hash != expected_hash:
-                            raise Exception(f"File integrity check failed! Expected: {expected_hash}, Got: {actual_hash}")
-                        print(f"OK: File integrity validated successfully")
-                    
-                    # 🚀 Stream in very large chunks for maximum speed
-                    data_length = len(decrypted_data)
-                    chunks_sent = 0
-                    for i in range(0, data_length, STREAM_BUFFER_SIZE):
-                        chunk_end = min(i + STREAM_BUFFER_SIZE, data_length)
-                        chunk = decrypted_data[i:chunk_end]
-                        chunks_sent += 1
-                        print(f"📤 Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
-                        yield chunk
+                    with open(path, "rb") as file:
+                        encrypted_data = file.read()
+                        print(f"📊 Read {len(encrypted_data)} bytes of encrypted data")
                         
-            except Exception as e:
-                print(f"🚨 AES decryption failed for {path}: {e}")
-                # Return error content instead of crashing
-                error_message = f"Error: Failed to decrypt file {path.name}. {str(e)}"
-                yield error_message.encode('utf-8')
-        else:
-            print("📄 Processing regular file")
-            # 🚀 Ultra-fast regular file streaming with optimized buffer
-            try:
-                with open(path, "rb") as file:
+                        # Use appropriate decryption method based on metadata
+                        if metadata and metadata.get('encryption_method') == 'streaming':
+                            from .aes_utils import decrypt_file_stream
+                            decrypted_data = decrypt_file_stream(encrypted_data, metadata, chunk_size=1024 * 1024)
+                            print(f"🔒 Used streaming decryption for {path.name}")
+                        else:
+                            # Note: Legacy encryption not supported - file may be corrupted
+                            print(f"⚠️ Cannot decrypt {path.name} - legacy encryption no longer supported")
+                            yield f"Error: File {path.name} uses unsupported legacy encryption".encode('utf-8')
+                            return
+                        
+                        print(f"OK: Decrypted to {len(decrypted_data)} bytes")
+                        
+                        # Validate integrity if metadata available
+                        if metadata and 'original_hash' in metadata:
+                            import hashlib
+                            actual_hash = hashlib.sha256(decrypted_data).hexdigest()
+                            expected_hash = metadata['original_hash']
+                            if actual_hash != expected_hash:
+                                raise Exception(f"File integrity check failed! Expected: {expected_hash}, Got: {actual_hash}")
+                            print(f"OK: File integrity validated successfully")
+                        
+                        # 🚀 Stream in very large chunks for maximum speed
+                        data_length = len(decrypted_data)
+                        chunks_sent = 0
+                        for i in range(0, data_length, STREAM_BUFFER_SIZE):
+                            chunk_end = min(i + STREAM_BUFFER_SIZE, data_length)
+                            chunk = decrypted_data[i:chunk_end]
+                            chunks_sent += 1
+                            print(f"📤 Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
+                            yield chunk
+                            
+                except Exception as e:
+                    print(f"🚨 AES decryption failed for {path}: {e}")
+                    # Return error content instead of crashing
+                    error_message = f"Error: Failed to decrypt file {path.name}. {str(e)}"
+                    yield error_message.encode('utf-8')
+            else:
+                print("📄 Processing regular file")
+                # 🚀 Ultra-fast regular file streaming with optimized buffer and proper cleanup
+                try:
+                    file_handle = open(path, "rb")
                     chunks_sent = 0
                     while True:
-                        chunk = file.read(STREAM_BUFFER_SIZE)
+                        chunk = file_handle.read(STREAM_BUFFER_SIZE)
                         if not chunk:
                             break
                         chunks_sent += 1
                         print(f"📤 Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
                         yield chunk
-                print(f"OK: Completed streaming {chunks_sent} chunks")
-            except Exception as e:
-                print(f"🚨 File streaming failed for {path}: {e}")
-                error_message = f"Error: Failed to read file {path.name}. {str(e)}"
-                yield error_message.encode('utf-8')
+                    print(f"OK: Completed streaming {chunks_sent} chunks")
+                except Exception as e:
+                    print(f"🚨 File streaming failed for {path}: {e}")
+                    error_message = f"Error: Failed to read file {path.name}. {str(e)}"
+                    yield error_message.encode('utf-8')
+        finally:
+            # Ensure file handle is always closed
+            if file_handle is not None:
+                try:
+                    file_handle.close()
+                    print(f"✅ File handle closed for: {path.name}")
+                except Exception as e:
+                    print(f"⚠️ Error closing file handle: {e}")
+            
+            # Force garbage collection to release any remaining handles
+            import gc
+            gc.collect()
 
     # For encrypted files, we need to adjust the Content-Length after decryption
     final_file_size = file_size
@@ -856,68 +868,65 @@ async def download_all_files():
 @router.post("/clear", name="clear_files")
 async def clear_files():
     """Clear all uploaded files and temporary chunks with enhanced Windows compatibility"""
-    import gc
+    from .windows_file_manager import WindowsFileManager
     
     try:
-        files_deleted = 0
-        chunks_deleted = 0
-        files_locked = 0
+        print("🧹 Starting enhanced file cleanup with Windows diagnostics...")
         
-        # Force garbage collection to release any file handles
-        gc.collect()
+        # Use enhanced cleanup with diagnostics
+        results = await WindowsFileManager.enhanced_cleanup_with_diagnostics(
+            upload_folder=UPLOAD_FOLDER,
+            temp_folder=TEMP_CHUNKS_FOLDER
+        )
         
-        # Clear main upload files with retry mechanism for Windows
-        for file in UPLOAD_FOLDER.iterdir():
-            if file.is_file():
-                deleted = False
-                for attempt in range(3):  # Try 3 times
-                    try:
-                        file.unlink()
-                        files_deleted += 1
-                        deleted = True
-                        break
-                    except PermissionError as e:
-                        if attempt < 2:  # Not the last attempt
-                            print(f"🔄 File locked (attempt {attempt + 1}/3): {file.name}")
-                            time.sleep(0.5)  # Wait 500ms before retry
-                            gc.collect()  # Try to release handles
-                        else:
-                            files_locked += 1
-                            print(f"🔒 File still in use after 3 attempts: {file.name} - {e}")
-                    except Exception as e:
-                        print(f"❌ Error deleting file {file}: {e}")
-                        break
+        files_deleted = results['files_deleted']
+        chunks_deleted = results['chunks_deleted']
+        files_locked = results['files_locked']
+        locked_files = results['locked_files']
+        processes_using_files = results['processes_using_files']
         
-        # Clear temporary chunks
-        if TEMP_CHUNKS_FOLDER.exists():
-            for chunk_file in TEMP_CHUNKS_FOLDER.iterdir():
-                if chunk_file.is_file():
-                    try:
-                        chunk_file.unlink()
-                        chunks_deleted += 1
-                    except Exception as e:
-                        print(f"Error deleting chunk {chunk_file}: {e}")
-        
-        # Enhanced status message
+        # Create detailed response
         if files_locked > 0:
-            print(f"WARNING: Cleared {files_deleted} files and {chunks_deleted} chunks ({files_locked} files still in use)")
+            # Provide helpful information about locked files
+            lock_details = []
+            for locked_file in locked_files:
+                detail = f"📄 {locked_file}"
+                # Find processes using this file
+                file_processes = [p for p in processes_using_files if locked_file in p.get('file_path', '')]
+                if file_processes:
+                    process_names = [p['name'] for p in file_processes]
+                    detail += f" (used by: {', '.join(set(process_names))})"
+                else:
+                    detail += " (likely being downloaded/streamed)"
+                lock_details.append(detail)
+            
+            message = f"Cleared {files_deleted} files and {chunks_deleted} chunks. {files_locked} files still in use:"
+            full_message = message + "\n" + "\n".join(lock_details)
+            
+            print(f"WARNING: {message}")
+            for detail in lock_details:
+                print(f"  {detail}")
+            
             return JSONResponse(content={
                 "status": "warning",
-                "msg": f"Cleared {files_deleted} files and {chunks_deleted} chunks ({files_locked} files still in use)",
+                "msg": message,
                 "files_deleted": files_deleted,
                 "chunks_deleted": chunks_deleted,
-                "files_locked": files_locked
+                "files_locked": files_locked,
+                "locked_files": locked_files,
+                "lock_details": lock_details,
+                "tip": "Files that are being downloaded or streamed cannot be deleted until the download completes."
             })
         else:
-            print(f"OK: Cleared {files_deleted} files and {chunks_deleted} chunks")
+            message = f"Cleared {files_deleted} files and {chunks_deleted} chunks"
+            print(f"✅ {message}")
             return JSONResponse(content={
                 "status": "success",
-                "msg": f"Cleared {files_deleted} files and {chunks_deleted} chunks",
+                "msg": message,
                 "files_deleted": files_deleted,
                 "chunks_deleted": chunks_deleted,
                 "files_locked": 0
             })
-        
     except Exception as e:
         print(f"❌ Error during file clearing: {e}")
         # Return a JSON error response instead of crashing
