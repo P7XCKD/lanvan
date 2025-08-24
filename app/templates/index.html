@@ -1921,11 +1921,11 @@
       }, 300); // Check every 300ms for ultra-responsive feel
     }
     
-    // 🔒 AES Configuration (matches backend)
+    // 🔒 AES Configuration (matches backend) - SIZE LIMITS REMOVED
     const AES_CONFIG = {
-      MAX_FILE_SIZE_MB: 200,
-      MAX_FILE_SIZE_BYTES: 200 * 1024 * 1024,
-      HTTPS_ONLY: true,
+      MAX_FILE_SIZE_MB: null,     // No limit - streaming encryption
+      MAX_FILE_SIZE_BYTES: null,  // No limit - streaming encryption
+      HTTPS_ONLY: false,          // Disabled for testing
       ALGORITHM: 'AES-256-CBC'
     };
 
@@ -1933,7 +1933,7 @@
   const LANVAN_CONFIG = {
     // Memory thresholds
     CHUNK_THRESHOLD: 250 * 1024 * 1024, // 250MB - when to use chunked upload
-    AES_SIZE_LIMIT: 200 * 1024 * 1024,  // 200MB - AES encryption limit
+    AES_SIZE_LIMIT: null,  // NO LIMIT - streaming encryption handles any size
     GUEST_MEMORY_LIMIT: 1024 * 1024 * 1024, // 1GB - guest device warning threshold
     
     // Unified chunk sizing for optimal performance (same for all device types)
@@ -5067,13 +5067,9 @@ function autoUpload(files) {
 
   console.log('⚙️ Upload settings:', { isAESEnabled, isHTTPS });
 
-  // ✅ Block upload if AES is ON and any file > configured limit
-  const overLimit = Array.from(files).some(file => file.size > LANVAN_CONFIG.AES_SIZE_LIMIT);
-  if (isAESEnabled && overLimit) {
-    console.log('❌ AES blocked for large file');
-    showToast("❌ AES is blocked for file size above 200MB to ensure smooth and efficient file transfer.", 5000);
-    return;
-  }
+  // ✅ NO SIZE LIMITS - Streaming encryption handles files of any size
+  // Size limit check removed - AES now supports multi-gigabyte files
+  console.log('🔒 AES enabled - streaming encryption supports any file size');
 
   // 🚫 Block AES on HTTP (re-enabled for testing)
   if (isAESEnabled && !isHTTPS) {
