@@ -131,11 +131,40 @@ class ConcurrentUploadManager:
             if file_size > 50 * 1024 * 1024:  # Files > 50MB
                 universal_optimizer.optimize_for_upload(file_size)
             
-            # 📝 Process file with streaming
+            # 📝 Process file with streaming - Enhanced with NEW async function option
             print(f"🔍 [{upload_id}] About to start streaming upload...")
-            result = await self._stream_upload_async(
-                upload_file, destination, encrypt, chunk_size, upload_id
-            )
+            
+            # 🚀 NEW: Option to use optimized async function from routes.py
+            USE_NEW_ASYNC_FUNCTION = True  # Toggle for performance testing
+            
+            if USE_NEW_ASYNC_FUNCTION:
+                # Use the new optimized async function that fixes synchronous bottlenecks
+                try:
+                    from .routes import save_upload_file_async
+                    print(f"🚀 [{upload_id}] Using NEW optimized async upload function...")
+                    
+                    # Call the new async function
+                    await save_upload_file_async(upload_file, destination, encrypt)
+                    
+                    # Create result dictionary for compatibility
+                    final_size = destination.stat().st_size
+                    result = {
+                        'bytes_written': final_size,
+                        'destination': str(destination),
+                        'hash': 'computed_by_async_function'  # Hash is computed inside the function
+                    }
+                    
+                except Exception as e:
+                    print(f"⚠️ [{upload_id}] New async function failed, falling back to original: {e}")
+                    # Fall back to original method
+                    result = await self._stream_upload_async(
+                        upload_file, destination, encrypt, chunk_size, upload_id
+                    )
+            else:
+                # Use original streaming method
+                result = await self._stream_upload_async(
+                    upload_file, destination, encrypt, chunk_size, upload_id
+                )
             
             # Update final status BEFORE cleanup
             elapsed = time.time() - start_time

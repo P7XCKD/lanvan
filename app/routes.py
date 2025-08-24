@@ -291,6 +291,141 @@ def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=Fa
         universal_optimizer.memory_cleanup(force=True)
         print(f"🔄 Universal optimizer cleanup completed")
 
+async def save_upload_file_async(upload_file: UploadFile, destination: Path, encrypt=False):
+    """
+    🔄 ASYNC Universal Streaming Upload Handler - Non-blocking optimized for ALL platforms
+    Processes files in chunks asynchronously to avoid memory exhaustion and server blocking
+    """
+    import os
+    import hashlib
+    import gc
+    import asyncio
+    from .android_optimizer import optimize_for_upload, get_adaptive_chunk_size, should_run_gc, universal_optimizer
+    
+    # 📱 Platform Detection (but optimizations apply to ALL)
+    is_android = ("ANDROID_STORAGE" in os.environ or 
+                 os.path.exists("/data/data/com.termux") or 
+                 "TERMUX_VERSION" in os.environ)
+    
+    is_windows = os.name == 'nt'
+    is_linux = os.name == 'posix' and not is_android
+    
+    platform_name = "Android/Termux" if is_android else "Windows" if is_windows else "Linux/Unix"
+    
+    # 📊 ASYNC File size estimation for progress tracking (NON-BLOCKING)
+    await asyncio.to_thread(upload_file.file.seek, 0, 2)  # Seek to end - ASYNC
+    file_size = await asyncio.to_thread(upload_file.file.tell)  # Tell position - ASYNC  
+    await asyncio.to_thread(upload_file.file.seek, 0)  # Reset to beginning - ASYNC
+    
+    # � Apply optimizations for large files on ALL platforms
+    if file_size > 50 * 1024 * 1024:  # Files > 50MB
+        print(f"🔄 Large file detected ({file_size//1024//1024}MB) - enabling streaming optimizations")
+        
+        # Android-specific feasibility check (but streaming works everywhere)
+        if is_android:
+            feasibility = optimize_for_upload(file_size)
+            if feasibility['warnings']:
+                for warning in feasibility['warnings']:
+                    print(f"⚠️ {warning}")
+            if feasibility['recommendations']:
+                print(f"💡 Android recommendations:")
+                for rec in feasibility['recommendations']:
+                    print(f"   • {rec}")
+        else:
+            # General recommendations for PC/Linux/Mac
+            feasibility = optimize_for_upload(file_size)
+            if feasibility['warnings']:
+                for warning in feasibility['warnings']:
+                    print(f"⚠️ {warning}")
+            if feasibility['recommendations']:
+                print(f"💡 {platform_name} recommendations:")
+                for rec in feasibility['recommendations']:
+                    print(f"   • {rec}")
+    
+    # 🎯 Universal adaptive chunk sizing optimized for each platform
+    CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(file_size)
+    print(f"🎯 {platform_name} detected - using adaptive chunk size: {CHUNK_SIZE//1024}KB")
+    
+    print(f"🔄 ASYNC Streaming upload: {destination.name} ({file_size:,} bytes)")
+    
+    if encrypt:
+        # 🔒 For now, fall back to original method for encrypted files
+        # TODO: Implement true streaming encryption in future update
+        print(f"🔒 Using existing encryption method (will be optimized in future)")
+        try:
+            data = await asyncio.to_thread(upload_file.file.read)
+            
+            # Import streaming encryption functions
+            from .aes_utils import encrypt_file_stream
+            
+            # Add file integrity validation for encrypted files
+            original_hash = hashlib.sha256(data).hexdigest()
+            print(f"🔒 Original file hash: {original_hash}")
+            
+            # Use memory-efficient streaming encryption
+            encrypted_data, metadata = encrypt_file_stream(data, chunk_size=CHUNK_SIZE)
+            
+            # Enhanced metadata with integrity information
+            metadata['original_hash'] = original_hash
+            metadata['original_size'] = str(len(data))
+            metadata['encrypted_size'] = str(len(encrypted_data))
+            
+            # Write encrypted data to file using async I/O
+            import aiofiles
+            async with aiofiles.open(destination, 'wb') as f:
+                await f.write(encrypted_data)
+            
+            # Yield control periodically
+            await asyncio.sleep(0.001)
+            
+        except Exception as e:
+            print(f"❌ Encryption error: {e}")
+            raise
+    else:
+        # 📦 Async Streaming upload without encryption
+        try:
+            import aiofiles
+            async with aiofiles.open(destination, 'wb') as f:
+                bytes_written = 0
+                hash_calculator = hashlib.sha256()
+                
+                while True:
+                    # Read chunk asynchronously
+                    chunk = await asyncio.to_thread(upload_file.file.read, CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    
+                    # Write chunk asynchronously
+                    await f.write(chunk)
+                    await f.flush()  # Ensure data is written
+                    
+                    bytes_written += len(chunk)
+                    hash_calculator.update(chunk)
+                    
+                    # Yield control every chunk to prevent blocking
+                    await asyncio.sleep(0.001)
+                    
+                    # Progress for large files (reduce spam)
+                    if bytes_written > 10 * 1024 * 1024 and bytes_written % (5 * 1024 * 1024) == 0:
+                        print(f"📦 Async Progress: {bytes_written // 1024 // 1024}MB written")
+                        
+                        # Android memory management during large uploads
+                        if is_android and should_run_gc(bytes_written, CHUNK_SIZE):
+                            gc.collect()
+                            await asyncio.sleep(0.01)  # Brief pause for GC
+                
+                print(f"✅ ASYNC Upload completed: {destination.name} ({bytes_written:,} bytes)")
+                
+        except Exception as e:
+            print(f"❌ ASYNC Upload error: {e}")
+            raise
+        finally:
+            # 🧹 Universal cleanup (applies to ALL platforms)
+            if hasattr(universal_optimizer, 'upload_active'):
+                universal_optimizer.upload_active = False
+            universal_optimizer.memory_cleanup(force=True)
+            print(f"🔄 Universal async optimizer cleanup completed")
+
 async def scan_file_async(path: Path):
     """
     🚀 Truly non-blocking async file scanning with frequent yielding
