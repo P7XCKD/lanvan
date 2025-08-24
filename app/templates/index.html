@@ -1494,6 +1494,7 @@
 
 <!-- 📋 Clipboard Real-Time WebSocket Auto-Refresh -->
 <script>
+  // Clipboard WebSocket for clipboard-only mode
   if (typeof show_clipboard_only !== 'undefined' && show_clipboard_only) {
     let ws = null;
     function connectClipboardWS() {
@@ -1524,7 +1525,51 @@
     window.addEventListener('beforeunload', () => {
       if (ws) ws.close();
     });
+  } else {
+    // Clipboard WebSocket for regular mode (when both sections are available)
+    let clipboardWS = null;
+    function connectRegularClipboardWS() {
+      // Only connect if clipboard section exists
+      const clipboardSection = document.getElementById('clipboardSection');
+      if (!clipboardSection) return;
+      
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsUrl = `${protocol}://${window.location.host}/ws/clipboard`;
+      clipboardWS = new WebSocket(wsUrl);
+      clipboardWS.onopen = () => {
+        console.log('📡 Regular mode clipboard WebSocket connected');
+        // Refresh clipboard history when WebSocket (re)connects
+        if (typeof refreshClipboardHistory === 'function') {
+          setTimeout(() => refreshClipboardHistory(), 100);
+        }
+      };
+      clipboardWS.onmessage = (event) => {
+        if (event.data === 'refresh') {
+          console.log('📋 Clipboard update received via WebSocket');
+          if (typeof refreshClipboardHistory === 'function') refreshClipboardHistory();
+        }
+      };
+      clipboardWS.onclose = () => {
+        console.log('📡 Clipboard WebSocket disconnected, will reconnect...');
+        // Try to reconnect after 2s if disconnected
+        setTimeout(connectRegularClipboardWS, 2000);
+      };
+      clipboardWS.onerror = () => {
+        clipboardWS.close();
+      };
+    }
+    
+    // Connect clipboard WebSocket when DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      // Small delay to ensure clipboard functions are defined
+      setTimeout(connectRegularClipboardWS, 1000);
+    });
+    
+    window.addEventListener('beforeunload', () => {
+      if (clipboardWS) clipboardWS.close();
+    });
   }
+</script>
 </script>
 
 <!-- 📡 Auto Upload JS -->
@@ -4218,9 +4263,19 @@ Device Session will reset when browser is closed
       updateFileCount(fileCount);
       lastFileCount = fileCount; // Initialize lastFileCount for auto-refresh tracking
     } else {
-      // No file grid means no files
-      updateFileCount(0);
       lastFileCount = 0;
+    }
+    
+    // Auto-load clipboard history if clipboard section is available
+    const clipboardSection = document.getElementById('clipboardSection');
+    if (clipboardSection) {
+      console.log('📋 Auto-loading clipboard history on page load...');
+      // Delay the refresh slightly to ensure all DOM elements are ready
+      setTimeout(() => {
+        if (typeof refreshClipboardHistory === 'function') {
+          refreshClipboardHistory();
+        }
+      }, 500);
     }
     
     // Set up event listeners after DOM cache is ready
