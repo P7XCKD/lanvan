@@ -63,16 +63,13 @@ class ConcurrentUploadManager:
         # Process results
         processed_results = []
         for i, result in enumerate(results):
-            print(f"🔍 Processing result {i}: {type(result)} = {result}")
             if isinstance(result, Exception):
-                print(f"🔍 Result {i} is an exception: {result}")
                 processed_results.append({
                     'success': False,
                     'filename': files[i].filename,
                     'error': str(result)
                 })
             else:
-                print(f"🔍 Result {i} is successful: {result}")
                 processed_results.append(result)
         
         print(f"✅ Concurrent upload completed: {len([r for r in processed_results if r.get('success')])} success, {len([r for r in processed_results if not r.get('success')])} failed")
@@ -138,7 +135,6 @@ class ConcurrentUploadManager:
             result = await self._stream_upload_async(
                 upload_file, destination, encrypt, chunk_size, upload_id
             )
-            print(f"🔍 [{upload_id}] Streaming upload completed successfully")
             
             # Update final status BEFORE cleanup
             elapsed = time.time() - start_time
@@ -151,7 +147,6 @@ class ConcurrentUploadManager:
                     })
             
             print(f"✅ [{upload_id}] Upload completed: {upload_file.filename} in {elapsed:.1f}s")
-            print(f"🔍 [{upload_id}] Returning result: {result}")
             
             # Schedule cleanup AFTER successful completion
             asyncio.create_task(self._cleanup_upload_tracking(upload_id, delay=30))
@@ -169,9 +164,6 @@ class ConcurrentUploadManager:
                     })
             
             print(f"❌ [{upload_id}] Upload failed: {upload_file.filename} - {type(e).__name__}: {str(e)}")
-            print(f"🔍 [{upload_id}] Exception caught in _upload_single_file_async")
-            import traceback
-            traceback.print_exc()
             
             # Return detailed error info instead of raising
             result = {
@@ -276,11 +268,8 @@ class ConcurrentUploadManager:
             # Clean up partial file
             if destination.exists():
                 destination.unlink()
-            # 🔧 Enhanced error logging for debugging
+            # Enhanced error logging for debugging
             print(f"❌ [{upload_id}] Stream upload error: {type(e).__name__}: {str(e)}")
-            import traceback
-            print(f"🔍 [{upload_id}] Full traceback:")
-            traceback.print_exc()
             raise e
         
         return {
