@@ -28,6 +28,7 @@ from app.validation import (
     validate_upload_files, 
     validate_upload_files_enhanced,
     validate_upload_files_enhanced_async,
+    validate_upload_files_enhanced_fast,
     secure_filename,
     is_allowed_file,
     FileValidator,
@@ -587,8 +588,8 @@ async def upload_auto_file(
     # 🔐 Protocol detection
     is_https = request.url.scheme == "https"
     
-    # 🔍 ENHANCED SECURITY: Comprehensive input validation with content analysis (ASYNC)
-    is_valid, error_messages, validated_files, security_warnings = await validate_upload_files_enhanced_async(files, encrypt, is_https)
+    # � ULTRA-FAST VALIDATION: Start uploads immediately with lightweight validation
+    is_valid, error_messages, validated_files, security_warnings = await validate_upload_files_enhanced_fast(files, encrypt, is_https)
     if not is_valid:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
             "status": "error", 

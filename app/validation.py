@@ -734,6 +734,84 @@ def is_allowed_file(filename: str) -> bool:
     return result['valid']
 
 
+async def validate_upload_files_enhanced_fast(files: List[UploadFile], encrypt: bool = False, is_https: bool = False) -> Tuple[bool, List[str], List[Dict], List[str]]:
+    """
+    🚀 ULTRA-FAST CONCURRENT VALIDATION: Immediate upload start with lightweight validation.
+    
+    This optimized function:
+    1. Validates filenames and extensions concurrently
+    2. Skips expensive content analysis to start uploads immediately
+    3. Uses basic file size detection only
+    4. Processes ALL files simultaneously
+    5. Allows uploads to start while validation completes
+    
+    Returns:
+        tuple: (is_valid, error_messages, validated_files, security_warnings)
+    """
+    import asyncio
+    
+    async def validate_single_file_fast(file: UploadFile) -> Dict[str, Any]:
+        """Fast validation of a single file"""
+        if not file.filename:
+            return {"error": "File without filename detected"}
+        
+        # 🔍 Basic filename validation only
+        filename_validation = FileValidator.validate_filename(file.filename)
+        if not filename_validation['valid']:
+            return {"error": f"{file.filename}: {filename_validation['error']}"}
+        
+        # 🚀 FAST: Get file size without expensive content analysis
+        try:
+            file_size = getattr(file, 'size', 0)
+            if file_size == 0:
+                # Quick size detection without reading full content
+                try:
+                    await asyncio.to_thread(file.file.seek, 0, 2)
+                    file_size = await asyncio.to_thread(file.file.tell)
+                    await asyncio.to_thread(file.file.seek, 0)
+                except:
+                    file_size = 0  # Will be detected during upload
+            
+            return {
+                "success": True,
+                "file_data": {
+                    'original_name': file.filename,
+                    'sanitized_name': filename_validation['sanitized_name'],
+                    'size': file_size,
+                    'mime_type': 'application/octet-stream',
+                    'file_hash': 'will_be_calculated_during_upload',
+                    'security_level': 'fast_validation'
+                }
+            }
+            
+        except Exception as e:
+            return {"error": f"{file.filename}: Failed to get file size - {str(e)}"}
+    
+    # 🚀 CONCURRENT VALIDATION: Process all files simultaneously  
+    print(f"🚀 Starting fast concurrent validation of {len(files)} files...")
+    validation_tasks = [validate_single_file_fast(file) for file in files]
+    validation_results = await asyncio.gather(*validation_tasks, return_exceptions=True)
+    
+    # Process results super fast
+    errors = []
+    validated_files = []
+    security_warnings = []
+    
+    for i, result in enumerate(validation_results):
+        if isinstance(result, Exception):
+            errors.append(f"🚫 {files[i].filename}: Validation exception - {str(result)}")
+        elif isinstance(result, dict) and "error" in result:
+            errors.append(f"🚫 {result['error']}")
+        elif isinstance(result, dict) and "success" in result:
+            validated_files.append(result["file_data"])
+    
+    is_valid = len(errors) == 0
+    
+    print(f"✅ Fast validation completed in minimal time: {len(validated_files)} valid, {len(errors)} errors")
+    
+    return is_valid, errors, validated_files, security_warnings
+
+
 async def validate_upload_files_enhanced_async(files: List[UploadFile], encrypt: bool = False, is_https: bool = False) -> Tuple[bool, List[str], List[Dict], List[str]]:
     """
     � ASYNC ENHANCED SECURITY: Non-blocking comprehensive validation with content analysis.
