@@ -1463,6 +1463,49 @@
       transform: scale(1);
     }
   }
+
+  /* 🎨 Enhanced Dropdown Styling */
+  [id*="switchDropdown"] {
+    background: var(--section-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  }
+
+  [id*="switchDropdown"] > div {
+    color: var(--text-color) !important;
+  }
+
+  [id*="switchDropdown"] > div:hover {
+    background-color: var(--input-bg) !important;
+  }
+
+  [id*="switchDropdown"] span {
+    color: var(--text-color) !important;
+  }
+
+  /* Settings dropdown styling */
+  #settingsMenu {
+    background: var(--section-bg) !important;
+    border: 1px solid var(--border-color) !important;
+  }
+
+  #settingsMenu button {
+    background: var(--section-bg) !important;
+    color: var(--text-color) !important;
+  }
+
+  #settingsMenu button:hover {
+    background: var(--input-bg) !important;
+  }
+
+  /* Dark mode specific dropdown improvements */
+  html[data-theme="dark"] [id*="switchDropdown"] {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+  }
+
+  html[data-theme="dark"] #settingsMenu {
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
+  }
 </style>
 
 <!-- JSZip Library for creating ZIP files -->
@@ -1533,10 +1576,10 @@
     position: absolute;
     right: 1rem;
     top: 6rem;
-    background: white;
+    background: var(--section-bg);
     border-radius: 10px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-    border: 1px solid #e1e5e9;
+    border: 1px solid var(--border-color);
     min-width: 200px;
     z-index: 1000;
     overflow: hidden;
@@ -1545,8 +1588,8 @@
       width: 100%;
       padding: 0.8rem 1rem;
       border: none;
-      background: white;
-      color: black;
+      background: var(--section-bg);
+      color: var(--text-color);
       text-align: left;
       cursor: pointer;
       font-size: 0.9rem;
@@ -1554,16 +1597,16 @@
       align-items: center;
       gap: 0.5rem;
       transition: background-color 0.2s ease;
-    " onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='white'">
+    " onmouseover="this.style.background='var(--input-bg)'" onmouseout="this.style.background='var(--section-bg)'">
       📊 Device Logs
     </button>
-    <div style="height: 1px; background: #e1e5e9; margin: 0;"></div>
+    <div style="height: 1px; background: var(--border-color); margin: 0;"></div>
     <button onclick="showAccessControlSettings(); toggleSettingsMenu();" style="
       width: 100%;
       padding: 0.8rem 1rem;
       border: none;
-      background: white;
-      color: black;
+      background: var(--section-bg);
+      color: var(--text-color);
       text-align: left;
       cursor: pointer;
       font-size: 0.9rem;
@@ -1571,8 +1614,8 @@
       align-items: center;
       gap: 0.5rem;
       transition: background-color 0.2s ease;
-    " onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='white'" title="Coming soon - Access control features">
-      🔐 Access Control <span style="font-size: 0.7rem; opacity: 0.6; color: #6c757d;">(Soon)</span>
+    " onmouseover="this.style.background='var(--input-bg)'" onmouseout="this.style.background='var(--section-bg)'" title="Coming soon - Access control features">
+      🔐 Access Control <span style="font-size: 0.7rem; opacity: 0.6; color: var(--text-color);">(Soon)</span>
     </button>
   </div>
 </header>
@@ -1599,16 +1642,16 @@
       " title="Switch between File Sharing and Clipboard">
         🔄 Switch
       </button>
-      <div id="switchDropdownMain" style="display:none; position:absolute; right:0; top:110%; background:white; border:1px solid #ccc; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); min-width:150px; z-index:10001;">
-        <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem;" onclick="switchToPage('file')">
-          <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;">
+      <div id="switchDropdownMain" style="display:none; position:absolute; right:0; top:110%; background:var(--section-bg); border:1px solid var(--border-color); border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); min-width:150px; z-index:10001;">
+        <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem; color: var(--text-color); transition: background-color 0.2s ease;" onclick="switchToPage('file')" onmouseover="this.style.backgroundColor='var(--input-bg)'" onmouseout="this.style.backgroundColor='transparent'">
+          <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; color: var(--text-color);">
             <span style="font-size: 1.3em;">📁</span>
             <span>File Sharing</span>
           </span>
           <span id="fileTickMain" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if not show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
         </div>
-        <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem;" onclick="switchToPage('clipboard')">
-          <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;">
+        <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem; color: var(--text-color); transition: background-color 0.2s ease;" onclick="switchToPage('clipboard')" onmouseover="this.style.backgroundColor='var(--input-bg)'" onmouseout="this.style.backgroundColor='transparent'">
+          <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; color: var(--text-color);">
             <span style="font-size: 1.3em;">📋</span>
             <span>Clipboard</span>
           </span>
@@ -1688,13 +1731,13 @@
     <div style="display: flex; gap: 0.5rem; align-items: center;">
       <div style="position: relative;">
         <button onclick="showSwitchDropdown(event, 'switchDropdownClipboard')" class="clipboard-btn" style="background: linear-gradient(135deg, #6c5ce7, #a29bfe); color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(108, 92, 231, 0.3);" title="Switch between File Sharing and Clipboard">🔄 Switch</button>
-        <div id="switchDropdownClipboard" style="display:none; position:absolute; right:0; top:110%; background:white; border:1px solid #ccc; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); min-width:150px; z-index:10001;">
-          <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem;" onclick="switchToPage('file')">
-            <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;"><span style="font-size: 1.3em;">📁</span><span>File Sharing</span></span>
+        <div id="switchDropdownClipboard" style="display:none; position:absolute; right:0; top:110%; background:var(--section-bg); border:1px solid var(--border-color); border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); min-width:150px; z-index:10001;">
+          <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem; color: var(--text-color); transition: background-color 0.2s ease;" onclick="switchToPage('file')" onmouseover="this.style.backgroundColor='var(--input-bg)'" onmouseout="this.style.backgroundColor='transparent'">
+            <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; color: var(--text-color);"><span style="font-size: 1.3em;">📁</span><span>File Sharing</span></span>
             <span id="fileTickClipboard" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if not show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
           </div>
-          <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem;" onclick="switchToPage('clipboard')">
-            <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;"><span style="font-size: 1.3em;">📋</span><span>Clipboard</span></span>
+          <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem; color: var(--text-color); transition: background-color 0.2s ease;" onclick="switchToPage('clipboard')" onmouseover="this.style.backgroundColor='var(--input-bg)'" onmouseout="this.style.backgroundColor='transparent'">
+            <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; color: var(--text-color);"><span style="font-size: 1.3em;">📋</span><span>Clipboard</span></span>
             <span id="clipboardTickClipboard" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
           </div>
         </div>
