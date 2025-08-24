@@ -15,6 +15,7 @@ import os
 import hashlib
 import gc
 import time
+import io
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from fastapi import UploadFile
@@ -97,10 +98,20 @@ class ConcurrentUploadManager:
             }
         
         try:
-            # 📊 Get file size for optimization
-            upload_file.file.seek(0, 2)
-            file_size = upload_file.file.tell()
-            upload_file.file.seek(0)
+            # 📊 Get file size for optimization - FIX: Use UploadFile size property
+            try:
+                upload_file.file.seek(0, 2)
+                file_size = upload_file.file.tell()
+                upload_file.file.seek(0)
+            except:
+                # Fallback: try to get size from UploadFile.size if seek fails
+                file_size = getattr(upload_file, 'size', 0)
+                if file_size == 0:
+                    # Last resort: read once to get size then reset
+                    content = await upload_file.read()
+                    file_size = len(content)
+                    # Reset file pointer by recreating the upload file object
+                    upload_file.file = io.BytesIO(content)
             
             # 🎯 Get adaptive chunk size for this file
             chunk_size = universal_optimizer.get_adaptive_chunk_size(file_size)
@@ -141,11 +152,20 @@ class ConcurrentUploadManager:
             with self.upload_lock:
                 self.active_uploads[upload_id].update({
                     'status': 'error',
-                    'error': str(e)
+                    'error': str(e),
+                    'error_type': type(e).__name__
                 })
             
-            print(f"❌ [{upload_id}] Upload failed: {upload_file.filename} - {str(e)}")
-            raise e
+            print(f"❌ [{upload_id}] Upload failed: {upload_file.filename} - {type(e).__name__}: {str(e)}")
+            
+            # Return detailed error info instead of raising
+            return {
+                'success': False,
+                'filename': upload_file.filename,
+                'error': str(e),
+                'error_type': type(e).__name__,
+                'upload_id': upload_id
+            }
         
         finally:
             # Cleanup upload tracking after delay
@@ -164,41 +184,45 @@ class ConcurrentUploadManager:
         upload_id: str
     ) -> Dict[str, Any]:
         """
-        🌊 Stream upload with adaptive chunk processing
+        🌊 Stream upload with adaptive chunk processing - TRUE non-blocking I/O
         """
         destination.parent.mkdir(parents=True, exist_ok=True)
         
         total_written = 0
         hash_calculator = hashlib.sha256()
         
-        # Use executor for I/O operations to avoid blocking
-        def write_chunk_sync(chunk_data: bytes, file_path: Path, mode: str):
-            with open(file_path, mode) as f:
-                f.write(chunk_data)
-        
         try:
-            with open(destination, 'wb') as dest_file:
+            # 🚀 Use async file I/O to prevent blocking the event loop
+            import aiofiles
+            
+            async with aiofiles.open(destination, 'wb') as dest_file:
+                chunk_count = 0
+                last_yield = time.time()
+                
                 while True:
-                    # Read chunk asynchronously
-                    chunk = await asyncio.get_event_loop().run_in_executor(
-                        self.executor, upload_file.file.read, chunk_size
-                    )
+                    # 🔧 Read chunk with more frequent yielding for large files
+                    chunk = await upload_file.read(chunk_size)
                     
                     if not chunk:
+                        print(f"🏁 [{upload_id}] Finished reading after {chunk_count} chunks, {total_written:,} bytes")
                         break
+                    
+                    chunk_count += 1
                     
                     # Process chunk
                     if encrypt:
                         # Add encryption logic here if needed
                         pass
                     
-                    # Write chunk asynchronously
-                    await asyncio.get_event_loop().run_in_executor(
-                        self.executor, dest_file.write, chunk
-                    )
+                    # 🚀 Write chunk asynchronously to prevent blocking
+                    await dest_file.write(chunk)
                     
                     total_written += len(chunk)
                     hash_calculator.update(chunk)
+                    
+                    # Progress logging for large files
+                    if chunk_count % 32 == 0:  # More frequent logging
+                        print(f"📊 [{upload_id}] Progress: {chunk_count} chunks, {total_written//1024//1024}MB written")
                     
                     # 🧹 Adaptive memory management
                     if universal_optimizer.should_run_gc(total_written, chunk_size):
@@ -214,13 +238,103 @@ class ConcurrentUploadManager:
                                 'bytes_processed': total_written
                             })
                     
-                    # Yield control to allow other uploads to progress
-                    await asyncio.sleep(0)
+                    # 🎯 CRITICAL: Yield control much more frequently for large files
+                    current_time = time.time()
+                    if current_time - last_yield > 0.1:  # Yield every 100ms
+                        await asyncio.sleep(0.01)  # Small sleep to allow other operations
+                        last_yield = current_time
+                    
+                    # Extra yielding for very large chunks
+                    if chunk_size > 8 * 1024 * 1024:  # Chunks > 8MB
+                        await asyncio.sleep(0.001)  # Micro-sleep for huge chunks
         
+        except ImportError:
+            # Fallback to synchronous I/O if aiofiles not available
+            print(f"⚠️ [{upload_id}] aiofiles not available, using synchronous I/O")
+            return await self._stream_upload_sync_fallback(
+                upload_file, destination, encrypt, chunk_size, upload_id, 
+                total_written, hash_calculator
+            )
         except Exception as e:
             # Clean up partial file
             if destination.exists():
                 destination.unlink()
+            # 🔧 Enhanced error logging for debugging
+            print(f"❌ [{upload_id}] Stream upload error: {type(e).__name__}: {str(e)}")
+            raise e
+        
+        return {
+            'success': True,
+            'filename': upload_file.filename,
+            'size': total_written,
+            'hash': hash_calculator.hexdigest(),
+            'destination': str(destination)
+        }
+    
+    async def _stream_upload_sync_fallback(
+        self, 
+        upload_file: UploadFile, 
+        destination: Path, 
+        encrypt: bool,
+        chunk_size: int,
+        upload_id: str,
+        total_written: int = 0,
+        hash_calculator = None
+    ) -> Dict[str, Any]:
+        """
+        🔄 Fallback synchronous upload with frequent yielding
+        """
+        if hash_calculator is None:
+            hash_calculator = hashlib.sha256()
+            
+        try:
+            with open(destination, 'wb') as dest_file:
+                chunk_count = 0
+                last_yield = time.time()
+                
+                while True:
+                    chunk = await upload_file.read(chunk_size)
+                    
+                    if not chunk:
+                        print(f"🏁 [{upload_id}] Finished reading after {chunk_count} chunks, {total_written:,} bytes")
+                        break
+                    
+                    chunk_count += 1
+                    
+                    # Write chunk synchronously but yield frequently
+                    dest_file.write(chunk)
+                    
+                    total_written += len(chunk)
+                    hash_calculator.update(chunk)
+                    
+                    # Progress logging
+                    if chunk_count % 32 == 0:
+                        print(f"📊 [{upload_id}] Progress: {chunk_count} chunks, {total_written//1024//1024}MB written")
+                    
+                    # Memory management
+                    if universal_optimizer.should_run_gc(total_written, chunk_size):
+                        gc.collect()
+                    
+                    # Update progress
+                    with self.upload_lock:
+                        if upload_id in self.active_uploads:
+                            total_size = self.active_uploads[upload_id].get('total_size', 1)
+                            progress = min(95, (total_written / total_size) * 100)
+                            self.active_uploads[upload_id].update({
+                                'progress': progress,
+                                'bytes_processed': total_written
+                            })
+                    
+                    # 🎯 FREQUENT yielding to prevent blocking
+                    current_time = time.time()
+                    if current_time - last_yield > 0.05:  # Yield every 50ms
+                        await asyncio.sleep(0.005)  # 5ms sleep
+                        last_yield = current_time
+        
+        except Exception as e:
+            if destination.exists():
+                destination.unlink()
+            print(f"❌ [{upload_id}] Sync fallback upload error: {type(e).__name__}: {str(e)}")
             raise e
         
         return {

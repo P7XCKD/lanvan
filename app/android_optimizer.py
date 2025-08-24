@@ -140,13 +140,19 @@ class UniversalOptimizer:
         else:                       # Massive memory - MAXIMUM PERFORMANCE
             chunk_size = base_chunk * 16
         
-        # 🎯 File size optimization - larger files can handle bigger chunks better
-        if file_size > 10 * 1024 * 1024 * 1024:  # Files > 10GB - use largest possible
+        # 🎯 File size optimization - balance performance vs server responsiveness
+        if file_size > 10 * 1024 * 1024 * 1024:  # Files > 10GB - prioritize responsiveness
             if not self.is_android and available_mb > 4096:
-                chunk_size = min(max_chunk, chunk_size * 2)  # Double chunk size for huge files
-        elif file_size > 5 * 1024 * 1024 * 1024:  # Files > 5GB
+                chunk_size = min(max_chunk, chunk_size)  # Keep chunks reasonable for responsiveness
+            else:
+                chunk_size = min(chunk_size, 8 * 1024 * 1024)  # Cap at 8MB for huge files
+        elif file_size > 5 * 1024 * 1024 * 1024:  # Files > 5GB - moderate increase
             if available_mb > 2048:
-                chunk_size = min(max_chunk, int(chunk_size * 1.5))  # 1.5x chunk size
+                chunk_size = min(max_chunk, int(chunk_size * 1.2))  # Smaller increase for responsiveness
+            else:
+                chunk_size = min(chunk_size, 4 * 1024 * 1024)  # Cap at 4MB
+        elif file_size > 2 * 1024 * 1024 * 1024:  # Files > 2GB - server responsiveness priority
+            chunk_size = min(chunk_size, 8 * 1024 * 1024)  # Cap at 8MB to keep server responsive
         elif file_size > 1 * 1024 * 1024 * 1024:  # Files > 1GB
             # Keep current chunk size - no reduction
             pass
@@ -154,31 +160,28 @@ class UniversalOptimizer:
             if chunk_size > 2 * 1024 * 1024:  # If chunk would be > 2MB
                 chunk_size = 2 * 1024 * 1024  # Cap at 2MB for small files (more efficient)
         
-        # 📊 CPU usage adjustment - if CPU is busy, use smaller chunks
-        if cpu_usage > 80:  # High CPU usage
-            chunk_size = max(min_chunk, chunk_size // 2)
-        elif cpu_usage > 60:  # Medium CPU usage  
+        # 📊 CPU usage adjustment - prioritize server responsiveness
+        if cpu_usage > 80:  # High CPU usage - prioritize responsiveness
+            chunk_size = max(min_chunk, chunk_size // 4)  # Drastically reduce chunks
+        elif cpu_usage > 60:  # Medium CPU usage - moderate reduction
+            chunk_size = max(min_chunk, chunk_size // 2)  # Halve chunk size
+        elif cpu_usage > 40:  # Some CPU usage - slight reduction for responsiveness
             chunk_size = max(min_chunk, int(chunk_size * 0.75))
-        # If CPU usage is low (< 60%), keep large chunks for maximum throughput
-        
-        # 🎯 Platform-specific optimization overrides
+        # 🎯 Platform-specific optimization overrides (before responsiveness caps)
         if not self.is_android:  # Desktop/Server systems
-            # Desktop systems can handle much larger chunks
+            # Desktop systems can handle larger chunks, but with limits for responsiveness
             if available_mb > 8192 and cpu_usage < 50:  # 8GB+ RAM and low CPU
-                chunk_size = min(max_chunk, max(chunk_size, 32 * 1024 * 1024))  # At least 32MB
+                chunk_size = min(max_chunk, max(chunk_size, 16 * 1024 * 1024))  # At least 16MB (reduced from 32MB)
             elif available_mb > 4096 and cpu_usage < 70:  # 4GB+ RAM and moderate CPU  
-                chunk_size = min(max_chunk, max(chunk_size, 16 * 1024 * 1024))  # At least 16MB
+                chunk_size = min(max_chunk, max(chunk_size, 8 * 1024 * 1024))  # At least 8MB (reduced from 16MB)
+        
+        # 🎯 FINAL Server responsiveness override for very large files (ALWAYS APPLIED)
+        if file_size > 2 * 1024 * 1024 * 1024:  # Files > 2GB
+            # Always cap chunk size to ensure server stays responsive
+            chunk_size = min(chunk_size, 4 * 1024 * 1024)  # Max 4MB for large files (STRICT CAP)
+            print(f"🎯 Large file detected ({file_size//1024//1024//1024}GB) - chunk size capped at {chunk_size//1024//1024}MB for server responsiveness")
         
         # Ensure we stay within bounds
-        chunk_size = max(min_chunk, min(max_chunk, chunk_size))
-        
-        return chunk_size
-        
-        # 3. CPU load adjustment
-        if cpu_usage > 80:
-            chunk_size = max(min_chunk, chunk_size // 2)  # Reduce chunk size under high CPU load
-        
-        # 4. Ensure bounds
         chunk_size = max(min_chunk, min(max_chunk, chunk_size))
         
         return chunk_size
