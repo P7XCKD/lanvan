@@ -1876,14 +1876,11 @@
     let isEncryptionEnabled = false;
     let fetchInterceptorActive = false;
     
-    // 📤 Upload Manager System
-    let uploadQueue = [];
+    // 📤 Upload Manager System - Make globally accessible
+    window.uploadQueue = [];
+    let uploadQueue = window.uploadQueue; // Local reference
     let uploadIdCounter = 0;
     let isUploadManagerVisible = false;
-    
-    // Clipboard operation queue to prevent blocking during uploads
-    let clipboardOperationQueue = [];
-    let isProcessingClipboardQueue = false;
     
     // 🔒 AES Configuration (matches backend)
     const AES_CONFIG = {
@@ -3087,6 +3084,7 @@ Device Session will reset when browser is closed
     
     // For processing updates, use async to prevent blocking other operations
     if (uploadItem.status === 'processing') {
+      console.log(`⚙️ Processing update for ${uploadItem.fileName}`);
       if (window.requestIdleCallback) {
         requestIdleCallback(() => performUIUpdate(uploadItem));
         return;
@@ -3164,8 +3162,13 @@ Device Session will reset when browser is closed
 
     // Update cancel button state for cancelled, completed, and processing items
     const cancelBtn = document.querySelector(`#upload-${uploadItem.id} .upload-control-btn.cancel`);
-    if (cancelBtn && (uploadItem.status === 'cancelled' || uploadItem.status === 'completed' || uploadItem.status === 'processing')) {
-      cancelBtn.style.display = 'none'; // Hide cancel button for cancelled, completed, and processing items
+    if (cancelBtn) {
+      if (uploadItem.status === 'cancelled' || uploadItem.status === 'completed' || uploadItem.status === 'processing') {
+        cancelBtn.style.display = 'none'; // Hide cancel button for cancelled, completed, and processing items
+        console.log(`🔄 Cancel button hidden for ${uploadItem.fileName} (status: ${uploadItem.status})`);
+      } else {
+        cancelBtn.style.display = 'inline-block'; // Show cancel button for active uploads
+      }
     }
 
     // Update item styling based on status (only if changed)
@@ -3511,6 +3514,7 @@ Device Session will reset when browser is closed
         const fileSizeMB = uploadItem.file.size / (1024 * 1024);
         if (fileSizeMB > 10) {
           uploadItem.status = 'processing';
+          console.log(`⚙️ Setting ${uploadItem.fileName} to processing status`);
           const statusText = document.getElementById(`status-${uploadItem.id}`);
           const speedText = document.getElementById(`speed-${uploadItem.id}`);
           if (statusText) statusText.textContent = '⚙️ Processing...';
@@ -3976,11 +3980,6 @@ Device Session will reset when browser is closed
             
             // Unblock QR generation after all chunked uploads complete
             window._qrBlocked = false;
-            
-            // Process any queued clipboard operations
-            if (clipboardOperationQueue.length > 0) {
-              setTimeout(() => processClipboardQueue(), 500);
-            }
             
             // 🔄 Refresh file count immediately to show new total
             setTimeout(() => {
@@ -5086,23 +5085,12 @@ function uploadFilesRegular(files, isAESEnabled) {
       // Unblock QR generation after successful upload
       window._qrBlocked = false;
       
-      // Process any queued clipboard operations
-      if (clipboardOperationQueue.length > 0) {
-        setTimeout(() => processClipboardQueue(), 500);
-      }
-      
       // End upload tracking
       endUpload();
     } else {
       showToast('❌ Upload failed • Click anywhere to dismiss', 0);
       // Unblock QR generation after failed upload
       window._qrBlocked = false;
-      
-      // Process any queued clipboard operations even after failure
-      if (clipboardOperationQueue.length > 0) {
-        setTimeout(() => processClipboardQueue(), 500);
-      }
-      
       endUpload(); // End upload tracking on failure
     }
   };
@@ -6626,7 +6614,7 @@ async function showConnectionInfo() {
   setTimeout(() => {
     const primaryQR = document.getElementById('qr-primary');
     if (primaryQR) {
-      primaryQR.src = qrServices[0];
+      primaryQR.src = primaryQRUrl;
       // For guest devices, if not loaded in 1s, show offline QR immediately
       if (isGuest) {
         setTimeout(() => {
@@ -7277,20 +7265,6 @@ async function addTextToClipboard() {
     return;
   }
   
-  // Check if uploads are in progress and queue if needed
-  if (window._qrBlocked || window.uploadQueue?.some(item => item.status === 'uploading' || item.status === 'processing')) {
-    showToast('⏸️ Upload in progress - clipboard operation queued...', 2000);
-    
-    // Add to queue instead of blocking
-    clipboardOperationQueue.push({
-      type: 'add',
-      data: text
-    });
-    
-    textInput.value = ''; // Clear input immediately
-    return;
-  }
-  
   const formData = new FormData();
   formData.append('data', text);
   
@@ -7305,12 +7279,8 @@ async function addTextToClipboard() {
       showToast(`📋 Text added to clipboard (${data.item.size} bytes)`, 3000);
       textInput.value = ''; // Clear input
       
-      // Use requestIdleCallback for refresh to prevent blocking
-      if (window.requestIdleCallback) {
-        requestIdleCallback(() => refreshClipboardHistory());
-      } else {
-        setTimeout(() => refreshClipboardHistory(), 100);
-      }
+      // Refresh clipboard immediately - independent of uploads
+      refreshClipboardHistory();
     } else {
       showToast(`❌ Failed to add text: ${data.msg}`, 4000);
     }
@@ -7318,45 +7288,6 @@ async function addTextToClipboard() {
     console.error('Error adding text to clipboard:', error);
     showToast('❌ Failed to add text to clipboard', 4000);
   }
-}
-
-// Process queued clipboard operations when uploads complete
-async function processClipboardQueue() {
-  if (isProcessingClipboardQueue || clipboardOperationQueue.length === 0) return;
-  
-  isProcessingClipboardQueue = true;
-  
-  while (clipboardOperationQueue.length > 0) {
-    const operation = clipboardOperationQueue.shift();
-    
-    try {
-      if (operation.type === 'refresh') {
-        await refreshClipboardHistory();
-      } else if (operation.type === 'add' && operation.data) {
-        // Re-execute the add operation
-        const formData = new FormData();
-        formData.append('data', operation.data);
-        
-        const response = await fetch('/api/clipboard/add', {
-          method: 'POST',
-          body: formData
-        });
-        const data = await response.json();
-        
-        if (data.status === 'success') {
-          showToast(`📋 Queued text added to clipboard (${data.item.size} bytes)`, 3000);
-          await refreshClipboardHistory();
-        }
-      }
-    } catch (error) {
-      console.error('Error processing clipboard queue:', error);
-    }
-    
-    // Small delay between operations to prevent overwhelming
-    await new Promise(resolve => setTimeout(resolve, 100));
-  }
-  
-  isProcessingClipboardQueue = false;
 }
 
 // Clear clipboard input fields
@@ -7370,12 +7301,6 @@ function clearClipboardInput() {
 
 // Refresh clipboard history
 async function refreshClipboardHistory() {
-  // Skip if uploads are heavy to prevent UI blocking
-  if (window.uploadQueue?.some(item => item.status === 'uploading' || item.status === 'processing')) {
-    console.log('⏸️ Skipping clipboard refresh during uploads');
-    return;
-  }
-  
   try {
     const response = await fetch('/api/clipboard/list');
     const data = await response.json();
