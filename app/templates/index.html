@@ -6113,18 +6113,31 @@ document.addEventListener('DOMContentLoaded', function() {
     const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
     const qrSize = isGuest ? 180 : 200;
     const qrUrl = `/api/qr-code?text=${encodeURIComponent(fullUrl)}&size=${qrSize}`;
-    const img = new window.Image();
-    img.onload = () => {
+    
+    // Test if QR API is available with a timeout
+    const testImg = new window.Image();
+    const timeout = setTimeout(() => {
+      console.log('QR API is slow/unavailable, will use offline generation');
+      window._qrApiUnavailable = true;
+    }, 1000); // 1 second timeout
+    
+    testImg.onload = () => {
+      clearTimeout(timeout);
       window._preloadedQR = {
         url: qrUrl,
-        img: img,
+        img: testImg,
         timestamp: Date.now()
       };
+      console.log('QR API is working, QR preloaded successfully');
     };
-    img.onerror = () => {
-      console.log('QR preload failed, will generate on-demand');
+    
+    testImg.onerror = () => {
+      clearTimeout(timeout);
+      console.log('QR API failed, will use offline generation');
+      window._qrApiUnavailable = true;
     };
-    img.src = qrUrl;
+    
+    testImg.src = qrUrl;
   }
   function preloadQR(protocol, hostname, port) {
     let fullUrl = `${protocol}//${hostname}`;
@@ -6134,9 +6147,31 @@ document.addEventListener('DOMContentLoaded', function() {
     const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
     const qrSize = isGuest ? 180 : 200;
     const qrUrl = `/api/qr-code?text=${encodeURIComponent(fullUrl)}&size=${qrSize}`;
-    const img = new window.Image();
-    img.src = qrUrl;
-    window._preloadedQR = { url: qrUrl, img: img };
+    
+    // Test if QR API is available with a timeout
+    const testImg = new window.Image();
+    const timeout = setTimeout(() => {
+      console.log('QR API is slow/unavailable, will use offline generation');
+      window._qrApiUnavailable = true;
+    }, 1000); // 1 second timeout
+    
+    testImg.onload = () => {
+      clearTimeout(timeout);
+      window._preloadedQR = {
+        url: qrUrl,
+        img: testImg,
+        timestamp: Date.now()
+      };
+      console.log('QR API is working, QR preloaded successfully');
+    };
+    
+    testImg.onerror = () => {
+      clearTimeout(timeout);
+      console.log('QR API failed, will use offline generation');
+      window._qrApiUnavailable = true;
+    };
+    
+    testImg.src = qrUrl;
   }
 });
 
@@ -6307,18 +6342,44 @@ async function showConnectionInfo() {
   setTimeout(() => {
     const primaryQR = document.getElementById('qr-primary');
     if (primaryQR) {
+      // Check if QR API was determined to be unavailable during preload
+      if (window._qrApiUnavailable) {
+        console.log('QR API unavailable, using offline generation immediately');
+        showOfflineQR();
+        return;
+      }
+      
       if (window._preloadedQR && window._preloadedQR.url === primaryQRUrl) {
         primaryQR.src = window._preloadedQR.img.src;
       } else {
         primaryQR.src = primaryQRUrl; // This will use our offline generator
       }
-      if (isGuest) {
-        setTimeout(() => {
-          if (primaryQR.style.display === 'none') {
-            showOfflineQR();
+      
+      // Aggressive fallback - if QR doesn't load quickly, try offline immediately
+      setTimeout(() => {
+        if (primaryQR.style.display === 'none') {
+          console.log('QR API not responding quickly, trying offline generator immediately...');
+          showOfflineQR();
+        }
+      }, 800); // Further reduced timeout
+      
+      // Second fallback - try external service
+      setTimeout(() => {
+        if (primaryQR.style.display === 'none') {
+          console.log('Primary QR failed, trying external fallback...');
+          const fallbackQR = document.getElementById('qr-fallback');
+          if (fallbackQR && fallbackQRUrls.length > 0) {
+            fallbackQR.src = fallbackQRUrls[0];
+            // Final fallback to offline if external also fails
+            setTimeout(() => {
+              if (fallbackQR.style.display === 'none') {
+                console.log('All external QR services failed, forcing offline...');
+                showOfflineQR();
+              }
+            }, 800);
           }
-        }, 1000);
-      }
+        }
+      }, 2000); // Try external after 2 seconds if local still hasn't loaded
     }
   }, 10);
   
@@ -6359,19 +6420,19 @@ async function showConnectionInfo() {
         
         <!-- Loading Animation -->
         <div id="qr-loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-          <div style="width: 40px; height: 40px; border: 4px solid #e1e1e1; border-top: 4px solid #007bff; border-radius: 50%; animation: qr-spin 1s linear infinite; margin-bottom: 1rem;"></div>
-          <p style="margin: 0; color: #666; font-size: 0.9rem;">🔄 Generating QR Code...</p>
+          <div style="width: 40px; height: 40px; border: 4px solid var(--border-color); border-top: 4px solid #007bff; border-radius: 50%; animation: qr-spin 1s linear infinite; margin-bottom: 1rem;"></div>
+          <p style="margin: 0; color: var(--text-color); opacity: 0.8; font-size: 0.9rem;">🔄 Generating QR Code...</p>
         </div>
         
         <!-- Offline QR Fallback -->
         <canvas id="offline-qr" style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; margin: 0 auto;"></canvas>
-        <p id="offline-qr-text" style="display: none; font-size: 0.8rem; color: #666; margin-top: 0.5rem;">📱 Offline QR Code</p>
+        <p id="offline-qr-text" style="display: none; font-size: 0.8rem; color: var(--text-color); opacity: 0.8; margin-top: 0.5rem;">📱 Offline QR Code</p>
       </div>
     </div>
     
-    <div style="background: #f8f9fa; border-radius: 10px; padding: 1rem; margin: 1rem 0;">
+    <div style="background: var(--input-bg); border-radius: 10px; padding: 1rem; margin: 1rem 0; border: 1px solid var(--border-color);">
       ${useMDNS ? `
-        <h4 style="margin: 0 0 0.5rem 0; color: #333;">🌐 mDNS Connection URL:</h4>
+        <h4 style="margin: 0 0 0.5rem 0; color: var(--text-color);">🌐 mDNS Connection URL:</h4>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
           <code id="connection-url" style="flex: 1; background: #d4edda; padding: 0.5rem; border-radius: 5px; border: 1px solid #c3e6cb; font-size: 0.85rem; word-break: break-all; min-width: 200px; color: #155724;">${fullUrl}</code>
           <button onclick="copyConnectionUrl()" style="background: #28a745; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer; font-size: 0.85rem; white-space: nowrap;" title="Copy mDNS URL to clipboard">📋 Copy</button>
@@ -6382,9 +6443,9 @@ async function showConnectionInfo() {
             <strong>mDNS Active:</strong> Easy access via domain name - guests can use ${networkInfo?.mdns?.domain || 'lanvan.local'}!
           </small>
         </div>
-        <h4 style="margin: 0 0 0.5rem 0; color: #666; font-size: 0.9rem;">📱 Alternative IP Connection:</h4>
+        <h4 style="margin: 0 0 0.5rem 0; color: var(--text-color); opacity: 0.8; font-size: 0.9rem;">📱 Alternative IP Connection:</h4>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.8rem;">
-          <code id="alternative-url" style="flex: 1; background: #fff; padding: 0.4rem; border-radius: 5px; border: 1px solid #ddd; font-size: 0.8rem; word-break: break-all; min-width: 200px; color: #666;">${lanIpUrl || 'http://192.168.x.x'}</code>
+          <code id="alternative-url" style="flex: 1; background: var(--section-bg); color: var(--text-color); padding: 0.4rem; border-radius: 5px; border: 1px solid var(--border-color); font-size: 0.8rem; word-break: break-all; min-width: 200px;">${lanIpUrl || 'http://192.168.x.x'}</code>
           <button onclick="copyAlternativeUrl()" style="background: #6c757d; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 5px; cursor: pointer; font-size: 0.8rem; white-space: nowrap;" title="Copy IP URL to clipboard">📋 Copy</button>
         </div>
         
@@ -6770,7 +6831,7 @@ function tryFallbackQR() {
 }
 
 function showOfflineQR() {
-  console.log('⚠️ All online QR services failed, using offline generator...');
+  console.log('⚠️ Using offline QR generator...');
   
   // Hide loading and failed images
   const loadingDiv = document.getElementById('qr-loading');
@@ -6790,10 +6851,31 @@ function showOfflineQR() {
     canvas.width = 200;
     canvas.height = 200;
     
-    const url = document.getElementById('connection-url').textContent;
-    generateOfflineQR(url, canvas);
+    // Get URL from connection-url element or fallback to current location
+    let url;
+    const connectionUrl = document.getElementById('connection-url');
+    if (connectionUrl) {
+      url = connectionUrl.textContent;
+    } else {
+      // Fallback to current page URL
+      url = window.location.href;
+    }
     
-    canvas.classList.add('qr-reveal');
+    try {
+      generateOfflineQR(url, canvas);
+      canvas.classList.add('qr-reveal');
+      console.log('✅ Offline QR generated successfully');
+    } catch (error) {
+      console.error('❌ Failed to generate offline QR:', error);
+      // Show a simple error message in the canvas
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'var(--text-color)';
+      ctx.font = '14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('QR Code', 100, 90);
+      ctx.fillText('Generation', 100, 110);
+      ctx.fillText('Failed', 100, 130);
+    }
   }
   
   if (text) {
