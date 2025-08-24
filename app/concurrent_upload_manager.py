@@ -63,13 +63,16 @@ class ConcurrentUploadManager:
         # Process results
         processed_results = []
         for i, result in enumerate(results):
+            print(f"🔍 Processing result {i}: {type(result)} = {result}")
             if isinstance(result, Exception):
+                print(f"🔍 Result {i} is an exception: {result}")
                 processed_results.append({
                     'success': False,
                     'filename': files[i].filename,
                     'error': str(result)
                 })
             else:
+                print(f"🔍 Result {i} is successful: {result}")
                 processed_results.append(result)
         
         print(f"✅ Concurrent upload completed: {len([r for r in processed_results if r.get('success')])} success, {len([r for r in processed_results if not r.get('success')])} failed")
@@ -137,42 +140,54 @@ class ConcurrentUploadManager:
             )
             print(f"🔍 [{upload_id}] Streaming upload completed successfully")
             
-            # Update final status
+            # Update final status BEFORE cleanup
             elapsed = time.time() - start_time
             with self.upload_lock:
-                self.active_uploads[upload_id].update({
-                    'status': 'completed',
-                    'progress': 100,
-                    'elapsed_time': elapsed
-                })
+                if upload_id in self.active_uploads:
+                    self.active_uploads[upload_id].update({
+                        'status': 'completed',
+                        'progress': 100,
+                        'elapsed_time': elapsed
+                    })
             
             print(f"✅ [{upload_id}] Upload completed: {upload_file.filename} in {elapsed:.1f}s")
+            print(f"🔍 [{upload_id}] Returning result: {result}")
+            
+            # Schedule cleanup AFTER successful completion
+            asyncio.create_task(self._cleanup_upload_tracking(upload_id, delay=30))
+            
             return result
             
         except Exception as e:
-            # Update error status
+            # Update error status (with safety check)
             with self.upload_lock:
-                self.active_uploads[upload_id].update({
-                    'status': 'error',
-                    'error': str(e),
-                    'error_type': type(e).__name__
-                })
+                if upload_id in self.active_uploads:
+                    self.active_uploads[upload_id].update({
+                        'status': 'error',
+                        'error': str(e),
+                        'error_type': type(e).__name__
+                    })
             
             print(f"❌ [{upload_id}] Upload failed: {upload_file.filename} - {type(e).__name__}: {str(e)}")
+            print(f"🔍 [{upload_id}] Exception caught in _upload_single_file_async")
+            import traceback
+            traceback.print_exc()
             
             # Return detailed error info instead of raising
-            return {
+            result = {
                 'success': False,
                 'filename': upload_file.filename,
                 'error': str(e),
                 'error_type': type(e).__name__,
                 'upload_id': upload_id
             }
-        
-        finally:
-            # Cleanup upload tracking after delay
+            
+            # Schedule cleanup for failed uploads too
             asyncio.create_task(self._cleanup_upload_tracking(upload_id, delay=30))
             
+            return result
+        
+        finally:
             # Stop optimizations
             universal_optimizer.upload_active = False
             universal_optimizer.memory_cleanup(force=True)
