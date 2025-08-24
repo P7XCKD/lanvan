@@ -3496,6 +3496,19 @@ Device Session will reset when browser is closed
         uploadItem.speed = speed;
         uploadItem.timeRemaining = remaining;
 
+        // When upload reaches 100%, immediately show processing for larger files
+        if (progress >= 100) {
+          const fileSizeMB = uploadItem.file.size / (1024 * 1024);
+          if (fileSizeMB > 10) {
+            uploadItem.status = 'processing';
+            console.log(`⚙️ Upload complete - Setting ${uploadItem.fileName} to processing status immediately`);
+            const statusText = document.getElementById(`status-${uploadItem.id}`);
+            const speedText = document.getElementById(`speed-${uploadItem.id}`);
+            if (statusText) statusText.textContent = '⚙️ Processing...';
+            if (speedText) speedText.textContent = 'Server processing';
+          }
+        }
+
         // Update network speed tracking for smart concurrency (sample during upload)
         if (elapsed > 2 && progress > 10 && progress < 90) { // Sample mid-upload for accuracy
           const speedMBps = (e.loaded / (1024 * 1024)) / elapsed;
@@ -3510,9 +3523,9 @@ Device Session will reset when browser is closed
 
     xhr.addEventListener('load', () => {
       if (xhr.status === 200) {
-        // Show processing status for files > 10MB
+        // Show processing status for files > 10MB (if not already set)
         const fileSizeMB = uploadItem.file.size / (1024 * 1024);
-        if (fileSizeMB > 10) {
+        if (fileSizeMB > 10 && uploadItem.status !== 'processing') {
           uploadItem.status = 'processing';
           console.log(`⚙️ Setting ${uploadItem.fileName} to processing status`);
           const statusText = document.getElementById(`status-${uploadItem.id}`);
@@ -3520,8 +3533,10 @@ Device Session will reset when browser is closed
           if (statusText) statusText.textContent = '⚙️ Processing...';
           if (speedText) speedText.textContent = 'Server processing';
           updateUploadItem(uploadItem);
-          
-          // Show toast for processing
+        }
+        
+        // Show toast for processing (only if processing)
+        if (uploadItem.status === 'processing') {
           showToast(`⚙️ Processing ${uploadItem.file.name} on server... (${fileSizeMB.toFixed(1)} MB)`, 3000);
           
           // Show processing for a moment before marking complete
