@@ -1900,7 +1900,10 @@
           const timeSinceUpdate = uploadItem.lastProgressUpdate ? (Date.now() - uploadItem.lastProgressUpdate) : 5000;
           // More aggressive: force update every 800ms for ultra-responsive feel
           if (timeSinceUpdate > 800) {
-            console.log(`🔄 Safety net: Forcing progress update for ${uploadItem.fileName} (${timeSinceUpdate}ms since last update)`);
+            // Only log if critically stuck for more than 30 seconds to reduce spam
+            if (timeSinceUpdate > 30000) {
+              console.warn(`⚠️ Upload critically stuck for ${uploadItem.fileName} (${(timeSinceUpdate/1000).toFixed(1)}s), forcing update`);
+            }
             updateUploadItem(uploadItem, true); // Force update flag
           }
         });

@@ -106,7 +106,7 @@ def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=Fa
     import os
     import hashlib
     import gc
-    from .universal_optimizer import optimize_for_large_upload
+    from .android_optimizer import optimize_for_upload, get_adaptive_chunk_size, should_run_gc, universal_optimizer
     
     # 📱 Platform Detection (but optimizations apply to ALL)
     is_android = ("ANDROID_STORAGE" in os.environ or 
@@ -129,7 +129,7 @@ def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=Fa
         
         # Android-specific feasibility check (but streaming works everywhere)
         if is_android:
-            feasibility = optimize_for_large_upload(file_size)
+            feasibility = optimize_for_upload(file_size)
             if feasibility['warnings']:
                 for warning in feasibility['warnings']:
                     print(f"⚠️ {warning}")
@@ -139,7 +139,7 @@ def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=Fa
                     print(f"   • {rec}")
         else:
             # General recommendations for PC/Linux/Mac
-            feasibility = optimize_for_large_upload(file_size)
+            feasibility = optimize_for_upload(file_size)
             if feasibility['warnings']:
                 for warning in feasibility['warnings']:
                     print(f"⚠️ {warning}")
@@ -148,21 +148,9 @@ def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=Fa
                 for rec in feasibility['recommendations']:
                     print(f"   • {rec}")
     
-    # 🎯 Universal chunk sizes optimized for each platform
-    if is_android:
-        # Smaller chunks for mobile devices with limited RAM
-        if file_size > 500 * 1024 * 1024:  # Files > 500MB
-            CHUNK_SIZE = 128 * 1024  # 128KB for very large files on Android
-        else:
-            CHUNK_SIZE = 256 * 1024  # 256KB chunks for Android
-        print(f"📱 {platform_name} detected - using optimized chunk size: {CHUNK_SIZE//1024}KB")
-    else:
-        # Larger chunks for desktop systems with more RAM
-        if file_size > 2 * 1024 * 1024 * 1024:  # Files > 2GB
-            CHUNK_SIZE = 512 * 1024  # 512KB for very large files on PC
-        else:
-            CHUNK_SIZE = 1024 * 1024  # 1MB chunks for normal desktop use
-        print(f"💻 {platform_name} detected - using optimized chunk size: {CHUNK_SIZE//1024}KB")
+    # 🎯 Universal adaptive chunk sizing optimized for each platform
+    CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(file_size)
+    print(f"🎯 {platform_name} detected - using adaptive chunk size: {CHUNK_SIZE//1024}KB")
     
     print(f"🔄 Streaming upload: {destination.name} ({file_size:,} bytes)")
     
@@ -233,16 +221,9 @@ def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=Fa
                     # Update hash
                     hash_calculator.update(chunk)
                     
-                    # 🧹 Universal Memory Management - optimized for all platforms
-                    if file_size > 1024 * 1024 * 1024:  # Files > 1GB - aggressive cleanup on ANY platform
-                        if total_written % (CHUNK_SIZE * 2) == 0:  # Every 2 chunks for huge files
-                            gc.collect()
-                    elif file_size > 500 * 1024 * 1024:  # Files > 500MB - moderate cleanup
-                        if total_written % (CHUNK_SIZE * 4) == 0:  # Every 4 chunks
-                            gc.collect()
-                    elif file_size > 100 * 1024 * 1024:  # Files > 100MB - light cleanup
-                        if total_written % (CHUNK_SIZE * 8) == 0:  # Every 8 chunks
-                            gc.collect()
+                    # 🧹 Universal Memory Management - adaptive cleanup based on system state
+                    if universal_optimizer.should_run_gc(total_written, CHUNK_SIZE):
+                        gc.collect()
                     
                     # 📊 Universal Progress Reporting - platform-aware thresholds
                     if is_android:
@@ -281,6 +262,11 @@ def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=Fa
     if file_size > 50 * 1024 * 1024:  # Files > 50MB on any platform
         gc.collect()
         print(f"🧹 {platform_name} memory cleanup completed")
+        
+        # Stop universal optimizer background tasks
+        universal_optimizer.upload_active = False
+        universal_optimizer.memory_cleanup(force=True)
+        print(f"🔄 Universal optimizer cleanup completed")
 
 def scan_file(path: Path):
     print(f"🧪 Scanning file in background: {path}")
@@ -1144,7 +1130,7 @@ async def finalize_upload(
         # 🛡️ ENHANCED SECURITY: Validate the assembled file before finalizing
         try:
             # Perform comprehensive security validation on the assembled file
-            security_check = AdvancedFileValidator.validate_uploaded_file(final_path)
+            security_check = AdvancedFileValidator.validate_uploaded_file(final_path, filename)
             
             if not security_check['valid']:
                 # File failed security validation - delete it immediately
