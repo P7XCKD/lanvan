@@ -162,6 +162,10 @@ async def lifespan(app: FastAPI):
     print("🚀 Server starting up with enhanced shutdown handling...")
     print("💡 Use Ctrl+C to shutdown gracefully (console commands disabled)")
     
+    # Start responsiveness monitor
+    from app.responsiveness_monitor import responsiveness_monitor
+    await responsiveness_monitor.start_monitoring()
+    
     # Start mDNS service
     # Get the actual port being used (80/443 or fallback ports)
     port = int(os.environ.get('PORT', 80))  # Default to HTTP port 80
@@ -232,6 +236,9 @@ async def lifespan(app: FastAPI):
     
     yield
     print("🚨 Server shutting down immediately...")
+    
+    # Stop responsiveness monitor
+    await responsiveness_monitor.stop_monitoring()
     
     # Stop universal optimizations if active
     try:

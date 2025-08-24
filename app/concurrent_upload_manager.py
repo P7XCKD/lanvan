@@ -23,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 import threading
 
 from .android_optimizer import universal_optimizer
+from .responsiveness_monitor import responsiveness_monitor, ensure_responsiveness
 
 
 class ConcurrentUploadManager:
@@ -197,6 +198,12 @@ class ConcurrentUploadManager:
         """
         destination.parent.mkdir(parents=True, exist_ok=True)
         
+        # Get file size for responsiveness calculations
+        file_size = 0
+        with self.upload_lock:
+            if upload_id in self.active_uploads:
+                file_size = self.active_uploads[upload_id].get('total_size', 0)
+        
         total_written = 0
         hash_calculator = hashlib.sha256()
         
@@ -247,15 +254,29 @@ class ConcurrentUploadManager:
                                 'bytes_processed': total_written
                             })
                     
-                    # 🎯 CRITICAL: Yield control much more frequently for large files
+                    # 🎯 ULTRA-RESPONSIVE: Yield control MUCH more frequently for large files
                     current_time = time.time()
-                    if current_time - last_yield > 0.1:  # Yield every 100ms
-                        await asyncio.sleep(0.01)  # Small sleep to allow other operations
+                    
+                    # Adaptive yielding based on file size and chunk size
+                    if file_size > 1024 * 1024 * 1024:  # Files > 1GB
+                        yield_interval = 0.05  # 50ms - very frequent yielding
+                    elif file_size > 100 * 1024 * 1024:  # Files > 100MB
+                        yield_interval = 0.08  # 80ms - frequent yielding
+                    else:
+                        yield_interval = 0.1   # 100ms - normal yielding
+                    
+                    if current_time - last_yield > yield_interval:
+                        # Use adaptive yielding based on system responsiveness
+                        await ensure_responsiveness()
                         last_yield = current_time
                     
-                    # Extra yielding for very large chunks
-                    if chunk_size > 8 * 1024 * 1024:  # Chunks > 8MB
-                        await asyncio.sleep(0.001)  # Micro-sleep for huge chunks
+                    # Additional micro-yielding for very large chunks to prevent blocking
+                    if chunk_size > 4 * 1024 * 1024:  # Chunks > 4MB
+                        await asyncio.sleep(0.001)  # 1ms micro-sleep
+                    
+                    # Force yielding every 10 chunks for large files to prevent ANY blocking
+                    if file_size > 500 * 1024 * 1024 and chunk_count % 10 == 0:
+                        await asyncio.sleep(0.005)  # 5ms forced yield every 10 chunks
         
         except ImportError:
             # Fallback to synchronous I/O if aiofiles not available

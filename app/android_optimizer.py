@@ -160,7 +160,21 @@ class UniversalOptimizer:
             if chunk_size > 2 * 1024 * 1024:  # If chunk would be > 2MB
                 chunk_size = 2 * 1024 * 1024  # Cap at 2MB for small files (more efficient)
         
-        # 📊 CPU usage adjustment - prioritize server responsiveness
+        # 📊 CPU usage adjustment - prioritize server responsiveness with emergency mode support
+        try:
+            from .responsiveness_monitor import get_adaptive_settings
+            adaptive_settings = get_adaptive_settings()
+            emergency_mode = adaptive_settings.get('emergency_mode', False)
+            max_allowed_chunk = adaptive_settings.get('max_chunk_size', max_chunk)
+            
+            if emergency_mode:
+                print("🚨 Emergency responsiveness mode - drastically reducing chunk sizes")
+                chunk_size = max(min_chunk, min(chunk_size // 8, 2 * 1024 * 1024))  # Max 2MB in emergency
+            else:
+                max_chunk = min(max_chunk, max_allowed_chunk)  # Respect monitor limits
+        except ImportError:
+            emergency_mode = False
+        
         if cpu_usage > 80:  # High CPU usage - prioritize responsiveness
             chunk_size = max(min_chunk, chunk_size // 4)  # Drastically reduce chunks
         elif cpu_usage > 60:  # Medium CPU usage - moderate reduction
@@ -175,10 +189,14 @@ class UniversalOptimizer:
             elif available_mb > 4096 and cpu_usage < 70:  # 4GB+ RAM and moderate CPU  
                 chunk_size = min(max_chunk, max(chunk_size, 8 * 1024 * 1024))  # At least 8MB (reduced from 16MB)
         
-        # 🎯 FINAL Server responsiveness override for very large files (ALWAYS APPLIED)
-        if file_size > 2 * 1024 * 1024 * 1024:  # Files > 2GB
-            # Always cap chunk size to ensure server stays responsive
-            chunk_size = min(chunk_size, 4 * 1024 * 1024)  # Max 4MB for large files (STRICT CAP)
+        # 🎯 FINAL Server responsiveness override for very large files (OPTIMIZED)
+        if file_size > 5 * 1024 * 1024 * 1024:  # Files > 5GB
+            # Very large files - prioritize stability
+            chunk_size = min(chunk_size, 6 * 1024 * 1024)  # Max 6MB for huge files
+            print(f"🎯 Huge file detected ({file_size//1024//1024//1024}GB) - chunk size capped at {chunk_size//1024//1024}MB for server stability")
+        elif file_size > 2 * 1024 * 1024 * 1024:  # Files > 2GB
+            # Large files - balance performance and responsiveness
+            chunk_size = min(chunk_size, 8 * 1024 * 1024)  # Max 8MB for large files (increased from 4MB)
             print(f"🎯 Large file detected ({file_size//1024//1024//1024}GB) - chunk size capped at {chunk_size//1024//1024}MB for server responsiveness")
         
         # Ensure we stay within bounds
