@@ -27,6 +27,7 @@ from app.metadata_protection import generate_secure_filename, obfuscate_file_siz
 from app.validation import (
     validate_upload_files, 
     validate_upload_files_enhanced,
+    validate_upload_files_enhanced_async,
     secure_filename,
     is_allowed_file,
     FileValidator,
@@ -122,176 +123,6 @@ def get_unique_filename(directory: Path, filename: str) -> str:
         new_name = f"{base}_{counter}{ext}"
         counter += 1
     return new_name
-
-def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=False):
-    """
-    🔄 Universal Streaming Upload Handler - Optimized for ALL platforms
-    Processes files in chunks to avoid memory exhaustion on ANY device (PC, Android, etc.)
-    """
-    import os
-    import hashlib
-    import gc
-    from .android_optimizer import optimize_for_upload, get_adaptive_chunk_size, should_run_gc, universal_optimizer
-    
-    # 📱 Platform Detection (but optimizations apply to ALL)
-    is_android = ("ANDROID_STORAGE" in os.environ or 
-                 os.path.exists("/data/data/com.termux") or 
-                 "TERMUX_VERSION" in os.environ)
-    
-    is_windows = os.name == 'nt'
-    is_linux = os.name == 'posix' and not is_android
-    
-    platform_name = "Android/Termux" if is_android else "Windows" if is_windows else "Linux/Unix"
-    
-    # 📊 File size estimation for progress tracking
-    upload_file.file.seek(0, 2)  # Seek to end
-    file_size = upload_file.file.tell()
-    upload_file.file.seek(0)  # Reset to beginning
-    
-    # � Apply optimizations for large files on ALL platforms
-    if file_size > 50 * 1024 * 1024:  # Files > 50MB
-        print(f"🔄 Large file detected ({file_size//1024//1024}MB) - enabling streaming optimizations")
-        
-        # Android-specific feasibility check (but streaming works everywhere)
-        if is_android:
-            feasibility = optimize_for_upload(file_size)
-            if feasibility['warnings']:
-                for warning in feasibility['warnings']:
-                    print(f"⚠️ {warning}")
-            if feasibility['recommendations']:
-                print(f"💡 Android recommendations:")
-                for rec in feasibility['recommendations']:
-                    print(f"   • {rec}")
-        else:
-            # General recommendations for PC/Linux/Mac
-            feasibility = optimize_for_upload(file_size)
-            if feasibility['warnings']:
-                for warning in feasibility['warnings']:
-                    print(f"⚠️ {warning}")
-            if feasibility['recommendations']:
-                print(f"💡 {platform_name} recommendations:")
-                for rec in feasibility['recommendations']:
-                    print(f"   • {rec}")
-    
-    # 🎯 Universal adaptive chunk sizing optimized for each platform
-    CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(file_size)
-    print(f"🎯 {platform_name} detected - using adaptive chunk size: {CHUNK_SIZE//1024}KB")
-    
-    print(f"🔄 Streaming upload: {destination.name} ({file_size:,} bytes)")
-    
-    if encrypt:
-        # 🔒 For now, fall back to original method for encrypted files
-        # TODO: Implement true streaming encryption in future update
-        print(f"🔒 Using existing encryption method (will be optimized in future)")
-        try:
-            data = upload_file.file.read()
-            
-            # Import streaming encryption functions
-            from .aes_utils import encrypt_file_stream
-            
-            # Add file integrity validation for encrypted files
-            original_hash = hashlib.sha256(data).hexdigest()
-            print(f"🔒 Original file hash: {original_hash}")
-            
-            # Use memory-efficient streaming encryption
-            encrypted_data, metadata = encrypt_file_stream(data, chunk_size=CHUNK_SIZE)
-            
-            # Enhanced metadata with integrity information
-            metadata['original_hash'] = original_hash
-            metadata['original_size'] = str(len(data))
-            metadata['encrypted_size'] = str(len(encrypted_data))
-            metadata['encryption_method'] = 'streaming'
-            metadata['android_optimized'] = str(is_android)
-            metadata['chunk_size'] = str(CHUNK_SIZE)
-            
-            # Save metadata to separate file
-            metadata_path = destination.with_suffix('.enc.meta')
-            with metadata_path.open("w") as meta_file:
-                import json
-                json.dump(metadata, meta_file, indent=2)
-            
-            # Write encrypted data
-            with destination.open("wb") as f:
-                f.write(encrypted_data)
-                
-            print(f"� File encrypted using streaming AES with {len(encrypted_data)} bytes")
-            
-            # 🧹 Clear memory universally for large files
-            del data, encrypted_data
-            if file_size > 100 * 1024 * 1024:  # Files > 100MB on any platform
-                gc.collect()
-                print(f"🧹 Memory cleanup after encryption")
-                
-        except Exception as e:
-            print(f"🚨 Streaming encryption failed: {e}")
-            raise Exception(f"AES encryption failed: {e}")
-    
-    else:
-        # 📁 Streaming Non-Encrypted Upload - MEMORY OPTIMIZED
-        try:
-            total_written = 0
-            hash_calculator = hashlib.sha256()
-            last_progress_report = 0
-            
-            with destination.open("wb") as f:
-                while True:
-                    chunk = upload_file.file.read(CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    
-                    # Write chunk immediately
-                    f.write(chunk)
-                    total_written += len(chunk)
-                    
-                    # Update hash
-                    hash_calculator.update(chunk)
-                    
-                    # 🧹 Universal Memory Management - adaptive cleanup based on system state
-                    if universal_optimizer.should_run_gc(total_written, CHUNK_SIZE):
-                        gc.collect()
-                    
-                    # 📊 Universal Progress Reporting - platform-aware thresholds
-                    if is_android:
-                        progress_threshold = 50 * 1024 * 1024  # Report for files > 50MB on Android
-                    else:
-                        progress_threshold = 100 * 1024 * 1024  # Report for files > 100MB on PC/Linux
-                    
-                    if file_size > progress_threshold:
-                        progress_bytes = total_written - last_progress_report
-                        report_interval = CHUNK_SIZE * 20  # Report every 20 chunks
-                        
-                        if progress_bytes >= report_interval:
-                            progress = (total_written / file_size) * 100 if file_size > 0 else 0
-                            print(f"📁 Upload progress: {progress:.1f}% ({total_written:,}/{file_size:,} bytes)")
-                            last_progress_report = total_written
-            
-            # Calculate final hash
-            file_hash = hash_calculator.hexdigest()
-            print(f"📁 ✅ Streaming upload complete: {total_written:,} bytes (SHA256: {file_hash[:8]}...)")
-            
-            # 🔍 Universal file verification for large files (all platforms)
-            if file_size > 100 * 1024 * 1024:  # For files > 100MB on ANY platform
-                actual_size = destination.stat().st_size
-                if actual_size != total_written:
-                    raise Exception(f"File size mismatch: expected {total_written}, got {actual_size}")
-                print(f"✅ {platform_name} verification: File size confirmed {actual_size:,} bytes")
-            
-        except Exception as e:
-            print(f"🚨 Streaming upload failed: {e}")
-            # Clean up partial files
-            if destination.exists():
-                destination.unlink()
-            raise Exception(f"Upload failed: {e}")
-    
-    # 🧹 Universal final cleanup for large files
-    if file_size > 50 * 1024 * 1024:  # Files > 50MB on any platform
-        gc.collect()
-        print(f"🧹 {platform_name} memory cleanup completed")
-        
-        # Stop universal optimizer background tasks
-        universal_optimizer.upload_active = False
-        universal_optimizer.memory_cleanup(force=True)
-        print(f"🔄 Universal optimizer cleanup completed")
 
 async def save_upload_file_async(upload_file: UploadFile, destination: Path, encrypt=False):
     """
@@ -486,6 +317,9 @@ async def encrypt_http_safe(
     http_safe: bool = Form(True)
 ):
     """Encrypt a file with HTTP-Safe AES protection"""
+    temp_input_path = None
+    encrypted_path = None
+    
     try:
         # Save uploaded file temporarily
         temp_input_path = UPLOAD_FOLDER / f"temp_input_{int(time.time())}_{file.filename}"
@@ -529,14 +363,17 @@ async def encrypt_http_safe(
         })
         
     except Exception as e:
-        # Clean up any temporary files
-        if 'temp_input_path' in locals():
-            temp_input_path.unlink(missing_ok=True)
-        if 'encrypted_path' in locals():
-            try:
+        # Clean up any temporary files - safe cleanup
+        try:
+            if temp_input_path and temp_input_path.exists():
+                temp_input_path.unlink(missing_ok=True)
+        except:
+            pass
+        try:
+            if encrypted_path and os.path.exists(encrypted_path):
                 os.unlink(encrypted_path)
-            except:
-                pass
+        except:
+            pass
         
         return JSONResponse(
             status_code=500,
@@ -691,8 +528,8 @@ async def upload_auto_file(
     # 🔐 Protocol detection
     is_https = request.url.scheme == "https"
     
-    # 🔍 ENHANCED SECURITY: Comprehensive input validation with content analysis
-    is_valid, error_messages, validated_files, security_warnings = validate_upload_files_enhanced(files, encrypt, is_https)
+    # 🔍 ENHANCED SECURITY: Comprehensive input validation with content analysis (ASYNC)
+    is_valid, error_messages, validated_files, security_warnings = await validate_upload_files_enhanced_async(files, encrypt, is_https)
     if not is_valid:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
             "status": "error", 
@@ -1546,7 +1383,7 @@ async def finalize_upload(
         # 🛡️ ENHANCED SECURITY: Validate the assembled file before finalizing
         try:
             # Perform comprehensive security validation on the assembled file
-            security_check = AdvancedFileValidator.validate_uploaded_file(final_path, filename)
+            security_check = FileValidator.validate_uploaded_file(final_path, filename)
             
             if not security_check['valid']:
                 # File failed security validation - delete it immediately

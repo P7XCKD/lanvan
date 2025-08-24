@@ -4,6 +4,7 @@ Provides advanced file validation, extension manipulation detection, and securit
 """
 
 import os
+import io
 import re
 import hashlib
 import mimetypes
@@ -733,15 +734,145 @@ def is_allowed_file(filename: str) -> bool:
     return result['valid']
 
 
+async def validate_upload_files_enhanced_async(files: List[UploadFile], encrypt: bool = False, is_https: bool = False) -> Tuple[bool, List[str], List[Dict], List[str]]:
+    """
+    � ASYNC ENHANCED SECURITY: Non-blocking comprehensive validation with content analysis.
+    
+    This async function:
+    1. Validates filenames and extensions
+    2. Checks for dangerous file types  
+    3. Detects extension manipulation attempts
+    4. Uses async file operations to prevent blocking
+    5. Provides security warnings for suspicious files
+    
+    Returns:
+        tuple: (is_valid, error_messages, validated_files, security_warnings)
+    """
+    import asyncio
+    
+    errors = []
+    validated_files = []
+    security_warnings = []
+    total_size = 0
+    
+    # Create temporary directory for content analysis
+    import tempfile
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_dir = Path(temp_dir)
+        
+        for file in files:
+            if not file.filename:
+                errors.append("🚫 File without filename detected")
+                continue
+            
+            # 🔍 STEP 1: Basic filename validation
+            filename_validation = FileValidator.validate_filename(file.filename)
+            if not filename_validation['valid']:
+                errors.append(f"🚫 {file.filename}: {filename_validation['error']}")
+                continue
+            
+            # 🔍 STEP 2: Async file size detection and content analysis
+            temp_file_path = temp_dir / file.filename
+            try:
+                # 🚀 ASYNC: Get file size without blocking
+                try:
+                    await asyncio.to_thread(file.file.seek, 0, 2)
+                    file_size = await asyncio.to_thread(file.file.tell)
+                    await asyncio.to_thread(file.file.seek, 0)
+                except:
+                    # Fallback: use UploadFile.size if available
+                    file_size = getattr(file, 'size', 0)
+                    if file_size == 0:
+                        # Last resort: read to get size, then reset
+                        content = await file.read()
+                        file_size = len(content)
+                        file.file = io.BytesIO(content)
+                
+                # 🚀 OPTIMIZED: Skip content analysis for very large files (>1GB)
+                if file_size > 1 * 1024 * 1024 * 1024:  # Files > 1GB
+                    print(f"📊 Skipping content analysis for large file: {file.filename} ({file_size / (1024**3):.1f}GB)")
+                    total_size += file_size
+                    
+                    # For large files, just do basic filename validation
+                    validated_files.append({
+                        'original_name': file.filename,
+                        'sanitized_name': filename_validation['sanitized_name'],
+                        'size': file_size,
+                        'mime_type': 'application/octet-stream',
+                        'file_hash': 'skipped_for_large_file',
+                        'security_level': 'basic_validation_only'
+                    })
+                    continue
+                else:
+                    # 🚀 ASYNC: Normal content analysis for smaller files
+                    import aiofiles
+                    async with aiofiles.open(temp_file_path, 'wb') as temp_file:
+                        content = await file.read()
+                        await temp_file.write(content)
+                        await asyncio.to_thread(file.file.seek, 0)  # Reset for later use
+                    
+                    file_size = len(content)
+                    total_size += file_size
+                
+            except Exception as e:
+                errors.append(f"🚫 {file.filename}: Failed to process file - {str(e)}")
+                continue
+            
+            # 🔍 STEP 3: ASYNC SECURITY - Content analysis and extension validation
+            # Skip security analysis for very large files
+            if file_size > 1 * 1024 * 1024 * 1024:  # Files > 1GB
+                print(f"⚠️ Skipping security analysis for large file: {file.filename} ({file_size / (1024**3):.1f}GB)")
+                continue
+                
+            # Use async file operations for security analysis
+            try:
+                security_result = await asyncio.to_thread(
+                    FileValidator.validate_uploaded_file, 
+                    temp_file_path, 
+                    file.filename
+                )
+                
+                if not security_result['valid']:
+                    errors.append(f"🚫 {file.filename}: {security_result['error']}")
+                    continue
+                
+                # Add security warnings if any
+                if security_result.get('warnings'):
+                    for warning in security_result['warnings']:
+                        security_warnings.append(f"⚠️ {file.filename}: {warning}")
+                
+                # Store validated file info
+                validated_files.append({
+                    'original_name': file.filename,
+                    'sanitized_name': security_result['sanitized_name'],
+                    'size': file_size,
+                    'mime_type': security_result.get('mime_type', 'application/octet-stream'),
+                    'file_hash': security_result.get('file_hash', 'unknown'),
+                    'security_level': 'full_analysis'
+                })
+                
+            except Exception as e:
+                errors.append(f"🚫 {file.filename}: Security analysis failed - {str(e)}")
+                continue
+    
+    # 🔍 Final validation
+    is_valid = len(errors) == 0
+    
+    return is_valid, errors, validated_files, security_warnings
+
+
 def validate_upload_files_enhanced(files: List[UploadFile], encrypt: bool = False, is_https: bool = False) -> Tuple[bool, List[str], List[Dict], List[str]]:
     """
-    🔐 ENHANCED SECURITY: Comprehensive validation with content analysis and extension manipulation detection.
+    🔄 LEGACY SYNC VERSION: Comprehensive validation with content analysis (BLOCKING).
+    
+    ⚠️ WARNING: This function uses blocking file operations and should be replaced with 
+    validate_upload_files_enhanced_async() for better performance.
     
     This function:
     1. Validates filenames and extensions
     2. Checks for dangerous file types
     3. Detects extension manipulation attempts
-    4. Analyzes file content vs claimed file type
+    4. Analyzes file content vs claimed file type (BLOCKING for files <1GB)
     5. Provides security warnings for suspicious files
     
     Returns:
