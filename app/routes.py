@@ -48,6 +48,30 @@ MAX_CONCURRENT_UPLOADS = 5  # Maximum parallel uploads per session
 
 # === Utility Functions ===
 def format_size(size_bytes):
+    """Format bytes to human readable string"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024.0:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024.0
+    return f"{size_bytes:.1f} TB"
+
+def https_redirect_if_needed(request: Request) -> Optional[RedirectResponse]:
+    """
+    🔀 HTTPS Fallback System: Check if we need to redirect HTTP to HTTPS
+    Returns RedirectResponse if redirect is needed, None otherwise
+    """
+    if mdns_manager.use_https and request.url.scheme == "http":
+        # Extract host and port information
+        host = request.headers.get("host", "")
+        if host:
+            # Construct HTTPS URL while preserving the host (including lanvan.local)
+            https_url = f"https://{host}{request.url.path}"
+            if request.url.query:
+                https_url += f"?{request.url.query}"
+            
+            print(f"🔀 HTTPS Redirect: {request.url} → {https_url}")
+            return RedirectResponse(url=https_url, status_code=301)  # Permanent redirect
+    return None
     for unit in ["B", "KB", "MB", "GB"]:
         if size_bytes < 1024:
             return f"{size_bytes:.2f} {unit}"
@@ -124,6 +148,11 @@ def scan_file(path: Path):
 @router.get("/loading", response_class=HTMLResponse, name="loading")
 async def loading_page(request: Request, redirect: str = "/"):
     """Loading page shown while resources are being prepared"""
+    # 🔀 HTTPS Fallback System: Auto-redirect HTTP to HTTPS when server runs in HTTPS mode
+    redirect_response = https_redirect_if_needed(request)
+    if redirect_response:
+        return redirect_response
+    
     return templates.TemplateResponse("loading.html", {
         "request": request,
         "redirect_url": redirect
@@ -131,6 +160,11 @@ async def loading_page(request: Request, redirect: str = "/"):
 
 @router.get("/", response_class=HTMLResponse, name="home")
 async def home(request: Request):
+    # 🔀 HTTPS Fallback System: Auto-redirect HTTP to HTTPS when server runs in HTTPS mode
+    redirect_response = https_redirect_if_needed(request)
+    if redirect_response:
+        return redirect_response
+    
     files = get_file_list()
     
     # Add helpful debug info for HTTPS troubleshooting
@@ -1202,6 +1236,11 @@ async def generate_offline_qr(text: str, size: int = 200):
 # === FULL PAGE CLIPBOARD ROUTE ===
 @router.get("/clipboard", response_class=HTMLResponse, name="clipboard_page")
 async def clipboard_page(request: Request):
+    # 🔀 HTTPS Fallback System: Auto-redirect HTTP to HTTPS when server runs in HTTPS mode
+    redirect_response = https_redirect_if_needed(request)
+    if redirect_response:
+        return redirect_response
+    
     files = get_file_list()  # Include files for seamless switching
     
     # Render the same template, but with clipboard as default view
