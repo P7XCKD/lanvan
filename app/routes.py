@@ -44,6 +44,28 @@ UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 TEMP_CHUNKS_FOLDER = UPLOAD_FOLDER / "temp_chunks"
 TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
 
+def cleanup_orphaned_temp_files():
+    """
+    🧹 Clean up orphaned .tmp files on startup (from interrupted uploads)
+    """
+    try:
+        temp_files = list(UPLOAD_FOLDER.glob("*.tmp"))
+        if temp_files:
+            print(f"🧹 Cleaning up {len(temp_files)} orphaned .tmp files...")
+            for temp_file in temp_files:
+                try:
+                    temp_file.unlink()
+                    print(f"🗑️ Removed: {temp_file.name}")
+                except Exception as e:
+                    print(f"⚠️ Failed to remove {temp_file.name}: {e}")
+        else:
+            print(f"✅ No orphaned .tmp files found")
+    except Exception as e:
+        print(f"⚠️ Error during temp file cleanup: {e}")
+
+# Clean up orphaned temp files on startup
+cleanup_orphaned_temp_files()
+
 # Templates - keep local for routes that need it
 templates = Jinja2Templates(directory="app/templates")
 
@@ -89,18 +111,20 @@ def get_file_list():
             "size": format_size(f.stat().st_size),
             "mtime": f.stat().st_mtime
         }
-        for f in UPLOAD_FOLDER.iterdir() if f.is_file()
+        for f in UPLOAD_FOLDER.iterdir() 
+        if f.is_file() and not f.name.endswith('.tmp')  # 🚫 Filter out temporary files
     ], key=lambda x: x["mtime"], reverse=True)
 
 async def get_file_list_async():
     """
     🚀 Async file list with yielding for large directories
+    🚫 RACE CONDITION FIX: Filter out .tmp files to prevent downloading partial uploads
     """
     files = []
     file_count = 0
     
     for f in UPLOAD_FOLDER.iterdir():
-        if f.is_file():
+        if f.is_file() and not f.name.endswith('.tmp'):  # 🚫 Filter out temporary files
             files.append({
                 "name": f.name,
                 "size": format_size(f.stat().st_size),
@@ -127,6 +151,7 @@ def get_unique_filename(directory: Path, filename: str) -> str:
 async def save_upload_file_async(upload_file: UploadFile, destination: Path, encrypt=False):
     """
     🔄 ASYNC Universal Streaming Upload Handler - Non-blocking optimized for ALL platforms
+    🔒 RACE CONDITION FIX: Upload to .tmp file first, then atomically move to final name
     Processes files in chunks asynchronously to avoid memory exhaustion and server blocking
     """
     import os
@@ -134,6 +159,10 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
     import gc
     import asyncio
     from .android_optimizer import optimize_for_upload, get_adaptive_chunk_size, should_run_gc, universal_optimizer
+    
+    # 🚀 TEMPORARY FILE STRATEGY: Upload to .tmp extension first
+    temp_destination = destination.with_suffix(destination.suffix + '.tmp')
+    print(f"🔄 Uploading to temporary file: {temp_destination.name}")
     
     # 📱 Platform Detection (but optimizations apply to ALL)
     is_android = ("ANDROID_STORAGE" in os.environ or 
@@ -205,20 +234,35 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
             
             # Write encrypted data to file using async I/O
             import aiofiles
-            async with aiofiles.open(destination, 'wb') as f:
+            async with aiofiles.open(temp_destination, 'wb') as f:
                 await f.write(encrypted_data)
+            
+            # 🎯 ATOMIC MOVE: Move encrypted file from .tmp to final destination
+            try:
+                print(f"🔄 Moving encrypted {temp_destination.name} → {destination.name}")
+                temp_destination.rename(destination)
+                print(f"✅ Encrypted file atomically moved to final destination: {destination.name}")
+            except Exception as e:
+                # Clean up temp file if move fails
+                if temp_destination.exists():
+                    temp_destination.unlink()
+                print(f"❌ Failed to move encrypted temp file: {e}")
+                raise Exception(f"Failed to finalize encrypted upload: {e}")
             
             # Yield control periodically
             await asyncio.sleep(0.001)
             
         except Exception as e:
+            # Clean up encrypted temp file
+            if temp_destination.exists():
+                temp_destination.unlink()
             print(f"❌ Encryption error: {e}")
             raise
     else:
         # 📦 Async Streaming upload without encryption
         try:
             import aiofiles
-            async with aiofiles.open(destination, 'wb') as f:
+            async with aiofiles.open(temp_destination, 'wb') as f:
                 bytes_written = 0
                 hash_calculator = hashlib.sha256()
                 
@@ -247,9 +291,24 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                             gc.collect()
                             await asyncio.sleep(0.01)  # Brief pause for GC
                 
-                print(f"✅ Upload completed: {destination.name} ({bytes_written:,} bytes)")
+                print(f"✅ Upload to temp file completed: {temp_destination.name} ({bytes_written:,} bytes)")
                 
+                # 🎯 ATOMIC MOVE: Move from .tmp to final destination to prevent race conditions
+                try:
+                    print(f"🔄 Moving {temp_destination.name} → {destination.name}")
+                    temp_destination.rename(destination)
+                    print(f"✅ File atomically moved to final destination: {destination.name}")
+                except Exception as e:
+                    # Clean up temp file if move fails
+                    if temp_destination.exists():
+                        temp_destination.unlink()
+                    print(f"❌ Failed to move temp file: {e}")
+                    raise Exception(f"Failed to finalize upload: {e}")
+        
         except Exception as e:
+            # Clean up partial temp file
+            if temp_destination.exists():
+                temp_destination.unlink()
             print(f"❌ ASYNC Upload error: {e}")
             raise
         finally:

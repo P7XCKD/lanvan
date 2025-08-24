@@ -190,6 +190,7 @@ class ConcurrentUploadManager:
             print(f"✅ [{upload_id}] Upload completed: {upload_file.filename} in {elapsed:.1f}s")
             
             # Schedule cleanup AFTER successful completion
+            import asyncio
             asyncio.create_task(self._cleanup_upload_tracking(upload_id, delay=30))
             
             return result
@@ -216,6 +217,7 @@ class ConcurrentUploadManager:
             }
             
             # Schedule cleanup for failed uploads too
+            import asyncio
             asyncio.create_task(self._cleanup_upload_tracking(upload_id, delay=30))
             
             return result
@@ -257,7 +259,7 @@ class ConcurrentUploadManager:
             # 🚀 Use async file I/O to prevent blocking the event loop
             import aiofiles
             
-            async with aiofiles.open(destination, 'wb') as dest_file:
+            async with aiofiles.open(temp_destination, 'wb') as dest_file:
                 chunk_count = 0
                 last_yield = time.time()
                 
@@ -340,12 +342,24 @@ class ConcurrentUploadManager:
                 total_written, hash_calculator
             )
         except Exception as e:
-            # Clean up partial file
-            if destination.exists():
-                destination.unlink()
+            # Clean up partial temp file
+            if temp_destination.exists():
+                temp_destination.unlink()
             # Enhanced error logging for debugging
             print(f"❌ [{upload_id}] Stream upload error: {type(e).__name__}: {str(e)}")
             raise e
+        
+        # 🎯 ATOMIC MOVE: Move from .tmp to final destination to prevent race conditions
+        try:
+            print(f"🔄 [{upload_id}] Moving {temp_destination.name} → {destination.name}")
+            temp_destination.rename(destination)
+            print(f"✅ [{upload_id}] File atomically moved to final destination")
+        except Exception as e:
+            # Clean up temp file if move fails
+            if temp_destination.exists():
+                temp_destination.unlink()
+            print(f"❌ [{upload_id}] Failed to move temp file: {e}")
+            raise Exception(f"Failed to finalize upload: {e}")
         
         return {
             'success': True,
