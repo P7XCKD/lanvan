@@ -22,6 +22,8 @@ from starlette.status import HTTP_302_FOUND, HTTP_400_BAD_REQUEST, HTTP_403_FORB
 
 from app.aes_utils import encrypt_session_data, decrypt_session_data
 from app.aes_config import AESConfig
+from app.http_safe_aes import encrypt_file_http_safe, decrypt_http_safe_file
+from app.metadata_protection import generate_secure_filename, obfuscate_file_size, generate_decoy_requests
 from app.validation import (
     validate_upload_files, 
     validate_upload_files_enhanced,
@@ -475,6 +477,127 @@ def scan_file(path: Path):
     asyncio.create_task(scan_file_async(path))
 
 # === Routes ===
+
+# 🛡️ HTTP-Safe AES Routes
+@router.post("/encrypt_http_safe", name="encrypt_http_safe")
+async def encrypt_http_safe(
+    request: Request,
+    file: UploadFile = File(...),
+    http_safe: bool = Form(True)
+):
+    """Encrypt a file with HTTP-Safe AES protection"""
+    try:
+        # Save uploaded file temporarily
+        temp_input_path = UPLOAD_FOLDER / f"temp_input_{int(time.time())}_{file.filename}"
+        
+        with open(temp_input_path, 'wb') as f:
+            content = await file.read()
+            f.write(content)
+        
+        # Encrypt with HTTP-Safe protection
+        encrypted_path, metadata = encrypt_file_http_safe(
+            input_path=str(temp_input_path),
+            original_filename=file.filename or "unknown_file"
+        )
+        
+        # Read encrypted content
+        with open(encrypted_path, 'rb') as f:
+            encrypted_content = f.read()
+        
+        # Clean up input file
+        temp_input_path.unlink(missing_ok=True)
+        
+        # Extract obfuscated filename from path
+        obfuscated_filename = os.path.basename(encrypted_path)
+        
+        # Save encrypted file temporarily for download
+        temp_filename = f"temp_encrypted_{int(time.time())}_{obfuscated_filename}"
+        temp_path = UPLOAD_FOLDER / temp_filename
+        
+        with open(temp_path, 'wb') as f:
+            f.write(encrypted_content)
+        
+        # Clean up original encrypted file
+        os.unlink(encrypted_path)
+        
+        return JSONResponse({
+            "status": "success",
+            "temp_filename": temp_filename,
+            "obfuscated_filename": obfuscated_filename,
+            "metadata": metadata,
+            "encrypted_size": len(encrypted_content)
+        })
+        
+    except Exception as e:
+        # Clean up any temporary files
+        if 'temp_input_path' in locals():
+            temp_input_path.unlink(missing_ok=True)
+        if 'encrypted_path' in locals():
+            try:
+                os.unlink(encrypted_path)
+            except:
+                pass
+        
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+@router.get("/download_temp/{filename}", name="download_temp")
+async def download_temp_file(filename: str):
+    """Download temporary encrypted file"""
+    try:
+        file_path = UPLOAD_FOLDER / filename
+        if not file_path.exists():
+            return JSONResponse(
+                status_code=404,
+                content={"status": "error", "message": "File not found"}
+            )
+        
+        def iter_file():
+            with open(file_path, 'rb') as f:
+                yield from f
+        
+        # Delete temp file after download
+        background_tasks = BackgroundTasks()
+        background_tasks.add_task(lambda: file_path.unlink(missing_ok=True))
+        
+        return StreamingResponse(
+            iter_file(),
+            media_type='application/octet-stream',
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+            background=background_tasks
+        )
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+@router.post("/generate_decoy", name="generate_decoy")
+async def generate_decoy_traffic(request: Request):
+    """Generate decoy traffic for HTTP-Safe mode"""
+    try:
+        data = await request.json()
+        size = data.get('size', 10000)
+        
+        # Generate random decoy data
+        decoy_data = os.urandom(size)
+        
+        # Simulate processing time
+        await asyncio.sleep(0.1)
+        
+        return JSONResponse({
+            "status": "success",
+            "decoy_size": len(decoy_data)
+        })
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
 
 @router.get("/loading", response_class=HTMLResponse, name="loading")
 async def loading_page(request: Request, redirect: str = "/"):

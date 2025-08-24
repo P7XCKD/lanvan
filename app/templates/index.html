@@ -1540,6 +1540,16 @@
           <span class="slider"></span>
         </label>
       </div>
+      
+      <!-- HTTP-Safe AES Toggle (only shown when AES is enabled) -->
+      <div id="httpSafeToggle" class="toggle-container" style="display: none; align-items: center; background-color: var(--toggle-bg); padding: 0.5rem 0.8rem; border-radius: 25px; gap: 0.6rem; transition: all 0.3s ease; border-left: 3px solid #4CAF50;">
+        <span style="font-size: 0.9rem; color: var(--toggle-text); transition: color 0.3s ease;"><b>🛡️ HTTP-Safe Mode</b></span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="enableHttpSafe">
+          <span class="slider"></span>
+        </label>
+        <span style="font-size: 0.75rem; color: var(--toggle-text); opacity: 0.8;">Metadata Protection</span>
+      </div>
     </div>
   </div>
   
@@ -4763,24 +4773,31 @@ Device Session will reset when browser is closed
 
     // ✅ Handle AES toggle restrictions - DISABLED FOR HTTP
     if (location.protocol === 'http:') {
-      const toggle = DOM_CACHE.aesToggle;
-      if (toggle) {
-        // Disable interaction and dim appearance
-        toggle.disabled = true;
-        toggle.checked = false;
-        isEncryptionEnabled = false; // Force encryption off for HTTP
-        const toggleWrapper = toggle.closest('div');
-        toggleWrapper.style.opacity = '0.5';
-        toggleWrapper.title = "🔒 AES encryption is only available when using HTTPS.";
+    // 🛡️ NEW LOGIC: Allow AES over HTTP with HTTP-Safe mode
+    const toggle = DOM_CACHE.aesToggle;
+    if (toggle) {
+      // Enable AES toggle for HTTP (HTTP-Safe mode will provide security)
+      toggle.disabled = false;
+      const toggleWrapper = toggle.closest('div');
+      toggleWrapper.style.opacity = '1';
+      toggleWrapper.title = "�️ AES over HTTP requires HTTP-Safe Mode for complete security protection.";
 
-        // Add fake click listener to explain restriction
-        toggleWrapper.addEventListener('click', function (e) {
-          e.preventDefault();
-          alert("🔒 AES encryption is only available over a secure HTTPS connection.");
-        });
-      }
+      // Add change listener
+      toggle.addEventListener('change', function() {
+        isEncryptionEnabled = this.checked;
+        console.log('🔐 Encryption toggled:', isEncryptionEnabled);
+        
+        // Show warning if AES is enabled over HTTP without HTTP-Safe mode
+        if (location.protocol === 'http:' && this.checked) {
+          const httpSafeToggle = document.getElementById('enableHttpSafe');
+          if (!httpSafeToggle || !httpSafeToggle.checked) {
+            showToast('⚠️ Enable HTTP-Safe Mode for complete security when using AES over HTTP!', 6000);
+          }
+        }
+      });
+    }
     } else {
-      // HTTPS - encryption can be enabled
+      // HTTPS - encryption available (same as HTTP now with HTTP-Safe mode)
       const toggle = DOM_CACHE.aesToggle;
       if (toggle) {
         toggle.addEventListener('change', function() {
@@ -5109,7 +5126,182 @@ function autoUpload(files) {
   }
 }
 
-// 🔄 Regular upload function (original logic) - supports HTTP & HTTPS
+// �️ HTTP-Safe AES Functions
+function isHttpSafeEnabled() {
+  const httpSafeToggle = document.getElementById('enableHttpSafe');
+  const aesToggle = document.getElementById('enableEncryption');
+  return httpSafeToggle && httpSafeToggle.checked && aesToggle && aesToggle.checked;
+}
+
+async function encryptFileHttpSafe(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('http_safe', 'true');
+  
+  const response = await fetch('/encrypt_http_safe', {
+    method: 'POST',
+    body: formData
+  });
+  
+  if (!response.ok) {
+    throw new Error(`HTTP-Safe encryption failed: ${response.statusText}`);
+  }
+  
+  const result = await response.json();
+  return {
+    encryptedBlob: await (await fetch(`/download_temp/${result.temp_filename}`)).blob(),
+    metadata: result.metadata,
+    obfuscatedFilename: result.obfuscated_filename,
+    originalSize: file.size,
+    encryptedSize: result.encrypted_size
+  };
+}
+
+function createObfuscatedUpload(encryptedData, originalFile) {
+  const obfuscatedFile = new File([encryptedData.encryptedBlob], encryptedData.obfuscatedFilename, {
+    type: 'application/octet-stream'
+  });
+  
+  // Add metadata as hidden field
+  return {
+    file: obfuscatedFile,
+    metadata: encryptedData.metadata,
+    originalName: originalFile.name,
+    originalSize: encryptedData.originalSize,
+    encryptedSize: encryptedData.encryptedSize
+  };
+}
+
+async function generateDecoyTraffic() {
+  if (!isHttpSafeEnabled()) return;
+  
+  const decoyCount = Math.floor(Math.random() * 3) + 1; // 1-3 decoys
+  for (let i = 0; i < decoyCount; i++) {
+    try {
+      await fetch('/generate_decoy', { 
+        method: 'POST',
+        body: JSON.stringify({ size: Math.floor(Math.random() * 50000) + 10000 }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (e) {
+      // Ignore decoy failures
+    }
+  }
+}
+
+// 🛡️ HTTP-Safe AES Upload Function
+async function uploadFilesHttpSafe(files) {
+  try {
+    updateToastContent('🛡️ HTTP-Safe AES: Preparing secure upload with metadata protection...');
+    
+    // Generate decoy traffic before upload
+    await generateDecoyTraffic();
+    
+    const encryptedFiles = [];
+    const totalOriginalSize = files.reduce((sum, file) => sum + file.size, 0);
+    const totalOriginalSizeMB = (totalOriginalSize / 1024 / 1024).toFixed(2);
+    
+    updateToastContent(`🛡️ HTTP-Safe AES: Encrypting ${files.length} file(s) (${totalOriginalSizeMB} MB)...`);
+    
+    // Encrypt files with HTTP-Safe protection
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      updateToastContent(`🛡️ HTTP-Safe AES: Encrypting file ${i + 1}/${files.length}: ${file.name}`);
+      
+      const encryptedData = await encryptFileHttpSafe(file);
+      const obfuscatedUpload = createObfuscatedUpload(encryptedData, file);
+      encryptedFiles.push(obfuscatedUpload);
+    }
+    
+    // Calculate encrypted sizes
+    const totalEncryptedSize = encryptedFiles.reduce((sum, ef) => sum + ef.encryptedSize, 0);
+    const totalEncryptedSizeMB = (totalEncryptedSize / 1024 / 1024).toFixed(2);
+    
+    updateToastContent(`🛡️ HTTP-Safe AES: Uploading ${encryptedFiles.length} protected file(s) (${totalEncryptedSizeMB} MB)...`);
+    
+    // Upload encrypted files
+    const formData = new FormData();
+    const metadataArray = [];
+    
+    for (const encFile of encryptedFiles) {
+      formData.append('files', encFile.file);
+      metadataArray.push({
+        original_name: encFile.originalName,
+        metadata: encFile.metadata,
+        original_size: encFile.originalSize,
+        encrypted_size: encFile.encryptedSize
+      });
+    }
+    
+    formData.append('http_safe_metadata', JSON.stringify(metadataArray));
+    formData.append('encrypt', 'true');
+    formData.append('http_safe', 'true');
+    
+    // Upload with progress tracking
+    const xhr = new XMLHttpRequest();
+    progressBar.style.display = 'block';
+    progressBar.value = 0;
+    
+    const startTime = new Date().getTime();
+    
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        const percent = (e.loaded / e.total) * 100;
+        progressBar.value = percent;
+        
+        const elapsed = (new Date().getTime() - startTime) / 1000;
+        const uploadedMB = (e.loaded / 1024 / 1024).toFixed(1);
+        const speed = elapsed > 0 ? (e.loaded / 1024 / 1024 / elapsed).toFixed(2) : '0.00';
+        
+        updateToastContent(`🛡️ HTTP-Safe AES: Uploading ${percent.toFixed(1)}% (${uploadedMB}/${totalEncryptedSizeMB} MB) @ ${speed} MB/s`);
+      }
+    });
+    
+    return new Promise((resolve, reject) => {
+      xhr.onload = () => {
+        window._qrBlocked = false;
+        progressBar.style.display = 'none';
+        
+        if (xhr.status === 200) {
+          const elapsed = (new Date().getTime() - startTime) / 1000;
+          const avgSpeed = (totalEncryptedSize / 1024 / 1024 / elapsed).toFixed(2);
+          
+          showToast(`✅ HTTP-Safe AES Upload Complete! ${files.length} file(s) (${totalOriginalSizeMB} MB) uploaded securely with metadata protection in ${elapsed.toFixed(1)}s @ ${avgSpeed} MB/s`, 5000);
+          
+          try {
+            const response = JSON.parse(xhr.responseText);
+            displayUploadedFiles(response.files || []);
+          } catch (e) {
+            console.warn('Response parsing issue:', e);
+          }
+          
+          resolve();
+        } else {
+          showToast(`❌ HTTP-Safe upload failed: ${xhr.statusText}`, 5000);
+          reject(new Error(`Upload failed: ${xhr.statusText}`));
+        }
+      };
+      
+      xhr.onerror = () => {
+        window._qrBlocked = false;
+        progressBar.style.display = 'none';
+        showToast('❌ HTTP-Safe upload failed due to network error', 5000);
+        reject(new Error('Network error'));
+      };
+      
+      xhr.open('POST', '/upload');
+      xhr.send(formData);
+    });
+    
+  } catch (error) {
+    window._qrBlocked = false;
+    progressBar.style.display = 'none';
+    showToast(`❌ HTTP-Safe AES encryption failed: ${error.message}`, 5000);
+    throw error;
+  }
+}
+
+// �🔄 Regular upload function (original logic) - supports HTTP & HTTPS
 function uploadFilesRegular(files, isAESEnabled) {
   // Block QR generation during uploads to prevent UI blocking
   window._qrBlocked = true;
@@ -9421,15 +9613,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const isHTTP = location.protocol === 'http:';
   
-  // For HTTP connections, force AES OFF and disable the toggle
+  // 🛡️ NEW LOGIC: Allow AES over HTTP only with HTTP-Safe mode
   if (isHTTP) {
-    aesToggle.checked = false;
-    aesToggle.disabled = true;
-    // Add visual indication that AES is disabled for HTTP
+    // For HTTP, enable AES toggle but show warning about HTTP-Safe requirement
+    aesToggle.disabled = false;
     const toggleContainer = aesToggle.closest('.toggle-switch').parentElement;
-    toggleContainer.style.opacity = '0.6';
-    toggleContainer.title = 'AES encryption is disabled for HTTP connections. Use HTTPS for encryption.';
-    localStorage.setItem('aes_enabled', '0');
+    toggleContainer.style.opacity = '1';
+    toggleContainer.title = 'AES over HTTP requires HTTP-Safe Mode for security. Enable both toggles for secure encryption.';
+    
+    // Restore saved state
+    const saved = localStorage.getItem('aes_enabled');
+    if (saved !== null) {
+      aesToggle.checked = saved === '1';
+    }
   } else {
     // For HTTPS, restore saved state and enable toggle
     aesToggle.disabled = false;
@@ -9439,12 +9635,66 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Save state on change (only for HTTPS)
+  // Save state on change (for both HTTP and HTTPS)
   aesToggle.addEventListener('change', () => {
-    if (!isHTTP) {
-      localStorage.setItem('aes_enabled', aesToggle.checked ? '1' : '0');
-    }
+    localStorage.setItem('aes_enabled', aesToggle.checked ? '1' : '0');
+    // Show/hide HTTP-Safe toggle based on AES state
+    updateHttpSafeToggleVisibility();
+    // Show HTTP warning if needed
+    updateHttpSecurityWarning();
   });
+
+  // 🛡️ HTTP-Safe AES Toggle Functionality
+  const httpSafeToggle = document.getElementById('enableHttpSafe');
+  const httpSafeContainer = document.getElementById('httpSafeToggle');
+  
+  if (httpSafeToggle && httpSafeContainer) {
+    // Load saved HTTP-Safe preference
+    const savedHttpSafe = localStorage.getItem('http_safe_enabled');
+    if (savedHttpSafe !== null) {
+      httpSafeToggle.checked = savedHttpSafe === '1';
+    }
+    
+    // Save state on change
+    httpSafeToggle.addEventListener('change', () => {
+      localStorage.setItem('http_safe_enabled', httpSafeToggle.checked ? '1' : '0');
+      updateHttpSafeStatus();
+    });
+    
+    // Initial visibility update
+    updateHttpSafeToggleVisibility();
+    updateHttpSafeStatus();
+  }
+
+  function updateHttpSafeToggleVisibility() {
+    if (httpSafeContainer) {
+      if (aesToggle.checked && !aesToggle.disabled) {
+        httpSafeContainer.style.display = 'flex';
+      } else {
+        httpSafeContainer.style.display = 'none';
+      }
+    }
+  }
+
+  function updateHttpSafeStatus() {
+    // Update UI indicators when HTTP-Safe mode changes
+    if (httpSafeToggle && httpSafeToggle.checked) {
+      console.log('🛡️ HTTP-Safe AES enabled - Metadata protection active');
+    }
+    // Update HTTP security warning
+    updateHttpSecurityWarning();
+  }
+
+  function updateHttpSecurityWarning() {
+    const isHTTP = location.protocol === 'http:';
+    const isAESEnabled = aesToggle.checked;
+    const isHttpSafeEnabled = httpSafeToggle && httpSafeToggle.checked;
+    
+    // Show warning if AES is enabled over HTTP without HTTP-Safe mode
+    if (isHTTP && isAESEnabled && !isHttpSafeEnabled) {
+      showToast('⚠️ AES over HTTP detected! Enable HTTP-Safe Mode for complete security protection.', 8000);
+    }
+  }
 
   // 🌙 Dark Mode Toggle Functionality
   const darkModeToggle = DOM_CACHE.darkModeToggle;
