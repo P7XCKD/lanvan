@@ -1897,14 +1897,14 @@
     AES_SIZE_LIMIT: 200 * 1024 * 1024,  // 200MB - AES encryption limit
     GUEST_MEMORY_LIMIT: 1024 * 1024 * 1024, // 1GB - guest device warning threshold
     
-    // Chunk sizing for different device types
+    // Unified chunk sizing for optimal performance (same for all device types)
     CHUNK_SIZES: {
-      GUEST_INITIAL: 8 * 1024 * 1024,   // 8MB initial for guest devices
-      GUEST_MIN: 1 * 1024 * 1024,       // 1MB minimum for guest devices
-      GUEST_MAX: 32 * 1024 * 1024,      // 32MB maximum for guest devices
+      GUEST_INITIAL: 16 * 1024 * 1024,   // 16MB initial for guest devices (unified)
+      GUEST_MIN: 2 * 1024 * 1024,        // 2MB minimum for guest devices (unified)
+      GUEST_MAX: 128 * 1024 * 1024,      // 128MB maximum for guest devices (unified)
       REGULAR_INITIAL: 16 * 1024 * 1024, // 16MB initial for regular devices
-      REGULAR_MIN: 2 * 1024 * 1024,     // 2MB minimum for regular devices
-      REGULAR_MAX: 128 * 1024 * 1024    // 128MB maximum for regular devices
+      REGULAR_MIN: 2 * 1024 * 1024,      // 2MB minimum for regular devices
+      REGULAR_MAX: 128 * 1024 * 1024     // 128MB maximum for regular devices
     },
     
     // Smart Concurrent Upload System
@@ -5245,8 +5245,8 @@ async function uploadFilesChunked(files, isAESEnabled) {
   const protocolMsg = isHTTPS ? "HTTPS" : "HTTP";
   
   if (isGuestDevice) {
-    updateToastContent(`⏳ Starting guest-safe adaptive-chunked upload over ${protocolMsg} (reduced chunk sizes for memory protection)...`);
-    console.log(`🔍 Guest device detected - using conservative chunk sizes: ${(MIN_CHUNK_SIZE/1024/1024).toFixed(1)}MB to ${(MAX_CHUNK_SIZE/1024/1024).toFixed(1)}MB`);
+    updateToastContent(`⏳ Starting adaptive-chunked upload over ${protocolMsg} (guest device with full performance)...`);
+    console.log(`🔍 Guest device detected - using unified high-performance chunk sizes: ${(MIN_CHUNK_SIZE/1024/1024).toFixed(1)}MB to ${(MAX_CHUNK_SIZE/1024/1024).toFixed(1)}MB`);
   } else {
     updateToastContent(`⏳ Starting adaptive-chunked upload over ${protocolMsg}...`);
   }
