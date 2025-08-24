@@ -179,6 +179,46 @@ def decrypt_file_with_metadata(encrypted_data: bytes, metadata: Dict[str, Option
     
     return decrypt_bytes(encrypted_data, key, iv)
 
+def encrypt_file_stream_chunked(chunk_data: bytes, key: Optional[bytes] = None, iv: Optional[bytes] = None, encryptor = None) -> bytes:
+    """
+    🔄 Android/Termux Optimized: Encrypt individual chunks for streaming uploads
+    
+    This function is designed to be called repeatedly for each chunk of a large file,
+    avoiding the need to load the entire file into memory.
+    
+    Args:
+        chunk_data: Individual chunk of file data
+        key: AES key (generated once per file)
+        iv: Initialization vector (generated once per file)  
+        encryptor: Cipher encryptor object (maintained across chunks)
+    
+    Returns:
+        bytes: Encrypted chunk data
+        
+    Note: This is a simplified chunked encryption. For production use with
+    large files, you'd typically use a stream cipher or authenticated encryption.
+    """
+    # For now, use a simple approach - pad and encrypt each chunk
+    # This is suitable for the current use case but could be enhanced
+    
+    if key is None:
+        key, _ = generate_secure_key()
+    if iv is None:
+        iv = generate_secure_iv()
+    
+    # Create encryptor if not provided
+    if encryptor is None:
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+        encryptor = cipher.encryptor()
+    
+    # Pad the chunk (Note: this is simplified - proper streaming would handle padding differently)
+    padded_chunk = pad(chunk_data)
+    
+    # Encrypt the chunk
+    encrypted_chunk = encryptor.update(padded_chunk)
+    
+    return encrypted_chunk
+
 def encrypt_file_stream(file_data: bytes, user_password: Optional[str] = None, chunk_size: int = 1024 * 1024) -> Tuple[bytes, Dict[str, str]]:
     """
     Memory-efficient streaming AES encryption for large files.

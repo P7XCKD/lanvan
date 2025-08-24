@@ -99,25 +99,74 @@ def get_unique_filename(directory: Path, filename: str) -> str:
     return new_name
 
 def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=False):
-    data = upload_file.file.read()
+    """
+    🔄 Android/Termux Optimized Streaming Upload Handler
+    Processes files in chunks to avoid memory exhaustion on resource-constrained devices
+    """
+    import os
+    import hashlib
+    import gc
+    from .android_optimizer import optimize_for_android_upload
+    
+    # 📱 Android/Termux Detection
+    is_android = ("ANDROID_STORAGE" in os.environ or 
+                 os.path.exists("/data/data/com.termux") or 
+                 "TERMUX_VERSION" in os.environ)
+    
+    # 📊 File size estimation for progress tracking
+    upload_file.file.seek(0, 2)  # Seek to end
+    file_size = upload_file.file.tell()
+    upload_file.file.seek(0)  # Reset to beginning
+    
+    # 📱 Apply Android optimizations for large files
+    if file_size > 50 * 1024 * 1024:  # Files > 50MB
+        feasibility = optimize_for_android_upload(file_size)
+        if feasibility['warnings']:
+            for warning in feasibility['warnings']:
+                print(f"⚠️ {warning}")
+        if feasibility['recommendations']:
+            print(f"💡 Recommendations:")
+            for rec in feasibility['recommendations']:
+                print(f"   • {rec}")
+    
+    # 🎯 Adaptive chunk sizes based on environment and file size
+    if is_android:
+        # Smaller chunks for Android to avoid memory pressure
+        if file_size > 500 * 1024 * 1024:  # Files > 500MB
+            CHUNK_SIZE = 128 * 1024  # 128KB for very large files on Android
+        else:
+            CHUNK_SIZE = 256 * 1024  # 256KB chunks for Android
+        print(f"📱 Android/Termux detected - using optimized chunk size: {CHUNK_SIZE//1024}KB")
+    else:
+        # Larger chunks for desktop systems
+        CHUNK_SIZE = 1024 * 1024  # 1MB chunks for desktop
+    
+    print(f"🔄 Streaming upload: {destination.name} ({file_size:,} bytes)")
+    
     if encrypt:
+        # 🔒 For now, fall back to original method for encrypted files
+        # TODO: Implement true streaming encryption in future update
+        print(f"🔒 Using existing encryption method (will be optimized in future)")
         try:
+            data = upload_file.file.read()
+            
             # Import streaming encryption functions
             from .aes_utils import encrypt_file_stream
             
             # Add file integrity validation for encrypted files
-            import hashlib
             original_hash = hashlib.sha256(data).hexdigest()
             print(f"🔒 Original file hash: {original_hash}")
             
             # Use memory-efficient streaming encryption
-            encrypted_data, metadata = encrypt_file_stream(data, chunk_size=1024 * 1024)  # 1MB chunks
+            encrypted_data, metadata = encrypt_file_stream(data, chunk_size=CHUNK_SIZE)
             
             # Enhanced metadata with integrity information
             metadata['original_hash'] = original_hash
             metadata['original_size'] = str(len(data))
             metadata['encrypted_size'] = str(len(encrypted_data))
             metadata['encryption_method'] = 'streaming'
+            metadata['android_optimized'] = str(is_android)
+            metadata['chunk_size'] = str(CHUNK_SIZE)
             
             # Save metadata to separate file
             metadata_path = destination.with_suffix('.enc.meta')
@@ -129,13 +178,81 @@ def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=Fa
             with destination.open("wb") as f:
                 f.write(encrypted_data)
                 
-            print(f"🔒 File encrypted using streaming AES with {len(encrypted_data)} bytes")
+            print(f"� File encrypted using streaming AES with {len(encrypted_data)} bytes")
+            
+            # 🧹 Clear memory
+            del data, encrypted_data
+            if is_android:
+                gc.collect()
+                
         except Exception as e:
             print(f"🚨 Streaming encryption failed: {e}")
             raise Exception(f"AES encryption failed: {e}")
+    
     else:
-        with destination.open("wb") as f:
-            f.write(data)
+        # 📁 Streaming Non-Encrypted Upload - MEMORY OPTIMIZED
+        try:
+            total_written = 0
+            hash_calculator = hashlib.sha256()
+            last_progress_report = 0
+            
+            with destination.open("wb") as f:
+                while True:
+                    chunk = upload_file.file.read(CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    
+                    # Write chunk immediately
+                    f.write(chunk)
+                    total_written += len(chunk)
+                    
+                    # Update hash
+                    hash_calculator.update(chunk)
+                    
+                    # 🧹 Memory management for Android - more aggressive for large files
+                    if is_android:
+                        if file_size > 500 * 1024 * 1024:  # Files > 500MB
+                            # Very aggressive cleanup for huge files
+                            if total_written % (CHUNK_SIZE * 4) == 0:
+                                gc.collect()
+                        else:
+                            # Regular cleanup
+                            if total_written % (CHUNK_SIZE * 8) == 0:
+                                gc.collect()
+                    
+                    # 📊 Progress reporting - throttled to avoid spam
+                    progress_threshold = 50 * 1024 * 1024 if is_android else 100 * 1024 * 1024
+                    if file_size > progress_threshold:
+                        progress_bytes = total_written - last_progress_report
+                        report_interval = CHUNK_SIZE * 20  # Report every 20 chunks
+                        
+                        if progress_bytes >= report_interval:
+                            progress = (total_written / file_size) * 100 if file_size > 0 else 0
+                            print(f"📁 Upload progress: {progress:.1f}% ({total_written:,}/{file_size:,} bytes)")
+                            last_progress_report = total_written
+            
+            # Calculate final hash
+            file_hash = hash_calculator.hexdigest()
+            print(f"📁 ✅ Streaming upload complete: {total_written:,} bytes (SHA256: {file_hash[:8]}...)")
+            
+            # 🧹 Android memory optimization: Verify file was written correctly
+            if is_android and file_size > 100 * 1024 * 1024:  # For files > 100MB on Android
+                actual_size = destination.stat().st_size
+                if actual_size != total_written:
+                    raise Exception(f"File size mismatch: expected {total_written}, got {actual_size}")
+                print(f"📱 Android verification: File size confirmed {actual_size:,} bytes")
+            
+        except Exception as e:
+            print(f"🚨 Streaming upload failed: {e}")
+            # Clean up partial files
+            if destination.exists():
+                destination.unlink()
+            raise Exception(f"Upload failed: {e}")
+    
+    # 🧹 Final cleanup for Android
+    if is_android:
+        gc.collect()
+        print(f"🧹 Android memory cleanup completed")
 
 def scan_file(path: Path):
     print(f"🧪 Scanning file in background: {path}")
@@ -200,6 +317,26 @@ async def api_files():
             status_code=500,
             content={"status": "error", "msg": f"Failed to get file list: {str(e)}"}
         )
+
+@router.get("/api/android-status", name="android_status")
+async def android_status():
+    """API endpoint to get Android/Termux optimization status"""
+    try:
+        from .android_optimizer import android_optimizer
+        
+        info = android_optimizer.get_memory_info()
+        info['optimizations_active'] = android_optimizer.keep_alive_active
+        
+        return JSONResponse(content={
+            "status": "success",
+            "android_info": info
+        })
+    except Exception as e:
+        return JSONResponse(content={
+            "status": "error",
+            "msg": str(e),
+            "android_info": {"platform": "unknown"}
+        })
 
 @router.post("/upload-auto", name="upload_auto_file")
 async def upload_auto_file(
