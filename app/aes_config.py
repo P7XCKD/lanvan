@@ -5,9 +5,9 @@ from typing import Dict, Any
 class AESConfig:
     """Centralized AES configuration and validation"""
     
-    # 🔐 AES Settings
-    MAX_FILE_SIZE_MB = 200
-    MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+    # 🔐 AES Settings - SIZE LIMITS REMOVED FOR STREAMING ENCRYPTION
+    MAX_FILE_SIZE_MB = None  # No limit - streaming encryption handles any size
+    MAX_FILE_SIZE_BYTES = None  # No limit - streaming encryption handles any size
     
     # 🔒 Security Settings
     ALGORITHM = "AES-256-CBC"
@@ -32,23 +32,20 @@ class AESConfig:
                 'error': 'AES encryption is only available over HTTPS connections for security.'
             }
         
-        if file_size > cls.MAX_FILE_SIZE_BYTES:
-            return {
-                'valid': False,
-                'error': f'AES is blocked for files >{cls.MAX_FILE_SIZE_MB}MB to ensure smooth & efficient file transfer.'
-            }
+        # SIZE LIMITS REMOVED - streaming encryption handles any file size
+        print(f"📊 AES encryption requested for {file_size / (1024**3):.1f}GB file - STREAMING ENCRYPTION (NO SIZE LIMITS)")
         
         return {'valid': True, 'error': None}
     
     @classmethod
     def get_size_limit_mb(cls) -> int:
-        """Get the AES file size limit in MB"""
-        return cls.MAX_FILE_SIZE_MB
+        """Get the AES file size limit in MB - REMOVED, returns 0 to indicate no limit"""
+        return 0
     
     @classmethod
     def get_size_limit_bytes(cls) -> int:
-        """Get the AES file size limit in bytes"""
-        return cls.MAX_FILE_SIZE_BYTES
+        """Get the AES file size limit in bytes - REMOVED, returns 0 to indicate no limit"""
+        return 0
     
     @classmethod
     def is_https_required(cls) -> bool:

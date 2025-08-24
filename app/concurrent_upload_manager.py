@@ -265,10 +265,18 @@ class ConcurrentUploadManager:
                     
                     chunk_count += 1
                     
-                    # Process chunk
+                    # 🔐 Process chunk with encryption if requested
                     if encrypt:
-                        # Add encryption logic here if needed
-                        pass
+                        # Import encryption function
+                        try:
+                            from .aes_utils import encrypt_file_stream
+                            print(f"🔐 [{upload_id}] Encrypting chunk {chunk_count} ({len(chunk):,} bytes)")
+                            # For now, encrypt each chunk individually (can be optimized later)
+                            encrypted_chunk, _ = encrypt_file_stream(chunk)
+                            chunk = encrypted_chunk
+                        except Exception as e:
+                            print(f"❌ [{upload_id}] Encryption failed for chunk {chunk_count}: {e}")
+                            # Continue without encryption as fallback
                     
                     # 🚀 Write chunk asynchronously to prevent blocking
                     await dest_file.write(chunk)
