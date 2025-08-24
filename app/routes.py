@@ -390,12 +390,20 @@ async def upload_auto_file(
                 "msg": validation['error']
             })
 
+    # 🚀 CONCURRENT PROCESSING: Upload all files simultaneously with adaptive optimization
+    from .concurrent_upload_manager import upload_multiple_files_concurrent
+    
     uploaded = []
     
-    print(f"🔍 Processing {len(files)} files for upload...")
+    print(f"🔍 Processing {len(files)} files for concurrent upload...")
 
+    # Prepare destinations and validate all files first
+    destinations = []
+    valid_files = []
+    file_info = []
+    
     for i, file in enumerate(files):
-        print(f"📁 Processing file {i+1}/{len(files)}: {file.filename}")
+        print(f"📁 Preparing file {i+1}/{len(files)}: {file.filename}")
         
         if not file.filename:
             print(f"❌ Skipping file {i+1}: No filename")
@@ -429,13 +437,38 @@ async def upload_auto_file(
         save_name = filename + ".enc" if encrypt else filename
         filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, save_name)
 
-        print(f"💾 Saving file {i+1} as: {filepath.name}")
-        save_upload_file_sync(file, filepath, encrypt=encrypt)
-        background_tasks.add_task(scan_file, filepath)
-        uploaded.append(filepath.name)
-        print(f"✅ File {i+1} uploaded successfully: {filepath.name}")
+        destinations.append(filepath)
+        valid_files.append(file)
+        file_info.append({
+            'original_name': file.filename,
+            'save_name': save_name,
+            'filepath': filepath,
+            'size': file_size
+        })
+        
+        print(f"💾 Will save file {i+1} as: {filepath.name}")
+    
+    if not valid_files:
+        return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
+            "status": "error",
+            "msg": "No valid files to process"
+        })
+    
+    # 🚀 Execute concurrent uploads with adaptive optimization
+    print(f"🚀 Starting concurrent upload of {len(valid_files)} files...")
+    upload_results = await upload_multiple_files_concurrent(valid_files, destinations, encrypt)
+    
+    # Process results and add background tasks
+    for i, result in enumerate(upload_results):
+        if result.get('success'):
+            filepath = Path(result['destination'])
+            background_tasks.add_task(scan_file, filepath)
+            uploaded.append(filepath.name)
+            print(f"✅ File {i+1} uploaded successfully: {filepath.name}")
+        else:
+            print(f"❌ File {i+1} failed: {result.get('error', 'Unknown error')}")
 
-    print(f"🎉 Upload complete! {len(uploaded)} files uploaded: {uploaded}")
+    print(f"🎉 Concurrent upload complete! {len(uploaded)} files uploaded: {uploaded}")
 
     if not uploaded:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
@@ -863,6 +896,57 @@ async def delete_file(filename: str):
             status_code=500,
             content={"status": "error", "msg": f"Failed to delete file: {str(e)}"}
         )
+
+@router.get("/api/upload/chunk-size/{file_size}", name="get_optimal_chunk_size")
+async def get_optimal_chunk_size(file_size: int):
+    """Get optimal chunk size for a file upload based on system capabilities"""
+    from .android_optimizer import universal_optimizer
+    
+    try:
+        # Get adaptive chunk size
+        optimal_chunk_size = universal_optimizer.get_adaptive_chunk_size(file_size)
+        
+        # Get system info for client optimization
+        system_info = universal_optimizer.get_system_info()
+        
+        return JSONResponse({
+            "status": "success",
+            "optimal_chunk_size": optimal_chunk_size,
+            "chunk_size_kb": optimal_chunk_size // 1024,
+            "chunk_size_mb": round(optimal_chunk_size / (1024 * 1024), 2),
+            "system_info": {
+                "platform": system_info["platform"],
+                "available_memory_mb": system_info["available_memory_mb"],
+                "is_low_memory": system_info["is_low_memory"],
+                "cpu_usage": system_info["cpu_usage"]
+            },
+            "recommendations": {
+                "use_concurrent_uploads": file_size > 100 * 1024 * 1024,  # >100MB
+                "enable_progress_reporting": file_size > 50 * 1024 * 1024,  # >50MB
+                "estimated_chunks": max(1, file_size // optimal_chunk_size)
+            }
+        })
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "msg": f"Failed to calculate chunk size: {str(e)}"}
+        )
+
+# === CONCURRENT UPLOAD STATUS ===
+
+@router.get("/api/upload/status", name="upload_status")
+async def get_upload_status():
+    """Get current upload status for all concurrent uploads"""
+    from .concurrent_upload_manager import concurrent_upload_manager
+    
+    status = concurrent_upload_manager.get_system_status()
+    detailed_status = concurrent_upload_manager.get_upload_status()
+    
+    return JSONResponse({
+        "status": "success",
+        "system": status,
+        "uploads": detailed_status
+    })
 
 # === CHUNKED UPLOAD ENDPOINTS ===
 

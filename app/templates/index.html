@@ -3833,18 +3833,42 @@ Device Session will reset when browser is closed
     xhr.send(formData);
   }
 
-  // 🚀 Chunked Upload
+  // 🚀 Enhanced Chunked Upload with Server-Side Adaptive Optimization
   async function uploadLargeFileChunked(uploadItem) {
-    const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
     const file = uploadItem.file;
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    
-    uploadItem.totalChunks = totalChunks;
-    uploadItem.uploadedChunks = 0;
-    uploadItem.status = 'uploading';
-    uploadItem.currentChunkIndex = 0;
     
     try {
+      // 🎯 Get optimal chunk size from server based on file size and system capabilities
+      console.log(`🔍 Getting optimal chunk size for ${file.size} byte file...`);
+      const chunkResponse = await fetch(`/api/upload/chunk-size/${file.size}`);
+      const chunkData = await chunkResponse.json();
+      
+      let CHUNK_SIZE = 1024 * 1024; // Default 1MB fallback
+      
+      if (chunkData.status === 'success') {
+        CHUNK_SIZE = chunkData.optimal_chunk_size;
+        console.log(`🎯 Server recommends ${chunkData.chunk_size_mb}MB chunks for this ${chunkData.system_info.platform} system`);
+        
+        // Show optimization info to user
+        if (chunkData.recommendations.use_concurrent_uploads) {
+          showToast(`🚀 Large file detected! Using ${chunkData.chunk_size_mb}MB chunks optimized for ${chunkData.system_info.platform}`, 4000);
+        }
+      } else {
+        console.warn('⚠️ Could not get optimal chunk size, using default 1MB');
+        showToast('⚠️ Using default chunk size - server optimization unavailable', 2000);
+      }
+      
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    
+      uploadItem.totalChunks = totalChunks;
+      uploadItem.uploadedChunks = 0;
+      uploadItem.status = 'uploading';
+      uploadItem.currentChunkIndex = 0;
+      uploadItem.adaptiveChunkSize = CHUNK_SIZE;
+      uploadItem.systemOptimized = chunkData.status === 'success';
+      
+      console.log(`🔄 Starting adaptive chunked upload: ${totalChunks} chunks of ${(CHUNK_SIZE/1024/1024).toFixed(2)}MB each`);
+      
       // Upload chunks sequentially
       for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
         // Update current chunk index
@@ -4029,10 +4053,12 @@ Device Session will reset when browser is closed
             protocol: window.location.protocol === 'https:' ? 'HTTPS' : 'HTTP',
             method: 'Chunked Upload (Resume Capable)',
             encrypted: false, // Chunked uploads don't support encryption yet
-            // Enhanced chunked stats
+            // Enhanced chunked stats with adaptive optimization info
             chunksUsed: true,
             chunkCount: uploadItem.totalChunks,
-            chunkSize: '1 MB',
+            chunkSize: uploadItem.systemOptimized ? `${(uploadItem.adaptiveChunkSize/1024/1024).toFixed(1)} MB (Adaptive)` : '1 MB (Fallback)',
+            systemOptimized: uploadItem.systemOptimized || false,
+            adaptiveChunkSize: uploadItem.adaptiveChunkSize || (1024 * 1024),
             resumeCount: uploadItem.resumeCount || 0,
             uploadId: uploadItem.id,
             sessionId: getCurrentDeviceId(),
