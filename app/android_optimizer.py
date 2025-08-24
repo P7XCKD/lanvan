@@ -101,42 +101,78 @@ class UniversalOptimizer:
     
     def get_adaptive_chunk_size(self, file_size: int, base_chunk: int = 1024 * 1024) -> int:
         """
-        🎯 Adaptive chunk sizing based on:
+        🚀 AGGRESSIVE Adaptive chunk sizing - maximizes performance based on system capabilities:
         - Available memory
-        - Platform capabilities
+        - Platform capabilities  
         - File size
         - Current system load
+        - Network bandwidth potential
         """
         available_mb = get_available_memory_mb()
         cpu_usage = get_cpu_usage()
         
-        # Base chunk sizes by platform
+        # 🎯 MUCH MORE AGGRESSIVE base chunk sizes by platform
         if self.is_android or self.is_low_memory:
-            min_chunk = 64 * 1024   # 64KB minimum
-            max_chunk = 512 * 1024  # 512KB maximum for Android
-            base_chunk = 256 * 1024 # 256KB base
+            min_chunk = 128 * 1024    # 128KB minimum (was 64KB)
+            max_chunk = 8 * 1024 * 1024   # 8MB maximum for Android (was 512KB!)
+            base_chunk = 1024 * 1024  # 1MB base (was 256KB)
         else:
-            min_chunk = 256 * 1024  # 256KB minimum
-            max_chunk = 4 * 1024 * 1024  # 4MB maximum for desktop
-            base_chunk = 1024 * 1024     # 1MB base
+            min_chunk = 512 * 1024    # 512KB minimum (was 256KB)
+            max_chunk = 64 * 1024 * 1024  # 64MB maximum for desktop (was 4MB!)
+            base_chunk = 4 * 1024 * 1024  # 4MB base (was 1MB)
         
-        # Adaptive adjustments
+        # 🚀 AGGRESSIVE memory-based scaling
         chunk_size = base_chunk
         
-        # 1. Memory-based adjustment
-        if available_mb < 512:     # Very low memory
+        # Memory-based multiplication factors
+        if available_mb < 512:      # Very low memory - conservative
             chunk_size = min_chunk
-        elif available_mb < 1024:  # Low memory  
+        elif available_mb < 1024:   # Low memory - still conservative  
             chunk_size = min_chunk * 2
-        elif available_mb > 4096:  # High memory
-            chunk_size = min(max_chunk, base_chunk * 2)
+        elif available_mb < 2048:   # Medium memory - moderate
+            chunk_size = base_chunk
+        elif available_mb < 4096:   # Good memory - aggressive
+            chunk_size = base_chunk * 2
+        elif available_mb < 8192:   # High memory - very aggressive
+            chunk_size = base_chunk * 4
+        elif available_mb < 16384:  # Very high memory - extremely aggressive
+            chunk_size = base_chunk * 8
+        else:                       # Massive memory - MAXIMUM PERFORMANCE
+            chunk_size = base_chunk * 16
         
-        # 2. File size adjustment
-        if file_size > 1024 * 1024 * 1024:  # Files > 1GB
-            if self.is_android:
-                chunk_size = min(chunk_size, 128 * 1024)  # Very small chunks for huge files on Android
-            else:
-                chunk_size = min(chunk_size, 512 * 1024)  # Moderate chunks for huge files
+        # 🎯 File size optimization - larger files can handle bigger chunks better
+        if file_size > 10 * 1024 * 1024 * 1024:  # Files > 10GB - use largest possible
+            if not self.is_android and available_mb > 4096:
+                chunk_size = min(max_chunk, chunk_size * 2)  # Double chunk size for huge files
+        elif file_size > 5 * 1024 * 1024 * 1024:  # Files > 5GB
+            if available_mb > 2048:
+                chunk_size = min(max_chunk, int(chunk_size * 1.5))  # 1.5x chunk size
+        elif file_size > 1 * 1024 * 1024 * 1024:  # Files > 1GB
+            # Keep current chunk size - no reduction
+            pass
+        elif file_size < 100 * 1024 * 1024:  # Files < 100MB - can use smaller efficient chunks
+            if chunk_size > 2 * 1024 * 1024:  # If chunk would be > 2MB
+                chunk_size = 2 * 1024 * 1024  # Cap at 2MB for small files (more efficient)
+        
+        # 📊 CPU usage adjustment - if CPU is busy, use smaller chunks
+        if cpu_usage > 80:  # High CPU usage
+            chunk_size = max(min_chunk, chunk_size // 2)
+        elif cpu_usage > 60:  # Medium CPU usage  
+            chunk_size = max(min_chunk, int(chunk_size * 0.75))
+        # If CPU usage is low (< 60%), keep large chunks for maximum throughput
+        
+        # 🎯 Platform-specific optimization overrides
+        if not self.is_android:  # Desktop/Server systems
+            # Desktop systems can handle much larger chunks
+            if available_mb > 8192 and cpu_usage < 50:  # 8GB+ RAM and low CPU
+                chunk_size = min(max_chunk, max(chunk_size, 32 * 1024 * 1024))  # At least 32MB
+            elif available_mb > 4096 and cpu_usage < 70:  # 4GB+ RAM and moderate CPU  
+                chunk_size = min(max_chunk, max(chunk_size, 16 * 1024 * 1024))  # At least 16MB
+        
+        # Ensure we stay within bounds
+        chunk_size = max(min_chunk, min(max_chunk, chunk_size))
+        
+        return chunk_size
         
         # 3. CPU load adjustment
         if cpu_usage > 80:
