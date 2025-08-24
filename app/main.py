@@ -233,12 +233,12 @@ async def lifespan(app: FastAPI):
     yield
     print("🚨 Server shutting down immediately...")
     
-    # Stop Android optimizations if active
+    # Stop universal optimizations if active
     try:
-        from app.android_optimizer import cleanup_android_resources
-        cleanup_android_resources()
+        from app.universal_optimizer import cleanup_resources
+        cleanup_resources()
     except Exception as e:
-        print(f"⚠️ Android cleanup warning: {e}")
+        print(f"⚠️ Cleanup warning: {e}")
     
     # Stop HTTPS redirect server if running
     print("🔴 Stopping HTTPS redirect server...")

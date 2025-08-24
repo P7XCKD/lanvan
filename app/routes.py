@@ -100,46 +100,69 @@ def get_unique_filename(directory: Path, filename: str) -> str:
 
 def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=False):
     """
-    🔄 Android/Termux Optimized Streaming Upload Handler
-    Processes files in chunks to avoid memory exhaustion on resource-constrained devices
+    🔄 Universal Streaming Upload Handler - Optimized for ALL platforms
+    Processes files in chunks to avoid memory exhaustion on ANY device (PC, Android, etc.)
     """
     import os
     import hashlib
     import gc
-    from .android_optimizer import optimize_for_android_upload
+    from .universal_optimizer import optimize_for_large_upload
     
-    # 📱 Android/Termux Detection
+    # 📱 Platform Detection (but optimizations apply to ALL)
     is_android = ("ANDROID_STORAGE" in os.environ or 
                  os.path.exists("/data/data/com.termux") or 
                  "TERMUX_VERSION" in os.environ)
+    
+    is_windows = os.name == 'nt'
+    is_linux = os.name == 'posix' and not is_android
+    
+    platform_name = "Android/Termux" if is_android else "Windows" if is_windows else "Linux/Unix"
     
     # 📊 File size estimation for progress tracking
     upload_file.file.seek(0, 2)  # Seek to end
     file_size = upload_file.file.tell()
     upload_file.file.seek(0)  # Reset to beginning
     
-    # 📱 Apply Android optimizations for large files
+    # � Apply optimizations for large files on ALL platforms
     if file_size > 50 * 1024 * 1024:  # Files > 50MB
-        feasibility = optimize_for_android_upload(file_size)
-        if feasibility['warnings']:
-            for warning in feasibility['warnings']:
-                print(f"⚠️ {warning}")
-        if feasibility['recommendations']:
-            print(f"💡 Recommendations:")
-            for rec in feasibility['recommendations']:
-                print(f"   • {rec}")
+        print(f"🔄 Large file detected ({file_size//1024//1024}MB) - enabling streaming optimizations")
+        
+        # Android-specific feasibility check (but streaming works everywhere)
+        if is_android:
+            feasibility = optimize_for_large_upload(file_size)
+            if feasibility['warnings']:
+                for warning in feasibility['warnings']:
+                    print(f"⚠️ {warning}")
+            if feasibility['recommendations']:
+                print(f"💡 Android recommendations:")
+                for rec in feasibility['recommendations']:
+                    print(f"   • {rec}")
+        else:
+            # General recommendations for PC/Linux/Mac
+            feasibility = optimize_for_large_upload(file_size)
+            if feasibility['warnings']:
+                for warning in feasibility['warnings']:
+                    print(f"⚠️ {warning}")
+            if feasibility['recommendations']:
+                print(f"💡 {platform_name} recommendations:")
+                for rec in feasibility['recommendations']:
+                    print(f"   • {rec}")
     
-    # 🎯 Adaptive chunk sizes based on environment and file size
+    # 🎯 Universal chunk sizes optimized for each platform
     if is_android:
-        # Smaller chunks for Android to avoid memory pressure
+        # Smaller chunks for mobile devices with limited RAM
         if file_size > 500 * 1024 * 1024:  # Files > 500MB
             CHUNK_SIZE = 128 * 1024  # 128KB for very large files on Android
         else:
             CHUNK_SIZE = 256 * 1024  # 256KB chunks for Android
-        print(f"📱 Android/Termux detected - using optimized chunk size: {CHUNK_SIZE//1024}KB")
+        print(f"📱 {platform_name} detected - using optimized chunk size: {CHUNK_SIZE//1024}KB")
     else:
-        # Larger chunks for desktop systems
-        CHUNK_SIZE = 1024 * 1024  # 1MB chunks for desktop
+        # Larger chunks for desktop systems with more RAM
+        if file_size > 2 * 1024 * 1024 * 1024:  # Files > 2GB
+            CHUNK_SIZE = 512 * 1024  # 512KB for very large files on PC
+        else:
+            CHUNK_SIZE = 1024 * 1024  # 1MB chunks for normal desktop use
+        print(f"💻 {platform_name} detected - using optimized chunk size: {CHUNK_SIZE//1024}KB")
     
     print(f"🔄 Streaming upload: {destination.name} ({file_size:,} bytes)")
     
@@ -180,10 +203,11 @@ def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=Fa
                 
             print(f"� File encrypted using streaming AES with {len(encrypted_data)} bytes")
             
-            # 🧹 Clear memory
+            # 🧹 Clear memory universally for large files
             del data, encrypted_data
-            if is_android:
+            if file_size > 100 * 1024 * 1024:  # Files > 100MB on any platform
                 gc.collect()
+                print(f"🧹 Memory cleanup after encryption")
                 
         except Exception as e:
             print(f"🚨 Streaming encryption failed: {e}")
@@ -209,19 +233,23 @@ def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=Fa
                     # Update hash
                     hash_calculator.update(chunk)
                     
-                    # 🧹 Memory management for Android - more aggressive for large files
-                    if is_android:
-                        if file_size > 500 * 1024 * 1024:  # Files > 500MB
-                            # Very aggressive cleanup for huge files
-                            if total_written % (CHUNK_SIZE * 4) == 0:
-                                gc.collect()
-                        else:
-                            # Regular cleanup
-                            if total_written % (CHUNK_SIZE * 8) == 0:
-                                gc.collect()
+                    # 🧹 Universal Memory Management - optimized for all platforms
+                    if file_size > 1024 * 1024 * 1024:  # Files > 1GB - aggressive cleanup on ANY platform
+                        if total_written % (CHUNK_SIZE * 2) == 0:  # Every 2 chunks for huge files
+                            gc.collect()
+                    elif file_size > 500 * 1024 * 1024:  # Files > 500MB - moderate cleanup
+                        if total_written % (CHUNK_SIZE * 4) == 0:  # Every 4 chunks
+                            gc.collect()
+                    elif file_size > 100 * 1024 * 1024:  # Files > 100MB - light cleanup
+                        if total_written % (CHUNK_SIZE * 8) == 0:  # Every 8 chunks
+                            gc.collect()
                     
-                    # 📊 Progress reporting - throttled to avoid spam
-                    progress_threshold = 50 * 1024 * 1024 if is_android else 100 * 1024 * 1024
+                    # 📊 Universal Progress Reporting - platform-aware thresholds
+                    if is_android:
+                        progress_threshold = 50 * 1024 * 1024  # Report for files > 50MB on Android
+                    else:
+                        progress_threshold = 100 * 1024 * 1024  # Report for files > 100MB on PC/Linux
+                    
                     if file_size > progress_threshold:
                         progress_bytes = total_written - last_progress_report
                         report_interval = CHUNK_SIZE * 20  # Report every 20 chunks
@@ -235,12 +263,12 @@ def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=Fa
             file_hash = hash_calculator.hexdigest()
             print(f"📁 ✅ Streaming upload complete: {total_written:,} bytes (SHA256: {file_hash[:8]}...)")
             
-            # 🧹 Android memory optimization: Verify file was written correctly
-            if is_android and file_size > 100 * 1024 * 1024:  # For files > 100MB on Android
+            # 🔍 Universal file verification for large files (all platforms)
+            if file_size > 100 * 1024 * 1024:  # For files > 100MB on ANY platform
                 actual_size = destination.stat().st_size
                 if actual_size != total_written:
                     raise Exception(f"File size mismatch: expected {total_written}, got {actual_size}")
-                print(f"📱 Android verification: File size confirmed {actual_size:,} bytes")
+                print(f"✅ {platform_name} verification: File size confirmed {actual_size:,} bytes")
             
         except Exception as e:
             print(f"🚨 Streaming upload failed: {e}")
@@ -249,10 +277,10 @@ def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=Fa
                 destination.unlink()
             raise Exception(f"Upload failed: {e}")
     
-    # 🧹 Final cleanup for Android
-    if is_android:
+    # 🧹 Universal final cleanup for large files
+    if file_size > 50 * 1024 * 1024:  # Files > 50MB on any platform
         gc.collect()
-        print(f"🧹 Android memory cleanup completed")
+        print(f"🧹 {platform_name} memory cleanup completed")
 
 def scan_file(path: Path):
     print(f"🧪 Scanning file in background: {path}")
@@ -318,24 +346,24 @@ async def api_files():
             content={"status": "error", "msg": f"Failed to get file list: {str(e)}"}
         )
 
-@router.get("/api/android-status", name="android_status")
-async def android_status():
-    """API endpoint to get Android/Termux optimization status"""
+@router.get("/api/platform-status", name="platform_status")
+async def platform_status():
+    """API endpoint to get universal platform optimization status"""
     try:
-        from .android_optimizer import android_optimizer
+        from .universal_optimizer import universal_optimizer
         
-        info = android_optimizer.get_memory_info()
-        info['optimizations_active'] = android_optimizer.keep_alive_active
+        info = universal_optimizer.get_platform_info()
+        info['optimizations_active'] = universal_optimizer.keep_alive_active
         
         return JSONResponse(content={
             "status": "success",
-            "android_info": info
+            "platform_info": info
         })
     except Exception as e:
         return JSONResponse(content={
             "status": "error",
             "msg": str(e),
-            "android_info": {"platform": "unknown"}
+            "platform_info": {"platform": "unknown"}
         })
 
 @router.post("/upload-auto", name="upload_auto_file")
