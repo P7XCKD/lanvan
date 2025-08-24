@@ -1794,7 +1794,7 @@
         //console.log('📡 Clipboard WebSocket connected');
         // Refresh clipboard history when WebSocket (re)connects
         if (typeof refreshClipboardHistory === 'function') {
-          setTimeout(() => refreshClipboardHistory(), 100);
+          setTimeout(() => refreshClipboardHistory(), 50); // Reduced from 100ms for responsiveness
         }
       };
       ws.onmessage = (event) => {
@@ -1803,8 +1803,8 @@
         }
       };
       ws.onclose = () => {
-        // Try to reconnect after 2s if disconnected
-        setTimeout(connectClipboardWS, 2000);
+        // Try to reconnect after reduced delay if disconnected
+        setTimeout(connectClipboardWS, 1000); // Reduced from 2000ms
       };
       ws.onerror = () => {
         ws.close();
@@ -1829,7 +1829,7 @@
         console.log('📡 Regular mode clipboard WebSocket connected');
         // Refresh clipboard history when WebSocket (re)connects
         if (typeof refreshClipboardHistory === 'function') {
-          setTimeout(() => refreshClipboardHistory(), 100);
+          setTimeout(() => refreshClipboardHistory(), 50); // Reduced from 100ms for responsiveness
         }
       };
       clipboardWS.onmessage = (event) => {
@@ -1840,8 +1840,8 @@
       };
       clipboardWS.onclose = () => {
         console.log('📡 Clipboard WebSocket disconnected, will reconnect...');
-        // Try to reconnect after 2s if disconnected
-        setTimeout(connectRegularClipboardWS, 2000);
+        // Try to reconnect after reduced delay if disconnected
+        setTimeout(connectRegularClipboardWS, 1000); // Reduced from 2000ms
       };
       clipboardWS.onerror = () => {
         clipboardWS.close();
@@ -1882,31 +1882,40 @@
     let uploadIdCounter = 0;
     let isUploadManagerVisible = false;
     
-    // 🔄 Progress Update Safety Net - Ensure active uploads never get stuck
+    // 🔄 Progress Update Safety Net - Ultra-responsive for live feel
     let progressUpdateInterval = null;
     
     function startProgressUpdateSafetyNet() {
       if (progressUpdateInterval) return; // Already running
       
       progressUpdateInterval = setInterval(() => {
+        // Include ALL uploads that should show progress (uploading OR processing)
         const activeUploads = uploadQueue.filter(item => 
-          item.status === 'uploading' && item.progress < 100
+          (item.status === 'uploading' || item.status === 'processing') && 
+          item.progress !== undefined && item.progress < 100
         );
         
-        // Force update active uploads that might be stuck due to processing delays
+        // Force update uploads that might be stuck due to processing delays
         activeUploads.forEach(uploadItem => {
-          if (uploadItem.lastProgressUpdate && (Date.now() - uploadItem.lastProgressUpdate) > 2000) {
-            console.log(`🔄 Safety net: Forcing progress update for ${uploadItem.fileName}`);
-            updateUploadItem(uploadItem);
+          const timeSinceUpdate = uploadItem.lastProgressUpdate ? (Date.now() - uploadItem.lastProgressUpdate) : 5000;
+          // More aggressive: force update every 800ms for ultra-responsive feel
+          if (timeSinceUpdate > 800) {
+            console.log(`🔄 Safety net: Forcing progress update for ${uploadItem.fileName} (${timeSinceUpdate}ms since last update)`);
+            updateUploadItem(uploadItem, true); // Force update flag
           }
         });
         
-        // Stop the safety net if no active uploads
-        if (activeUploads.length === 0) {
+        // Keep safety net running if ANY uploads exist (not just active ones)
+        const anyUploads = uploadQueue.filter(item => 
+          !['completed', 'cancelled', 'error'].includes(item.status)
+        );
+        
+        if (anyUploads.length === 0) {
           clearInterval(progressUpdateInterval);
           progressUpdateInterval = null;
+          console.log('🔄 Safety net stopped - no active uploads');
         }
-      }, 1000); // Check every second
+      }, 300); // Check every 300ms for ultra-responsive feel
     }
     
     // 🔒 AES Configuration (matches backend)
@@ -3088,11 +3097,11 @@ Device Session will reset when browser is closed
     return newItem.fileSize < existingItem.fileSize;
   }
 
-  // 🎨 UI UPDATE OPTIMIZATION: Prevent flickering during pause/resume
+  // 🎨 UI UPDATE OPTIMIZATION: Minimal throttling for responsive feel
   let lastUIUpdate = {};
-  const UI_UPDATE_THROTTLE = 100; // ms - prevent excessive updates
+  const UI_UPDATE_THROTTLE = 50; // ms - reduced from 100ms for ultra-responsive feel
 
-  function updateUploadItem(uploadItem) {
+  function updateUploadItem(uploadItem, forceUpdate = false) {
     const now = Date.now();
     const lastUpdate = lastUIUpdate[uploadItem.id] || 0;
     
@@ -3105,14 +3114,16 @@ Device Session will reset when browser is closed
       uploadItem.progress === 100;
     
     // Use requestIdleCallback for non-critical updates to prevent blocking
-    // But NEVER throttle progress updates for actively uploading files
+    // But NEVER throttle progress updates for actively uploading files OR force updates
     const isActiveUpload = uploadItem.status === 'uploading' && uploadItem.progress < 100;
-    if (!isImportantUpdate && !isActiveUpload && (now - lastUpdate) < UI_UPDATE_THROTTLE) {
+    
+    // Safety net can force updates bypassing ALL throttling
+    if (!forceUpdate && !isImportantUpdate && !isActiveUpload && (now - lastUpdate) < UI_UPDATE_THROTTLE) {
       return; // Skip this update to prevent flickering
     }
     
-    // For processing updates, only defer the status text update, not progress bar updates
-    if (uploadItem.status === 'processing') {
+    // For processing updates, only defer the status text update UNLESS it's a force update
+    if (uploadItem.status === 'processing' && !forceUpdate) {
       console.log(`⚙️ Processing update for ${uploadItem.fileName}`);
       // Only defer status updates for processing files, allow progress updates to flow normally
       if (window.requestIdleCallback) {
@@ -3127,11 +3138,11 @@ Device Session will reset when browser is closed
       // Continue to immediate UI update for progress and other elements
     }
     
-    performUIUpdate(uploadItem);
+    performUIUpdate(uploadItem, forceUpdate);
   }
 
   // Separated UI update logic to allow async processing
-  function performUIUpdate(uploadItem) {
+  function performUIUpdate(uploadItem, forceUpdate = false) {
     const now = Date.now();
     lastUIUpdate[uploadItem.id] = now;
 
@@ -3144,11 +3155,17 @@ Device Session will reset when browser is closed
 
     if (!itemDiv) return;
 
-    // 🎨 SMOOTH PROGRESS: Use requestAnimationFrame for smooth progress bar updates
+    // 🎨 SMOOTH PROGRESS: Use immediate updates for forced updates, requestAnimationFrame for normal ones
     if (progressFill && uploadItem.progress !== undefined) {
-      requestAnimationFrame(() => {
+      if (forceUpdate) {
+        // Immediate update for safety net - no animation delay
         progressFill.style.width = `${uploadItem.progress}%`;
-      });
+      } else {
+        // Smooth animation for normal updates
+        requestAnimationFrame(() => {
+          progressFill.style.width = `${uploadItem.progress}%`;
+        });
+      }
     }
 
     // Update progress text with stable rounding
@@ -7323,11 +7340,14 @@ async function addTextToClipboard() {
     showToast('❌ Please enter some text to add to clipboard', 3000);
     return;
   }
-  
+
   const formData = new FormData();
   formData.append('data', text);
   
   try {
+    // Use Promise.resolve to ensure this runs in next tick, not blocking UI
+    await Promise.resolve();
+    
     const response = await fetch('/api/clipboard/add', {
       method: 'POST',
       body: formData
@@ -7338,8 +7358,8 @@ async function addTextToClipboard() {
       showToast(`📋 Text added to clipboard (${data.item.size} bytes)`, 3000);
       textInput.value = ''; // Clear input
       
-      // Refresh clipboard immediately - independent of uploads
-      refreshClipboardHistory();
+      // Refresh clipboard immediately in next tick - completely independent of uploads
+      requestAnimationFrame(() => refreshClipboardHistory());
     } else {
       showToast(`❌ Failed to add text: ${data.msg}`, 4000);
     }
@@ -7361,15 +7381,25 @@ function clearClipboardInput() {
 // Refresh clipboard history
 async function refreshClipboardHistory() {
   try {
-    const response = await fetch('/api/clipboard/list');
-    const data = await response.json();
+    // Use requestIdleCallback if available to avoid blocking upload progress
+    const performRefresh = async () => {
+      const response = await fetch('/api/clipboard/list');
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        clipboardHistoryData = data.items;
+        // Use requestAnimationFrame for smooth UI updates
+        requestAnimationFrame(() => renderClipboardHistory(data.items));
+      } else {
+        console.error('Failed to load clipboard history:', data.msg);
+        showToast('❌ Failed to load clipboard history', 3000);
+      }
+    };
     
-    if (data.status === 'success') {
-      clipboardHistoryData = data.items;
-      renderClipboardHistory(data.items);
+    if (window.requestIdleCallback) {
+      requestIdleCallback(performRefresh);
     } else {
-      console.error('Failed to load clipboard history:', data.msg);
-      showToast('❌ Failed to load clipboard history', 3000);
+      await performRefresh();
     }
   } catch (error) {
     console.error('Error loading clipboard history:', error);
