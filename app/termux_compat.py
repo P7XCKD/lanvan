@@ -16,7 +16,7 @@ def is_termux_environment() -> bool:
     🔍 Reliable Termux environment detection
     """
     # Check for Termux-specific environment variables and paths
-    return any([
+    is_termux = any([
         "TERMUX_VERSION" in os.environ,
         "ANDROID_STORAGE" in os.environ,
         os.path.exists("/data/data/com.termux"),
@@ -24,6 +24,13 @@ def is_termux_environment() -> bool:
         "com.termux" in os.environ.get("PREFIX", ""),
         "/data/data/com.termux" in sys.executable
     ])
+    
+    # Only log once per session
+    if is_termux and not hasattr(is_termux_environment, '_logged'):
+        print("🤖 Termux environment detected - using safe compatibility mode")
+        is_termux_environment._logged = True
+    
+    return is_termux
 
 
 def is_android_environment() -> bool:
@@ -60,7 +67,7 @@ def safe_psutil_call(
     """
     # Use Termux-specific fallback if available and we're in Termux
     if is_termux_environment() and termux_fallback is not None:
-        print(f"🤖 Using Termux fallback for {func.__name__}")
+        # Silent fallback - only log once per session if needed
         return termux_fallback
     
     try:
@@ -75,12 +82,12 @@ def safe_psutil_call(
             "access denied",
             "errno 13"
         ]):
-            print(f"⚠️ System access restricted for {func.__name__}: {e}")
+            # Silent fallback for permission errors in Termux
             return termux_fallback if termux_fallback is not None else default_value
         # Re-raise if it's not a known permission/access issue
         raise
     except ImportError:
-        print(f"⚠️ psutil not available for {func.__name__}")
+        # Silent fallback for missing psutil
         return termux_fallback if termux_fallback is not None else default_value
 
 

@@ -112,8 +112,14 @@ class ResponsivenessMonitor:
                         'memory_usage': memory_info['percent'],
                         'last_heartbeat': time.time()
                     })
-                    
-                print(f"🤖 Lightweight metrics - CPU: {cpu_percent:.1f}%, Memory: {memory_info['percent']:.1f}%")
+                
+                # Only log occasionally to reduce noise
+                if not hasattr(self, 'log_counter'):
+                    self.log_counter = 0
+                self.log_counter += 1
+                
+                if self.log_counter % 20 == 0:  # Every 20th update
+                    print(f"📊 System: CPU {cpu_percent:.1f}%, Memory {memory_info['percent']:.1f}%")
             else:
                 # Full monitoring for desktop/server environments
                 cpu_percent = get_safe_cpu_usage()

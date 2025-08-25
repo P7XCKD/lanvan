@@ -47,7 +47,7 @@ def calculate_optimal_chunk_size(file_size: int, available_memory_mb: int) -> in
     
     # Use Termux-specific chunk sizing if in Termux environment
     if is_termux_environment():
-        chunk_size = get_termux_chunk_size(file_size, available_memory_mb)
+        chunk_size = get_termux_chunk_size(file_size)
         print(f"🤖 Termux chunk size: {chunk_size // 1024}KB")
         return chunk_size
     
