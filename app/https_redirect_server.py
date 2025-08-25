@@ -47,7 +47,6 @@ class HTTPSRedirectServer:
             if request.url.query:
                 https_url += f"?{request.url.query}"
             
-            print(f"🔀 HTTP→HTTPS Redirect: {request.url} → {https_url}")
             return RedirectResponse(url=https_url, status_code=301)
         
         # Add POST redirect for completeness
