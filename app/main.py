@@ -19,6 +19,9 @@ from app.routes import router
 # Import mDNS manager for service discovery
 from app.simple_mdns import mdns_manager
 
+# Import HTTPS redirect server for dual-protocol support
+from app.https_redirect_server import start_https_redirect_server, stop_https_redirect_server
+
 # 🔇 Suppress noisy ClientDisconnect errors in logs
 class ClientDisconnectFilter(logging.Filter):
     def filter(self, record):
@@ -159,6 +162,10 @@ async def lifespan(app: FastAPI):
     print("🚀 Server starting up with enhanced shutdown handling...")
     print("💡 Use Ctrl+C to shutdown gracefully (console commands disabled)")
     
+    # Start responsiveness monitor
+    from app.responsiveness_monitor import responsiveness_monitor
+    await responsiveness_monitor.start_monitoring()
+    
     # Start mDNS service
     # Get the actual port being used (80/443 or fallback ports)
     port = int(os.environ.get('PORT', 80))  # Default to HTTP port 80
@@ -168,6 +175,27 @@ async def lifespan(app: FastAPI):
     mdns_manager.use_https = use_https  # Configure HTTPS mode
     
     print(f"🔍 Starting mDNS service discovery ({'HTTPS' if use_https else 'HTTP'} mode)...")
+    
+    # 🔀 Start HTTPS redirect server if in HTTPS mode
+    if use_https:
+        try:
+            # Determine HTTP redirect port (try standard port 80, fallback to 8080)
+            http_redirect_port = 80
+            if port == 443:
+                # Standard HTTPS setup - use port 80 for redirect
+                http_redirect_port = 80
+            elif port == 5001:
+                # Development HTTPS setup - use port 5000 for redirect  
+                http_redirect_port = 5000
+            else:
+                # Custom HTTPS port - use port 8080 for redirect
+                http_redirect_port = 8080
+            
+            print(f"🔀 Starting HTTPS redirect server on port {http_redirect_port} → {port}")
+            await start_https_redirect_server(port, http_redirect_port)
+        except Exception as e:
+            print(f"⚠️ HTTPS redirect server failed: {e}")
+            print("   Direct HTTPS access will still work")
     
     # Start mDNS in background thread to not block server startup
     def start_mdns_background():
@@ -179,6 +207,10 @@ async def lifespan(app: FastAPI):
                 print(f"   Access via: {mdns_info['url']}")
                 if mdns_info['conflict_resolved']:
                     print(f"   🔧 Conflict resolved (attempt #{mdns_info['conflict_count'] + 1})")
+                
+                # Show redirect info for HTTPS mode
+                if use_https:
+                    print(f"🔀 HTTP→HTTPS redirect: http://lanvan.local → https://lanvan.local:{port}")
             else:
                 print("⚠️  mDNS service failed to start - using IP access only")
         except Exception as e:
@@ -204,6 +236,25 @@ async def lifespan(app: FastAPI):
     
     yield
     print("🚨 Server shutting down immediately...")
+    
+    # Stop responsiveness monitor
+    await responsiveness_monitor.stop_monitoring()
+    
+    # Stop universal optimizations if active
+    try:
+        from app.universal_optimizer import cleanup_resources
+        cleanup_resources()
+    except Exception as e:
+        print(f"⚠️ Cleanup warning: {e}")
+    
+    # Stop HTTPS redirect server if running
+    print("🔴 Stopping HTTPS redirect server...")
+    await stop_https_redirect_server()
+    
+    # Stop streaming assembly system
+    print("🌊 Stopping streaming assembly system...")
+    from app.streaming_assembly import shutdown_streaming_assembly
+    shutdown_streaming_assembly()
     
     # Stop mDNS service
     print("🔴 Stopping mDNS service...")
