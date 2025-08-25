@@ -125,15 +125,90 @@ def can_bind_privileged_port(port):
     except (OSError, PermissionError):
         return False
 
-def get_safe_port(preferred_port, fallback_port):
-    """Get a safe port to use, falling back if privileged port can't be bound"""
-    if can_bind_privileged_port(preferred_port):
-        return preferred_port
-    else:
-        if preferred_port < 1024:
-            print(f"[WARNING] Cannot bind to privileged port {preferred_port} (requires admin/root)")
-            print(f"[INFO] Using fallback port {fallback_port}")
-        return fallback_port
+def is_port_available(port):
+    """Check if a port is available for binding"""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(('0.0.0.0', port))
+            return True
+    except (socket.error, OSError):
+        return False
+
+def find_available_port(start_port=5000, end_port=9999):
+    """Find an available port in the given range"""
+    for port in range(start_port, end_port + 1):
+        if is_port_available(port):
+            return port
+    return None
+
+def get_safe_port(preferred_port=None, protocol="http"):
+    """
+    Get a safe port with intelligent priority system
+    Priority: HTTP(80) → HTTPS(443) → fallback(5000/5001) → auto-search
+    """
+    # Define port priorities based on protocol
+    if protocol.lower() == "https":
+        priority_ports = [443, 5001, 80, 5000]
+        fallback_search_start = 8443
+    else:  # http
+        priority_ports = [80, 5000, 443, 5001]
+        fallback_search_start = 8080
+    
+    # If a specific preferred port is provided, try it first
+    if preferred_port is not None:
+        if is_port_available(preferred_port) and can_bind_privileged_port(preferred_port):
+            return preferred_port
+        else:
+            if preferred_port < 1024:
+                print(f"[WARNING] Cannot bind to privileged port {preferred_port} (requires admin/root)")
+            else:
+                print(f"[WARNING] Port {preferred_port} is not available or already in use")
+    
+    # Try priority ports in order
+    for port in priority_ports:
+        if is_port_available(port):
+            if can_bind_privileged_port(port):
+                if port in [80, 443]:
+                    print(f"[SUCCESS] Using standard {protocol.upper()} port {port}")
+                else:
+                    print(f"[INFO] Using fallback port {port}")
+                return port
+            else:
+                if port < 1024:
+                    print(f"[WARNING] Cannot bind to privileged port {port} (requires admin/root)")
+                continue
+        else:
+            print(f"[WARNING] Port {port} is already in use")
+    
+    # Auto-search for available ports in common ranges
+    print("[INFO] Searching for available port in common ranges...")
+    search_ranges = [
+        (fallback_search_start, fallback_search_start + 99),  # 8080-8179 or 8443-8542
+        (3000, 3099),    # Common development ports
+        (4000, 4099),    # Alternative development ports  
+        (6000, 6099),    # Alternative service ports
+        (7000, 7099),    # Alternative service ports
+        (8000, 8099),    # HTTP alternatives
+        (9000, 9099),    # High-level service ports
+        (10000, 10999)   # User ports
+    ]
+    
+    for start, end in search_ranges:
+        available_port = find_available_port(start, end)
+        if available_port:
+            print(f"[INFO] Auto-discovered available port: {available_port}")
+            return available_port
+    
+    # Last resort: search entire unprivileged port range
+    available_port = find_available_port(1024, 65535)
+    if available_port:
+        print(f"[INFO] Found available port in extended search: {available_port}")
+        return available_port
+    
+    # If all else fails, return 5000 and let the system handle the error
+    print(f"[ERROR] No available ports found! Using 5000 anyway...")
+    return 5000
 
 def is_android_termux():
     return "ANDROID_STORAGE" in os.environ or os.path.exists("/data/data/com.termux")
@@ -275,18 +350,18 @@ if __name__ == "__main__":
     
     # Parse arguments
     use_https = False
-    port = get_safe_port(HTTP_PORT, FALLBACK_HTTP_PORT)
+    port = get_safe_port(protocol="http")
     ios_mode = False
     
     # Check for arguments
     for arg in [a.lower() for a in args[1:]]:
         if arg in ["https", "--https"]:
             use_https = True
-            port = get_safe_port(HTTPS_PORT, FALLBACK_HTTPS_PORT)
+            port = get_safe_port(protocol="https")
         elif arg in ["ios", "--ios", "--safari"]:
             ios_mode = True
             use_https = False  # Force HTTP for iOS compatibility
-            port = get_safe_port(HTTP_PORT, FALLBACK_HTTP_PORT)
+            port = get_safe_port(protocol="http")
     
     # Check for custom port
     for i, arg in enumerate(args):
@@ -307,7 +382,7 @@ if __name__ == "__main__":
         else:
             print("[WARNING] Failed to generate certificates. Falling back to HTTP.")
             use_https = False
-            port = get_safe_port(HTTP_PORT, FALLBACK_HTTP_PORT)
+            port = get_safe_port(protocol="http")
 
     print_banner(ip, port, use_https)
     
