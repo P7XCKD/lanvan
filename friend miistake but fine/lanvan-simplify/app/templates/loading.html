@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LANVan - Loading...</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  
+  <!-- 🚀 INSTANT DARK MODE - NO FLASH! -->
+  <script>
+    (function() {
+      const savedDarkMode = localStorage.getItem('dark_mode_enabled');
+      let isDarkMode = false;
+      
+      if (savedDarkMode !== null) {
+        isDarkMode = savedDarkMode === '1';
+      } else if (window.matchMedia) {
+        isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+      
+      if (isDarkMode) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  
+  <style>
+    /* CSS Variables for theme support */
+    :root {
+      --bg-color: #f2f3f7;
+      --card-bg: #fff;
+      --text-color: #333;
+      --accent-color: #4a90e2;
+      --border-color: #e1e5e9;
+    }
+
+    [data-theme="dark"] {
+      --bg-color: #1a1a1a;
+      --card-bg: #2d2d2d;
+      --text-color: #e0e0e0;
+      --accent-color: #6bb6ff;
+      --border-color: #404040;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      background: var(--bg-color);
+      color: var(--text-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 1rem;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    .loading-container {
+      text-align: center;
+      background: var(--card-bg);
+      border-radius: 15px;
+      padding: 3rem 2rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      max-width: 400px;
+      width: 100%;
+      transition: background-color 0.3s ease;
+    }
+
+    .logo-container {
+      margin-bottom: 2rem;
+    }
+
+    .logo {
+      width: 80px;
+      height: 80px;
+      border-radius: 15px;
+      animation: pulse 2s ease-in-out infinite;
+      display: block;
+      margin: 0 auto;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      50% {
+        transform: scale(1.05);
+        opacity: 0.8;
+      }
+    }
+
+    h1 {
+      color: var(--text-color);
+      font-size: 1.8rem;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+    }
+
+    .subtitle {
+      color: var(--text-color);
+      opacity: 0.7;
+      font-size: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border-color);
+      border-radius: 50%;
+      border-top-color: var(--accent-color);
+      animation: spin 1s ease-in-out infinite;
+      margin-bottom: 1rem;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .status-text {
+      color: var(--text-color);
+      opacity: 0.8;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+
+    .progress-dots {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-color);
+      animation: wave 1.4s ease-in-out infinite;
+    }
+
+    .dot:nth-child(1) { animation-delay: -0.32s; }
+    .dot:nth-child(2) { animation-delay: -0.16s; }
+    .dot:nth-child(3) { animation-delay: 0s; }
+
+    @keyframes wave {
+      0%, 60%, 100% {
+        transform: initial;
+        opacity: 0.4;
+      }
+      30% {
+        transform: translateY(-10px);
+        opacity: 1;
+      }
+    }
+
+    .retry-section {
+      margin-top: 1.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border-color);
+      display: none;
+    }
+
+    .retry-button {
+      background: var(--accent-color);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .retry-button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+    }
+
+    .retry-button:active {
+      transform: translateY(0);
+    }
+
+    /* Mobile responsiveness */
+    @media (max-width: 480px) {
+      .loading-container {
+        padding: 2rem 1.5rem;
+        margin: 1rem;
+      }
+      
+      .logo {
+        width: 60px;
+        height: 60px;
+      }
+      
+      h1 {
+        font-size: 1.5rem;
+      }
+    }
+
+    /* Dark mode specific adjustments */
+    [data-theme="dark"] .loading-container {
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    [data-theme="dark"] .retry-button:hover {
+      box-shadow: 0 4px 12px rgba(107, 182, 255, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <div class="loading-container">
+    <div class="logo-container">
+      <img src="{{ request.url_for('static', path='images/icon.png') }}" alt="LANVan" class="logo"
+           onerror="this.style.display='none';">
+    </div>
+    
+    <h1>LANVan</h1>
+    <p class="subtitle">Secure Local File Transfer</p>
+    
+    <div class="loading-spinner"></div>
+    
+    <div class="status-text" id="statusText">Initializing...</div>
+    
+    <div class="progress-dots">
+      <div class="dot"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+    </div>
+    
+    <div class="retry-section" id="retrySection">
+      <p style="margin-bottom: 1rem; opacity: 0.8;">Taking longer than expected?</p>
+      <button class="retry-button" onclick="retryLoading()">Retry Connection</button>
+    </div>
+  </div>
+
+  <script>
+    let statusElement = document.getElementById('statusText');
+    let retrySection = document.getElementById('retrySection');
+    let loadingAttempts = 0;
+    let maxAttempts = 3;
+    let currentTimeout;
+
+    const statusMessages = [
+      'Initializing...',
+      'Checking network connectivity...',
+      'Starting LANVan services...',
+      'Loading file transfer interface...',
+      'Almost ready...'
+    ];
+
+    let currentStep = 0;
+
+    // Check if we can skip the loading process
+    function shouldSkipLoading() {
+      try {
+        const lastLoaded = sessionStorage.getItem('lanvan_page_loaded_successfully');
+        const resourcesReady = sessionStorage.getItem('lanvan_resources_ready');
+        
+        if (lastLoaded && resourcesReady === 'true') {
+          const lastLoadTime = parseInt(lastLoaded);
+          const now = Date.now();
+          
+          // If page loaded successfully within last 5 minutes, skip loading
+          if (now - lastLoadTime < 5 * 60 * 1000) {
+            return true;
+          }
+        }
+      } catch (e) {
+        // Ignore storage errors
+      }
+      return false;
+    }
+
+    // Quick check if server is immediately available
+    function quickServerCheck() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const originalPath = urlParams.get('redirect') || '/';
+      
+      // If we should skip loading, go directly to the page
+      if (shouldSkipLoading() && originalPath !== '/loading') {
+        statusElement.textContent = 'Already ready! Redirecting...';
+        setTimeout(() => {
+          window.location.href = originalPath;
+        }, 200);
+        return true;
+      }
+      
+      // Try a quick fetch to see if server responds immediately
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1000);
+      
+      fetch('/api/server-status', { 
+        signal: controller.signal,
+        cache: 'no-cache'
+      })
+        .then(response => {
+          clearTimeout(timeoutId);
+          if (response.ok) {
+            return response.json();
+          }
+          throw new Error('Server not ready');
+        })
+        .then(data => {
+          if (data.status === 'online' && data.resources_ready !== false) {
+            statusElement.textContent = 'Server ready! Redirecting...';
+            
+            // Test if the target page actually loads
+            fetch(originalPath, { method: 'HEAD', cache: 'no-cache' })
+              .then(() => {
+                setTimeout(() => {
+                  window.location.href = originalPath;
+                }, 300);
+              })
+              .catch(() => {
+                // If target page fails, continue with loading sequence
+                setTimeout(updateStatus, 500);
+              });
+          } else {
+            // Continue with loading sequence
+            setTimeout(updateStatus, 500);
+          }
+        })
+        .catch(() => {
+          // Server not immediately available, continue with loading
+          setTimeout(updateStatus, 800);
+        });
+      
+      return false;
+    }
+
+    function updateStatus() {
+      if (currentStep < statusMessages.length) {
+        statusElement.textContent = statusMessages[currentStep];
+        currentStep++;
+        setTimeout(updateStatus, 800);
+      } else {
+        checkServerReady();
+      }
+    }
+
+    function checkServerReady() {
+      loadingAttempts++;
+      
+      // First check if we can reach our own server
+      fetch('/api/server-status')
+        .then(response => {
+          if (response.ok) {
+            return response.json();
+          }
+          throw new Error('Server not ready');
+        })
+        .then(data => {
+          if (data.status === 'online') {
+            statusElement.textContent = 'Server ready! Redirecting...';
+            
+            // Get the original path or default to home
+            const urlParams = new URLSearchParams(window.location.search);
+            const originalPath = urlParams.get('redirect') || '/';
+            
+            // Try to fetch the original path to make sure it's actually available
+            fetch(originalPath, { method: 'HEAD' })
+              .then(response => {
+                // If the page exists, redirect to it
+                setTimeout(() => {
+                  window.location.href = originalPath;
+                }, 500);
+              })
+              .catch(() => {
+                // If original path doesn't exist, go to home
+                setTimeout(() => {
+                  window.location.href = '/';
+                }, 500);
+              });
+          } else {
+            throw new Error('Server status not ready');
+          }
+        })
+        .catch(error => {
+          console.log('Server check failed:', error);
+          handleLoadingFailure();
+        });
+    }
+
+    function handleLoadingFailure() {
+      if (loadingAttempts < maxAttempts) {
+        statusElement.textContent = `Retrying... (${loadingAttempts}/${maxAttempts})`;
+        currentTimeout = setTimeout(checkServerReady, 2000);
+      } else {
+        statusElement.textContent = 'Connection timeout';
+        retrySection.style.display = 'block';
+      }
+    }
+
+    function retryLoading() {
+      loadingAttempts = 0;
+      currentStep = 0;
+      retrySection.style.display = 'none';
+      statusElement.textContent = 'Retrying...';
+      
+      if (currentTimeout) {
+        clearTimeout(currentTimeout);
+      }
+      
+      setTimeout(updateStatus, 500);
+    }
+
+    // Start the loading process - but try quick check first
+    if (!quickServerCheck()) {
+      // Only start full loading if quick check didn't redirect us
+      setTimeout(updateStatus, 1000);
+    }
+
+    // Show retry option after 15 seconds if still loading
+    setTimeout(() => {
+      if (window.location.pathname.includes('loading')) {
+        retrySection.style.display = 'block';
+      }
+    }, 15000);
+  </script>
+</body>
+</html>

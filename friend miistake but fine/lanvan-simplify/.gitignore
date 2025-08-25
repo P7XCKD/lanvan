@@ -1,0 +1,133 @@
+# Python bytecode and cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+venv/
+env/
+ENV/
+
+# Database files
+*.db
+*.sqlite3
+
+# macOS files
+.DS_Store
+.DS_Store?
+
+# Ignore uploaded files and temporary directories
+app/uploads/
+uploads/
+app/uploads/temp_chunks/
+app/uploads/temp_downloads/
+temp/
+tmp/
+
+# Unused static directory (root level only - app/static contains needed files)
+/static/
+
+# Security: Ignore SSL certificates and private keys
+certs/*.pem
+certs/*.key
+certs/*.crt
+certs/*.cert
+
+# Keep certificate configuration template and utilities
+!certs/openssl.conf
+!certs/README.md
+!certs/generate_certs.py
+!certs/generate_certs_python.py
+!certs/cleanup_certs.py
+!certs/test_certificate.py
+
+# VS Code and IDE files
+.vscode/
+.history/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+
+# IDE backup and auto-save files
+*.orig
+*.rej
+.#*
+#*#
+
+# VS Code workspace files (project-specific - usually not needed in repo)
+*.code-workspace
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temporary and backup files
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+
+# Log files
+*.log
+logs/
+debug.log
+error.log
+
+# Runtime files
+*.pid
+*.seed
+*.lock
+
+# mDNS and network discovery cache files
+*.mdns_cache
+.zeroconf/
+
+# P2P session data and empty directories
+.p2p_sessions/
+p2p_cache/
+app/p2p/__pycache__/
+
+# Development and testing
+test_files/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Documentation builds
+docs/_build/
+
+# Local configuration overrides
+config.local.py
+settings.local.py

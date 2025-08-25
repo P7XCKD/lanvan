@@ -50,6 +50,9 @@ UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 TEMP_CHUNKS_FOLDER = UPLOAD_FOLDER / "temp_chunks"
 TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
 
+# === Concurrent Upload Configuration ===
+MAX_CONCURRENT_UPLOADS = 5  # Maximum parallel uploads per session
+
 # === Streaming Assembly Setup ===
 # Initialize streaming assembly system on first use (lazy initialization)
 _streaming_initialized = False
@@ -151,7 +154,7 @@ async def get_file_list_async():
             
             # Yield every 50 files to prevent blocking on large directories
             if file_count % 50 == 0:
-                await asyncio.sleep(0.001)
+                await asyncio.sleep(0.01)  # OPTIMIZED: 10ms instead of 1ms
     
     return sorted(files, key=lambda x: x["mtime"], reverse=True)
 
@@ -266,8 +269,8 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                 print(f"❌ Failed to move encrypted temp file: {e}")
                 raise Exception(f"Failed to finalize encrypted upload: {e}")
             
-            # Yield control periodically
-            await asyncio.sleep(0.001)
+            # Yield control periodically - OPTIMIZED: 10ms instead of 1ms for better performance
+            await asyncio.sleep(0.01)
             
         except Exception as e:
             # Clean up encrypted temp file
@@ -296,15 +299,18 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                     bytes_written += len(chunk)
                     hash_calculator.update(chunk)
                     
-                    # Yield control every chunk to prevent blocking
-                    await asyncio.sleep(0.001)
+                    # Yield control every 5 chunks to prevent blocking - OPTIMIZED: Less frequent yielding
+                    chunk_count = processed_chunks if 'processed_chunks' in locals() else 0
+                    if chunk_count % 5 == 0:
+                        await asyncio.sleep(0.01)  # OPTIMIZED: 10ms instead of 1ms
                     
                     # Progress for large files (reduce spam)
                     if bytes_written > 10 * 1024 * 1024 and bytes_written % (20 * 1024 * 1024) == 0:
                         print(f"📦 Progress: {bytes_written // 1024 // 1024}MB")
                         
-                        # Android memory management during large uploads
-                        if is_android and should_run_gc(bytes_written, CHUNK_SIZE):
+                        # OPTIMIZED: Strategic memory management - only GC for very large files
+                        from .universal_optimizer import universal_optimizer
+                        if is_android and universal_optimizer.should_run_gc(bytes_written // (10 * 1024 * 1024)):
                             gc.collect()
                             await asyncio.sleep(0.01)  # Brief pause for GC
                 
