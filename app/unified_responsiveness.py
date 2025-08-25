@@ -84,42 +84,6 @@ class ResponsivenessConfig:
                 max_concurrent_operations=15       # Maximum throughput
             )
         }
-            ResponsivenessMode.DESKTOP: cls(
-                mode=mode,
-                streaming_yield_size=128 * 1024,  # 128KB
-                upload_yield_frequency=5,          # More frequent yields
-                monitoring_interval=0.05,          # 50ms
-                async_sleep_duration=0.005,        # 5ms
-                max_concurrent_operations=8        # Higher concurrency
-            ),
-            ResponsivenessMode.MOBILE: cls(
-                mode=mode,
-                streaming_yield_size=32 * 1024,   # 32KB
-                upload_yield_frequency=15,         # Less frequent yields
-                monitoring_interval=0.2,           # 200ms
-                async_sleep_duration=0.02,         # 20ms
-                sync_sleep_duration=0.1,           # 100ms
-                max_concurrent_operations=3        # Lower concurrency
-            ),
-            ResponsivenessMode.SERVER: cls(
-                mode=mode,
-                streaming_yield_size=256 * 1024,  # 256KB
-                upload_yield_frequency=20,         # Less frequent yields
-                monitoring_interval=0.5,           # 500ms
-                memory_check_frequency=100,        # Less frequent checks
-                max_concurrent_operations=10       # Higher concurrency
-            ),
-            ResponsivenessMode.MINIMAL: cls(
-                mode=mode,
-                streaming_yield_size=512 * 1024,  # 512KB
-                upload_yield_frequency=50,         # Minimal yields
-                monitoring_interval=1.0,           # 1s
-                memory_check_frequency=200,        # Minimal checks
-                async_sleep_duration=0.001,        # 1ms
-                sync_sleep_duration=0.01,          # 10ms
-                max_concurrent_operations=15       # Maximum throughput
-            )
-        }
         return configs.get(mode, cls())
 
 class UnifiedResponsivenessManager:

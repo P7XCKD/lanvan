@@ -347,8 +347,8 @@ async def scan_file_async(path: Path):
     """
     print(f"🧪 Scanning file in background: {path}")
     
-    # Yield control immediately to prevent blocking
-    await asyncio.sleep(0.001)
+    # OPTIMIZED: Yield control with better interval
+    await asyncio.sleep(0.01)  # 10ms instead of 1ms
     
     try:
         # Simulate processing with frequent yielding for responsiveness
@@ -370,8 +370,8 @@ async def scan_file_async(path: Path):
                     progress = (i + 1) / chunk_count * 100
                     print(f"🔄 Processing {path.name}: {progress:.1f}% complete")
         else:
-            # Small files process quickly with minimal yielding
-            await asyncio.sleep(0.001)
+            # Small files process quickly with minimal yielding - OPTIMIZED
+            await asyncio.sleep(0.01)  # 10ms instead of 1ms
             
         print(f"✅ File scan completed: {path.name}")
         
