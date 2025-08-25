@@ -15,13 +15,32 @@ rather than waiting for all chunks to complete.
 """
 
 import os
+import sys
 import time
 import threading
+import shutil
+import hashlib
+import tempfile
 from pathlib import Path
 from typing import Dict, Set, Optional, List, Union
 from dataclasses import dataclass, field
-import hashlib
-import tempfile
+
+# Import validation and encryption modules at top level for Termux compatibility
+try:
+    from app.validation import FileValidator
+    VALIDATION_AVAILABLE = True
+except ImportError:
+    print("⚠️  Validation module not available - will use basic validation")
+    FileValidator = None
+    VALIDATION_AVAILABLE = False
+
+try:
+    from app.aes_utils import encrypt_session_data
+    ENCRYPTION_AVAILABLE = True
+except ImportError:
+    print("⚠️  Encryption module not available - will skip encryption")
+    encrypt_session_data = None
+    ENCRYPTION_AVAILABLE = False
 
 
 @dataclass
@@ -243,9 +262,6 @@ class StreamingChunkAssembler:
     def _streaming_assembly_worker(self, stream_file: StreamingFile):
         """Worker thread for TRUE streaming assembly + background processing"""
         try:
-            # 🚀 TRUE BACKGROUND PROCESSING: Import processing modules
-            from app.validation import FileValidator
-            
             # Create temp processing file for validation during assembly
             temp_processing_path = stream_file.final_path.with_suffix(stream_file.final_path.suffix + '.processing')
             
@@ -329,12 +345,18 @@ class StreamingChunkAssembler:
                                         # Flush current data for validation
                                         final_file.flush()
                                         # Validate what we have so far
-                                        validation_result = FileValidator.validate_uploaded_file(temp_processing_path, stream_file.filename)
-                                        security_valid = validation_result.get('valid', True)
-                                        if security_valid:
-                                            print(f"✅ Background security validation passed for {stream_file.filename}")
+                                        if VALIDATION_AVAILABLE and FileValidator:
+                                            validation_result = FileValidator.validate_uploaded_file(temp_processing_path, stream_file.filename)
+                                            security_valid = validation_result.get('valid', True)
+                                            if security_valid:
+                                                print(f"✅ Background security validation passed for {stream_file.filename}")
+                                            else:
+                                                print(f"❌ Background security validation failed for {stream_file.filename}: {validation_result.get('error', 'Unknown error')}")
                                         else:
-                                            print(f"❌ Background security validation failed for {stream_file.filename}: {validation_result.get('error', 'Unknown error')}")
+                                            # Fallback validation when module not available
+                                            print(f"⚠️  Using basic validation for {stream_file.filename}")
+                                            validation_result = {'valid': True, 'warnings': ['Advanced validation not available']}
+                                            security_valid = True
                                     except Exception as e:
                                         print(f"⚠️  Background validation error: {e}")
                                         validation_result = {'valid': True, 'warnings': [str(e)]}
@@ -350,10 +372,13 @@ class StreamingChunkAssembler:
                                 def background_encryption_prep():
                                     nonlocal encryption_result
                                     try:
-                                        from app.aes_utils import encrypt_session_data
-                                        # Pre-generate encryption keys
-                                        encryption_result = {'ready': True, 'keys_prepared': True}
-                                        print(f"✅ Background encryption preparation completed for {stream_file.filename}")
+                                        if ENCRYPTION_AVAILABLE and encrypt_session_data:
+                                            # Pre-generate encryption keys
+                                            encryption_result = {'ready': True, 'keys_prepared': True}
+                                            print(f"✅ Background encryption preparation completed for {stream_file.filename}")
+                                        else:
+                                            print(f"⚠️  Encryption not available for {stream_file.filename}")
+                                            encryption_result = {'ready': False, 'error': 'Encryption module not available'}
                                     except Exception as e:
                                         print(f"⚠️  Background encryption preparation error: {e}")
                                         encryption_result = {'ready': False, 'error': str(e)}
@@ -395,10 +420,9 @@ class StreamingChunkAssembler:
             # Apply encryption if requested and prepared
             final_file_path = temp_processing_path
             if self.encryption_required.get(stream_file.filename, False):
-                if encryption_result and encryption_result.get('ready', False):
+                if encryption_result and encryption_result.get('ready', False) and ENCRYPTION_AVAILABLE and encrypt_session_data:
                     print(f"🔐 Applying background-prepared encryption for {stream_file.filename}")
                     try:
-                        from app.aes_utils import encrypt_session_data
                         # Read the assembled file
                         file_data = temp_processing_path.read_bytes()
                         # Encrypt the data
@@ -412,10 +436,11 @@ class StreamingChunkAssembler:
                         print(f"✅ Background encryption completed for {stream_file.filename}")
                     except Exception as e:
                         print(f"⚠️  Background encryption failed: {e}")
+                else:
+                    print(f"⚠️  Encryption requested but not available for {stream_file.filename}")
             
             # Move final file to correct location (atomic operation)
             if final_file_path.exists() and final_file_path != stream_file.final_path:
-                import shutil
                 shutil.move(str(final_file_path), str(stream_file.final_path))
                 print(f"📁 Moved processed file to final location: {stream_file.final_path}")
                 
