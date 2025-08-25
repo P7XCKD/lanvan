@@ -251,6 +251,11 @@ async def lifespan(app: FastAPI):
     print("🔴 Stopping HTTPS redirect server...")
     await stop_https_redirect_server()
     
+    # Stop streaming assembly system
+    print("🌊 Stopping streaming assembly system...")
+    from app.streaming_assembly import shutdown_streaming_assembly
+    shutdown_streaming_assembly()
+    
     # Stop mDNS service
     print("🔴 Stopping mDNS service...")
     mdns_manager.stop_service()

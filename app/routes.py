@@ -35,6 +35,11 @@ from app.validation import (
     AdvancedFileValidator
 )
 from app.simple_mdns import mdns_manager
+from app.streaming_assembly import (
+    initialize_streaming_assembly, 
+    get_streaming_assembler,
+    shutdown_streaming_assembly
+)
 
 # === Setup ===
 router = APIRouter()
@@ -44,6 +49,10 @@ UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 # === Chunked Upload Setup ===
 TEMP_CHUNKS_FOLDER = UPLOAD_FOLDER / "temp_chunks"
 TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
+
+# === Streaming Assembly Setup ===
+# Initialize streaming assembly system on module load
+initialize_streaming_assembly(TEMP_CHUNKS_FOLDER, UPLOAD_FOLDER)
 
 def cleanup_orphaned_temp_files():
     """
@@ -1294,6 +1303,14 @@ async def upload_chunk(
             # Log potential issue but allow overwrite (might be a retry)
             print(f"⚠️ Warning: Chunk {chunk_filename} already exists, overwriting (possible retry)")
         
+        # 🌊 Register file for streaming assembly if this is the first chunk
+        if part_number == 1 and total_parts:
+            assembler = get_streaming_assembler()
+            if assembler:
+                final_path = UPLOAD_FOLDER / safe_filename
+                assembler.register_file(safe_filename, total_parts, final_path)
+                print(f"🌊 Registered {safe_filename} for streaming assembly")
+        
         # Save the chunk with error handling
         try:
             with open(chunk_path, "wb") as f:
@@ -1345,7 +1362,7 @@ async def finalize_upload(
     total_parts: int = Form(...),
     encrypt: bool = Form(False)
 ):
-    """Combine all chunks into final file - supports both HTTP and HTTPS with dynamic chunk detection"""
+    """Combine all chunks into final file - supports streaming assembly with failsafe fallback"""
     try:
         # 🔐 Protocol detection  
         is_https = request.url.scheme == "https"
@@ -1368,77 +1385,50 @@ async def finalize_upload(
                 }
             )
 
-        # 🚀 Auto-detect actual chunks (adaptive chunked upload support)
-        chunk_files = []
-        part_num = 1
-        while True:
-            chunk_path = TEMP_CHUNKS_FOLDER / f"{safe_filename}.part{part_num}"
-            if chunk_path.exists():
-                chunk_files.append((part_num, chunk_path))
-                part_num += 1
-            else:
-                break
+        # 🌊 Check if streaming assembly is available and completed
+        assembler = get_streaming_assembler()
+        streaming_completed = False
+        final_path = None
         
-        actual_chunks = len(chunk_files)
-        if actual_chunks == 0:
-            return JSONResponse(
-                status_code=HTTP_400_BAD_REQUEST,
-                content={"status": "error", "msg": "No chunks found for this file"}
-            )
-
-        # Check if encryption is requested and validate using centralized config
-        if encrypt:
-            # Calculate total size by checking all actual chunks
-            total_size = sum(chunk_path.stat().st_size for _, chunk_path in chunk_files)
+        if assembler:
+            status = assembler.get_file_status(safe_filename)
+            if status and status['completed'] and not status['error']:
+                # Streaming assembly completed successfully
+                streaming_completed = True
+                final_path = UPLOAD_FOLDER / safe_filename
+                print(f"✅ Streaming assembly completed for {safe_filename}")
+        
+        # 🔄 Failsafe: Use traditional chunk combination if streaming didn't complete
+        if not streaming_completed:
+            print(f"🔄 Using traditional chunk assembly for {safe_filename}")
             
-            validation = AESConfig.validate_file_for_aes(total_size, is_https)
-            if not validation['valid']:
-                # Clean up chunks
-                for _, chunk_path in chunk_files:
-                    if chunk_path.exists():
-                        chunk_path.unlink()
-                        
+            # 🚀 Auto-detect actual chunks (adaptive chunked upload support)
+            chunk_files = []
+            part_num = 1
+            while True:
+                chunk_path = TEMP_CHUNKS_FOLDER / f"{safe_filename}.part{part_num}"
+                if chunk_path.exists():
+                    chunk_files.append((part_num, chunk_path))
+                    part_num += 1
+                else:
+                    break
+            
+            actual_chunks = len(chunk_files)
+            if actual_chunks == 0:
                 return JSONResponse(
                     status_code=HTTP_400_BAD_REQUEST,
-                    content={
-                        "status": "error",
-                        "msg": validation['error']
-                    }
+                    content={"status": "error", "msg": "No chunks found for this file"}
                 )
-        
-        # Determine final filename
-        final_filename = safe_filename + ".enc" if encrypt else safe_filename
-        final_path = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, final_filename)
-        
-        # 🚀 Fast chunk combination with proper error handling
-        with open(final_path, "wb") as final_file:
-            for part_num, chunk_path in chunk_files:
-                if not chunk_path.exists():
-                    # Clean up partial chunks and final file
-                    if final_path.exists():
-                        final_path.unlink()
-                    for _, clean_chunk_path in chunk_files:
-                        if clean_chunk_path.exists():
-                            clean_chunk_path.unlink()
-                    
-                    return JSONResponse(
-                        status_code=HTTP_400_BAD_REQUEST,
-                        content={"status": "error", "msg": f"Missing chunk {part_num}"}
-                    )
-                
-                # Read chunk data
-                chunk_data = chunk_path.read_bytes()
-                
-                # Encrypt if requested with error handling
-                if encrypt:
-                    try:
-                        # Use secure session-based encryption for temporary chunks
-                        chunk_data, session_key, session_iv = encrypt_session_data(chunk_data)
-                        # Note: For production use, you'd want to store session_key and session_iv securely
-                        # For now, this is just for demonstration - chunks are temporary
-                    except Exception as encrypt_error:
-                        print(f"🚨 AES encryption failed for chunk {part_num}: {encrypt_error}")
-                        # Clean up and return error
+            
+            # Determine final filename
+            final_filename = safe_filename + ".enc" if encrypt else safe_filename
+            final_path = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, final_filename)
+            
+            # 🚀 Fast chunk combination with proper error handling
+            with open(final_path, "wb") as final_file:
+                for part_num, chunk_path in chunk_files:
+                    if not chunk_path.exists():
+                        # Clean up partial chunks and final file
                         if final_path.exists():
                             final_path.unlink()
                         for _, clean_chunk_path in chunk_files:
@@ -1447,16 +1437,94 @@ async def finalize_upload(
                         
                         return JSONResponse(
                             status_code=HTTP_400_BAD_REQUEST,
-                            content={"status": "error", "msg": f"AES encryption failed: {encrypt_error}"}
+                            content={"status": "error", "msg": f"Missing chunk {part_num}"}
                         )
-                
-                # Write to final file
-                final_file.write(chunk_data)
+                    
+                    # Read chunk data
+                    chunk_data = chunk_path.read_bytes()
+                    
+                    # Encrypt if requested with error handling
+                    if encrypt:
+                        try:
+                            # Use secure session-based encryption for temporary chunks
+                            chunk_data, session_key, session_iv = encrypt_session_data(chunk_data)
+                            # Note: For production use, you'd want to store session_key and session_iv securely
+                            # For now, this is just for demonstration - chunks are temporary
+                        except Exception as encrypt_error:
+                            print(f"🚨 AES encryption failed for chunk {part_num}: {encrypt_error}")
+                            # Clean up and return error
+                            if final_path.exists():
+                                final_path.unlink()
+                            for _, clean_chunk_path in chunk_files:
+                                if clean_chunk_path.exists():
+                                    clean_chunk_path.unlink()
+                            
+                            return JSONResponse(
+                                status_code=HTTP_400_BAD_REQUEST,
+                                content={"status": "error", "msg": f"AES encryption failed: {encrypt_error}"}
+                            )
+                    
+                    # Write to final file
+                    final_file.write(chunk_data)
+            
+            # Clean up temporary chunks using actual chunks found
+            for _, chunk_path in chunk_files:
+                if chunk_path.exists():
+                    chunk_path.unlink()
         
-        # Clean up temporary chunks using actual chunks found
-        for _, chunk_path in chunk_files:
-            if chunk_path.exists():
-                chunk_path.unlink()
+        else:
+            # Streaming assembly completed - just verify the file exists
+            if not final_path or not final_path.exists():
+                return JSONResponse(
+                    status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={"status": "error", "msg": "Streaming assembly completed but file not found"}
+                )
+            
+            # Apply encryption if requested for streaming-assembled file
+            if encrypt:
+                try:
+                    # Read the streaming-assembled file
+                    file_data = final_path.read_bytes()
+                    
+                    # Encrypt the data
+                    encrypted_data, session_key, session_iv = encrypt_session_data(file_data)
+                    
+                    # Write back encrypted data
+                    final_path.write_bytes(encrypted_data)
+                    
+                    # Rename to .enc extension
+                    encrypted_path = final_path.parent / (final_path.name + ".enc")
+                    final_path.rename(encrypted_path)
+                    final_path = encrypted_path
+                    
+                except Exception as encrypt_error:
+                    print(f"🚨 AES encryption failed for streaming file: {encrypt_error}")
+                    if final_path.exists():
+                        final_path.unlink()
+                    
+                    return JSONResponse(
+                        status_code=HTTP_400_BAD_REQUEST,
+                        content={"status": "error", "msg": f"AES encryption failed: {encrypt_error}"}
+                    )
+
+        # Check if encryption is requested and validate using centralized config
+        if encrypt:
+            # Get file size after processing
+            total_size = final_path.stat().st_size if final_path.exists() else 0
+            
+            validation = AESConfig.validate_file_for_aes(total_size, is_https)
+            if not validation['valid']:
+                # Clean up file
+                if final_path.exists():
+                    final_path.unlink()
+                        
+                return JSONResponse(
+                    status_code=HTTP_400_BAD_REQUEST,
+                    content={
+                        "status": "error",
+                        "msg": validation['error']
+                    }
+                )
         
         # 🛡️ ENHANCED SECURITY: Validate the assembled file before finalizing
         try:
@@ -1500,8 +1568,13 @@ async def finalize_upload(
         # Add background scan task
         background_tasks.add_task(scan_file, final_path)
         
+        # Clean up streaming registration if applicable
+        if assembler and assembler.get_file_status(safe_filename):
+            assembler.unregister_file(safe_filename)
+        
         # Success response with security confirmation
-        success_msg = f"File '{final_path.name}' uploaded successfully via {'HTTPS' if is_https else 'HTTP'} ({actual_chunks} chunks combined)"
+        assembly_method = "streaming assembly" if streaming_completed else "traditional chunk combination"
+        success_msg = f"File '{final_path.name}' uploaded successfully via {'HTTPS' if is_https else 'HTTP'} ({assembly_method})"
         if security_check.get('warnings'):
             success_msg += f" ⚠️ Security Notes: {'; '.join(security_check['warnings'])}"
         
@@ -1509,8 +1582,8 @@ async def finalize_upload(
             "status": "success",
             "msg": success_msg,
             "filename": final_path.name,
-            "actual_chunks": actual_chunks,
-            "estimated_chunks": total_parts,
+            "streaming_assembly": streaming_completed,
+            "assembly_method": assembly_method,
             "protocol": "HTTPS" if is_https else "HTTP",
             "security_validated": True
         })

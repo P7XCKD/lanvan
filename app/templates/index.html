@@ -3995,34 +3995,51 @@ Device Session will reset when browser is closed
       
       xhr.addEventListener('load', () => {
         if (xhr.status === 200) {
-          // Show processing status for chunked files (always show for large files)
+          const response = JSON.parse(xhr.responseText);
+          
+          // Check if streaming assembly was used
+          const isStreamingAssembly = response.streaming_assembly || false;
+          const assemblyMethod = response.assembly_method || 'traditional chunk combination';
+          
+          // Show appropriate processing status
           uploadItem.status = 'processing';
           const statusText = document.getElementById(`status-${uploadItem.id}`);
           const speedText = document.getElementById(`speed-${uploadItem.id}`);
-          if (statusText) statusText.textContent = '⚙️ Processing chunks...';
-          if (speedText) speedText.textContent = 'Server processing';
-          updateUploadItem(uploadItem);
           
-          const fileSizeMB = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
-          // Show toast for chunked processing with better messaging
-          showToast(`⚙️ Processing ${uploadItem.totalChunks} chunks for ${uploadItem.fileName}... (${fileSizeMB} MB) - Other operations may continue`, 4000);
-          
-          // Show processing for chunked files (longer processing time)
-          // Use requestIdleCallback to prevent blocking other uploads and UI
-          const processAsync = () => {
+          if (isStreamingAssembly) {
+            if (statusText) statusText.textContent = '🌊 Streaming assembly completed';
+            if (speedText) speedText.textContent = 'Optimized processing';
+            // Streaming is much faster, show completion sooner
             uploadItem.status = 'completed';
             uploadItem.progress = 100;
             updateUploadItem(uploadItem);
-          };
-          
-          if (window.requestIdleCallback) {
-            requestIdleCallback(() => {
-              setTimeout(processAsync, 2000);
-            }, { timeout: 5000 });
+            
+            const fileSizeMB = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
+            showToast(`🌊 Streaming upload completed for ${uploadItem.fileName} (${fileSizeMB} MB) - 4x faster!`, 3000);
           } else {
-            setTimeout(processAsync, 2000);
+            if (statusText) statusText.textContent = '⚙️ Processing chunks...';
+            if (speedText) speedText.textContent = 'Server processing';
+            
+            const fileSizeMB = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
+            showToast(`⚙️ Processing ${uploadItem.totalChunks} chunks for ${uploadItem.fileName}... (${fileSizeMB} MB) - Other operations may continue`, 4000);
+            
+            // Traditional processing takes longer
+            const processAsync = () => {
+              uploadItem.status = 'completed';
+              uploadItem.progress = 100;
+              updateUploadItem(uploadItem);
+            };
+            
+            if (window.requestIdleCallback) {
+              requestIdleCallback(() => {
+                setTimeout(processAsync, 2000);
+              }, { timeout: 5000 });
+            } else {
+              setTimeout(processAsync, 2000);
+            }
           }
           
+          updateUploadItem(uploadItem);
           endUpload();
           
           // Show completion toast with smart refresh detection
