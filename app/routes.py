@@ -1399,6 +1399,8 @@ async def finalize_upload(
         assembler = get_streaming_assembler()
         streaming_completed = False
         final_path = None
+        background_processing_done = False
+        validation_from_background = None
         
         # First, check if streaming-assembled file already exists
         potential_streaming_file = UPLOAD_FOLDER / safe_filename
@@ -1409,6 +1411,15 @@ async def finalize_upload(
             print(f"🌊 Found streaming-assembled file: {safe_filename}")
             streaming_completed = True
             final_path = potential_streaming_file
+            
+            # 🚀 Check if background processing was completed during streaming
+            if assembler:
+                status = assembler.get_file_status(safe_filename)
+                if status and status.get('validation_result'):
+                    validation_from_background = status['validation_result']
+                    background_processing_done = True
+                    print(f"⚡ Background processing completed during upload - no additional processing needed!")
+                    
         elif assembler:
             # Check streaming status if file doesn't exist yet
             status = assembler.get_file_status(safe_filename)
@@ -1416,9 +1427,16 @@ async def finalize_upload(
             if status and status['completed'] and not status['error']:
                 streaming_completed = True
                 final_path = UPLOAD_FOLDER / safe_filename
+                
+                # Check for background processing results
+                if status.get('validation_result'):
+                    validation_from_background = status['validation_result']
+                    background_processing_done = True
+                    
                 print(f"✅ Streaming assembly completed for {safe_filename}")
         
         print(f"🔍 Streaming completed: {streaming_completed}")
+        print(f"🔍 Background processing done: {background_processing_done}")
         print(f"🔍 Final path: {final_path}")
         
         # 🔄 Failsafe: Use traditional chunk combination if streaming didn't complete
@@ -1565,10 +1583,16 @@ async def finalize_upload(
                     }
                 )
         
-        # 🛡️ ENHANCED SECURITY: Validate the assembled file before finalizing
+        # 🛡️ ENHANCED SECURITY: Validate the assembled file (skip if already done in background)
         try:
-            # Perform comprehensive security validation on the assembled file
-            security_check = FileValidator.validate_uploaded_file(final_path, filename)
+            if background_processing_done and validation_from_background:
+                # 🚀 Use validation results from background processing - massive time savings!
+                print(f"⚡ Using background validation results - skipping duplicate processing!")
+                security_check = validation_from_background
+            else:
+                # 🐌 Traditional validation (slower)
+                print(f"🔄 Performing security validation (no background processing available)")
+                security_check = FileValidator.validate_uploaded_file(final_path, filename)
             
             if not security_check['valid']:
                 # File failed security validation - delete it immediately

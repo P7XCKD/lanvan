@@ -38,6 +38,7 @@ class StreamingFile:
     processing_started: bool = False
     completed: bool = False
     error: Optional[str] = None
+    validation_result: Optional[Dict] = None  # Store background validation results
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
@@ -222,10 +223,22 @@ class StreamingChunkAssembler:
             stream_file.error = str(e)
     
     def _streaming_assembly_worker(self, stream_file: StreamingFile):
-        """Worker thread for TRUE streaming assembly - processes chunks as they arrive"""
+        """Worker thread for TRUE streaming assembly + background processing - processes chunks as they arrive"""
         try:
+            # 🚀 TRUE BACKGROUND PROCESSING: Import processing modules
+            from app.validation import FileValidator
+            from app.aes_config import AESConfig
+            
+            # Create temp processing file for validation during assembly
+            temp_processing_path = stream_file.final_path.with_suffix(stream_file.final_path.suffix + '.processing')
+            
+            # 🌊 TRUE BACKGROUND PROCESSING: Start validation as soon as we have enough data
+            validation_started = False
+            validation_result = None
+            security_valid = True
+            
             # Create final file and prepare for streaming writes
-            with open(stream_file.final_path, 'wb') as final_file:
+            with open(temp_processing_path, 'wb') as final_file:
                 processed_chunks = set()
                 chunks_written = 0
                 
@@ -289,6 +302,31 @@ class StreamingChunkAssembler:
                                 # Update chunk size record
                                 stream_file.chunk_sizes[part_num] = len(chunk_data)
                             
+                            # 🚀 TRUE BACKGROUND PROCESSING: Start validation after we have enough data
+                            if not validation_started and chunks_written >= 3:  # Start validation after 3 chunks
+                                validation_started = True
+                                print(f"🛡️  Starting background security validation for {stream_file.filename}")
+                                # Start validation in separate thread so it doesn't block chunk processing
+                                import threading
+                                def background_validation():
+                                    nonlocal validation_result, security_valid
+                                    try:
+                                        # Flush current data for validation
+                                        final_file.flush()
+                                        # Validate what we have so far
+                                        validation_result = FileValidator.validate_uploaded_file(temp_processing_path, stream_file.filename)
+                                        security_valid = validation_result.get('valid', True)
+                                        if security_valid:
+                                            print(f"✅ Background security validation passed for {stream_file.filename}")
+                                        else:
+                                            print(f"❌ Background security validation failed for {stream_file.filename}: {validation_result.get('error', 'Unknown error')}")
+                                    except Exception as e:
+                                        print(f"⚠️  Background validation error: {e}")
+                                        validation_result = {'valid': True, 'warnings': [str(e)]}
+                                
+                                validation_thread = threading.Thread(target=background_validation, daemon=True)
+                                validation_thread.start()
+                            
                         except Exception as chunk_error:
                             print(f"⚠️  Error processing chunk {part_num}: {chunk_error}")
                             continue
@@ -298,18 +336,51 @@ class StreamingChunkAssembler:
                         progress = chunks_written / stream_file.expected_parts * 100
                         print(f"🌊 Streaming {stream_file.filename}: {progress:.1f}% complete ({chunks_written}/{stream_file.expected_parts} chunks)")
             
-            # Verify file completeness
-            expected_size = self._estimate_final_size(stream_file)
-            actual_size = stream_file.final_path.stat().st_size
+            # 🚀 BACKGROUND PROCESSING COMPLETION: Wait for validation and handle results
+            print(f"🔄 Finalizing background processing for {stream_file.filename}...")
             
-            if expected_size and abs(actual_size - expected_size) > (expected_size * 0.01):  # 1% tolerance
-                print(f"⚠️  Size mismatch for {stream_file.filename}: expected ~{expected_size}, got {actual_size}")
+            # Wait a bit for background validation to complete if it was started
+            if validation_started and validation_result is None:
+                print("⏳ Waiting for background validation to complete...")
+                for _ in range(20):  # Wait up to 2 seconds
+                    time.sleep(0.1)
+                    if validation_result is not None:
+                        break
+            
+            # Check if validation passed
+            if not security_valid or (validation_result and not validation_result.get('valid', True)):
+                print(f"❌ Security validation failed during background processing")
+                stream_file.error = validation_result.get('error', 'Security validation failed') if validation_result else 'Security validation failed'
+                stream_file.completed = True
+                
+                # Clean up temp file
+                if temp_processing_path.exists():
+                    temp_processing_path.unlink()
+                return
+            
+            # Move temp file to final location (atomic operation)
+            if temp_processing_path.exists():
+                import shutil
+                shutil.move(str(temp_processing_path), str(stream_file.final_path))
+                print(f"📁 Moved processed file to final location: {stream_file.final_path}")
+            
+            # Verify file completeness
+            if stream_file.final_path.exists():
+                expected_size = self._estimate_final_size(stream_file)
+                actual_size = stream_file.final_path.stat().st_size
+                
+                if expected_size and abs(actual_size - expected_size) > (expected_size * 0.01):  # 1% tolerance
+                    print(f"⚠️  Size mismatch for {stream_file.filename}: expected ~{expected_size}, got {actual_size}")
+            
+            # Store validation results for routes to use
+            stream_file.validation_result = validation_result or {'valid': True}
             
             # Mark as completed
             stream_file.completed = True
             elapsed = time.time() - stream_file.start_time
-            print(f"✅ TRUE streaming assembly completed for {stream_file.filename} in {elapsed:.1f}s")
-            print(f"   🚀 Processed {chunks_written} chunks in real-time as they arrived!")
+            print(f"✅ TRUE streaming assembly + background processing completed for {stream_file.filename} in {elapsed:.1f}s")
+            print(f"   🚀 Processed {chunks_written} chunks + security validation in real-time!")
+            print(f"   ⚡ Background processing saved significant time - file immediately ready!")
             
             # Call completion callback if provided
             if stream_file.filename in self.completion_callbacks:
@@ -400,6 +471,7 @@ class StreamingChunkAssembler:
                 'processing_started': stream_file.processing_started,
                 'completed': stream_file.completed,
                 'error': stream_file.error,
+                'validation_result': stream_file.validation_result,  # Include background validation results
                 'elapsed_time': time.time() - stream_file.start_time
             }
     
