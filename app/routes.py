@@ -22,6 +22,7 @@ from starlette.status import HTTP_302_FOUND, HTTP_400_BAD_REQUEST, HTTP_403_FORB
 from app.aes_utils import encrypt_session_data, decrypt_session_data
 from app.aes_config import AESConfig
 from app.unified_responsiveness import responsiveness_manager, create_responsive_operation, should_yield_now, yield_if_needed, get_optimal_chunk_size  # OPTIMIZED: Unified responsiveness
+from app.optimized_streaming import streaming_handler  # OPTIMIZED: Efficient file streaming
 from app.validation import (
     validate_upload_files, 
     validate_upload_files_enhanced,
@@ -325,157 +326,47 @@ async def download_file(filename: str, request: Request):
         return await full_download_file(file_path, safe_name, mime_type, file_size)
 
 async def full_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int):
-    """Ultra-optimized full file download - for small files and .enc files"""
-    print(f"📤 Starting full download for: {safe_name}")
+    """OPTIMIZED: Ultra-efficient full file download using optimized streaming"""
+    print(f"📤 Starting optimized full download for: {safe_name}")
     
-    # 🚀 Much larger buffer for maximum speed - 32MB buffer (4x improvement)
-    STREAM_BUFFER_SIZE = 32 * 1024 * 1024  # 32MB buffer (was 8MB)
+    # Determine if this is an encrypted file
+    is_encrypted = file_path.suffix == ".enc"
     
-    def stream_file_ultra_optimized(path: Path):
-        print(f"🔄 Streaming file: {path}")
-        
-        if path.suffix == ".enc":
-            print("🔐 Processing encrypted file")
-            # 🔐 Enhanced .enc file handling with streaming decryption and metadata validation
-            try:
-                # Check for metadata file first
-                metadata_path = path.with_suffix('.enc.meta')
-                metadata = None
-                
-                if metadata_path.exists():
-                    with open(metadata_path, "r") as meta_file:
-                        import json
-                        metadata = json.load(meta_file)
-                        print(f"🔒 Found metadata for encrypted file: {metadata.get('encryption_method', 'legacy')}")
-                
-                with open(path, "rb") as file:
-                    encrypted_data = file.read()
-                    print(f"📊 Read {len(encrypted_data)} bytes of encrypted data")
-                    
-                    # Use appropriate decryption method based on metadata
-                    if metadata and metadata.get('encryption_method') == 'streaming':
-                        from .aes_utils import decrypt_file_stream
-                        decrypted_data = decrypt_file_stream(encrypted_data, metadata, chunk_size=1024 * 1024)
-                        print(f"🔒 Used streaming decryption for {path.name}")
-                    else:
-                        # Note: Legacy encryption not supported - file may be corrupted
-                        print(f"⚠️ Cannot decrypt {path.name} - legacy encryption no longer supported")
-                        return Response(
-                            content=f"Error: File {path.name} uses unsupported legacy encryption",
-                            status_code=400
-                        )
-                    
-                    print(f"OK: Decrypted to {len(decrypted_data)} bytes")
-                    
-                    # Validate integrity if metadata available
-                    if metadata and 'original_hash' in metadata:
-                        import hashlib
-                        actual_hash = hashlib.sha256(decrypted_data).hexdigest()
-                        expected_hash = metadata['original_hash']
-                        if actual_hash != expected_hash:
-                            raise Exception(f"File integrity check failed! Expected: {expected_hash}, Got: {actual_hash}")
-                        print(f"OK: File integrity validated successfully")
-                    
-                    # 🚀 OPTIMIZED: Stream with unified responsiveness
-                    data_length = len(decrypted_data)
-                    operation_id = create_responsive_operation("file_streaming", "encryption", data_length)
-                    
-                    # OPTIMIZED: Use unified responsiveness for chunk size
-                    chunk_size = get_optimal_chunk_size('encryption')
-                    chunks_sent = 0
-                    
-                    for i in range(0, data_length, chunk_size):
-                        chunk_end = min(i + chunk_size, data_length)
-                        chunk = decrypted_data[i:chunk_end]
-                        chunks_sent += 1
-                        print(f"📤 Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
-                        yield chunk
-                        
-                        # OPTIMIZED: Use unified responsiveness for yielding
-                        if should_yield_now(operation_id, len(chunk)):
-                            yield_if_needed(operation_id)
-                        
-            except Exception as e:
-                print(f"🚨 AES decryption failed for {path}: {e}")
-                # Return error content instead of crashing
-                error_message = f"Error: Failed to decrypt file {path.name}. {str(e)}"
-                yield error_message.encode('utf-8')
-        else:
-            print("📄 Processing regular file")
-            # 🚀 OPTIMIZED: Ultra-fast regular file streaming with unified responsiveness
-            try:
-                operation_id = create_responsive_operation("file_streaming", "file_streaming", file_size)
-                chunk_size = get_optimal_chunk_size('file_streaming')
-                
-                with open(path, "rb") as file:
-                    chunks_sent = 0
-                    while True:
-                        chunk = file.read(chunk_size)
-                        if not chunk:
-                            break
-                        chunks_sent += 1
-                        print(f"📤 Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
-                        yield chunk
-                        
-                        # OPTIMIZED: Use unified responsiveness for yielding
-                        if should_yield_now(operation_id, len(chunk)):
-                            yield_if_needed(operation_id)
-                            
-                print(f"OK: Completed streaming {chunks_sent} chunks")
-            except Exception as e:
-                print(f"🚨 File streaming failed for {path}: {e}")
-                error_message = f"Error: Failed to read file {path.name}. {str(e)}"
-                yield error_message.encode('utf-8')
-
-    # For encrypted files, we need to adjust the Content-Length after decryption
-    final_file_size = file_size
-    if file_path.suffix == ".enc":
-        # Try to get the original size from metadata
-        metadata_path = file_path.with_suffix('.enc.meta')
-        if metadata_path.exists():
-            try:
-                with open(metadata_path, "r") as meta_file:
-                    import json
-                    metadata = json.load(meta_file)
-                    if 'original_size' in metadata:
-                        final_file_size = int(metadata['original_size'])
-                        print(f"🔒 Using original size from metadata: {final_file_size}")
-            except Exception as e:
-                print(f"⚠️ Could not read metadata for size: {e}")
+    # Get optimized headers
+    headers = streaming_handler.get_optimal_headers(
+        file_path, safe_name, mime_type, file_size
+    )
+    headers.update({
+        "X-Download-Type": "optimized-full",
+        "X-Memory-Efficient": "true"
+    })
     
-    headers = {
-        "Content-Disposition": f'attachment; filename="{safe_name}"',
-        "Content-Type": mime_type or "application/octet-stream",
-        "Cache-Control": "public, max-age=86400",
-        "X-Accel-Buffering": "no",
-        "X-Download-Type": "ultra-optimized-full",
-        "X-Buffer-Size": "32MB"
-    }
+    # Use optimized streaming based on file type
+    if is_encrypted:
+        print("� Using optimized encrypted file streaming")
+        stream_generator = streaming_handler.stream_encrypted_file_optimized(file_path)
+    else:
+        print("� Using optimized regular file streaming")
+        stream_generator = streaming_handler.stream_file_optimized(file_path, operation_type="file_streaming")
     
-    # Only add Content-Length for non-encrypted files to avoid mismatch
-    if not file_path.suffix == ".enc":
-        headers["Content-Length"] = str(final_file_size)
-    
-    print(f"📋 Response headers: {headers}")
+    print(f"📋 Optimized response headers: {headers}")
     
     return StreamingResponse(
-        stream_file_ultra_optimized(file_path),
+        stream_generator,
         media_type=mime_type or "application/octet-stream",
         headers=headers
     )
 
 async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, request: Request | None = None):
-    """High-performance chunked file download - for large files (≥250MB) that are not .enc"""
-    # 🚀 Much larger chunk size for faster downloads - 16MB chunks (16x improvement)
-    CHUNK_SIZE = 16 * 1024 * 1024  # 16MB chunks (was 1MB)
+    """OPTIMIZED: High-performance chunked file download using optimized streaming"""
+    print(f"� Starting optimized chunked download for: {safe_name}")
     
-    # Check for Range header (for proper chunked downloads)
+    # Parse Range header for partial content requests
     range_header = request.headers.get('Range') if request else None
     start = 0
     end = file_size - 1
     
     if range_header:
-        # Parse Range header: "bytes=start-end"
         try:
             range_match = range_header.replace('bytes=', '').split('-')
             if len(range_match) == 2:
@@ -488,42 +379,30 @@ async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str 
             pass  # Ignore invalid range headers
     
     content_length = end - start + 1
+    is_partial = bool(range_header)
     
-    def stream_chunks_optimized():
-        """Optimized streaming with larger buffers and better memory management"""
-        with open(file_path, "rb") as file:
-            file.seek(start)
-            remaining = content_length
-            
-            # 🚀 Use larger buffer reads for maximum speed
-            while remaining > 0:
-                # Dynamic chunk sizing - use full CHUNK_SIZE unless near end
-                chunk_size = min(CHUNK_SIZE, remaining)
-                chunk = file.read(chunk_size)
-                if not chunk:
-                    break
-                remaining -= len(chunk)
-                yield chunk
-
-    headers = {
-        "Content-Disposition": f'attachment; filename="{safe_name}"',
-        "Content-Length": str(content_length),
-        "Cache-Control": "public, max-age=86400",
-        "X-Accel-Buffering": "no",
-        "X-Download-Type": "high-performance-chunked",  # Updated indicator
-        "Accept-Ranges": "bytes",
-        "X-Chunk-Size": "16MB"  # Performance indicator
-    }
+    # Get optimized headers
+    headers = streaming_handler.get_optimal_headers(
+        file_path, safe_name, mime_type, file_size, 
+        is_partial=is_partial, start=start, end=end
+    )
+    headers.update({
+        "X-Download-Type": "optimized-chunked",
+        "X-Memory-Efficient": "true"
+    })
     
-    # Add Content-Range header for partial content
-    if range_header:
-        headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
-        status_code = 206  # Partial Content
-    else:
-        status_code = 200
-
+    # Determine status code
+    status_code = 206 if is_partial else 200
+    
+    # Use optimized streaming for the specified range
+    stream_generator = streaming_handler.stream_file_optimized(
+        file_path, start_pos=start, end_pos=end, operation_type="chunked_download"
+    )
+    
+    print(f"📋 Optimized chunked headers: {headers}")
+    
     return StreamingResponse(
-        stream_chunks_optimized(),
+        stream_generator,
         media_type=mime_type or "application/octet-stream",
         headers=headers,
         status_code=status_code
@@ -564,27 +443,16 @@ async def download_all_files():
         zip_data = zip_buffer.getvalue()
         zip_buffer.close()
         
-        # Create a proper generator for streaming with unified responsiveness
-        def generate_zip():
-            # OPTIMIZED: Use unified responsiveness for chunk size
-            chunk_size = get_optimal_chunk_size('file_streaming')
-            operation_id = create_responsive_operation("zip_streaming", "download", len(zip_data))
-            
-            for i in range(0, len(zip_data), chunk_size):
-                chunk = zip_data[i:i + chunk_size]
-                if chunk:  # Only yield non-empty chunks
-                    yield chunk
-                    
-                    # OPTIMIZED: Use unified responsiveness for yielding
-                    if should_yield_now(operation_id, len(chunk)):
-                        yield_if_needed(operation_id)
+        # Create a proper generator for optimized streaming
+        stream_generator = streaming_handler.stream_zip_optimized(zip_data)
         
         return StreamingResponse(
-            generate_zip(),
+            stream_generator,
             media_type="application/zip",
             headers={
                 "Content-Disposition": "attachment; filename=all_files.zip",
-                "Content-Length": str(len(zip_data))
+                "Content-Length": str(len(zip_data)),
+                "X-Streaming-Optimized": "true"
             }
         )
         
