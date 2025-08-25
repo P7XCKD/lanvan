@@ -23,6 +23,7 @@ from app.aes_utils import encrypt_session_data, decrypt_session_data
 from app.aes_config import AESConfig
 from app.unified_responsiveness import responsiveness_manager, create_responsive_operation, should_yield_now, yield_if_needed, get_optimal_chunk_size  # OPTIMIZED: Unified responsiveness
 from app.optimized_streaming import streaming_handler  # OPTIMIZED: Efficient file streaming
+from app.simplified_chunks import chunk_manager  # OPTIMIZED: Simplified chunk management
 from app.validation import (
     validate_upload_files, 
     validate_upload_files_enhanced,
@@ -88,8 +89,9 @@ def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=Fa
             original_hash = hashlib.sha256(data).hexdigest()
             print(f"🔒 Original file hash: {original_hash}")
             
-            # Use memory-efficient streaming encryption
-            encrypted_data, metadata = encrypt_file_stream(data, chunk_size=1024 * 1024)  # 1MB chunks
+            # Use memory-efficient streaming encryption with optimized chunk size
+            chunk_size = chunk_manager.get_chunk_size('encryption')  # OPTIMIZED: Fixed chunk size
+            encrypted_data, metadata = encrypt_file_stream(data, chunk_size=chunk_size)
             
             # Enhanced metadata with integrity information
             metadata['original_hash'] = original_hash
@@ -461,6 +463,29 @@ async def download_all_files():
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to create ZIP archive: {str(e)}"}
+        )
+
+@router.get("/api/chunk-config", name="get_chunk_config")
+async def get_chunk_config():
+    """OPTIMIZED: Get simplified chunk configuration for frontend"""
+    try:
+        config = chunk_manager.get_frontend_config()
+        summary = chunk_manager.get_performance_summary()
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "config": config,
+                "summary": summary,
+                "optimization": "simplified_chunks_enabled"
+            }
+        )
+    except Exception as e:
+        print(f"❌ Error getting chunk config: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "msg": f"Failed to get chunk config: {str(e)}"}
         )
 
 @router.post("/clear", name="clear_files")
@@ -1392,7 +1417,9 @@ async def upload_from_clipboard(
                 original_hash = hashlib.sha256(file_data).hexdigest()
                 
                 # Encrypt the data
-                encrypted_data, metadata = encrypt_file_stream(file_data, chunk_size=1024 * 1024)
+                # Use optimized chunk size for encryption
+                chunk_size = chunk_manager.get_chunk_size('encryption')  # OPTIMIZED: Fixed chunk size
+                encrypted_data, metadata = encrypt_file_stream(file_data, chunk_size=chunk_size)
                 
                 # Enhanced metadata
                 metadata['original_hash'] = original_hash

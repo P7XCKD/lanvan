@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import AsyncGenerator, Dict, Optional, Union
 from app.platform_detector import platform_detector  # OPTIMIZED: Cached platform detection
 from app.unified_responsiveness import responsiveness_manager, create_responsive_operation, should_yield_now, yield_if_needed, get_optimal_chunk_size
+from app.simplified_chunks import chunk_manager  # OPTIMIZED: Simplified chunk management
 
 
 class StreamingFileHandler:
@@ -60,8 +61,8 @@ class StreamingFileHandler:
         content_length = end_pos - start_pos + 1
         operation_id = create_responsive_operation("optimized_streaming", operation_type, content_length)
         
-        # Get optimal chunk size for this operation
-        chunk_size = get_optimal_chunk_size(operation_type)
+        # Get optimal chunk size for this operation using simplified chunks
+        chunk_size = chunk_manager.get_chunk_size(operation_type)  # OPTIMIZED: No runtime calculations
         
         # Ensure chunk size doesn't exceed our memory limits
         chunk_size = min(chunk_size, self.max_memory_buffer)
@@ -125,7 +126,7 @@ class StreamingFileHandler:
             from .aes_utils import decrypt_file_stream
             
             operation_id = create_responsive_operation("encrypted_streaming", "encryption", file_path.stat().st_size)
-            chunk_size = get_optimal_chunk_size('encryption')
+            chunk_size = chunk_manager.get_chunk_size('encryption')  # OPTIMIZED: Fixed chunk size
             
             # Stream-decrypt the file in chunks to avoid memory overhead
             with open(file_path, "rb") as encrypted_file:
@@ -165,7 +166,7 @@ class StreamingFileHandler:
         Memory-efficient ZIP streaming with optimal chunking
         """
         operation_id = create_responsive_operation("zip_streaming", "download", len(zip_data))
-        chunk_size = get_optimal_chunk_size('file_streaming')
+        chunk_size = chunk_manager.get_chunk_size('zip')  # OPTIMIZED: Fixed chunk size
         
         # Ensure chunk size doesn't exceed memory limits
         chunk_size = min(chunk_size, self.max_memory_buffer)
