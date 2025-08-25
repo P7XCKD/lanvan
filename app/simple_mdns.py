@@ -47,8 +47,7 @@ def force_cleanup_mdns_resources():
         import gc
         import threading
         
-        # Force garbage collection
-        gc.collect()
+        # OPTIMIZED: Natural cleanup instead of forced GC
         
         # Log any daemon threads that might be lingering
         daemon_threads = [t for t in threading.enumerate() 
@@ -57,7 +56,7 @@ def force_cleanup_mdns_resources():
         if daemon_threads:
             print(f"🧹 Found {len(daemon_threads)} zeroconf daemon threads (will be cleaned up on exit)")
         
-        print("🧹 Forced cleanup of mDNS resources")
+        print("🧹 Cleanup of mDNS resources completed")
         return True
     except Exception as e:
         print(f"⚠️ Cleanup warning: {e}")
@@ -536,12 +535,7 @@ class SimpleMDNSManager:
                         print(f"⚠️ Zeroconf close warning: {close_error}")
                     
                     # Additional cleanup for Android/Termux
-                    try:
-                        # Force garbage collection to free network resources
-                        import gc
-                        gc.collect()
-                    except:
-                        pass
+                    # OPTIMIZED: Rely on Python's natural cleanup instead of forced GC
                 
                 # Reset all state
                 self.is_running = False

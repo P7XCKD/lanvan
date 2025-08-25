@@ -203,8 +203,7 @@ def optimize_for_termux():
         except:
             pass  # Non-critical
         
-        # Gentle memory cleanup
-        gc.collect()
+        # OPTIMIZED: Natural cleanup instead of forced GC
         
         return True
         

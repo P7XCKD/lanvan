@@ -1593,7 +1593,7 @@
       PROGRESS_UPDATE: 4000,  // Progress update interval (matches unified)
       TOAST_UPDATE: 4000,     // Toast update interval (matches unified)
       CHUNK_ADAPTATION: 3,    // Adapt chunk size every N chunks
-      MEMORY_CHECK: 10,       // Check memory every N chunks (guest devices)
+      MEMORY_CHECK: 50,       // OPTIMIZED: Check memory every 50 chunks (was 10) - 80% less overhead
       CLIPBOARD_RETRY: 5000   // Clipboard WebSocket retry interval (5s) - OPTIMIZED
     },
     
@@ -1610,7 +1610,7 @@
     // Memory management
     MEMORY: {
       HIGH_USAGE_THRESHOLD: 70, // Reduce chunk size above 70% memory usage
-      GC_FREQUENCY: 10          // Force GC every N chunks on guest devices
+      CHECK_FREQUENCY: 50       // OPTIMIZED: Check memory every 50 chunks (was 10) - 80% less overhead
     },
     
     // Error recovery and retry mechanisms
@@ -1757,12 +1757,7 @@
       console.log('⚠️ Error cleaning transfer logs:', e);
     }
     
-    // Force garbage collection if available
-    if (typeof window.gc === 'function') {
-      window.gc();
-      console.log('🧹 Forced garbage collection');
-    }
-    
+    // OPTIMIZED: Let browser handle GC naturally - removed forced collection
     LANVAN_STATE.memory.lastCleanup = now;
   }
 
@@ -4953,23 +4948,23 @@ async function uploadFilesChunked(files, isAESEnabled) {
       let chunkCount = 0;
 
       while (currentPosition < fileSize) {
-        // 🔍 Optimized memory monitoring for guest device protection (reduced frequency)
-        if (isGuestDevice && chunkCount % LANVAN_CONFIG.MEMORY.GC_FREQUENCY === 0) {
+        // 🔍 OPTIMIZED: Less frequent memory monitoring (every 50 chunks instead of 10)
+        if (isGuestDevice && chunkCount % LANVAN_CONFIG.MEMORY.CHECK_FREQUENCY === 0) {
           try {
-            // Check available memory before creating large chunks (only every N chunks)
+            // Lightweight memory check - only when really needed
             if (performance.memory && performance.memory.usedJSHeapSize) {
               const usedMemoryMB = performance.memory.usedJSHeapSize / (1024 * 1024);
               const limitMemoryMB = performance.memory.jsHeapSizeLimit / (1024 * 1024);
               const memoryUsagePercent = (usedMemoryMB / limitMemoryMB) * 100;
               
-              // If memory usage is high, reduce chunk size
+              // Only act on critically high memory usage
               if (memoryUsagePercent > LANVAN_CONFIG.MEMORY.HIGH_USAGE_THRESHOLD) {
-                CHUNK_SIZE = Math.max(MIN_CHUNK_SIZE, CHUNK_SIZE * 0.5);
+                CHUNK_SIZE = Math.max(MIN_CHUNK_SIZE, CHUNK_SIZE * 0.75); // Gentler reduction
                 console.log(`🔥 High memory usage (${memoryUsagePercent.toFixed(1)}%), reducing chunk size to ${(CHUNK_SIZE/1024/1024).toFixed(1)}MB`);
               }
             }
           } catch (memError) {
-            console.log('Memory monitoring failed, continuing with current chunk size:', memError);
+            // Silently continue - don't spam console with memory errors
           }
         }
         
@@ -5078,21 +5073,18 @@ async function uploadFilesChunked(files, isAESEnabled) {
         // Calculate timing after successful upload
         const chunkDuration = (Date.now() - chunkStartTime) / 1000;
         
-        // 🧹 CRITICAL MEMORY CLEANUP: Explicitly dispose of chunk data after successful upload
+        // 🧹 OPTIMIZED: Let browser handle GC naturally - no forced collection
         chunk = null;
         chunkFormData = null;
         
-        // Force garbage collection hints for guest devices
-        if (isGuestDevice && chunkCount % LANVAN_CONFIG.MEMORY.GC_FREQUENCY === 0) {
-          // Trigger GC if available (Chrome DevTools or --js-flags=--expose-gc)
-          if (typeof window.gc === 'function') {
-            window.gc();
-            console.log(`🧹 Forced garbage collection after chunk ${chunkCount}`);
-          }
-          // Additional memory pressure relief
+        // Lightweight memory monitoring (much less frequent)
+        if (isGuestDevice && chunkCount % LANVAN_CONFIG.MEMORY.CHECK_FREQUENCY === 0) {
           if (typeof window.performance?.memory !== 'undefined') {
             const usedMB = window.performance.memory.usedJSHeapSize / (1024 * 1024);
-            console.log(`💾 Memory usage: ${usedMB.toFixed(1)}MB after chunk ${chunkCount}`);
+            // Only log if memory usage is concerning
+            if (usedMB > 200) { // Only log if > 200MB
+              console.log(`💾 Memory usage: ${usedMB.toFixed(1)}MB after chunk ${chunkCount}`);
+            }
           }
         }
         
