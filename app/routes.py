@@ -63,19 +63,16 @@ async def home(request: Request):
         current_port = request.url.port or (80 if request.url.scheme == "http" else 443)
         current_scheme = request.url.scheme
         
-        # 🔀 Only redirect if we're NOT already on the correct protocol AND port
-        protocol_wrong = current_scheme != actual_protocol
-        port_wrong = current_port != actual_port
-        
-        # Only redirect if both protocol AND port need changing, or if only protocol needs changing
-        if protocol_wrong or (port_wrong and current_scheme == "http"):
-            # Construct correct URL
-            if (actual_port == 80 and actual_protocol == "http") or (actual_port == 443 and actual_protocol == "https"):
-                # Standard ports - omit port number
-                redirect_url = f"{actual_protocol}://lanvan.local{request.url.path}"
+        # 🔀 ONLY redirect if we're on HTTP but server is HTTPS
+        # Don't redirect HTTPS requests to avoid loops
+        if current_scheme == "http" and actual_protocol == "https":
+            # Construct correct HTTPS URL
+            if actual_port == 443:
+                # Standard HTTPS port - omit port number
+                redirect_url = f"https://lanvan.local{request.url.path}"
             else:
-                # Non-standard ports - include port number
-                redirect_url = f"{actual_protocol}://lanvan.local:{actual_port}{request.url.path}"
+                # Non-standard HTTPS port - include port number
+                redirect_url = f"https://lanvan.local:{actual_port}{request.url.path}"
             
             if request.url.query:
                 redirect_url += f"?{request.url.query}"

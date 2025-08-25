@@ -209,8 +209,8 @@ async def lifespan(app: FastAPI):
                     print(f"   🔧 Conflict resolved (attempt #{mdns_info['conflict_count'] + 1})")
                 
                 # Show redirect info for HTTPS mode
-                if use_https:
-                    print(f"🔀 HTTP→HTTPS redirect: http://lanvan.local → https://lanvan.local:{port}")
+                if use_https and mdns_info['domain'] != "lanvan.local":
+                    print(f"🔀 Redirect available: http://lanvan.local → https://lanvan.local:{port}")
             else:
                 print("⚠️  mDNS service failed to start - using IP access only")
         except Exception as e:
