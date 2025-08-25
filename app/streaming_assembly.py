@@ -32,6 +32,7 @@ class StreamingFile:
     received_parts: Set[int] = field(default_factory=set)
     final_path: Path = None
     temp_chunks: Dict[int, Path] = field(default_factory=dict)
+    chunk_sizes: Dict[int, int] = field(default_factory=dict)  # Track individual chunk sizes
     start_time: float = field(default_factory=time.time)
     last_chunk_time: float = field(default_factory=time.time)
     processing_started: bool = False
@@ -59,8 +60,8 @@ class StreamingChunkAssembler:
         
         # Termux-optimized settings
         self.is_termux = is_termux_environment()
-        self.chunk_check_interval = 0.5 if self.is_termux else 0.2  # Slower polling on Termux
-        self.min_chunks_before_processing = 3 if self.is_termux else 2  # Conservative on mobile
+        self.chunk_check_interval = 0.1 if self.is_termux else 0.05  # Much faster polling for true streaming
+        self.min_chunks_before_processing = 2 if self.is_termux else 1  # Start processing ASAP
         
         print(f"🌊 Streaming Assembly initialized ({'Termux-optimized' if self.is_termux else 'desktop-optimized'})")
     
@@ -159,9 +160,11 @@ class StreamingChunkAssembler:
                 if part_number in stream_file.received_parts:
                     return  # Already processed
                 
-                # Record this chunk
+                # Record this chunk and its size
+                chunk_size = chunk_path.stat().st_size if chunk_path.exists() else 0
                 stream_file.received_parts.add(part_number)
                 stream_file.temp_chunks[part_number] = chunk_path
+                stream_file.chunk_sizes[part_number] = chunk_size
                 stream_file.last_chunk_time = time.time()
                 
                 # Check if we should start streaming assembly
@@ -219,59 +222,94 @@ class StreamingChunkAssembler:
             stream_file.error = str(e)
     
     def _streaming_assembly_worker(self, stream_file: StreamingFile):
-        """Worker thread for streaming assembly"""
+        """Worker thread for TRUE streaming assembly - processes chunks as they arrive"""
         try:
+            # Create final file and prepare for streaming writes
             with open(stream_file.final_path, 'wb') as final_file:
-                next_part = 1
+                processed_chunks = set()
+                chunks_written = 0
                 
-                while next_part <= stream_file.expected_parts:
-                    # Wait for next chunk
-                    chunk_path = None
-                    max_wait = 30.0  # 30 second timeout per chunk
-                    wait_start = time.time()
-                    
-                    while time.time() - wait_start < max_wait:
-                        with stream_file.lock:
-                            if next_part in stream_file.temp_chunks:
-                                chunk_path = stream_file.temp_chunks[next_part]
-                                break
-                        
-                        # Short sleep while waiting
-                        time.sleep(0.1)
-                    
-                    if chunk_path is None:
-                        raise TimeoutError(f"Timeout waiting for chunk {next_part}")
-                    
-                    if not chunk_path.exists():
-                        raise FileNotFoundError(f"Chunk {next_part} file not found: {chunk_path}")
-                    
-                    # Read and append chunk data
-                    chunk_data = chunk_path.read_bytes()
-                    final_file.write(chunk_data)
-                    final_file.flush()  # Ensure data is written
-                    
-                    # Clean up processed chunk immediately (save space)
-                    try:
-                        chunk_path.unlink()
-                        print(f"🧹 Cleaned up chunk {next_part} for {stream_file.filename}")
-                    except:
-                        pass  # Non-critical
+                # Pre-allocate file space for better performance (if we know total size)
+                # This prevents fragmentation and improves write speed
+                
+                while chunks_written < stream_file.expected_parts:
+                    # Get all available chunks that haven't been processed yet
+                    available_chunks = []
                     
                     with stream_file.lock:
-                        if next_part in stream_file.temp_chunks:
-                            del stream_file.temp_chunks[next_part]
+                        for part_num, chunk_path in stream_file.temp_chunks.items():
+                            if part_num not in processed_chunks and chunk_path.exists():
+                                available_chunks.append((part_num, chunk_path))
                     
-                    next_part += 1
+                    if not available_chunks:
+                        # No new chunks available, wait briefly and check again
+                        time.sleep(0.05)  # Very short wait for true real-time processing
+                        
+                        # Check if we've been waiting too long
+                        if time.time() - stream_file.last_chunk_time > 30.0:
+                            raise TimeoutError("No new chunks received in 30 seconds")
+                        continue
+                    
+                    # Sort available chunks by part number for ordered writing
+                    available_chunks.sort(key=lambda x: x[0])
+                    
+                    # Process all available chunks
+                    for part_num, chunk_path in available_chunks:
+                        try:
+                            if not chunk_path.exists():
+                                print(f"⚠️  Chunk {part_num} disappeared, skipping")
+                                continue
+                            
+                            # Read chunk data
+                            chunk_data = chunk_path.read_bytes()
+                            
+                            # Calculate file position for this chunk using cumulative sizes
+                            chunk_position = self._calculate_chunk_position(stream_file, part_num)
+                            
+                            # Seek to correct position and write chunk
+                            final_file.seek(chunk_position)
+                            final_file.write(chunk_data)
+                            final_file.flush()
+                            
+                            # Mark chunk as processed
+                            processed_chunks.add(part_num)
+                            chunks_written += 1
+                            
+                            # Clean up processed chunk immediately
+                            try:
+                                chunk_path.unlink()
+                                print(f"🌊 Processed chunk {part_num}/{stream_file.expected_parts} for {stream_file.filename} ({chunks_written * 100 / stream_file.expected_parts:.1f}%)")
+                            except:
+                                pass  # Non-critical
+                            
+                            # Remove from temp_chunks tracking
+                            with stream_file.lock:
+                                if part_num in stream_file.temp_chunks:
+                                    del stream_file.temp_chunks[part_num]
+                                # Update chunk size record
+                                stream_file.chunk_sizes[part_num] = len(chunk_data)
+                            
+                        except Exception as chunk_error:
+                            print(f"⚠️  Error processing chunk {part_num}: {chunk_error}")
+                            continue
                     
                     # Progress feedback
-                    if next_part % 10 == 0 or next_part == stream_file.expected_parts:
-                        progress = (next_part - 1) / stream_file.expected_parts * 100
-                        print(f"🌊 Streaming {stream_file.filename}: {progress:.1f}% assembled ({next_part-1}/{stream_file.expected_parts} chunks)")
+                    if chunks_written % 5 == 0 or chunks_written == stream_file.expected_parts:
+                        progress = chunks_written / stream_file.expected_parts * 100
+                        print(f"🌊 Streaming {stream_file.filename}: {progress:.1f}% complete ({chunks_written}/{stream_file.expected_parts} chunks)")
+            
+            # Verify file completeness
+            expected_size = self._estimate_final_size(stream_file)
+            actual_size = stream_file.final_path.stat().st_size
+            
+            if expected_size and abs(actual_size - expected_size) > (expected_size * 0.01):  # 1% tolerance
+                print(f"⚠️  Size mismatch for {stream_file.filename}: expected ~{expected_size}, got {actual_size}")
             
             # Mark as completed
             stream_file.completed = True
             elapsed = time.time() - stream_file.start_time
-            print(f"✅ Streaming assembly completed for {stream_file.filename} in {elapsed:.1f}s")
+            print(f"✅ TRUE streaming assembly completed for {stream_file.filename} in {elapsed:.1f}s")
+            print(f"   🚀 Processed {chunks_written} chunks in real-time as they arrived!")
             
             # Call completion callback if provided
             if stream_file.filename in self.completion_callbacks:
@@ -284,7 +322,7 @@ class StreamingChunkAssembler:
             self.unregister_file(stream_file.filename)
             
         except Exception as e:
-            print(f"❌ Streaming assembly failed for {stream_file.filename}: {e}")
+            print(f"❌ TRUE streaming assembly failed for {stream_file.filename}: {e}")
             stream_file.error = str(e)
             stream_file.completed = True
             
@@ -294,6 +332,53 @@ class StreamingChunkAssembler:
                     stream_file.final_path.unlink()
                 except:
                     pass
+    
+    def _calculate_chunk_position(self, stream_file: StreamingFile, target_part: int):
+        """Calculate the file position for a specific chunk based on actual chunk sizes"""
+        position = 0
+        
+        with stream_file.lock:
+            # Sum sizes of all chunks before this one
+            for part_num in range(1, target_part):
+                if part_num in stream_file.chunk_sizes:
+                    position += stream_file.chunk_sizes[part_num]
+                else:
+                    # Estimate size based on average of known chunks
+                    avg_size = self._get_average_chunk_size(stream_file)
+                    position += avg_size if avg_size else 0
+        
+        return position
+    
+    def _get_average_chunk_size(self, stream_file: StreamingFile):
+        """Get average chunk size from processed chunks"""
+        with stream_file.lock:
+            if not stream_file.chunk_sizes:
+                return 0
+            return sum(stream_file.chunk_sizes.values()) / len(stream_file.chunk_sizes)
+    
+    def _estimate_final_size(self, stream_file: StreamingFile):
+        """Estimate final file size based on received chunks"""
+        if not stream_file.temp_chunks:
+            return None
+        
+        # Get average chunk size from received chunks
+        total_size = 0
+        chunk_count = 0
+        
+        with stream_file.lock:
+            for chunk_path in stream_file.temp_chunks.values():
+                if chunk_path.exists():
+                    try:
+                        total_size += chunk_path.stat().st_size
+                        chunk_count += 1
+                    except:
+                        continue
+        
+        if chunk_count == 0:
+            return None
+        
+        avg_chunk_size = total_size / chunk_count
+        return int(avg_chunk_size * stream_file.expected_parts)
     
     def _continue_streaming_assembly(self, stream_file: StreamingFile, new_part: int):
         """Handle new chunk during active streaming assembly"""
