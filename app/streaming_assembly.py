@@ -22,8 +22,9 @@ from app.thread_manager import thread_manager, ThreadPriority  # OPTIMIZED: Cent
 from app.unified_responsiveness import responsiveness_manager, create_responsive_operation, should_yield_now, yield_if_needed  # OPTIMIZED: Unified responsiveness
 from collections import defaultdict
 
-# Import Termux compatibility
-from .termux_compat import is_termux_environment, should_use_lightweight_mode
+# Import Termux compatibility  
+from .termux_compat import should_use_lightweight_mode
+from .platform_detector import platform_detector  # OPTIMIZED: Cached platform detection
 
 
 @dataclass
@@ -61,8 +62,8 @@ class StreamingChunkAssembler:
         self.completion_callbacks: Dict[str, Callable] = {}
         self.lock = threading.Lock()
         
-        # Termux-optimized settings with unified responsiveness
-        self.is_termux = is_termux_environment()
+        # OPTIMIZED: Use cached platform detection instead of repeated calls
+        self.is_termux = platform_detector.is_termux_environment()
         
         # OPTIMIZED: Use unified responsiveness manager for intervals
         self.chunk_check_interval = responsiveness_manager.config.monitoring_interval
@@ -70,6 +71,7 @@ class StreamingChunkAssembler:
         
         print(f"🌊 Streaming Assembly initialized ({'Termux-optimized' if self.is_termux else 'desktop-optimized'})")
         print(f"🎯 Using unified responsiveness (interval: {self.chunk_check_interval}s)")
+        print(f"🔍 Platform detection cached (no repeated overhead)")
     
     def start_monitoring(self):
         """OPTIMIZED: Start managed monitoring thread"""

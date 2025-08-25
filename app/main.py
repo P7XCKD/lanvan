@@ -19,6 +19,7 @@ from app.routes import router
 # Import mDNS manager for service discovery
 from app.simple_mdns import mdns_manager
 from app.thread_manager import thread_manager, ThreadPriority  # OPTIMIZED: Centralized thread management
+from app.platform_detector import platform_detector  # OPTIMIZED: Cached platform detection
 from app.unified_responsiveness import responsiveness_manager, optimize_responsiveness_for_environment, start_responsiveness_monitoring  # OPTIMIZED: Unified responsiveness
 
 # 🔇 Suppress noisy ClientDisconnect errors in logs
@@ -170,6 +171,10 @@ async def lifespan(app: FastAPI):
     """Handle app startup and shutdown"""
     print("🚀 Server starting up with enhanced shutdown handling...")
     print("💡 Use Ctrl+C to shutdown gracefully (console commands disabled)")
+    
+    # OPTIMIZED: Initialize platform detection early (cached for entire session)
+    print("🔍 Initializing platform detection system...")
+    platform_info = platform_detector.get_platform_info()
     
     # OPTIMIZED: Initialize unified responsiveness system
     print("🎯 Initializing unified responsiveness management...")
