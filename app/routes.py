@@ -46,6 +46,67 @@ router = APIRouter()
 UPLOAD_FOLDER = Path("app/uploads")
 UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
+# === Universal mDNS Redirect Handler ===
+@router.get("/", response_class=HTMLResponse, name="home") 
+async def home(request: Request):
+    """
+    🎯 Universal mDNS Redirect + Main Page Handler
+    Handles lanvan.local access regardless of port/protocol with smart redirects
+    """
+    host = request.headers.get("host", "").lower()
+    
+    # 🎯 Universal mDNS Redirect Logic for lanvan.local
+    if "lanvan.local" in host:
+        # Get current server configuration
+        actual_port = mdns_manager.actual_port
+        actual_protocol = mdns_manager.actual_protocol
+        current_port = request.url.port or (80 if request.url.scheme == "http" else 443)
+        current_scheme = request.url.scheme
+        
+        # 🔀 Only redirect if we're NOT already on the correct protocol AND port
+        protocol_wrong = current_scheme != actual_protocol
+        port_wrong = current_port != actual_port
+        
+        # Only redirect if both protocol AND port need changing, or if only protocol needs changing
+        if protocol_wrong or (port_wrong and current_scheme == "http"):
+            # Construct correct URL
+            if (actual_port == 80 and actual_protocol == "http") or (actual_port == 443 and actual_protocol == "https"):
+                # Standard ports - omit port number
+                redirect_url = f"{actual_protocol}://lanvan.local{request.url.path}"
+            else:
+                # Non-standard ports - include port number
+                redirect_url = f"{actual_protocol}://lanvan.local:{actual_port}{request.url.path}"
+            
+            if request.url.query:
+                redirect_url += f"?{request.url.query}"
+            
+            return RedirectResponse(url=redirect_url, status_code=302)  # Temporary redirect
+    
+    # 🔀 HTTPS Fallback System: Auto-redirect HTTP to HTTPS when server runs in HTTPS mode
+    redirect_response = https_redirect_if_needed(request)
+    if redirect_response:
+        return redirect_response
+    
+    # 🏠 Main page logic
+    files = get_file_list()
+    
+    # Add helpful debug info for HTTPS troubleshooting
+    protocol = request.url.scheme
+    host = request.headers.get("host", "unknown")
+    
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "msg": "Lanvan",
+        "files": [f["name"] for f in files],
+        "debug_info": {
+            "protocol": protocol,
+            "host": host,
+            "port": "5000" if ":5000" in host else "unknown"
+        },
+        "show_both_sections": True,  # Show both file transfer and clipboard
+        "default_view": "file"       # Default to file transfer view
+    })
+
 # === Chunked Upload Setup ===
 TEMP_CHUNKS_FOLDER = UPLOAD_FOLDER / "temp_chunks"
 TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
@@ -110,12 +171,21 @@ def https_redirect_if_needed(request: Request) -> Optional[RedirectResponse]:
         # Extract host and port information
         host = request.headers.get("host", "")
         if host:
-            # Construct HTTPS URL while preserving the host (including lanvan.local)
-            https_url = f"https://{host}{request.url.path}"
+            # 🎯 Universal Port Redirect: Handle lanvan.local with any port
+            if "lanvan.local" in host:
+                # For lanvan.local, redirect to the actual HTTPS service
+                actual_port = mdns_manager.actual_port
+                if actual_port == 443:
+                    https_url = f"https://lanvan.local{request.url.path}"
+                else:
+                    https_url = f"https://lanvan.local:{actual_port}{request.url.path}"
+            else:
+                # Regular redirect preserving original host
+                https_url = f"https://{host}{request.url.path}"
+            
             if request.url.query:
                 https_url += f"?{request.url.query}"
             
-            print(f"🔀 HTTPS Redirect: {request.url} → {https_url}")
             return RedirectResponse(url=https_url, status_code=301)  # Permanent redirect
     return None
     for unit in ["B", "KB", "MB", "GB"]:
@@ -529,32 +599,6 @@ async def loading_page(request: Request, redirect: str = "/"):
     return templates.TemplateResponse("loading.html", {
         "request": request,
         "redirect_url": redirect
-    })
-
-@router.get("/", response_class=HTMLResponse, name="home")
-async def home(request: Request):
-    # 🔀 HTTPS Fallback System: Auto-redirect HTTP to HTTPS when server runs in HTTPS mode
-    redirect_response = https_redirect_if_needed(request)
-    if redirect_response:
-        return redirect_response
-    
-    files = get_file_list()
-    
-    # Add helpful debug info for HTTPS troubleshooting
-    protocol = request.url.scheme
-    host = request.headers.get("host", "unknown")
-    
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "msg": "Lanvan",
-        "files": [f["name"] for f in files],
-        "debug_info": {
-            "protocol": protocol,
-            "host": host,
-            "port": "5000" if ":5000" in host else "unknown"
-        },
-        "show_both_sections": True,  # Show both file transfer and clipboard
-        "default_view": "file"       # Default to file transfer view
     })
 
 @router.get("/api/files", name="api_files")

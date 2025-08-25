@@ -76,7 +76,8 @@ class SimpleMDNSManager:
         self.service_info = None
         self.service_name = "lanvan"
         self.base_service_name = "lanvan"
-        self.service_type = "_http._tcp.local."  # Always use _http._tcp for mDNS, even for HTTPS
+        # 🎯 Universal Service Type: Always use _http._tcp for mDNS compatibility
+        self.service_type = "_http._tcp.local."  
         self.domain = f"{self.service_name}.local"
         self.conflict_count = 0
         self.is_running = False
@@ -85,6 +86,10 @@ class SimpleMDNSManager:
         self._lock = threading.Lock()
         self._announcement_thread = None
         self._stop_announcements = False
+        
+        # 🔀 Universal Port Redirect: Track both HTTP and HTTPS services
+        self.actual_port = port
+        self.actual_protocol = self.protocol
         
         # Setup simple logging
         self.logger = logging.getLogger(__name__)
@@ -430,7 +435,7 @@ class SimpleMDNSManager:
                 # Create service name
                 service_name_full = f"{self.service_name}.{self.service_type}"
                 
-                # Enhanced properties with offline-friendly information
+                # Enhanced properties with universal port redirect info
                 properties = {
                     b'version': b'1.0.0',
                     b'service': b'lanvan-file-server',
@@ -440,7 +445,11 @@ class SimpleMDNSManager:
                     b'device_id': self.device_id.encode('utf-8'),
                     b'collision_resolved': b'true' if self.conflict_count > 0 else b'false',
                     b'offline_ready': b'true',  # Indicate offline compatibility
-                    b'local_network': b'true'   # Local network only
+                    b'local_network': b'true',  # Local network only
+                    # 🎯 Universal Port Redirect: Add actual service details
+                    b'actual_port': str(self.actual_port).encode('utf-8'),
+                    b'actual_protocol': self.actual_protocol.encode('utf-8'),
+                    b'redirect_capable': b'true'  # Indicates smart redirect support
                 }
                 
                 # Create service info with offline optimization
