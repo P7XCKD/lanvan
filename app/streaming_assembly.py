@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Dict, Optional, Set, Callable
 import shutil
 from dataclasses import dataclass, field
+from app.thread_manager import thread_manager, ThreadPriority  # OPTIMIZED: Centralized thread management
 from collections import defaultdict
 
 # Import Termux compatibility
@@ -67,20 +68,27 @@ class StreamingChunkAssembler:
         print(f"🌊 Streaming Assembly initialized ({'Termux-optimized' if self.is_termux else 'desktop-optimized'})")
     
     def start_monitoring(self):
-        """Start monitoring temp folder for new chunks"""
+        """OPTIMIZED: Start managed monitoring thread"""
         if self.monitoring:
             return
             
         self.monitoring = True
-        self.monitor_thread = threading.Thread(target=self._monitor_chunks, daemon=True)
-        self.monitor_thread.start()
+        
+        # OPTIMIZED: Use centralized thread manager
+        self.monitor_stop_event = thread_manager.create_thread(
+            target=self._monitor_chunks,
+            name="streaming_monitor",
+            priority=ThreadPriority.HIGH,
+            timeout=5.0
+        )
         print("🔍 Streaming chunk monitoring started")
     
     def stop_monitoring(self):
-        """Stop monitoring"""
+        """OPTIMIZED: Stop managed monitoring thread"""
         self.monitoring = False
-        if self.monitor_thread:
-            self.monitor_thread.join(timeout=2.0)
+        
+        # OPTIMIZED: Use centralized thread manager
+        thread_manager.stop_thread("streaming_monitor", timeout=3.0)
         print("🔍 Streaming chunk monitoring stopped")
     
     def register_file(self, filename: str, expected_parts: int, final_path: Path, 
@@ -111,20 +119,24 @@ class StreamingChunkAssembler:
             if filename in self.completion_callbacks:
                 del self.completion_callbacks[filename]
     
-    def _monitor_chunks(self):
-        """Monitor temp folder for new chunks and process them"""
+    def _monitor_chunks(self, stop_event=None):
+        """OPTIMIZED: Monitor with managed lifecycle"""
         print(f"👀 Monitoring {self.temp_folder} for chunks (interval: {self.chunk_check_interval}s)")
         
-        while self.monitoring:
+        while self.monitoring and not (stop_event and stop_event.is_set()):
             try:
                 # Check for new chunks
                 if self.temp_folder.exists():
                     for chunk_file in self.temp_folder.glob("*.part*"):
+                        if stop_event and stop_event.is_set():
+                            break
                         self._process_discovered_chunk(chunk_file)
                 
                 # Check for files ready to start streaming assembly
                 with self.lock:
                     for filename, stream_file in list(self.active_files.items()):
+                        if stop_event and stop_event.is_set():
+                            break
                         if not stream_file.processing_started:
                             self._check_start_streaming_assembly(stream_file)
                 
@@ -210,13 +222,15 @@ class StreamingChunkAssembler:
             # Create final file
             stream_file.final_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # Start streaming assembly in background thread
-            assembly_thread = threading.Thread(
+            # OPTIMIZED: Start streaming assembly with managed thread
+            thread_name = f"stream_assembly_{stream_file.filename}"
+            thread_manager.create_thread(
                 target=self._streaming_assembly_worker,
+                name=thread_name,
                 args=(stream_file,),
-                daemon=True
+                priority=ThreadPriority.HIGH,
+                timeout=30.0
             )
-            assembly_thread.start()
             
         except Exception as e:
             print(f"❌ Failed to start streaming assembly for {stream_file.filename}: {e}")
@@ -324,8 +338,14 @@ class StreamingChunkAssembler:
                                         print(f"⚠️  Background validation error: {e}")
                                         validation_result = {'valid': True, 'warnings': [str(e)]}
                                 
-                                validation_thread = threading.Thread(target=background_validation, daemon=True)
-                                validation_thread.start()
+                                # OPTIMIZED: Use managed thread for background validation
+                                validation_thread_name = f"bg_validation_{stream_file.filename}_{part_num}"
+                                thread_manager.create_thread(
+                                    target=background_validation,
+                                    name=validation_thread_name,
+                                    priority=ThreadPriority.LOW,
+                                    timeout=10.0
+                                )
                             
                         except Exception as chunk_error:
                             print(f"⚠️  Error processing chunk {part_num}: {chunk_error}")

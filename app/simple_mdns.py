@@ -8,6 +8,7 @@ import platform
 import os
 from typing import Optional, Dict, Any
 from zeroconf import ServiceInfo, Zeroconf, ServiceBrowser
+from app.thread_manager import thread_manager, ThreadPriority  # OPTIMIZED: Centralized thread management
 
 def check_mdns_dependencies() -> tuple[bool, str]:
     """Check if mDNS dependencies are available, especially for Termux"""
@@ -160,21 +161,31 @@ class SimpleMDNSManager:
             return f"lanvan-{hash(str(time.time())) % 1000}"
 
     def _start_announcement_thread(self):
-        """Start background thread for periodic mDNS announcements (instant guest loading)"""
-        if self._announcement_thread and self._announcement_thread.is_alive():
-            return
-            
-        self._stop_announcements = False
-        self._announcement_thread = threading.Thread(target=self._announcement_worker, daemon=True)
-        self._announcement_thread.start()
+        """OPTIMIZED: Start managed announcement thread"""
+        # Stop existing thread if running
+        self._stop_announcement_thread()
         
-    def _announcement_worker(self):
-        """Background worker for periodic mDNS announcements - reduced frequency"""
+        self._stop_announcements = False
+        
+        # OPTIMIZED: Use centralized thread manager
+        self._announcement_stop_event = thread_manager.create_thread(
+            target=self._announcement_worker,
+            name=f"mdns_announcer_{self.service_name}",
+            priority=ThreadPriority.HIGH,
+            timeout=10.0
+        )
+        
+    def _announcement_worker(self, stop_event=None):
+        """OPTIMIZED: Background worker with managed lifecycle"""
         try:
             announcement_count = 0
-            while not self._stop_announcements and self.is_running:
+            while not (self._stop_announcements or (stop_event and stop_event.is_set())) and self.is_running:
                 time.sleep(5)  # Increased from 1s to reduce HTTP conflicts
                 announcement_count += 1
+                
+                # Check for early termination
+                if stop_event and stop_event.is_set():
+                    break
                 
                 # Announce every 30 seconds for first 2 minutes (reduced frequency)
                 if announcement_count <= 24 and announcement_count % 6 == 0:
@@ -194,12 +205,16 @@ class SimpleMDNSManager:
                         
         except Exception as e:
             print(f"⚠️ Announcement thread error (non-critical): {e}")
+        finally:
+            print(f"🔧 mDNS announcer for {self.service_name} stopped")
 
     def _stop_announcement_thread(self):
-        """Stop the announcement thread"""
+        """OPTIMIZED: Stop managed announcement thread"""
         self._stop_announcements = True
-        if self._announcement_thread and self._announcement_thread.is_alive():
-            self._announcement_thread.join(timeout=1.0)
+        
+        # OPTIMIZED: Use centralized thread manager
+        thread_name = f"mdns_announcer_{self.service_name}"
+        thread_manager.stop_thread(thread_name, timeout=2.0)
 
     def _detect_collision(self, service_name: str) -> tuple[str, bool]:
         """Detect if service name is already in use and suggest alternative - works offline"""

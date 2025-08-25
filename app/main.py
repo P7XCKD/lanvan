@@ -18,9 +18,7 @@ from app.routes import router
 
 # Import mDNS manager for service discovery
 from app.simple_mdns import mdns_manager
-
-# Import HTTPS redirect server for dual-protocol support
-from app.https_redirect_server import start_https_redirect_server, stop_https_redirect_server
+from app.thread_manager import thread_manager, ThreadPriority  # OPTIMIZED: Centralized thread management
 
 # 🔇 Suppress noisy ClientDisconnect errors in logs
 class ClientDisconnectFilter(logging.Filter):
@@ -123,22 +121,32 @@ def initiate_graceful_shutdown_process():
     
     print("🚨 Graceful shutdown initiated - notifying all connected clients...")
     
-    def countdown_and_shutdown():
+    def countdown_and_shutdown(stop_event=None):
         global shutdown_countdown
         for i in range(5, 0, -1):
+            if stop_event and stop_event.is_set():
+                break
             shutdown_countdown = i
             print(f"🕒 Shutdown in {i} seconds...")
-            threading.Event().wait(1)  # Non-blocking sleep
+            time.sleep(1)  # Use regular sleep in managed thread
         
         print("🚨 Server is now inactive...")
         shutdown_event.set()
         
+        # OPTIMIZED: Graceful thread shutdown
+        print("🔧 Stopping all background threads...")
+        thread_manager.shutdown_all(timeout=10.0)
+        
         # Force exit to ensure immediate shutdown
         os._exit(0)
     
-    # Start countdown in background thread
-    shutdown_thread = threading.Thread(target=countdown_and_shutdown, daemon=True)
-    shutdown_thread.start()
+    # OPTIMIZED: Use managed thread for shutdown
+    thread_manager.create_thread(
+        target=countdown_and_shutdown,
+        name="shutdown_countdown",
+        priority=ThreadPriority.CRITICAL,
+        timeout=15.0
+    )
 
 # 🎯 Signal handlers for Ctrl+C and other termination signals
 def signal_handler(signum, frame):
@@ -162,10 +170,6 @@ async def lifespan(app: FastAPI):
     print("🚀 Server starting up with enhanced shutdown handling...")
     print("💡 Use Ctrl+C to shutdown gracefully (console commands disabled)")
     
-    # Start responsiveness monitor
-    from app.responsiveness_monitor import responsiveness_monitor
-    await responsiveness_monitor.start_monitoring()
-    
     # Start mDNS service
     # Get the actual port being used (80/443 or fallback ports)
     port = int(os.environ.get('PORT', 80))  # Default to HTTP port 80
@@ -176,29 +180,8 @@ async def lifespan(app: FastAPI):
     
     print(f"🔍 Starting mDNS service discovery ({'HTTPS' if use_https else 'HTTP'} mode)...")
     
-    # 🔀 Start HTTPS redirect server if in HTTPS mode
-    if use_https:
-        try:
-            # Determine HTTP redirect port (try standard port 80, fallback to 8080)
-            http_redirect_port = 80
-            if port == 443:
-                # Standard HTTPS setup - use port 80 for redirect
-                http_redirect_port = 80
-            elif port == 5001:
-                # Development HTTPS setup - use port 5000 for redirect  
-                http_redirect_port = 5000
-            else:
-                # Custom HTTPS port - use port 8080 for redirect
-                http_redirect_port = 8080
-            
-            print(f"🔀 Starting HTTPS redirect server on port {http_redirect_port} → {port}")
-            await start_https_redirect_server(port, http_redirect_port)
-        except Exception as e:
-            print(f"⚠️ HTTPS redirect server failed: {e}")
-            print("   Direct HTTPS access will still work")
-    
     # Start mDNS in background thread to not block server startup
-    def start_mdns_background():
+    def start_mdns_background(stop_event=None):
         try:
             time.sleep(1)  # Give server time to start
             if mdns_manager.start_service():
@@ -207,28 +190,33 @@ async def lifespan(app: FastAPI):
                 print(f"   Access via: {mdns_info['url']}")
                 if mdns_info['conflict_resolved']:
                     print(f"   🔧 Conflict resolved (attempt #{mdns_info['conflict_count'] + 1})")
-                
-                # Show redirect info for HTTPS mode
-                if use_https:
-                    print(f"🔀 HTTP→HTTPS redirect: http://lanvan.local → https://lanvan.local:{port}")
             else:
                 print("⚠️  mDNS service failed to start - using IP access only")
         except Exception as e:
             print(f"⚠️  mDNS service error: {e} - using IP access only")
     
-    # Start mDNS in background thread
-    mdns_thread = threading.Thread(target=start_mdns_background, daemon=True)
-    mdns_thread.start()
+    # OPTIMIZED: Use managed thread for mDNS
+    thread_manager.create_thread(
+        target=start_mdns_background,
+        name="mdns_service",
+        priority=ThreadPriority.HIGH,
+        timeout=10.0
+    )
     
     # Mark resources as ready after startup
-    def mark_resources_ready():
-        global resources_ready
+    def mark_resources_ready(stop_event=None):
         time.sleep(2)  # Give time for initial setup
+        global resources_ready
         resources_ready = True
         print("✅ Server resources are ready")
     
-    ready_thread = threading.Thread(target=mark_resources_ready, daemon=True)
-    ready_thread.start()
+    # OPTIMIZED: Use managed thread for resource readiness
+    thread_manager.create_thread(
+        target=mark_resources_ready,
+        name="resource_monitor",
+        priority=ThreadPriority.NORMAL,
+        timeout=5.0
+    )
     
     # Store shutdown state in app for access from routes
     app.state.graceful_shutdown_initiated = False
@@ -236,20 +224,6 @@ async def lifespan(app: FastAPI):
     
     yield
     print("🚨 Server shutting down immediately...")
-    
-    # Stop responsiveness monitor
-    await responsiveness_monitor.stop_monitoring()
-    
-    # Stop universal optimizations if active
-    try:
-        from app.universal_optimizer import cleanup_resources
-        cleanup_resources()
-    except Exception as e:
-        print(f"⚠️ Cleanup warning: {e}")
-    
-    # Stop HTTPS redirect server if running
-    print("🔴 Stopping HTTPS redirect server...")
-    await stop_https_redirect_server()
     
     # Stop streaming assembly system
     print("🌊 Stopping streaming assembly system...")
