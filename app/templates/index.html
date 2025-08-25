@@ -13,13 +13,12 @@
     // Apply dark mode IMMEDIATELY before page renders to prevent flash
     (function() {
       const savedDarkMode = localStorage.getItem('dark_mode_enabled');
-      let isDarkMode = false;
+      let isDarkMode = false;  // Default to light mode
       
       if (savedDarkMode !== null) {
         isDarkMode = savedDarkMode === '1';
-      } else if (window.matchMedia) {
-        isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
       }
+      // Removed system preference check to ensure light mode is default
       
       if (isDarkMode) {
         document.documentElement.setAttribute('data-theme', 'dark');

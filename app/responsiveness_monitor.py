@@ -8,8 +8,16 @@ import asyncio
 import time
 import threading
 from typing import Dict, Any, Optional
-import psutil
 import gc
+
+# Import Termux compatibility layer
+from .termux_compat import (
+    is_termux_environment, 
+    should_use_lightweight_mode,
+    get_safe_cpu_usage,
+    get_safe_memory_info,
+    safe_psutil_call
+)
 
 
 class ResponsivenessMonitor:
@@ -90,20 +98,43 @@ class ResponsivenessMonitor:
                 await asyncio.sleep(1.0)
     
     async def _update_system_metrics(self):
-        """Update system performance metrics"""
+        """Update system performance metrics with Termux-safe methods"""
         try:
-            cpu_percent = psutil.cpu_percent(interval=0.1)
-            memory_info = psutil.virtual_memory()
-            
-            with self.lock:
-                self.responsiveness_metrics.update({
-                    'cpu_usage': cpu_percent,
-                    'memory_usage': memory_info.percent,
-                    'last_heartbeat': time.time()
-                })
+            # Use Termux-safe system metric collection
+            if should_use_lightweight_mode():
+                # Lightweight mode for Termux/Android
+                cpu_percent = get_safe_cpu_usage()
+                memory_info = get_safe_memory_info()
+                
+                with self.lock:
+                    self.responsiveness_metrics.update({
+                        'cpu_usage': cpu_percent,
+                        'memory_usage': memory_info['percent'],
+                        'last_heartbeat': time.time()
+                    })
+                    
+                print(f"🤖 Lightweight metrics - CPU: {cpu_percent:.1f}%, Memory: {memory_info['percent']:.1f}%")
+            else:
+                # Full monitoring for desktop/server environments
+                cpu_percent = get_safe_cpu_usage()
+                memory_info = get_safe_memory_info()
+                
+                with self.lock:
+                    self.responsiveness_metrics.update({
+                        'cpu_usage': cpu_percent,
+                        'memory_usage': memory_info['percent'],
+                        'last_heartbeat': time.time()
+                    })
                 
         except Exception as e:
             print(f"⚠️ Failed to update system metrics: {e}")
+            # Set safe fallback values
+            with self.lock:
+                self.responsiveness_metrics.update({
+                    'cpu_usage': 50.0,  # Neutral fallback
+                    'memory_usage': 60.0,  # Conservative fallback
+                    'last_heartbeat': time.time()
+                })
     
     async def _check_responsiveness(self):
         """Check if the server is becoming unresponsive"""

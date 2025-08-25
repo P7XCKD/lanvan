@@ -1,7 +1,7 @@
 """
-� Universal Performance Optimizer
+🚀 Universal Performance Optimizer with Termux Compatibility
 Handles memory management, chunk sizing, and process optimization for ALL platforms:
-- Android/Termux: Resource-constrained optimization
+- Android/Termux: Resource-constrained optimization with safe system access
 - Desktop: High-performance optimization  
 - Server: Balanced optimization
 """
@@ -14,375 +14,355 @@ import threading
 from typing import Optional, Dict, Any
 import subprocess
 
+# Import Termux compatibility layer
+from .termux_compat import (
+    is_termux_environment, 
+    is_android_environment,
+    should_use_lightweight_mode,
+    get_termux_system_info,
+    get_safe_cpu_usage,
+    get_safe_memory_info,
+    get_termux_chunk_size,
+    safe_psutil_call
+)
+
 def get_available_memory_mb() -> int:
-    """Get available memory in MB across platforms"""
-    try:
-        # Try psutil first (most reliable)
-        import psutil
-        mem = psutil.virtual_memory()
-        return int(mem.available / (1024 * 1024))
-    except ImportError:
-        pass
+    """Get available memory in MB across platforms with Termux-safe fallback"""
+    # Use Termux-compatible memory detection
+    memory_info = get_safe_memory_info()
+    if memory_info and 'available' in memory_info:
+        return int(memory_info['available'] / (1024**2))  # Convert bytes to MB
     
-    try:
-        # Linux/Android: read from /proc/meminfo
-        if os.path.exists('/proc/meminfo'):
-            with open('/proc/meminfo', 'r') as f:
-                for line in f:
-                    if 'MemAvailable:' in line:
-                        available_kb = int(line.split()[1])
-                        return available_kb // 1024
-    except:
-        pass
-    
-    # Fallback: assume reasonable amount
-    return 1024  # 1GB default
+    # Fallback for systems without safe memory access
+    print("⚠️  Memory detection unavailable, using conservative estimate")
+    return 512  # Conservative default for resource-constrained environments
 
 def get_cpu_usage() -> float:
-    """Get current CPU usage percentage"""
-    try:
-        import psutil
-        return psutil.cpu_percent(interval=0.1)
-    except ImportError:
-        return 50.0  # Conservative fallback
+    """Get current CPU usage percentage with Termux-safe fallback"""
+    cpu_usage = get_safe_cpu_usage()
+    return cpu_usage if cpu_usage is not None else 50.0  # Conservative fallback
 
-class UniversalOptimizer:
-    """Universal performance optimizer for all platforms"""
+def calculate_optimal_chunk_size(file_size: int, available_memory_mb: int) -> int:
+    """Calculate optimal chunk size based on file size and system resources with Termux awareness"""
     
-    def __init__(self):
-        self.is_android = self._detect_android()
-        self.is_termux = self._detect_termux()
-        self.is_low_memory = self._detect_low_memory_device()
-        self.platform = self._detect_platform()
-        self.background_keeper = None
-        self.keep_alive_active = False
-        self.upload_active = False
-        
-        print(f"🚀 Universal optimizer initialized for {self.platform}")
-        if self.is_android:
-            print(f"📱 Android optimizations enabled")
-        if self.is_termux:
-            print(f"🤖 Termux-specific optimizations enabled")
-        if self.is_low_memory:
-            print(f"💾 Low-memory device optimizations enabled")
-    
-    def _detect_android(self) -> bool:
-        """Detect Android environment"""
-        return ("ANDROID_STORAGE" in os.environ or 
-                os.path.exists("/data/data/com.termux") or 
-                "TERMUX_VERSION" in os.environ or
-                "android" in str(os.environ.get("PREFIX", "")).lower())
-    
-    def _detect_termux(self) -> bool:
-        """Detect Termux specifically"""
-        return ("TERMUX_VERSION" in os.environ or 
-                os.path.exists("/data/data/com.termux") or
-                "/data/data/com.termux" in str(os.environ.get("PREFIX", "")))
-    
-    def _detect_low_memory_device(self) -> bool:
-        """Detect if device has limited memory"""
-        available_mb = get_available_memory_mb()
-        return available_mb < 2048  # Less than 2GB available = low memory
-    
-    def _detect_platform(self) -> str:
-        """Detect platform type"""
-        if self.is_termux:
-            return "Termux"
-        elif self.is_android:
-            return "Android"
-        elif sys.platform.startswith('win'):
-            return "Windows"
-        elif sys.platform.startswith('darwin'):
-            return "macOS"
-        elif sys.platform.startswith('linux'):
-            return "Linux"
-        else:
-            return "Unknown"
-    
-    def get_adaptive_chunk_size(self, file_size: int, base_chunk: int = 1024 * 1024) -> int:
-        """
-        🚀 AGGRESSIVE Adaptive chunk sizing - maximizes performance based on system capabilities:
-        - Available memory
-        - Platform capabilities  
-        - File size
-        - Current system load
-        - Network bandwidth potential
-        """
-        available_mb = get_available_memory_mb()
-        cpu_usage = get_cpu_usage()
-        
-        # 🎯 MUCH MORE AGGRESSIVE base chunk sizes by platform
-        if self.is_android or self.is_low_memory:
-            min_chunk = 128 * 1024    # 128KB minimum (was 64KB)
-            max_chunk = 8 * 1024 * 1024   # 8MB maximum for Android (was 512KB!)
-            base_chunk = 1024 * 1024  # 1MB base (was 256KB)
-        else:
-            min_chunk = 512 * 1024    # 512KB minimum (was 256KB)
-            max_chunk = 64 * 1024 * 1024  # 64MB maximum for desktop (was 4MB!)
-            base_chunk = 4 * 1024 * 1024  # 4MB base (was 1MB)
-        
-        # 🚀 AGGRESSIVE memory-based scaling
-        chunk_size = base_chunk
-        
-        # Memory-based multiplication factors
-        if available_mb < 512:      # Very low memory - conservative
-            chunk_size = min_chunk
-        elif available_mb < 1024:   # Low memory - still conservative  
-            chunk_size = min_chunk * 2
-        elif available_mb < 2048:   # Medium memory - moderate
-            chunk_size = base_chunk
-        elif available_mb < 4096:   # Good memory - aggressive
-            chunk_size = base_chunk * 2
-        elif available_mb < 8192:   # High memory - very aggressive
-            chunk_size = base_chunk * 4
-        elif available_mb < 16384:  # Very high memory - extremely aggressive
-            chunk_size = base_chunk * 8
-        else:                       # Massive memory - MAXIMUM PERFORMANCE
-            chunk_size = base_chunk * 16
-        
-        # 🎯 File size optimization - balance performance vs server responsiveness
-        if file_size > 10 * 1024 * 1024 * 1024:  # Files > 10GB - prioritize responsiveness
-            if not self.is_android and available_mb > 4096:
-                chunk_size = min(max_chunk, chunk_size)  # Keep chunks reasonable for responsiveness
-            else:
-                chunk_size = min(chunk_size, 8 * 1024 * 1024)  # Cap at 8MB for huge files
-        elif file_size > 5 * 1024 * 1024 * 1024:  # Files > 5GB - moderate increase
-            if available_mb > 2048:
-                chunk_size = min(max_chunk, int(chunk_size * 1.2))  # Smaller increase for responsiveness
-            else:
-                chunk_size = min(chunk_size, 4 * 1024 * 1024)  # Cap at 4MB
-        elif file_size > 2 * 1024 * 1024 * 1024:  # Files > 2GB - server responsiveness priority
-            chunk_size = min(chunk_size, 8 * 1024 * 1024)  # Cap at 8MB to keep server responsive
-        elif file_size > 1 * 1024 * 1024 * 1024:  # Files > 1GB
-            # Keep current chunk size - no reduction
-            pass
-        elif file_size < 100 * 1024 * 1024:  # Files < 100MB - can use smaller efficient chunks
-            if chunk_size > 2 * 1024 * 1024:  # If chunk would be > 2MB
-                chunk_size = 2 * 1024 * 1024  # Cap at 2MB for small files (more efficient)
-        
-        # 📊 CPU usage adjustment - prioritize server responsiveness with emergency mode support
-        try:
-            from .responsiveness_monitor import get_adaptive_settings
-            adaptive_settings = get_adaptive_settings()
-            emergency_mode = adaptive_settings.get('emergency_mode', False)
-            max_allowed_chunk = adaptive_settings.get('max_chunk_size', max_chunk)
-            
-            if emergency_mode:
-                print("🚨 Emergency responsiveness mode - drastically reducing chunk sizes")
-                chunk_size = max(min_chunk, min(chunk_size // 8, 2 * 1024 * 1024))  # Max 2MB in emergency
-            else:
-                max_chunk = min(max_chunk, max_allowed_chunk)  # Respect monitor limits
-        except ImportError:
-            emergency_mode = False
-        
-        if cpu_usage > 80:  # High CPU usage - prioritize responsiveness
-            chunk_size = max(min_chunk, chunk_size // 4)  # Drastically reduce chunks
-        elif cpu_usage > 60:  # Medium CPU usage - moderate reduction
-            chunk_size = max(min_chunk, chunk_size // 2)  # Halve chunk size
-        elif cpu_usage > 40:  # Some CPU usage - slight reduction for responsiveness
-            chunk_size = max(min_chunk, int(chunk_size * 0.75))
-        # 🎯 Platform-specific optimization overrides (before responsiveness caps)
-        if not self.is_android:  # Desktop/Server systems
-            # Desktop systems can handle larger chunks, but with limits for responsiveness
-            if available_mb > 8192 and cpu_usage < 50:  # 8GB+ RAM and low CPU
-                chunk_size = min(max_chunk, max(chunk_size, 16 * 1024 * 1024))  # At least 16MB (reduced from 32MB)
-            elif available_mb > 4096 and cpu_usage < 70:  # 4GB+ RAM and moderate CPU  
-                chunk_size = min(max_chunk, max(chunk_size, 8 * 1024 * 1024))  # At least 8MB (reduced from 16MB)
-        
-        # 🎯 FINAL Server responsiveness override for very large files (OPTIMIZED)
-        if file_size > 5 * 1024 * 1024 * 1024:  # Files > 5GB
-            # Very large files - prioritize stability
-            chunk_size = min(chunk_size, 6 * 1024 * 1024)  # Max 6MB for huge files
-            print(f"🎯 Huge file detected ({file_size//1024//1024//1024}GB) - chunk size capped at {chunk_size//1024//1024}MB for server stability")
-        elif file_size > 2 * 1024 * 1024 * 1024:  # Files > 2GB
-            # Large files - balance performance and responsiveness
-            chunk_size = min(chunk_size, 8 * 1024 * 1024)  # Max 8MB for large files (increased from 4MB)
-            print(f"🎯 Large file detected ({file_size//1024//1024//1024}GB) - chunk size capped at {chunk_size//1024//1024}MB for server responsiveness")
-        
-        # Ensure we stay within bounds
-        chunk_size = max(min_chunk, min(max_chunk, chunk_size))
-        
+    # Use Termux-specific chunk sizing if in Termux environment
+    if is_termux_environment():
+        chunk_size = get_termux_chunk_size(file_size, available_memory_mb)
+        print(f"🤖 Termux chunk size: {chunk_size // 1024}KB")
         return chunk_size
     
-    def should_run_gc(self, bytes_processed: int, chunk_size: int) -> bool:
-        """Determine if garbage collection should run"""
-        available_mb = get_available_memory_mb()
+    # Desktop/server optimization for non-Termux environments
+    available_memory_bytes = available_memory_mb * 1024 * 1024
+    
+    # Calculate based on file size
+    if file_size < 1024 * 1024:  # < 1MB
+        base_chunk = min(64 * 1024, file_size)  # 64KB max
+    elif file_size < 10 * 1024 * 1024:  # < 10MB
+        base_chunk = min(256 * 1024, file_size // 4)  # 256KB max
+    elif file_size < 100 * 1024 * 1024:  # < 100MB
+        base_chunk = min(1024 * 1024, file_size // 10)  # 1MB max
+    else:  # >= 100MB
+        base_chunk = min(4 * 1024 * 1024, file_size // 20)  # 4MB max
+    
+    # Adjust for available memory
+    memory_limited_chunk = min(base_chunk, available_memory_bytes // 8)
+    
+    # Ensure minimum chunk size
+    final_chunk = max(memory_limited_chunk, 32 * 1024)  # 32KB minimum
+    
+    print(f"💡 Optimal chunk size: {final_chunk // 1024}KB (File: {file_size // 1024}KB, RAM: {available_memory_mb}MB)")
+    return final_chunk
+
+def optimize_for_android() -> Dict[str, Any]:
+    """Android-specific optimizations including Termux compatibility"""
+    optimizations = {}
+    
+    if is_termux_environment():
+        print("🔧 Applying Termux-specific optimizations...")
+        system_info = get_termux_system_info()
         
-        # More aggressive GC for constrained environments
-        if self.is_android or available_mb < 1024:
-            return bytes_processed % (chunk_size * 4) == 0  # GC every 4 chunks
-        elif available_mb < 2048:
-            return bytes_processed % (chunk_size * 8) == 0  # GC every 8 chunks
-        else:
-            return bytes_processed % (chunk_size * 16) == 0  # GC every 16 chunks
+        # Use safe system information
+        optimizations.update({
+            'max_concurrent_uploads': 2,  # Conservative for Termux
+            'memory_threshold': 0.7,  # Lower threshold for resource constraints
+            'gc_frequency': 5,  # More frequent garbage collection
+            'chunk_multiplier': 0.5,  # Smaller chunks
+            'cpu_throttle_threshold': 70,
+            'system_info': system_info,
+            'platform': 'termux'
+        })
+    else:
+        print("🔧 Applying Android optimizations...")
+        # Standard Android optimizations
+        optimizations.update({
+            'max_concurrent_uploads': 3,
+            'memory_threshold': 0.8,
+            'gc_frequency': 10,
+            'chunk_multiplier': 0.8,
+            'cpu_throttle_threshold': 80,
+            'platform': 'android'
+        })
     
-    def optimize_for_upload(self, file_size: int):
-        """Apply optimizations for file upload"""
-        self.upload_active = True
-        
-        if file_size > 100 * 1024 * 1024:  # Files > 100MB
-            print(f"🚀 Applying upload optimizations for {file_size:,} byte file")
-            
-            # Start keep-alive for large uploads
-            self._start_keep_alive()
-            
-            # Platform-specific optimizations
-            if self.is_android or self.is_low_memory:
-                self._apply_constrained_optimizations()
-            else:
-                self._apply_performance_optimizations()
-        
-        return self.check_upload_feasibility(file_size)
+    # Force garbage collection
+    gc.collect()
     
-    def _apply_constrained_optimizations(self):
-        """Apply optimizations for resource-constrained devices"""
-        try:
-            # Disable automatic GC - we'll manage it manually
-            gc.disable()
-            
-            # Set environment variables for better memory management
-            os.environ['PYTHONUNBUFFERED'] = '1'
-            
-            print(f"📱 Resource-constrained optimizations applied")
-        except Exception as e:
-            print(f"⚠️ Constrained optimization warning: {e}")
+    return optimizations
+
+def optimize_for_desktop() -> Dict[str, Any]:
+    """Desktop-specific optimizations"""
+    print("🖥️  Applying desktop optimizations...")
     
-    def _apply_performance_optimizations(self):
-        """Apply optimizations for high-performance systems"""
-        try:
-            # Enable more aggressive garbage collection threshold
-            gc.set_threshold(700, 10, 10)
-            
-            print(f"🚀 Performance optimizations applied")
-        except Exception as e:
-            print(f"⚠️ Performance optimization warning: {e}")
+    # Get safe system metrics
+    available_memory = get_available_memory_mb()
+    cpu_usage = get_cpu_usage()
     
-    def _start_keep_alive(self):
-        """Start background keep-alive for upload stability"""
-        if self.keep_alive_active:
+    # Desktop can handle more aggressive optimization
+    optimizations = {
+        'max_concurrent_uploads': min(6, max(2, available_memory // 512)),
+        'memory_threshold': 0.85,
+        'gc_frequency': 20,
+        'chunk_multiplier': 1.2,
+        'cpu_throttle_threshold': 85,
+        'available_memory': available_memory,
+        'cpu_usage': cpu_usage,
+        'platform': 'desktop'
+    }
+    
+    return optimizations
+
+def optimize_for_server() -> Dict[str, Any]:
+    """Server-specific optimizations"""
+    print("🖥️  Applying server optimizations...")
+    
+    # Get safe system metrics
+    available_memory = get_available_memory_mb()
+    cpu_usage = get_cpu_usage()
+    
+    # Server optimization focuses on throughput and stability
+    optimizations = {
+        'max_concurrent_uploads': min(10, max(3, available_memory // 256)),
+        'memory_threshold': 0.75,  # More conservative for stability
+        'gc_frequency': 15,
+        'chunk_multiplier': 1.0,
+        'cpu_throttle_threshold': 75,
+        'available_memory': available_memory,
+        'cpu_usage': cpu_usage,
+        'platform': 'server'
+    }
+    
+    return optimizations
+
+class ResourceMonitor:
+    """Monitor system resources with Termux-safe implementations"""
+    
+    def __init__(self):
+        self.is_termux = is_termux_environment()
+        self.monitoring = False
+        self.monitor_thread = None
+        self.stats = {
+            'memory_usage': [],
+            'cpu_usage': [],
+            'last_update': time.time()
+        }
+    
+    def start_monitoring(self):
+        """Start resource monitoring"""
+        if self.monitoring:
             return
-        
-        self.keep_alive_active = True
-        self.background_keeper = threading.Thread(
-            target=self._keep_alive_worker, 
-            daemon=True
-        )
-        self.background_keeper.start()
-        print(f"🔋 Upload keep-alive started")
+            
+        self.monitoring = True
+        self.monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
+        self.monitor_thread.start()
+        print(f"📊 Resource monitoring started ({'Termux-safe' if self.is_termux else 'full'})")
     
-    def _keep_alive_worker(self):
-        """Background worker to maintain upload stability"""
-        while self.keep_alive_active and self.upload_active:
+    def stop_monitoring(self):
+        """Stop resource monitoring"""
+        self.monitoring = False
+        if self.monitor_thread:
+            self.monitor_thread.join(timeout=1.0)
+        print("📊 Resource monitoring stopped")
+    
+    def _monitor_loop(self):
+        """Main monitoring loop with Termux-safe implementations"""
+        while self.monitoring:
             try:
-                time.sleep(30)  # Check every 30 seconds
+                # Get safe metrics
+                memory_info = get_safe_memory_info()
+                cpu_usage = get_safe_cpu_usage()
                 
-                # Gentle memory cleanup
-                if self.is_android or self.is_low_memory:
-                    gc.collect()
+                if memory_info:
+                    memory_usage = (memory_info.get('used', 0) / memory_info.get('total', 1)) * 100
+                    self.stats['memory_usage'].append(memory_usage)
                 
-                # Touch keepalive file for Termux
+                if cpu_usage is not None:
+                    self.stats['cpu_usage'].append(cpu_usage)
+                
+                self.stats['last_update'] = time.time()
+                
+                # Keep only recent data
+                max_samples = 60  # Last 60 samples
+                for key in ['memory_usage', 'cpu_usage']:
+                    if len(self.stats[key]) > max_samples:
+                        self.stats[key] = self.stats[key][-max_samples:]
+                
+                # Adaptive monitoring frequency
                 if self.is_termux:
-                    try:
-                        keepalive_file = "/tmp/lanvan_keepalive"
-                        with open(keepalive_file, 'w') as f:
-                            f.write(str(time.time()))
-                    except:
-                        pass
-                
-            except Exception:
-                pass  # Silent background worker
+                    time.sleep(2.0)  # Slower monitoring for Termux
+                else:
+                    time.sleep(1.0)  # Normal monitoring
+                    
+            except Exception as e:
+                print(f"⚠️  Monitoring error: {e}")
+                time.sleep(5.0)  # Back off on error
     
-    def finish_upload(self):
-        """Clean up after upload completion"""
-        self.upload_active = False
+    def get_current_stats(self) -> Dict[str, Any]:
+        """Get current system statistics"""
+        stats = self.stats.copy()
         
-        if self.keep_alive_active:
-            self.keep_alive_active = False
-            print(f"🔋 Upload keep-alive stopped")
+        # Add current readings
+        stats['current_memory'] = self.stats['memory_usage'][-1] if self.stats['memory_usage'] else 0
+        stats['current_cpu'] = self.stats['cpu_usage'][-1] if self.stats['cpu_usage'] else 0
+        stats['platform'] = 'termux' if self.is_termux else 'desktop'
         
-        # Re-enable GC if disabled
-        if self.is_android or self.is_low_memory:
-            gc.enable()
-        
-        # Final cleanup
-        self.memory_cleanup(force=True)
+        return stats
     
-    def memory_cleanup(self, force: bool = False):
-        """Perform memory cleanup"""
-        if self.is_android or self.is_low_memory or force:
-            try:
-                gc.collect()
-                
-                # Additional cleanup for constrained devices
-                if self.is_android:
-                    try:
-                        subprocess.run(['sync'], capture_output=True, timeout=2)
-                    except:
-                        pass
-            except Exception:
-                pass
-    
-    def check_upload_feasibility(self, file_size: int) -> Dict[str, Any]:
-        """Check if upload is feasible and provide recommendations"""
-        result = {
-            'feasible': True,
-            'warnings': [],
-            'recommendations': [],
-            'chunk_size': self.get_adaptive_chunk_size(file_size)
-        }
-        
-        available_mb = get_available_memory_mb()
-        file_size_mb = file_size / (1024 * 1024)
-        
-        # Universal checks
-        if file_size_mb > 1000:  # Files > 1GB
-            result['warnings'].append(f"Large file ({file_size_mb:.0f}MB) upload initiated")
+    def should_throttle(self) -> bool:
+        """Determine if system should throttle operations"""
+        if not self.stats['memory_usage'] or not self.stats['cpu_usage']:
+            return False
             
-            if available_mb < 512:
-                result['warnings'].append(f"Limited memory available ({available_mb}MB)")
-                result['recommendations'].append("Close other applications to free memory")
-            
-            result['recommendations'].append("Keep device active during upload")
+        current_memory = self.stats['memory_usage'][-1]
+        current_cpu = self.stats['cpu_usage'][-1]
         
-        # Platform-specific recommendations
-        if self.is_android:
-            result['recommendations'].append("Keep device plugged in")
-            result['recommendations'].append("Avoid switching apps during upload")
-            
-            if self.is_termux:
-                result['recommendations'].append("Consider using 'termux-wake-lock'")
+        # Termux has lower thresholds
+        if self.is_termux:
+            memory_threshold = 70  # 70% memory
+            cpu_threshold = 70     # 70% CPU
+        else:
+            memory_threshold = 85  # 85% memory
+            cpu_threshold = 85     # 85% CPU
         
-        return result
-    
-    def get_system_info(self) -> Dict[str, Any]:
-        """Get comprehensive system information"""
-        return {
-            'platform': self.platform,
-            'android': self.is_android,
-            'termux': self.is_termux,
-            'low_memory': self.is_low_memory,
-            'available_memory_mb': get_available_memory_mb(),
-            'cpu_usage': get_cpu_usage(),
-            'keep_alive_active': self.keep_alive_active,
-            'upload_active': self.upload_active,
-            'gc_enabled': gc.isenabled()
-        }
+        return current_memory > memory_threshold or current_cpu > cpu_threshold
 
-# Global optimizer instance
-universal_optimizer = UniversalOptimizer()
-
-def optimize_for_upload(file_size: int = 0) -> Dict[str, Any]:
-    """Quick function to optimize for uploads"""
-    return universal_optimizer.optimize_for_upload(file_size)
+def get_platform_optimizer() -> Dict[str, Any]:
+    """Get appropriate optimizer based on platform with Termux detection"""
+    
+    if is_termux_environment():
+        return optimize_for_android()  # Termux uses Android optimizations
+    elif is_android_environment():
+        return optimize_for_android()
+    elif os.name == 'nt':  # Windows
+        return optimize_for_desktop()
+    elif 'linux' in sys.platform.lower():
+        # Check if it's a server environment (no GUI)
+        if os.environ.get('DISPLAY') is None and os.environ.get('WAYLAND_DISPLAY') is None:
+            return optimize_for_server()
+        else:
+            return optimize_for_desktop()
+    else:
+        return optimize_for_desktop()  # Default fallback
 
 def cleanup_resources():
-    """Clean up all resources"""
-    universal_optimizer.finish_upload()
+    """Clean up system resources with platform awareness"""
+    print("🧹 Cleaning up system resources...")
+    
+    # Force garbage collection
+    gc.collect()
+    
+    # Platform-specific cleanup
+    if is_termux_environment():
+        print("🤖 Termux cleanup - conservative approach")
+        # More conservative cleanup for Termux
+        time.sleep(0.1)
+    else:
+        print("💻 Standard cleanup")
+        # Standard cleanup
+        pass
+    
+    print("✅ Resource cleanup complete")
 
-def get_adaptive_chunk_size(file_size: int = 0) -> int:
-    """Get adaptive chunk size for file"""
-    return universal_optimizer.get_adaptive_chunk_size(file_size)
+# Global resource monitor instance
+_resource_monitor = None
 
-def should_run_gc(bytes_processed: int, chunk_size: int) -> bool:
-    """Check if GC should run"""
-    return universal_optimizer.should_run_gc(bytes_processed, chunk_size)
+def get_resource_monitor() -> ResourceMonitor:
+    """Get global resource monitor instance"""
+    global _resource_monitor
+    if _resource_monitor is None:
+        _resource_monitor = ResourceMonitor()
+    return _resource_monitor
+
+def initialize_optimizer():
+    """Initialize the optimizer system"""
+    print("🚀 Initializing Universal Performance Optimizer...")
+    
+    # Detect platform
+    platform_info = get_platform_optimizer()
+    print(f"📱 Platform: {platform_info.get('platform', 'unknown')}")
+    
+    # Start resource monitoring
+    monitor = get_resource_monitor()
+    monitor.start_monitoring()
+    
+    print("✅ Optimizer initialization complete")
+    return platform_info
+
+def shutdown_optimizer():
+    """Shutdown the optimizer system"""
+    print("🔄 Shutting down optimizer...")
+    
+    # Stop monitoring
+    global _resource_monitor
+    if _resource_monitor:
+        _resource_monitor.stop_monitoring()
+        _resource_monitor = None
+    
+    # Clean up resources
+    cleanup_resources()
+    
+    print("✅ Optimizer shutdown complete")
+
+# Initialize on module import
+if __name__ != "__main__":
+    try:
+        _platform_config = initialize_optimizer()
+    except Exception as e:
+        print(f"⚠️  Optimizer initialization failed: {e}")
+        _platform_config = {'platform': 'fallback', 'max_concurrent_uploads': 2}
+
+class UniversalOptimizer:
+    """Universal optimizer class for compatibility with existing code"""
+    
+    def __init__(self):
+        self.platform = _platform_config.get('platform', 'unknown')
+        self.upload_active = False
+        self.resource_monitor = get_resource_monitor()
+    
+    def get_adaptive_chunk_size(self, file_size: int) -> int:
+        """Get adaptive chunk size for a file"""
+        available_memory = get_available_memory_mb()
+        return calculate_optimal_chunk_size(file_size, available_memory)
+    
+    def optimize_for_upload(self, file_size: int):
+        """Optimize system for upload"""
+        self.upload_active = True
+        print(f"🚀 Optimizing system for {file_size} byte upload")
+    
+    def should_run_gc(self, bytes_processed: int, chunk_size: int) -> bool:
+        """Check if garbage collection should run"""
+        # Run GC every 10 chunks or when system is under pressure
+        chunk_count = bytes_processed // chunk_size if chunk_size > 0 else 0
+        should_gc = (chunk_count > 0 and chunk_count % 10 == 0)
+        
+        # Also check system pressure
+        if self.resource_monitor.should_throttle():
+            should_gc = True
+            
+        return should_gc
+    
+    def memory_cleanup(self, force: bool = False):
+        """Clean up memory"""
+        self.upload_active = False
+        cleanup_resources()
+
+# Global optimizer instance for compatibility
+universal_optimizer = UniversalOptimizer()

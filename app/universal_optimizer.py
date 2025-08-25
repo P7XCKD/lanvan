@@ -1,5 +1,5 @@
 """
-🔄 Universal Platform Optimizer
+🔄 Universal Platform Optimizer with Termux Compatibility
 Performance optimizations for large file uploads on ALL platforms (Windows, Linux, Mac, Android)
 """
 
@@ -11,6 +11,18 @@ import platform
 import threading
 from typing import Optional, Dict
 import subprocess
+
+# Import Termux compatibility layer
+from .termux_compat import (
+    is_termux_environment, 
+    is_android_environment,
+    should_use_lightweight_mode,
+    get_termux_system_info,
+    get_safe_cpu_usage,
+    get_safe_memory_info,
+    get_termux_chunk_size,
+    safe_psutil_call
+)
 
 class UniversalOptimizer:
     """Universal platform optimizer for large file operations"""
@@ -99,13 +111,11 @@ class UniversalOptimizer:
         """Windows specific optimizations"""
         try:
             # Set high priority for the process (if possible)
-            try:
-                import psutil
-                p = psutil.Process()
-                p.nice(psutil.HIGH_PRIORITY_CLASS)
+            priority_result = safe_psutil_call(
+                lambda: __import__('psutil').Process().nice(__import__('psutil').HIGH_PRIORITY_CLASS)
+            )
+            if priority_result is not None:
                 print(f"💻 Windows: Process priority set to high")
-            except (ImportError, Exception):
-                pass  # Not critical - psutil might not be available or access denied
             
             # Disable Windows write caching for immediate disk writes
             os.environ['PYTHONUNBUFFERED'] = '1'
@@ -255,12 +265,10 @@ class UniversalOptimizer:
                             info['available_memory_mb'] = available_kb // 1024
                             break
             elif self.is_windows:
-                try:
-                    import psutil
-                    memory = psutil.virtual_memory()
-                    info['available_memory_mb'] = memory.available // 1024 // 1024
-                except ImportError:
-                    pass
+                # Use safe memory detection for all platforms
+                memory_info = get_safe_memory_info()
+                if memory_info and 'available' in memory_info:
+                    info['available_memory_mb'] = int(memory_info['available'] / (1024**2))
         except Exception:
             pass
         
