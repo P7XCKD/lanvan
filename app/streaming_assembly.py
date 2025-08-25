@@ -19,6 +19,7 @@ from typing import Dict, Optional, Set, Callable
 import shutil
 from dataclasses import dataclass, field
 from app.thread_manager import thread_manager, ThreadPriority  # OPTIMIZED: Centralized thread management
+from app.unified_responsiveness import responsiveness_manager, create_responsive_operation, should_yield_now, yield_if_needed  # OPTIMIZED: Unified responsiveness
 from collections import defaultdict
 
 # Import Termux compatibility
@@ -60,12 +61,15 @@ class StreamingChunkAssembler:
         self.completion_callbacks: Dict[str, Callable] = {}
         self.lock = threading.Lock()
         
-        # Termux-optimized settings
+        # Termux-optimized settings with unified responsiveness
         self.is_termux = is_termux_environment()
-        self.chunk_check_interval = 0.1 if self.is_termux else 0.05  # Much faster polling for true streaming
+        
+        # OPTIMIZED: Use unified responsiveness manager for intervals
+        self.chunk_check_interval = responsiveness_manager.config.monitoring_interval
         self.min_chunks_before_processing = 2 if self.is_termux else 1  # Start processing ASAP
         
         print(f"🌊 Streaming Assembly initialized ({'Termux-optimized' if self.is_termux else 'desktop-optimized'})")
+        print(f"🎯 Using unified responsiveness (interval: {self.chunk_check_interval}s)")
     
     def start_monitoring(self):
         """OPTIMIZED: Start managed monitoring thread"""
@@ -120,8 +124,11 @@ class StreamingChunkAssembler:
                 del self.completion_callbacks[filename]
     
     def _monitor_chunks(self, stop_event=None):
-        """OPTIMIZED: Monitor with managed lifecycle"""
-        print(f"👀 Monitoring {self.temp_folder} for chunks (interval: {self.chunk_check_interval}s)")
+        """OPTIMIZED: Monitor with unified responsiveness management"""
+        print(f"👀 Monitoring {self.temp_folder} for chunks (unified responsiveness)")
+        
+        # OPTIMIZED: Register with unified responsiveness manager
+        operation_id = create_responsive_operation("chunk_monitoring", "monitoring")
         
         while self.monitoring and not (stop_event and stop_event.is_set()):
             try:
@@ -131,19 +138,35 @@ class StreamingChunkAssembler:
                         if stop_event and stop_event.is_set():
                             break
                         self._process_discovered_chunk(chunk_file)
+                        
+                        # OPTIMIZED: Use unified responsiveness for yielding
+                        if should_yield_now(operation_id, 1):
+                            yield_if_needed(operation_id)
                 
                 # Check for files ready to start streaming assembly
                 with self.lock:
                     for filename, stream_file in list(self.active_files.items()):
                         if stop_event and stop_event.is_set():
                             break
+                        
+                        # OPTIMIZED: Use unified responsiveness between operations
+                        if should_yield_now(operation_id, 1):
+                            yield_if_needed(operation_id)
+                        
                         if not stream_file.processing_started:
                             self._check_start_streaming_assembly(stream_file)
                 
-                # Termux-friendly polling interval
-                time.sleep(self.chunk_check_interval)
+                # OPTIMIZED: Use unified responsiveness for sleep timing
+                sleep_duration = responsiveness_manager.config.monitoring_interval
+                for _ in range(int(sleep_duration * 10)):
+                    if stop_event and stop_event.is_set():
+                        break
+                    time.sleep(0.1)
                 
             except Exception as e:
+                print(f"⚠️  Chunk monitoring error: {e}")
+                # OPTIMIZED: Use unified responsiveness for error backoff
+                time.sleep(responsiveness_manager.config.error_backoff_duration)
                 print(f"⚠️  Chunk monitoring error: {e}")
                 time.sleep(1.0)  # Back off on error
     

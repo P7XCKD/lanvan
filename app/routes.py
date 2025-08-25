@@ -21,6 +21,7 @@ from starlette.status import HTTP_302_FOUND, HTTP_400_BAD_REQUEST, HTTP_403_FORB
 
 from app.aes_utils import encrypt_session_data, decrypt_session_data
 from app.aes_config import AESConfig
+from app.unified_responsiveness import responsiveness_manager, create_responsive_operation, should_yield_now, yield_if_needed, get_optimal_chunk_size  # OPTIMIZED: Unified responsiveness
 from app.validation import (
     validate_upload_files, 
     validate_upload_files_enhanced,
@@ -375,15 +376,24 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                             raise Exception(f"File integrity check failed! Expected: {expected_hash}, Got: {actual_hash}")
                         print(f"OK: File integrity validated successfully")
                     
-                    # 🚀 Stream in very large chunks for maximum speed
+                    # 🚀 OPTIMIZED: Stream with unified responsiveness
                     data_length = len(decrypted_data)
+                    operation_id = create_responsive_operation("file_streaming", "encryption", data_length)
+                    
+                    # OPTIMIZED: Use unified responsiveness for chunk size
+                    chunk_size = get_optimal_chunk_size('encryption')
                     chunks_sent = 0
-                    for i in range(0, data_length, STREAM_BUFFER_SIZE):
-                        chunk_end = min(i + STREAM_BUFFER_SIZE, data_length)
+                    
+                    for i in range(0, data_length, chunk_size):
+                        chunk_end = min(i + chunk_size, data_length)
                         chunk = decrypted_data[i:chunk_end]
                         chunks_sent += 1
                         print(f"📤 Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
                         yield chunk
+                        
+                        # OPTIMIZED: Use unified responsiveness for yielding
+                        if should_yield_now(operation_id, len(chunk)):
+                            yield_if_needed(operation_id)
                         
             except Exception as e:
                 print(f"🚨 AES decryption failed for {path}: {e}")
@@ -392,17 +402,25 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                 yield error_message.encode('utf-8')
         else:
             print("📄 Processing regular file")
-            # 🚀 Ultra-fast regular file streaming with optimized buffer
+            # 🚀 OPTIMIZED: Ultra-fast regular file streaming with unified responsiveness
             try:
+                operation_id = create_responsive_operation("file_streaming", "file_streaming", file_size)
+                chunk_size = get_optimal_chunk_size('file_streaming')
+                
                 with open(path, "rb") as file:
                     chunks_sent = 0
                     while True:
-                        chunk = file.read(STREAM_BUFFER_SIZE)
+                        chunk = file.read(chunk_size)
                         if not chunk:
                             break
                         chunks_sent += 1
                         print(f"📤 Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
                         yield chunk
+                        
+                        # OPTIMIZED: Use unified responsiveness for yielding
+                        if should_yield_now(operation_id, len(chunk)):
+                            yield_if_needed(operation_id)
+                            
                 print(f"OK: Completed streaming {chunks_sent} chunks")
             except Exception as e:
                 print(f"🚨 File streaming failed for {path}: {e}")
@@ -546,13 +564,20 @@ async def download_all_files():
         zip_data = zip_buffer.getvalue()
         zip_buffer.close()
         
-        # Create a proper generator for streaming
+        # Create a proper generator for streaming with unified responsiveness
         def generate_zip():
-            chunk_size = 8192  # 8KB chunks
+            # OPTIMIZED: Use unified responsiveness for chunk size
+            chunk_size = get_optimal_chunk_size('file_streaming')
+            operation_id = create_responsive_operation("zip_streaming", "download", len(zip_data))
+            
             for i in range(0, len(zip_data), chunk_size):
                 chunk = zip_data[i:i + chunk_size]
                 if chunk:  # Only yield non-empty chunks
                     yield chunk
+                    
+                    # OPTIMIZED: Use unified responsiveness for yielding
+                    if should_yield_now(operation_id, len(chunk)):
+                        yield_if_needed(operation_id)
         
         return StreamingResponse(
             generate_zip(),

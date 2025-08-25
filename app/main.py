@@ -19,6 +19,7 @@ from app.routes import router
 # Import mDNS manager for service discovery
 from app.simple_mdns import mdns_manager
 from app.thread_manager import thread_manager, ThreadPriority  # OPTIMIZED: Centralized thread management
+from app.unified_responsiveness import responsiveness_manager, optimize_responsiveness_for_environment, start_responsiveness_monitoring  # OPTIMIZED: Unified responsiveness
 
 # 🔇 Suppress noisy ClientDisconnect errors in logs
 class ClientDisconnectFilter(logging.Filter):
@@ -169,6 +170,11 @@ async def lifespan(app: FastAPI):
     """Handle app startup and shutdown"""
     print("🚀 Server starting up with enhanced shutdown handling...")
     print("💡 Use Ctrl+C to shutdown gracefully (console commands disabled)")
+    
+    # OPTIMIZED: Initialize unified responsiveness system
+    print("🎯 Initializing unified responsiveness management...")
+    optimize_responsiveness_for_environment()
+    start_responsiveness_monitoring()
     
     # Start mDNS service
     # Get the actual port being used (80/443 or fallback ports)
