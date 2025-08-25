@@ -41,8 +41,9 @@ def monitor_encryption_memory(operation: str, file_size_mb: float = 0):
             try:
                 result = func(*args, **kwargs)
                 
-                # Force garbage collection
-                gc.collect()
+                # OPTIMIZED: Strategic garbage collection - only for large operations
+                if operation in ['encrypt_file_to_file_streaming', 'large_file_encryption']:
+                    gc.collect()
                 
                 end_memory = get_memory_usage_mb()
                 memory_delta = end_memory - start_memory
@@ -297,8 +298,9 @@ def encrypt_file_to_file_streaming(input_path: str, output_path: str, user_passw
             output_file.write(final_chunk)
             encrypted_size += len(final_chunk)
     
-    # Final memory check
-    gc.collect()
+    # OPTIMIZED: Strategic memory check - only for large operations
+    if encrypted_size > 50 * 1024 * 1024:  # Only GC for files > 50MB
+        gc.collect()
     end_memory = get_memory_usage_mb()
     memory_delta = end_memory - start_memory
     print(f"💾 [AES-Zero-Memory] Complete - Memory: {end_memory:.1f}MB | Delta: {memory_delta:+.1f}MB")
@@ -385,8 +387,9 @@ def encrypt_file_from_path_streaming(file_path: str, user_password: Optional[str
     
     encrypted_data = b''.join(encrypted_chunks)
     
-    # Final memory check
-    gc.collect()
+    # OPTIMIZED: Strategic memory check - only for large operations
+    if len(encrypted_data) > 50 * 1024 * 1024:  # Only GC for files > 50MB
+        gc.collect()
     end_memory = get_memory_usage_mb()
     memory_delta = end_memory - start_memory
     print(f"💾 [AES-Disk-Stream] Complete - Memory: {end_memory:.1f}MB | Delta: {memory_delta:+.1f}MB")

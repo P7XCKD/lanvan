@@ -57,275 +57,146 @@ class UniversalOptimizer:
         elif system == 'linux':
             return 'linux'
         else:
-            return 'other'
+            return 'unknown'
     
     def _detect_termux(self) -> bool:
-        """Detect if running in Termux specifically"""
-        return ("TERMUX_VERSION" in os.environ or 
-                os.path.exists("/data/data/com.termux") or
-                "/data/data/com.termux" in str(os.environ.get("PREFIX", "")))
+        """Check if running in Termux environment"""
+        return is_termux_environment()
     
-    def optimize_for_large_upload(self, file_size: int):
-        """Apply platform-specific optimizations for large file uploads"""
-        print(f"🚀 Enabling optimizations for {file_size//1024//1024}MB file on {self.platform_type}")
+    def optimize_for_large_files(self, operation_type: str = "upload") -> Dict:
+        """
+        OPTIMIZED: Apply strategic memory management for large file operations
+        Reduced gc.collect() frequency for better performance
+        """
+        optimizations = {
+            'memory_optimization': False,
+            'gc_optimization': False,
+            'platform_optimization': False,
+            'performance_mode': 'standard'
+        }
         
         try:
-            # 🧹 Universal: Force garbage collection
-            gc.collect()
-            
-            # 🔋 Start keep-alive for all platforms during large uploads
-            if file_size > 500 * 1024 * 1024:  # Files > 500MB
-                self._start_keep_alive()
+            # OPTIMIZED: Only run GC optimization for major operations
+            if operation_type in ['upload_complete', 'large_file_finished']:
+                print(f"🧹 Strategic memory cleanup for {operation_type}")
+                gc.collect()
+                optimizations['gc_optimization'] = True
             
             # Platform-specific optimizations
-            if self.is_android:
-                self._apply_android_optimizations()
+            if self.is_termux:
+                optimizations.update(self._optimize_termux())
+            elif self.is_android:
+                optimizations.update(self._optimize_android())
             elif self.is_windows:
-                self._apply_windows_optimizations()
-            elif self.is_linux:
-                self._apply_linux_optimizations()
-            elif self.is_mac:
-                self._apply_mac_optimizations()
+                optimizations.update(self._optimize_windows())
+            else:
+                optimizations.update(self._optimize_unix())
             
-            print(f"✅ {self.platform_type.title()} optimizations applied")
+            optimizations['platform_optimization'] = True
+            return optimizations
             
         except Exception as e:
             print(f"⚠️ Optimization warning: {e}")
+            return optimizations
     
-    def _apply_android_optimizations(self):
-        """Android/Termux specific optimizations"""
-        try:
-            # Disable Python GC during upload (manual management)
-            gc.disable()
-            
-            # Set environment variables for better memory management
-            os.environ['PYTHONUNBUFFERED'] = '1'
-            os.environ['MALLOC_TRIM_THRESHOLD_'] = '100000'
-            
-            print(f"📱 Android optimizations applied")
-            
-        except Exception as e:
-            print(f"⚠️ Android optimization warning: {e}")
-    
-    def _apply_windows_optimizations(self):
-        """Windows specific optimizations"""
-        try:
-            # Set high priority for the process (if possible)
-            priority_result = safe_psutil_call(
-                lambda: __import__('psutil').Process().nice(__import__('psutil').HIGH_PRIORITY_CLASS)
-            )
-            if priority_result is not None:
-                print(f"💻 Windows: Process priority set to high")
-            
-            # Disable Windows write caching for immediate disk writes
-            os.environ['PYTHONUNBUFFERED'] = '1'
-            
-            print(f"💻 Windows optimizations applied")
-            
-        except Exception as e:
-            print(f"⚠️ Windows optimization warning: {e}")
-    
-    def _apply_linux_optimizations(self):
-        """Linux specific optimizations"""
-        try:
-            # Linux-specific optimizations (nice priority only on Linux)
-            if platform.system().lower() == 'linux':
-                try:
-                    # Check if we can modify process priority
-                    os.system('renice -n -5 {} > /dev/null 2>&1'.format(os.getpid()))
-                    print(f"🐧 Linux: Process priority increased")
-                except:
-                    pass  # Not critical
-            
-            # Optimize for sequential I/O
-            os.environ['PYTHONUNBUFFERED'] = '1'
-            
-            print(f"🐧 Linux optimizations applied")
-            
-        except Exception as e:
-            print(f"⚠️ Linux optimization warning: {e}")
-    
-    def _apply_mac_optimizations(self):
-        """macOS specific optimizations"""
-        try:
-            # macOS memory management
-            os.environ['PYTHONUNBUFFERED'] = '1'
-            
-            # Basic macOS optimizations (avoid complex priority changes)
-            print(f"🍎 macOS optimizations applied")
-            
-        except Exception as e:
-            print(f"⚠️ macOS optimization warning: {e}")
-    
-    def _start_keep_alive(self):
-        """Start background thread to keep process active during large uploads"""
-        if self.keep_alive_active:
-            return
+    def _optimize_termux(self) -> Dict:
+        """Termux-specific optimizations"""
+        print("🤖 Applying Termux optimizations")
         
-        self.keep_alive_active = True
-        self.background_keeper = threading.Thread(
-            target=self._keep_alive_worker, 
-            daemon=True
-        )
-        self.background_keeper.start()
-        print(f"🔋 Keep-alive thread started for {self.platform_type}")
+        try:
+            # Set environment variables for better Termux performance
+            os.environ['PYTHONUNBUFFERED'] = '1'
+            os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
+            
+            # Use Termux-compatible settings
+            return {
+                'chunk_size': get_termux_chunk_size(),
+                'memory_limit': get_safe_memory_info().get('available_mb', 512),
+                'performance_mode': 'termux_optimized'
+            }
+        except Exception as e:
+            print(f"⚠️ Termux optimization warning: {e}")
+            return {'performance_mode': 'termux_fallback'}
     
-    def _keep_alive_worker(self):
-        """Background worker to prevent process termination"""
-        while self.keep_alive_active:
+    def _optimize_android(self) -> Dict:
+        """Android-specific optimizations"""
+        return {
+            'performance_mode': 'android_optimized',
+            'memory_conservative': True
+        }
+    
+    def _optimize_windows(self) -> Dict:
+        """Windows-specific optimizations"""
+        return {
+            'performance_mode': 'windows_optimized',
+            'high_performance': True
+        }
+    
+    def _optimize_unix(self) -> Dict:
+        """Unix/Linux/Mac optimizations"""
+        return {
+            'performance_mode': 'unix_optimized',
+            'standard_performance': True
+        }
+    
+    def should_run_gc(self, operation_count: int = 0, memory_threshold: float = 85.0) -> bool:
+        """
+        OPTIMIZED: Determine if garbage collection should run
+        Much less frequent GC calls to improve performance
+        """
+        # Only run GC every 50 operations instead of frequent calls
+        if operation_count > 0 and operation_count % 50 != 0:
+            return False
+        
+        try:
+            # Check memory usage
+            memory_info = get_safe_memory_info()
+            if memory_info and 'usage_percent' in memory_info:
+                return memory_info['usage_percent'] > memory_threshold
+            
+            # Fallback: run GC less frequently
+            return operation_count % 100 == 0  # Only every 100 operations
+            
+        except Exception:
+            return False  # Don't run GC if we can't determine memory usage
+    
+    def start_background_keepalive(self):
+        """Start background keepalive for Termux stability"""
+        if self.keep_alive_active or not self.is_termux:
+            return
+            
+        def keepalive_worker():
+            """Background keepalive worker"""
             try:
-                time.sleep(30)  # Check every 30 seconds
-                
-                # Gentle garbage collection
-                gc.collect()
-                
-                # Platform-specific keep-alive actions
-                if self.is_android or self.is_termux:
-                    # Touch a file to show activity
-                    keepalive_file = "/tmp/lanvan_keepalive"
+                keepalive_file = "/tmp/lanvan_keepalive"
+                while self.keep_alive_active:
                     with open(keepalive_file, 'w') as f:
                         f.write(str(time.time()))
-                elif self.is_windows:
-                    # Windows: Just the memory management is enough
-                    pass
-                else:
-                    # Linux/Mac: Touch temp file
-                    keepalive_file = "/tmp/lanvan_keepalive"
-                    try:
-                        with open(keepalive_file, 'w') as f:
-                            f.write(str(time.time()))
-                    except PermissionError:
-                        pass  # May not have /tmp access
-                
-            except Exception:
-                pass  # Silent handling in background
+                    time.sleep(30)  # Update every 30 seconds
+            except Exception as e:
+                print(f"⚠️ Keepalive warning: {e}")
+        
+        self.keep_alive_active = True
+        self.background_keeper = threading.Thread(target=keepalive_worker, daemon=True)
+        self.background_keeper.start()
+        print("🔄 Background keepalive started")
     
-    def stop_keep_alive(self):
-        """Stop the keep-alive thread"""
+    def stop_background_keepalive(self):
+        """Stop background keepalive"""
         if self.keep_alive_active:
             self.keep_alive_active = False
-            print(f"🔋 Keep-alive thread stopped")
-            
-            # Re-enable garbage collection if disabled
-            if self.is_android:
-                gc.enable()
+            print("🔄 Background keepalive stopped")
     
-    def memory_cleanup(self, force: bool = False):
-        """Perform memory cleanup optimized for current platform"""
-        try:
-            # Universal garbage collection
-            gc.collect()
-            
-            # Platform-specific cleanup
-            if self.is_windows:
-                try:
-                    # Windows: Request memory trim
-                    subprocess.run(['powershell', '-Command', '[GC]::Collect()'], 
-                                 capture_output=True, timeout=3)
-                except (subprocess.TimeoutExpired, FileNotFoundError):
-                    pass
-            elif self.is_linux or self.is_mac:
-                try:
-                    # Unix: Sync filesystem
-                    subprocess.run(['sync'], capture_output=True, timeout=5)
-                except (subprocess.TimeoutExpired, FileNotFoundError):
-                    pass
-            elif self.is_android:
-                try:
-                    # Android: More aggressive cleanup
-                    subprocess.run(['sync'], capture_output=True, timeout=5)
-                    if self.is_termux:
-                        # Clear Python module caches
-                        sys.modules.clear()
-                except (subprocess.TimeoutExpired, FileNotFoundError):
-                    pass
-                
-        except Exception:
-            pass  # Silent cleanup
-    
-    def get_platform_info(self) -> Dict:
-        """Get current platform and optimization info"""
-        info = {
+    def get_performance_summary(self) -> Dict:
+        """Get performance optimization summary"""
+        return {
             'platform': self.platform_type,
-            'platform_details': platform.platform(),
-            'python_version': platform.python_version(),
-            'is_android': self.is_android,
-            'is_termux': self.is_termux,
-            'keep_alive_active': self.keep_alive_active
+            'termux_mode': self.is_termux,
+            'android_mode': self.is_android,
+            'optimizations_active': True,
+            'memory_management': 'strategic_gc',  # OPTIMIZED: Strategic instead of frequent
+            'performance_profile': 'optimized'
         }
-        
-        # Add memory info if available
-        try:
-            if self.is_android or self.is_linux:
-                # Read from /proc/meminfo
-                with open('/proc/meminfo', 'r') as f:
-                    for line in f:
-                        if 'MemAvailable:' in line:
-                            available_kb = int(line.split()[1])
-                            info['available_memory_mb'] = available_kb // 1024
-                            break
-            elif self.is_windows:
-                # Use safe memory detection for all platforms
-                memory_info = get_safe_memory_info()
-                if memory_info and 'available' in memory_info:
-                    info['available_memory_mb'] = int(memory_info['available'] / (1024**2))
-        except Exception:
-            pass
-        
-        return info
-    
-    def check_upload_feasibility(self, file_size: int) -> Dict:
-        """Check if large upload is feasible on current platform"""
-        result = {
-            'feasible': True,
-            'warnings': [],
-            'recommendations': []
-        }
-        
-        file_size_mb = file_size / (1024 * 1024)
-        platform_info = self.get_platform_info()
-        available_mb = platform_info.get('available_memory_mb', 0)
-        
-        # Universal checks for all platforms
-        if file_size_mb > 1000:  # Files > 1GB
-            result['warnings'].append(f"Large file ({file_size_mb:.0f}MB) detected on {self.platform_type}")
-            
-            if available_mb > 0 and available_mb < 1000:  # Less than 1GB available
-                result['warnings'].append(f"Low memory available ({available_mb}MB)")
-                result['recommendations'].append("Close other applications to free memory")
-        
-        # Platform-specific recommendations
-        if self.is_android:
-            result['recommendations'].extend([
-                "Keep device plugged in during upload",
-                "Avoid switching apps during upload"
-            ])
-            if self.is_termux:
-                result['recommendations'].append("Consider using 'termux-wake-lock' to prevent sleep")
-        elif self.is_windows:
-            result['recommendations'].extend([
-                "Ensure sufficient disk space",
-                "Consider pausing Windows Updates during upload"
-            ])
-        elif self.is_linux or self.is_mac:
-            result['recommendations'].extend([
-                "Ensure sufficient disk space",
-                "Avoid hibernation/sleep during upload"
-            ])
-        
-        return result
 
-# Global universal optimizer instance
+# Global optimizer instance
 universal_optimizer = UniversalOptimizer()
-
-def optimize_for_large_upload(file_size: int = 0) -> Dict:
-    """Quick function to optimize for large uploads on any platform"""
-    if file_size > 100 * 1024 * 1024:  # Files > 100MB
-        universal_optimizer.optimize_for_large_upload(file_size)
-    
-    return universal_optimizer.check_upload_feasibility(file_size)
-
-def cleanup_resources():
-    """Clean up optimization resources for any platform"""
-    universal_optimizer.stop_keep_alive()
-    universal_optimizer.memory_cleanup(force=True)
