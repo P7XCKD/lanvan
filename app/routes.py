@@ -51,8 +51,15 @@ TEMP_CHUNKS_FOLDER = UPLOAD_FOLDER / "temp_chunks"
 TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
 
 # === Streaming Assembly Setup ===
-# Initialize streaming assembly system on module load
-initialize_streaming_assembly(TEMP_CHUNKS_FOLDER, UPLOAD_FOLDER)
+# Initialize streaming assembly system on first use (lazy initialization)
+_streaming_initialized = False
+
+def ensure_streaming_initialized():
+    """Ensure streaming assembly is initialized"""
+    global _streaming_initialized
+    if not _streaming_initialized:
+        initialize_streaming_assembly(TEMP_CHUNKS_FOLDER, UPLOAD_FOLDER)
+        _streaming_initialized = True
 
 def cleanup_orphaned_temp_files():
     """
@@ -1303,7 +1310,9 @@ async def upload_chunk(
             # Log potential issue but allow overwrite (might be a retry)
             print(f"⚠️ Warning: Chunk {chunk_filename} already exists, overwriting (possible retry)")
         
-        # 🌊 Register file for streaming assembly if this is the first chunk
+        # 🌊 Ensure streaming assembly is initialized and register file if this is the first chunk
+        ensure_streaming_initialized()
+        
         if part_number == 1 and total_parts:
             assembler = get_streaming_assembler()
             if assembler:
@@ -1386,17 +1395,31 @@ async def finalize_upload(
             )
 
         # 🌊 Check if streaming assembly is available and completed
+        ensure_streaming_initialized()
         assembler = get_streaming_assembler()
         streaming_completed = False
         final_path = None
         
-        if assembler:
+        # First, check if streaming-assembled file already exists
+        potential_streaming_file = UPLOAD_FOLDER / safe_filename
+        print(f"🔍 Checking for streaming file: {potential_streaming_file}")
+        print(f"🔍 File exists: {potential_streaming_file.exists()}")
+        
+        if potential_streaming_file.exists():
+            print(f"🌊 Found streaming-assembled file: {safe_filename}")
+            streaming_completed = True
+            final_path = potential_streaming_file
+        elif assembler:
+            # Check streaming status if file doesn't exist yet
             status = assembler.get_file_status(safe_filename)
+            print(f"🔍 Streaming status: {status}")
             if status and status['completed'] and not status['error']:
-                # Streaming assembly completed successfully
                 streaming_completed = True
                 final_path = UPLOAD_FOLDER / safe_filename
                 print(f"✅ Streaming assembly completed for {safe_filename}")
+        
+        print(f"🔍 Streaming completed: {streaming_completed}")
+        print(f"🔍 Final path: {final_path}")
         
         # 🔄 Failsafe: Use traditional chunk combination if streaming didn't complete
         if not streaming_completed:
@@ -1414,45 +1437,37 @@ async def finalize_upload(
                     break
             
             actual_chunks = len(chunk_files)
-            if actual_chunks == 0:
-                return JSONResponse(
-                    status_code=HTTP_400_BAD_REQUEST,
-                    content={"status": "error", "msg": "No chunks found for this file"}
-                )
             
-            # Determine final filename
-            final_filename = safe_filename + ".enc" if encrypt else safe_filename
-            final_path = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, final_filename)
+            # If no chunks found but streaming was expected, assume streaming completed successfully
+            if actual_chunks == 0 and assembler:
+                # Check if streaming file was created
+                potential_file = UPLOAD_FOLDER / safe_filename
+                if potential_file.exists():
+                    print(f"🌊 Found streaming-assembled file: {safe_filename}")
+                    streaming_completed = True
+                    final_path = potential_file
+                else:
+                    return JSONResponse(
+                        status_code=HTTP_400_BAD_REQUEST,
+                        content={"status": "error", "msg": "No chunks found and no streaming file exists"}
+                    )
             
-            # 🚀 Fast chunk combination with proper error handling
-            with open(final_path, "wb") as final_file:
-                for part_num, chunk_path in chunk_files:
-                    if not chunk_path.exists():
-                        # Clean up partial chunks and final file
-                        if final_path.exists():
-                            final_path.unlink()
-                        for _, clean_chunk_path in chunk_files:
-                            if clean_chunk_path.exists():
-                                clean_chunk_path.unlink()
-                        
-                        return JSONResponse(
-                            status_code=HTTP_400_BAD_REQUEST,
-                            content={"status": "error", "msg": f"Missing chunk {part_num}"}
-                        )
-                    
-                    # Read chunk data
-                    chunk_data = chunk_path.read_bytes()
-                    
-                    # Encrypt if requested with error handling
-                    if encrypt:
-                        try:
-                            # Use secure session-based encryption for temporary chunks
-                            chunk_data, session_key, session_iv = encrypt_session_data(chunk_data)
-                            # Note: For production use, you'd want to store session_key and session_iv securely
-                            # For now, this is just for demonstration - chunks are temporary
-                        except Exception as encrypt_error:
-                            print(f"🚨 AES encryption failed for chunk {part_num}: {encrypt_error}")
-                            # Clean up and return error
+            if not streaming_completed:
+                if actual_chunks == 0:
+                    return JSONResponse(
+                        status_code=HTTP_400_BAD_REQUEST,
+                        content={"status": "error", "msg": "No chunks found for this file"}
+                    )
+                
+                # Determine final filename
+                final_filename = safe_filename + ".enc" if encrypt else safe_filename
+                final_path = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, final_filename)
+                
+                # 🚀 Fast chunk combination with proper error handling
+                with open(final_path, "wb") as final_file:
+                    for part_num, chunk_path in chunk_files:
+                        if not chunk_path.exists():
+                            # Clean up partial chunks and final file
                             if final_path.exists():
                                 final_path.unlink()
                             for _, clean_chunk_path in chunk_files:
@@ -1461,16 +1476,40 @@ async def finalize_upload(
                             
                             return JSONResponse(
                                 status_code=HTTP_400_BAD_REQUEST,
-                                content={"status": "error", "msg": f"AES encryption failed: {encrypt_error}"}
+                                content={"status": "error", "msg": f"Missing chunk {part_num}"}
                             )
-                    
-                    # Write to final file
-                    final_file.write(chunk_data)
-            
-            # Clean up temporary chunks using actual chunks found
-            for _, chunk_path in chunk_files:
-                if chunk_path.exists():
-                    chunk_path.unlink()
+                        
+                        # Read chunk data
+                        chunk_data = chunk_path.read_bytes()
+                        
+                        # Encrypt if requested with error handling
+                        if encrypt:
+                            try:
+                                # Use secure session-based encryption for temporary chunks
+                                chunk_data, session_key, session_iv = encrypt_session_data(chunk_data)
+                                # Note: For production use, you'd want to store session_key and session_iv securely
+                                # For now, this is just for demonstration - chunks are temporary
+                            except Exception as encrypt_error:
+                                print(f"🚨 AES encryption failed for chunk {part_num}: {encrypt_error}")
+                                # Clean up and return error
+                                if final_path.exists():
+                                    final_path.unlink()
+                                for _, clean_chunk_path in chunk_files:
+                                    if clean_chunk_path.exists():
+                                        clean_chunk_path.unlink()
+                                
+                                return JSONResponse(
+                                    status_code=HTTP_400_BAD_REQUEST,
+                                    content={"status": "error", "msg": f"AES encryption failed: {encrypt_error}"}
+                                )
+                        
+                        # Write to final file
+                        final_file.write(chunk_data)
+                
+                # Clean up temporary chunks using actual chunks found
+                for _, chunk_path in chunk_files:
+                    if chunk_path.exists():
+                        chunk_path.unlink()
         
         else:
             # Streaming assembly completed - just verify the file exists
