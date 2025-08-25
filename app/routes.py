@@ -1,8 +1,7 @@
 import os
 import io
 import time
-import asyncio
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from pathlib import Path
 from mimetypes import guess_type
 from zipfile import ZipFile
@@ -22,24 +21,18 @@ from starlette.status import HTTP_302_FOUND, HTTP_400_BAD_REQUEST, HTTP_403_FORB
 
 from app.aes_utils import encrypt_session_data, decrypt_session_data
 from app.aes_config import AESConfig
-from app.http_safe_aes import encrypt_file_http_safe, decrypt_http_safe_file
-from app.metadata_protection import generate_secure_filename, obfuscate_file_size, generate_decoy_requests
+from app.unified_responsiveness import responsiveness_manager, create_responsive_operation, should_yield_now, yield_if_needed, get_optimal_chunk_size  # OPTIMIZED: Unified responsiveness
+from app.optimized_streaming import streaming_handler  # OPTIMIZED: Efficient file streaming
+from app.simplified_chunks import chunk_manager  # OPTIMIZED: Simplified chunk management
 from app.validation import (
     validate_upload_files, 
     validate_upload_files_enhanced,
-    validate_upload_files_enhanced_async,
-    validate_upload_files_enhanced_fast,
     secure_filename,
     is_allowed_file,
     FileValidator,
     AdvancedFileValidator
 )
 from app.simple_mdns import mdns_manager
-from app.streaming_assembly import (
-    initialize_streaming_assembly, 
-    get_streaming_assembler,
-    shutdown_streaming_assembly
-)
 
 # === Setup ===
 router = APIRouter()
@@ -50,39 +43,6 @@ UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 TEMP_CHUNKS_FOLDER = UPLOAD_FOLDER / "temp_chunks"
 TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
 
-# === Streaming Assembly Setup ===
-# Initialize streaming assembly system on first use (lazy initialization)
-_streaming_initialized = False
-
-def ensure_streaming_initialized():
-    """Ensure streaming assembly is initialized"""
-    global _streaming_initialized
-    if not _streaming_initialized:
-        initialize_streaming_assembly(TEMP_CHUNKS_FOLDER, UPLOAD_FOLDER)
-        _streaming_initialized = True
-
-def cleanup_orphaned_temp_files():
-    """
-    🧹 Clean up orphaned .tmp files on startup (from interrupted uploads)
-    """
-    try:
-        temp_files = list(UPLOAD_FOLDER.glob("*.tmp"))
-        if temp_files:
-            print(f"🧹 Cleaning up {len(temp_files)} orphaned .tmp files...")
-            for temp_file in temp_files:
-                try:
-                    temp_file.unlink()
-                    print(f"🗑️ Removed: {temp_file.name}")
-                except Exception as e:
-                    print(f"⚠️ Failed to remove {temp_file.name}: {e}")
-        else:
-            print(f"✅ No orphaned .tmp files found")
-    except Exception as e:
-        print(f"⚠️ Error during temp file cleanup: {e}")
-
-# Clean up orphaned temp files on startup
-cleanup_orphaned_temp_files()
-
 # Templates - keep local for routes that need it
 templates = Jinja2Templates(directory="app/templates")
 
@@ -91,30 +51,6 @@ MAX_CONCURRENT_UPLOADS = 5  # Maximum parallel uploads per session
 
 # === Utility Functions ===
 def format_size(size_bytes):
-    """Format bytes to human readable string"""
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size_bytes < 1024.0:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024.0
-    return f"{size_bytes:.1f} TB"
-
-def https_redirect_if_needed(request: Request) -> Optional[RedirectResponse]:
-    """
-    🔀 HTTPS Fallback System: Check if we need to redirect HTTP to HTTPS
-    Returns RedirectResponse if redirect is needed, None otherwise
-    """
-    if mdns_manager.use_https and request.url.scheme == "http":
-        # Extract host and port information
-        host = request.headers.get("host", "")
-        if host:
-            # Construct HTTPS URL while preserving the host (including lanvan.local)
-            https_url = f"https://{host}{request.url.path}"
-            if request.url.query:
-                https_url += f"?{request.url.query}"
-            
-            print(f"🔀 HTTPS Redirect: {request.url} → {https_url}")
-            return RedirectResponse(url=https_url, status_code=301)  # Permanent redirect
-    return None
     for unit in ["B", "KB", "MB", "GB"]:
         if size_bytes < 1024:
             return f"{size_bytes:.2f} {unit}"
@@ -128,32 +64,8 @@ def get_file_list():
             "size": format_size(f.stat().st_size),
             "mtime": f.stat().st_mtime
         }
-        for f in UPLOAD_FOLDER.iterdir() 
-        if f.is_file() and not f.name.endswith('.tmp')  # 🚫 Filter out temporary files
+        for f in UPLOAD_FOLDER.iterdir() if f.is_file()
     ], key=lambda x: x["mtime"], reverse=True)
-
-async def get_file_list_async():
-    """
-    🚀 Async file list with yielding for large directories
-    🚫 RACE CONDITION FIX: Filter out .tmp files to prevent downloading partial uploads
-    """
-    files = []
-    file_count = 0
-    
-    for f in UPLOAD_FOLDER.iterdir():
-        if f.is_file() and not f.name.endswith('.tmp'):  # 🚫 Filter out temporary files
-            files.append({
-                "name": f.name,
-                "size": format_size(f.stat().st_size),
-                "mtime": f.stat().st_mtime
-            })
-            file_count += 1
-            
-            # Yield every 50 files to prevent blocking on large directories
-            if file_count % 50 == 0:
-                await asyncio.sleep(0.001)
-    
-    return sorted(files, key=lambda x: x["mtime"], reverse=True)
 
 def get_unique_filename(directory: Path, filename: str) -> str:
     base = Path(filename).stem
@@ -165,361 +77,57 @@ def get_unique_filename(directory: Path, filename: str) -> str:
         counter += 1
     return new_name
 
-async def save_upload_file_async(upload_file: UploadFile, destination: Path, encrypt=False):
-    """
-    🔄 ASYNC Universal Streaming Upload Handler - Non-blocking optimized for ALL platforms
-    🔒 RACE CONDITION FIX: Upload to .tmp file first, then atomically move to final name
-    Processes files in chunks asynchronously to avoid memory exhaustion and server blocking
-    """
-    import os
-    import hashlib
-    import gc
-    import asyncio
-    from .android_optimizer import optimize_for_upload, get_adaptive_chunk_size, should_run_gc, universal_optimizer
-    
-    # 🚀 TEMPORARY FILE STRATEGY: Upload to .tmp extension first
-    temp_destination = destination.with_suffix(destination.suffix + '.tmp')
-    print(f"🔄 Uploading to temporary file: {temp_destination.name}")
-    
-    # 📱 Platform Detection (but optimizations apply to ALL)
-    is_android = ("ANDROID_STORAGE" in os.environ or 
-                 os.path.exists("/data/data/com.termux") or 
-                 "TERMUX_VERSION" in os.environ)
-    
-    is_windows = os.name == 'nt'
-    is_linux = os.name == 'posix' and not is_android
-    
-    platform_name = "Android/Termux" if is_android else "Windows" if is_windows else "Linux/Unix"
-    
-    # 📊 ASYNC File size estimation for progress tracking (NON-BLOCKING)
-    await asyncio.to_thread(upload_file.file.seek, 0, 2)  # Seek to end - ASYNC
-    file_size = await asyncio.to_thread(upload_file.file.tell)  # Tell position - ASYNC  
-    await asyncio.to_thread(upload_file.file.seek, 0)  # Reset to beginning - ASYNC
-    
-    # � Apply optimizations for large files on ALL platforms
-    if file_size > 50 * 1024 * 1024:  # Files > 50MB
-        print(f"🔄 Large file detected ({file_size//1024//1024}MB) - enabling streaming optimizations")
-        
-        # Android-specific feasibility check (but streaming works everywhere)
-        if is_android:
-            feasibility = optimize_for_upload(file_size)
-            if feasibility['warnings']:
-                for warning in feasibility['warnings']:
-                    print(f"⚠️ {warning}")
-            if feasibility['recommendations']:
-                print(f"💡 Android recommendations:")
-                for rec in feasibility['recommendations']:
-                    print(f"   • {rec}")
-        else:
-            # General recommendations for PC/Linux/Mac
-            feasibility = optimize_for_upload(file_size)
-            if feasibility['warnings']:
-                for warning in feasibility['warnings']:
-                    print(f"⚠️ {warning}")
-            if feasibility['recommendations']:
-                print(f"💡 {platform_name} recommendations:")
-                for rec in feasibility['recommendations']:
-                    print(f"   • {rec}")
-    
-    # 🎯 Universal adaptive chunk sizing optimized for each platform
-    CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(file_size)
-    print(f"🎯 {platform_name} - chunk size: {CHUNK_SIZE//1024}KB")
-    
-    print(f"🔄 ASYNC Upload: {destination.name} ({file_size:,} bytes)")
-    
+def save_upload_file_sync(upload_file: UploadFile, destination: Path, encrypt=False):
+    data = upload_file.file.read()
     if encrypt:
-        # 🔒 For now, fall back to original method for encrypted files
-        # TODO: Implement true streaming encryption in future update
-        print(f"🔒 Using existing encryption method (will be optimized in future)")
         try:
-            data = await asyncio.to_thread(upload_file.file.read)
-            
             # Import streaming encryption functions
             from .aes_utils import encrypt_file_stream
             
             # Add file integrity validation for encrypted files
+            import hashlib
             original_hash = hashlib.sha256(data).hexdigest()
             print(f"🔒 Original file hash: {original_hash}")
             
-            # Use memory-efficient streaming encryption
-            encrypted_data, metadata = encrypt_file_stream(data, chunk_size=CHUNK_SIZE)
+            # Use memory-efficient streaming encryption with optimized chunk size
+            chunk_size = chunk_manager.get_chunk_size('encryption')  # OPTIMIZED: Fixed chunk size
+            encrypted_data, metadata = encrypt_file_stream(data, chunk_size=chunk_size)
             
             # Enhanced metadata with integrity information
             metadata['original_hash'] = original_hash
             metadata['original_size'] = str(len(data))
             metadata['encrypted_size'] = str(len(encrypted_data))
+            metadata['encryption_method'] = 'streaming'
             
-            # Write encrypted data to file using async I/O
-            import aiofiles
-            async with aiofiles.open(temp_destination, 'wb') as f:
-                await f.write(encrypted_data)
+            # Save metadata to separate file
+            metadata_path = destination.with_suffix('.enc.meta')
+            with metadata_path.open("w") as meta_file:
+                import json
+                json.dump(metadata, meta_file, indent=2)
             
-            # 🎯 ATOMIC MOVE: Move encrypted file from .tmp to final destination
-            try:
-                print(f"🔄 Moving encrypted {temp_destination.name} → {destination.name}")
-                temp_destination.rename(destination)
-                print(f"✅ Encrypted file atomically moved to final destination: {destination.name}")
-            except Exception as e:
-                # Clean up temp file if move fails
-                if temp_destination.exists():
-                    temp_destination.unlink()
-                print(f"❌ Failed to move encrypted temp file: {e}")
-                raise Exception(f"Failed to finalize encrypted upload: {e}")
-            
-            # Yield control periodically
-            await asyncio.sleep(0.001)
-            
+            # Write encrypted data
+            with destination.open("wb") as f:
+                f.write(encrypted_data)
+                
+            print(f"🔒 File encrypted using streaming AES with {len(encrypted_data)} bytes")
         except Exception as e:
-            # Clean up encrypted temp file
-            if temp_destination.exists():
-                temp_destination.unlink()
-            print(f"❌ Encryption error: {e}")
-            raise
+            print(f"🚨 Streaming encryption failed: {e}")
+            raise Exception(f"AES encryption failed: {e}")
     else:
-        # 📦 Async Streaming upload without encryption
-        try:
-            import aiofiles
-            async with aiofiles.open(temp_destination, 'wb') as f:
-                bytes_written = 0
-                hash_calculator = hashlib.sha256()
-                
-                while True:
-                    # Read chunk asynchronously
-                    chunk = await asyncio.to_thread(upload_file.file.read, CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    
-                    # Write chunk asynchronously
-                    await f.write(chunk)
-                    await f.flush()  # Ensure data is written
-                    
-                    bytes_written += len(chunk)
-                    hash_calculator.update(chunk)
-                    
-                    # Yield control every chunk to prevent blocking
-                    await asyncio.sleep(0.001)
-                    
-                    # Progress for large files (reduce spam)
-                    if bytes_written > 10 * 1024 * 1024 and bytes_written % (20 * 1024 * 1024) == 0:
-                        print(f"📦 Progress: {bytes_written // 1024 // 1024}MB")
-                        
-                        # Android memory management during large uploads
-                        if is_android and should_run_gc(bytes_written, CHUNK_SIZE):
-                            gc.collect()
-                            await asyncio.sleep(0.01)  # Brief pause for GC
-                
-                print(f"✅ Upload to temp file completed: {temp_destination.name} ({bytes_written:,} bytes)")
-                
-                # 🎯 ATOMIC MOVE: Move from .tmp to final destination to prevent race conditions
-                try:
-                    print(f"🔄 Moving {temp_destination.name} → {destination.name}")
-                    temp_destination.rename(destination)
-                    print(f"✅ File atomically moved to final destination: {destination.name}")
-                except Exception as e:
-                    # Clean up temp file if move fails
-                    if temp_destination.exists():
-                        temp_destination.unlink()
-                    print(f"❌ Failed to move temp file: {e}")
-                    raise Exception(f"Failed to finalize upload: {e}")
-        
-        except Exception as e:
-            # Clean up partial temp file
-            if temp_destination.exists():
-                temp_destination.unlink()
-            print(f"❌ ASYNC Upload error: {e}")
-            raise
-        finally:
-            # 🧹 Universal cleanup (applies to ALL platforms)
-            if hasattr(universal_optimizer, 'upload_active'):
-                universal_optimizer.upload_active = False
-            universal_optimizer.memory_cleanup(force=True)
-            print(f"🔄 Universal async cleanup completed")
-
-async def scan_file_async(path: Path):
-    """
-    🚀 Truly non-blocking async file scanning with frequent yielding
-    """
-    print(f"🧪 Scanning file in background: {path}")
-    
-    # Yield control immediately to prevent blocking
-    await asyncio.sleep(0.001)
-    
-    try:
-        # Simulate processing with frequent yielding for responsiveness
-        # In real implementation, this would do virus scanning, checksums, etc.
-        file_size = path.stat().st_size
-        
-        # For large files, break processing into smaller chunks with yielding
-        if file_size > 100 * 1024 * 1024:  # >100MB
-            print(f"🔍 Large file processing with yielding: {path.name} ({file_size // 1024 // 1024}MB)")
-            
-            # Simulate chunked processing with frequent yielding
-            chunk_count = max(1, file_size // (50 * 1024 * 1024))  # 50MB chunks
-            for i in range(chunk_count):
-                # Yield every processing chunk to keep server responsive
-                await asyncio.sleep(0.01)  # 10ms yield per chunk
-                
-                # Simulate some processing work
-                if i % 10 == 0:  # Progress every 10 chunks
-                    progress = (i + 1) / chunk_count * 100
-                    print(f"🔄 Processing {path.name}: {progress:.1f}% complete")
-        else:
-            # Small files process quickly with minimal yielding
-            await asyncio.sleep(0.001)
-            
-        print(f"✅ File scan completed: {path.name}")
-        
-    except Exception as e:
-        print(f"❌ File scan error: {path.name} - {e}")
-        # Don't let scanning errors affect the main upload flow
-    
-    # Final yield to ensure responsiveness
-    await asyncio.sleep(0.001)
+        with destination.open("wb") as f:
+            f.write(data)
 
 def scan_file(path: Path):
-    """
-    🔄 Legacy sync wrapper - creates async task for background processing
-    """
-    # Create async task with low priority for true background processing
-    asyncio.create_task(scan_file_async(path))
+    print(f"🧪 Scanning file in background: {path}")
+    # Placeholder for virus scan / checksum / DLP
+    # Simulate processing delay
+    # time.sleep(1)
 
 # === Routes ===
-
-# 🛡️ HTTP-Safe AES Routes
-@router.post("/encrypt_http_safe", name="encrypt_http_safe")
-async def encrypt_http_safe(
-    request: Request,
-    file: UploadFile = File(...),
-    http_safe: bool = Form(True)
-):
-    """Encrypt a file with HTTP-Safe AES protection"""
-    temp_input_path = None
-    encrypted_path = None
-    
-    try:
-        # Save uploaded file temporarily
-        temp_input_path = UPLOAD_FOLDER / f"temp_input_{int(time.time())}_{file.filename}"
-        
-        with open(temp_input_path, 'wb') as f:
-            content = await file.read()
-            f.write(content)
-        
-        # Encrypt with HTTP-Safe protection
-        encrypted_path, metadata = encrypt_file_http_safe(
-            input_path=str(temp_input_path),
-            original_filename=file.filename or "unknown_file"
-        )
-        
-        # Read encrypted content
-        with open(encrypted_path, 'rb') as f:
-            encrypted_content = f.read()
-        
-        # Clean up input file
-        temp_input_path.unlink(missing_ok=True)
-        
-        # Extract obfuscated filename from path
-        obfuscated_filename = os.path.basename(encrypted_path)
-        
-        # Save encrypted file temporarily for download
-        temp_filename = f"temp_encrypted_{int(time.time())}_{obfuscated_filename}"
-        temp_path = UPLOAD_FOLDER / temp_filename
-        
-        with open(temp_path, 'wb') as f:
-            f.write(encrypted_content)
-        
-        # Clean up original encrypted file
-        os.unlink(encrypted_path)
-        
-        return JSONResponse({
-            "status": "success",
-            "temp_filename": temp_filename,
-            "obfuscated_filename": obfuscated_filename,
-            "metadata": metadata,
-            "encrypted_size": len(encrypted_content)
-        })
-        
-    except Exception as e:
-        # Clean up any temporary files - safe cleanup
-        try:
-            if temp_input_path and temp_input_path.exists():
-                temp_input_path.unlink(missing_ok=True)
-        except:
-            pass
-        try:
-            if encrypted_path and os.path.exists(encrypted_path):
-                os.unlink(encrypted_path)
-        except:
-            pass
-        
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
-        )
-
-@router.get("/download_temp/{filename}", name="download_temp")
-async def download_temp_file(filename: str):
-    """Download temporary encrypted file"""
-    try:
-        file_path = UPLOAD_FOLDER / filename
-        if not file_path.exists():
-            return JSONResponse(
-                status_code=404,
-                content={"status": "error", "message": "File not found"}
-            )
-        
-        def iter_file():
-            with open(file_path, 'rb') as f:
-                yield from f
-        
-        # Delete temp file after download
-        background_tasks = BackgroundTasks()
-        background_tasks.add_task(lambda: file_path.unlink(missing_ok=True))
-        
-        return StreamingResponse(
-            iter_file(),
-            media_type='application/octet-stream',
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
-            background=background_tasks
-        )
-        
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
-        )
-
-@router.post("/generate_decoy", name="generate_decoy")
-async def generate_decoy_traffic(request: Request):
-    """Generate decoy traffic for HTTP-Safe mode"""
-    try:
-        data = await request.json()
-        size = data.get('size', 10000)
-        
-        # Generate random decoy data
-        decoy_data = os.urandom(size)
-        
-        # Simulate processing time
-        await asyncio.sleep(0.1)
-        
-        return JSONResponse({
-            "status": "success",
-            "decoy_size": len(decoy_data)
-        })
-        
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
-        )
 
 @router.get("/loading", response_class=HTMLResponse, name="loading")
 async def loading_page(request: Request, redirect: str = "/"):
     """Loading page shown while resources are being prepared"""
-    # 🔀 HTTPS Fallback System: Auto-redirect HTTP to HTTPS when server runs in HTTPS mode
-    redirect_response = https_redirect_if_needed(request)
-    if redirect_response:
-        return redirect_response
-    
     return templates.TemplateResponse("loading.html", {
         "request": request,
         "redirect_url": redirect
@@ -527,11 +135,6 @@ async def loading_page(request: Request, redirect: str = "/"):
 
 @router.get("/", response_class=HTMLResponse, name="home")
 async def home(request: Request):
-    # 🔀 HTTPS Fallback System: Auto-redirect HTTP to HTTPS when server runs in HTTPS mode
-    redirect_response = https_redirect_if_needed(request)
-    if redirect_response:
-        return redirect_response
-    
     files = get_file_list()
     
     # Add helpful debug info for HTTPS troubleshooting
@@ -568,26 +171,6 @@ async def api_files():
             content={"status": "error", "msg": f"Failed to get file list: {str(e)}"}
         )
 
-@router.get("/api/platform-status", name="platform_status")
-async def platform_status():
-    """API endpoint to get universal platform optimization status"""
-    try:
-        from .universal_optimizer import universal_optimizer
-        
-        info = universal_optimizer.get_platform_info()
-        info['optimizations_active'] = universal_optimizer.keep_alive_active
-        
-        return JSONResponse(content={
-            "status": "success",
-            "platform_info": info
-        })
-    except Exception as e:
-        return JSONResponse(content={
-            "status": "error",
-            "msg": str(e),
-            "platform_info": {"platform": "unknown"}
-        })
-
 @router.post("/upload-auto", name="upload_auto_file")
 async def upload_auto_file(
     request: Request,
@@ -604,8 +187,8 @@ async def upload_auto_file(
     # 🔐 Protocol detection
     is_https = request.url.scheme == "https"
     
-    # � ULTRA-FAST VALIDATION: Start uploads immediately with lightweight validation
-    is_valid, error_messages, validated_files, security_warnings = await validate_upload_files_enhanced_fast(files, encrypt, is_https)
+    # 🔍 ENHANCED SECURITY: Comprehensive input validation with content analysis
+    is_valid, error_messages, validated_files, security_warnings = validate_upload_files_enhanced(files, encrypt, is_https)
     if not is_valid:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
             "status": "error", 
@@ -626,103 +209,52 @@ async def upload_auto_file(
                 "msg": validation['error']
             })
 
-    # 🚀 CONCURRENT PROCESSING: Upload all files simultaneously with adaptive optimization
-    from .concurrent_upload_manager import upload_multiple_files_concurrent
-    
     uploaded = []
     
-    print(f"🔍 Processing {len(files)} files for concurrent upload...")
+    print(f"🔍 Processing {len(files)} files for upload...")
 
-    # 🚀 CONCURRENT PREPARATION: Prepare all file destinations simultaneously
-    async def prepare_file_for_upload(i: int, file: UploadFile) -> Dict[str, Any]:
-        """Prepare a single file for upload concurrently"""
-        try:
-            print(f"📁 Preparing file {i+1}/{len(files)}: {file.filename}")
+    for i, file in enumerate(files):
+        print(f"📁 Processing file {i+1}/{len(files)}: {file.filename}")
+        
+        if not file.filename:
+            print(f"❌ Skipping file {i+1}: No filename")
+            continue
+
+        # Use validated filename
+        validated_file = validated_files[i] if i < len(validated_files) else None
+        if not validated_file:
+            print(f"❌ Skipping file {i+1}: Validation failed")
+            continue
             
-            if not file.filename:
-                return {"error": f"File {i+1}: No filename"}
+        filename = validated_file['sanitized_name']
+        file_size = validated_file['size']
+        print(f"📋 File {i+1} details: {filename} ({file_size} bytes)")
 
-            # Use validated filename
-            validated_file = validated_files[i] if i < len(validated_files) else None
-            if not validated_file:
-                return {"error": f"File {i+1}: Validation failed"}
-                
-            filename = validated_file['sanitized_name']
-            file_size = validated_file['size']
-            print(f"📋 File {i+1} details: {filename} ({file_size} bytes)")
+        # Double-check with existing validation (defense in depth)
+        if not is_allowed_file(filename):
+            print(f"❌ Skipping file {i+1}: File type not allowed")
+            continue
 
-            # Double-check with existing validation (defense in depth)
-            if not is_allowed_file(filename):
-                return {"error": f"File {i+1}: File type not allowed"}
+        # Check size using centralized AES config
+        if encrypt:
+            validation = AESConfig.validate_file_for_aes(file_size, is_https)
+            if not validation['valid']:
+                print(f"❌ File {i+1} failed AES validation: {validation['error']}")
+                return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
+                    "status": "error",
+                    "msg": validation['error']
+                })
 
-            # Check size using centralized AES config
-            if encrypt:
-                validation = AESConfig.validate_file_for_aes(file_size, is_https)
-                if not validation['valid']:
-                    return {"error": f"File {i+1} failed AES validation: {validation['error']}"}
+        save_name = filename + ".enc" if encrypt else filename
+        filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, save_name)
 
-            save_name = filename + ".enc" if encrypt else filename
-            filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, save_name)
+        print(f"💾 Saving file {i+1} as: {filepath.name}")
+        save_upload_file_sync(file, filepath, encrypt=encrypt)
+        background_tasks.add_task(scan_file, filepath)
+        uploaded.append(filepath.name)
+        print(f"✅ File {i+1} uploaded successfully: {filepath.name}")
 
-            print(f"💾 Will save file {i+1} as: {filepath.name}")
-            
-            return {
-                "success": True,
-                "file": file,
-                "destination": filepath,
-                "file_info": {
-                    'original_name': file.filename,
-                    'save_name': save_name,
-                    'filepath': filepath,
-                    'size': file_size
-                }
-            }
-            
-        except Exception as e:
-            return {"error": f"File {i+1}: Preparation failed - {str(e)}"}
-    
-    # 🚀 PREPARE ALL FILES CONCURRENTLY
-    print(f"� Starting concurrent preparation of {len(files)} files...")
-    preparation_tasks = [prepare_file_for_upload(i, file) for i, file in enumerate(files)]
-    preparation_results = await asyncio.gather(*preparation_tasks, return_exceptions=True)
-    
-    # Process preparation results
-    destinations = []
-    valid_files = []
-    file_info = []
-    
-    for i, result in enumerate(preparation_results):
-        if isinstance(result, Exception):
-            print(f"❌ File {i+1} preparation exception: {str(result)}")
-        elif isinstance(result, dict) and "error" in result:
-            print(f"❌ {result['error']}")
-        elif isinstance(result, dict) and "success" in result:
-            destinations.append(result["destination"])
-            valid_files.append(result["file"])
-            file_info.append(result["file_info"])
-            print(f"✅ File {i+1} prepared successfully")
-    
-    if not valid_files:
-        return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
-            "status": "error",
-            "msg": "No valid files to process"
-        })
-    
-    # 🚀 Execute concurrent uploads with adaptive optimization
-    print(f"🚀 Starting concurrent upload of {len(valid_files)} files...")
-    upload_results = await upload_multiple_files_concurrent(valid_files, destinations, encrypt)
-    
-    # Process results and add background tasks
-    for i, result in enumerate(upload_results):
-        if result.get('success'):
-            filepath = Path(result['destination'])
-            background_tasks.add_task(scan_file, filepath)
-            uploaded.append(filepath.name)
-            print(f"✅ File {i+1} uploaded successfully: {filepath.name}")
-        else:
-            print(f"❌ File {i+1} failed: {result.get('error', 'Unknown error')}")
-
-    print(f"🎉 Concurrent upload complete! {len(uploaded)} files uploaded: {uploaded}")
+    print(f"🎉 Upload complete! {len(uploaded)} files uploaded: {uploaded}")
 
     if not uploaded:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
@@ -796,152 +328,47 @@ async def download_file(filename: str, request: Request):
         return await full_download_file(file_path, safe_name, mime_type, file_size)
 
 async def full_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int):
-    """Ultra-optimized full file download - for small files and .enc files"""
-    print(f"📤 Starting full download for: {safe_name}")
+    """OPTIMIZED: Ultra-efficient full file download using optimized streaming"""
+    print(f"📤 Starting optimized full download for: {safe_name}")
     
-    # 🚀 Much larger buffer for maximum speed - 32MB buffer (4x improvement)
-    STREAM_BUFFER_SIZE = 32 * 1024 * 1024  # 32MB buffer (was 8MB)
+    # Determine if this is an encrypted file
+    is_encrypted = file_path.suffix == ".enc"
     
-    def stream_file_ultra_optimized(path: Path):
-        print(f"🔄 Streaming file: {path}")
-        file_handle = None  # Track file handle for proper cleanup
-        
-        try:
-            if path.suffix == ".enc":
-                print("🔐 Processing encrypted file")
-                # 🔐 Enhanced .enc file handling with streaming decryption and metadata validation
-                try:
-                    # Check for metadata file first
-                    metadata_path = path.with_suffix('.enc.meta')
-                    metadata = None
-                    
-                    if metadata_path.exists():
-                        with open(metadata_path, "r") as meta_file:
-                            import json
-                            metadata = json.load(meta_file)
-                            print(f"🔒 Found metadata for encrypted file: {metadata.get('encryption_method', 'legacy')}")
-                    
-                    with open(path, "rb") as file:
-                        encrypted_data = file.read()
-                        print(f"📊 Read {len(encrypted_data)} bytes of encrypted data")
-                        
-                        # Use appropriate decryption method based on metadata
-                        if metadata and metadata.get('encryption_method') == 'streaming':
-                            from .aes_utils import decrypt_file_stream
-                            decrypted_data = decrypt_file_stream(encrypted_data, metadata, chunk_size=1024 * 1024)
-                            print(f"🔒 Used streaming decryption for {path.name}")
-                        else:
-                            # Note: Legacy encryption not supported - file may be corrupted
-                            print(f"⚠️ Cannot decrypt {path.name} - legacy encryption no longer supported")
-                            yield f"Error: File {path.name} uses unsupported legacy encryption".encode('utf-8')
-                            return
-                        
-                        print(f"OK: Decrypted to {len(decrypted_data)} bytes")
-                        
-                        # Validate integrity if metadata available
-                        if metadata and 'original_hash' in metadata:
-                            import hashlib
-                            actual_hash = hashlib.sha256(decrypted_data).hexdigest()
-                            expected_hash = metadata['original_hash']
-                            if actual_hash != expected_hash:
-                                raise Exception(f"File integrity check failed! Expected: {expected_hash}, Got: {actual_hash}")
-                            print(f"OK: File integrity validated successfully")
-                        
-                        # 🚀 Stream in very large chunks for maximum speed
-                        data_length = len(decrypted_data)
-                        chunks_sent = 0
-                        for i in range(0, data_length, STREAM_BUFFER_SIZE):
-                            chunk_end = min(i + STREAM_BUFFER_SIZE, data_length)
-                            chunk = decrypted_data[i:chunk_end]
-                            chunks_sent += 1
-                            print(f"📤 Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
-                            yield chunk
-                            
-                except Exception as e:
-                    print(f"🚨 AES decryption failed for {path}: {e}")
-                    # Return error content instead of crashing
-                    error_message = f"Error: Failed to decrypt file {path.name}. {str(e)}"
-                    yield error_message.encode('utf-8')
-            else:
-                print("📄 Processing regular file")
-                # 🚀 Ultra-fast regular file streaming with optimized buffer and proper cleanup
-                try:
-                    file_handle = open(path, "rb")
-                    chunks_sent = 0
-                    while True:
-                        chunk = file_handle.read(STREAM_BUFFER_SIZE)
-                        if not chunk:
-                            break
-                        chunks_sent += 1
-                        print(f"📤 Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
-                        yield chunk
-                    print(f"OK: Completed streaming {chunks_sent} chunks")
-                except Exception as e:
-                    print(f"🚨 File streaming failed for {path}: {e}")
-                    error_message = f"Error: Failed to read file {path.name}. {str(e)}"
-                    yield error_message.encode('utf-8')
-        finally:
-            # Ensure file handle is always closed
-            if file_handle is not None:
-                try:
-                    file_handle.close()
-                    print(f"✅ File handle closed for: {path.name}")
-                except Exception as e:
-                    print(f"⚠️ Error closing file handle: {e}")
-            
-            # Force garbage collection to release any remaining handles
-            import gc
-            gc.collect()
-
-    # For encrypted files, we need to adjust the Content-Length after decryption
-    final_file_size = file_size
-    if file_path.suffix == ".enc":
-        # Try to get the original size from metadata
-        metadata_path = file_path.with_suffix('.enc.meta')
-        if metadata_path.exists():
-            try:
-                with open(metadata_path, "r") as meta_file:
-                    import json
-                    metadata = json.load(meta_file)
-                    if 'original_size' in metadata:
-                        final_file_size = int(metadata['original_size'])
-                        print(f"🔒 Using original size from metadata: {final_file_size}")
-            except Exception as e:
-                print(f"⚠️ Could not read metadata for size: {e}")
+    # Get optimized headers
+    headers = streaming_handler.get_optimal_headers(
+        file_path, safe_name, mime_type, file_size
+    )
+    headers.update({
+        "X-Download-Type": "optimized-full",
+        "X-Memory-Efficient": "true"
+    })
     
-    headers = {
-        "Content-Disposition": f'attachment; filename="{safe_name}"',
-        "Content-Type": mime_type or "application/octet-stream",
-        "Cache-Control": "public, max-age=86400",
-        "X-Accel-Buffering": "no",
-        "X-Download-Type": "ultra-optimized-full",
-        "X-Buffer-Size": "32MB"
-    }
+    # Use optimized streaming based on file type
+    if is_encrypted:
+        print("� Using optimized encrypted file streaming")
+        stream_generator = streaming_handler.stream_encrypted_file_optimized(file_path)
+    else:
+        print("� Using optimized regular file streaming")
+        stream_generator = streaming_handler.stream_file_optimized(file_path, operation_type="file_streaming")
     
-    # Only add Content-Length for non-encrypted files to avoid mismatch
-    if not file_path.suffix == ".enc":
-        headers["Content-Length"] = str(final_file_size)
-    
-    print(f"📋 Response headers: {headers}")
+    print(f"📋 Optimized response headers: {headers}")
     
     return StreamingResponse(
-        stream_file_ultra_optimized(file_path),
+        stream_generator,
         media_type=mime_type or "application/octet-stream",
         headers=headers
     )
 
 async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, request: Request | None = None):
-    """High-performance chunked file download - for large files (≥250MB) that are not .enc"""
-    # 🚀 Much larger chunk size for faster downloads - 16MB chunks (16x improvement)
-    CHUNK_SIZE = 16 * 1024 * 1024  # 16MB chunks (was 1MB)
+    """OPTIMIZED: High-performance chunked file download using optimized streaming"""
+    print(f"� Starting optimized chunked download for: {safe_name}")
     
-    # Check for Range header (for proper chunked downloads)
+    # Parse Range header for partial content requests
     range_header = request.headers.get('Range') if request else None
     start = 0
     end = file_size - 1
     
     if range_header:
-        # Parse Range header: "bytes=start-end"
         try:
             range_match = range_header.replace('bytes=', '').split('-')
             if len(range_match) == 2:
@@ -954,42 +381,30 @@ async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str 
             pass  # Ignore invalid range headers
     
     content_length = end - start + 1
+    is_partial = bool(range_header)
     
-    def stream_chunks_optimized():
-        """Optimized streaming with larger buffers and better memory management"""
-        with open(file_path, "rb") as file:
-            file.seek(start)
-            remaining = content_length
-            
-            # 🚀 Use larger buffer reads for maximum speed
-            while remaining > 0:
-                # Dynamic chunk sizing - use full CHUNK_SIZE unless near end
-                chunk_size = min(CHUNK_SIZE, remaining)
-                chunk = file.read(chunk_size)
-                if not chunk:
-                    break
-                remaining -= len(chunk)
-                yield chunk
-
-    headers = {
-        "Content-Disposition": f'attachment; filename="{safe_name}"',
-        "Content-Length": str(content_length),
-        "Cache-Control": "public, max-age=86400",
-        "X-Accel-Buffering": "no",
-        "X-Download-Type": "high-performance-chunked",  # Updated indicator
-        "Accept-Ranges": "bytes",
-        "X-Chunk-Size": "16MB"  # Performance indicator
-    }
+    # Get optimized headers
+    headers = streaming_handler.get_optimal_headers(
+        file_path, safe_name, mime_type, file_size, 
+        is_partial=is_partial, start=start, end=end
+    )
+    headers.update({
+        "X-Download-Type": "optimized-chunked",
+        "X-Memory-Efficient": "true"
+    })
     
-    # Add Content-Range header for partial content
-    if range_header:
-        headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
-        status_code = 206  # Partial Content
-    else:
-        status_code = 200
-
+    # Determine status code
+    status_code = 206 if is_partial else 200
+    
+    # Use optimized streaming for the specified range
+    stream_generator = streaming_handler.stream_file_optimized(
+        file_path, start_pos=start, end_pos=end, operation_type="chunked_download"
+    )
+    
+    print(f"📋 Optimized chunked headers: {headers}")
+    
     return StreamingResponse(
-        stream_chunks_optimized(),
+        stream_generator,
         media_type=mime_type or "application/octet-stream",
         headers=headers,
         status_code=status_code
@@ -1030,20 +445,16 @@ async def download_all_files():
         zip_data = zip_buffer.getvalue()
         zip_buffer.close()
         
-        # Create a proper generator for streaming
-        def generate_zip():
-            chunk_size = 8192  # 8KB chunks
-            for i in range(0, len(zip_data), chunk_size):
-                chunk = zip_data[i:i + chunk_size]
-                if chunk:  # Only yield non-empty chunks
-                    yield chunk
+        # Create a proper generator for optimized streaming
+        stream_generator = streaming_handler.stream_zip_optimized(zip_data)
         
         return StreamingResponse(
-            generate_zip(),
+            stream_generator,
             media_type="application/zip",
             headers={
                 "Content-Disposition": "attachment; filename=all_files.zip",
-                "Content-Length": str(len(zip_data))
+                "Content-Length": str(len(zip_data)),
+                "X-Streaming-Optimized": "true"
             }
         )
         
@@ -1054,68 +465,93 @@ async def download_all_files():
             content={"error": f"Failed to create ZIP archive: {str(e)}"}
         )
 
+@router.get("/api/chunk-config", name="get_chunk_config")
+async def get_chunk_config():
+    """OPTIMIZED: Get simplified chunk configuration for frontend"""
+    try:
+        config = chunk_manager.get_frontend_config()
+        summary = chunk_manager.get_performance_summary()
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "config": config,
+                "summary": summary,
+                "optimization": "simplified_chunks_enabled"
+            }
+        )
+    except Exception as e:
+        print(f"❌ Error getting chunk config: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "msg": f"Failed to get chunk config: {str(e)}"}
+        )
+
 @router.post("/clear", name="clear_files")
 async def clear_files():
     """Clear all uploaded files and temporary chunks with enhanced Windows compatibility"""
-    from .windows_file_manager import WindowsFileManager
+    import gc
     
     try:
-        print("🧹 Starting enhanced file cleanup with Windows diagnostics...")
+        files_deleted = 0
+        chunks_deleted = 0
+        files_locked = 0
         
-        # Use enhanced cleanup with diagnostics
-        results = await WindowsFileManager.enhanced_cleanup_with_diagnostics(
-            upload_folder=UPLOAD_FOLDER,
-            temp_folder=TEMP_CHUNKS_FOLDER
-        )
+        # OPTIMIZED: Remove forced GC - let Python handle naturally
         
-        files_deleted = results['files_deleted']
-        chunks_deleted = results['chunks_deleted']
-        files_locked = results['files_locked']
-        locked_files = results['locked_files']
-        processes_using_files = results['processes_using_files']
+        # Clear main upload files with retry mechanism for Windows
+        for file in UPLOAD_FOLDER.iterdir():
+            if file.is_file():
+                deleted = False
+                for attempt in range(3):  # Try 3 times
+                    try:
+                        file.unlink()
+                        files_deleted += 1
+                        deleted = True
+                        break
+                    except PermissionError as e:
+                        if attempt < 2:  # Not the last attempt
+                            print(f"🔄 File locked (attempt {attempt + 1}/3): {file.name}")
+                            time.sleep(0.5)  # Wait 500ms before retry
+                            # OPTIMIZED: Removed excessive gc.collect() from retry loop
+                        else:
+                            files_locked += 1
+                            print(f"🔒 File still in use after 3 attempts: {file.name} - {e}")
+                    except Exception as e:
+                        print(f"❌ Error deleting file {file}: {e}")
+                        break
         
-        # Create detailed response
+        # Clear temporary chunks
+        if TEMP_CHUNKS_FOLDER.exists():
+            for chunk_file in TEMP_CHUNKS_FOLDER.iterdir():
+                if chunk_file.is_file():
+                    try:
+                        chunk_file.unlink()
+                        chunks_deleted += 1
+                    except Exception as e:
+                        print(f"Error deleting chunk {chunk_file}: {e}")
+        
+        # Enhanced status message
         if files_locked > 0:
-            # Provide helpful information about locked files
-            lock_details = []
-            for locked_file in locked_files:
-                detail = f"📄 {locked_file}"
-                # Find processes using this file
-                file_processes = [p for p in processes_using_files if locked_file in p.get('file_path', '')]
-                if file_processes:
-                    process_names = [p['name'] for p in file_processes]
-                    detail += f" (used by: {', '.join(set(process_names))})"
-                else:
-                    detail += " (likely being downloaded/streamed)"
-                lock_details.append(detail)
-            
-            message = f"Cleared {files_deleted} files and {chunks_deleted} chunks. {files_locked} files still in use:"
-            full_message = message + "\n" + "\n".join(lock_details)
-            
-            print(f"WARNING: {message}")
-            for detail in lock_details:
-                print(f"  {detail}")
-            
+            print(f"WARNING: Cleared {files_deleted} files and {chunks_deleted} chunks ({files_locked} files still in use)")
             return JSONResponse(content={
                 "status": "warning",
-                "msg": message,
+                "msg": f"Cleared {files_deleted} files and {chunks_deleted} chunks ({files_locked} files still in use)",
                 "files_deleted": files_deleted,
                 "chunks_deleted": chunks_deleted,
-                "files_locked": files_locked,
-                "locked_files": locked_files,
-                "lock_details": lock_details,
-                "tip": "Files that are being downloaded or streamed cannot be deleted until the download completes."
+                "files_locked": files_locked
             })
         else:
-            message = f"Cleared {files_deleted} files and {chunks_deleted} chunks"
-            print(f"✅ {message}")
+            print(f"OK: Cleared {files_deleted} files and {chunks_deleted} chunks")
             return JSONResponse(content={
                 "status": "success",
-                "msg": message,
+                "msg": f"Cleared {files_deleted} files and {chunks_deleted} chunks",
                 "files_deleted": files_deleted,
                 "chunks_deleted": chunks_deleted,
                 "files_locked": 0
             })
+        
     except Exception as e:
         print(f"❌ Error during file clearing: {e}")
         # Return a JSON error response instead of crashing
@@ -1159,57 +595,6 @@ async def delete_file(filename: str):
             status_code=500,
             content={"status": "error", "msg": f"Failed to delete file: {str(e)}"}
         )
-
-@router.get("/api/upload/chunk-size/{file_size}", name="get_optimal_chunk_size")
-async def get_optimal_chunk_size(file_size: int):
-    """Get optimal chunk size for a file upload based on system capabilities"""
-    from .android_optimizer import universal_optimizer
-    
-    try:
-        # Get adaptive chunk size
-        optimal_chunk_size = universal_optimizer.get_adaptive_chunk_size(file_size)
-        
-        # Get system info for client optimization
-        system_info = universal_optimizer.get_system_info()
-        
-        return JSONResponse({
-            "status": "success",
-            "optimal_chunk_size": optimal_chunk_size,
-            "chunk_size_kb": optimal_chunk_size // 1024,
-            "chunk_size_mb": round(optimal_chunk_size / (1024 * 1024), 2),
-            "system_info": {
-                "platform": system_info["platform"],
-                "available_memory_mb": system_info["available_memory_mb"],
-                "is_low_memory": system_info["is_low_memory"],
-                "cpu_usage": system_info["cpu_usage"]
-            },
-            "recommendations": {
-                "use_concurrent_uploads": file_size > 100 * 1024 * 1024,  # >100MB
-                "enable_progress_reporting": file_size > 50 * 1024 * 1024,  # >50MB
-                "estimated_chunks": max(1, file_size // optimal_chunk_size)
-            }
-        })
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "msg": f"Failed to calculate chunk size: {str(e)}"}
-        )
-
-# === CONCURRENT UPLOAD STATUS ===
-
-@router.get("/api/upload/status", name="upload_status")
-async def get_upload_status():
-    """Get current upload status for all concurrent uploads"""
-    from .concurrent_upload_manager import concurrent_upload_manager
-    
-    status = concurrent_upload_manager.get_system_status()
-    detailed_status = concurrent_upload_manager.get_upload_status()
-    
-    return JSONResponse({
-        "status": "success",
-        "system": status,
-        "uploads": detailed_status
-    })
 
 # === CHUNKED UPLOAD ENDPOINTS ===
 
@@ -1310,16 +695,6 @@ async def upload_chunk(
             # Log potential issue but allow overwrite (might be a retry)
             print(f"⚠️ Warning: Chunk {chunk_filename} already exists, overwriting (possible retry)")
         
-        # 🌊 Ensure streaming assembly is initialized and register file if this is the first chunk
-        ensure_streaming_initialized()
-        
-        if part_number == 1 and total_parts:
-            assembler = get_streaming_assembler()
-            if assembler:
-                final_path = UPLOAD_FOLDER / safe_filename
-                assembler.register_file(safe_filename, total_parts, final_path)
-                print(f"🌊 Registered {safe_filename} for streaming assembly")
-        
         # Save the chunk with error handling
         try:
             with open(chunk_path, "wb") as f:
@@ -1371,7 +746,7 @@ async def finalize_upload(
     total_parts: int = Form(...),
     encrypt: bool = Form(False)
 ):
-    """Combine all chunks into final file - supports streaming assembly with failsafe fallback"""
+    """Combine all chunks into final file - supports both HTTP and HTTPS with dynamic chunk detection"""
     try:
         # 🔐 Protocol detection  
         is_https = request.url.scheme == "https"
@@ -1394,186 +769,35 @@ async def finalize_upload(
                 }
             )
 
-        # 🌊 Check if streaming assembly is available and completed
-        ensure_streaming_initialized()
-        assembler = get_streaming_assembler()
-        streaming_completed = False
-        final_path = None
-        background_processing_done = False
-        validation_from_background = None
+        # 🚀 Auto-detect actual chunks (adaptive chunked upload support)
+        chunk_files = []
+        part_num = 1
+        while True:
+            chunk_path = TEMP_CHUNKS_FOLDER / f"{safe_filename}.part{part_num}"
+            if chunk_path.exists():
+                chunk_files.append((part_num, chunk_path))
+                part_num += 1
+            else:
+                break
         
-        # First, check if streaming-assembled file already exists
-        potential_streaming_file = UPLOAD_FOLDER / safe_filename
-        print(f"🔍 Checking for streaming file: {potential_streaming_file}")
-        print(f"🔍 File exists: {potential_streaming_file.exists()}")
-        
-        if potential_streaming_file.exists():
-            print(f"🌊 Found streaming-assembled file: {safe_filename}")
-            streaming_completed = True
-            final_path = potential_streaming_file
-            
-            # 🚀 Check if background processing was completed during streaming
-            if assembler:
-                status = assembler.get_file_status(safe_filename)
-                if status and status.get('validation_result'):
-                    validation_from_background = status['validation_result']
-                    background_processing_done = True
-                    print(f"⚡ Background processing completed during upload - no additional processing needed!")
-                    
-        elif assembler:
-            # Check streaming status if file doesn't exist yet
-            status = assembler.get_file_status(safe_filename)
-            print(f"🔍 Streaming status: {status}")
-            if status and status['completed'] and not status['error']:
-                streaming_completed = True
-                final_path = UPLOAD_FOLDER / safe_filename
-                
-                # Check for background processing results
-                if status.get('validation_result'):
-                    validation_from_background = status['validation_result']
-                    background_processing_done = True
-                    
-                print(f"✅ Streaming assembly completed for {safe_filename}")
-        
-        print(f"🔍 Streaming completed: {streaming_completed}")
-        print(f"🔍 Background processing done: {background_processing_done}")
-        print(f"🔍 Final path: {final_path}")
-        
-        # 🔄 Failsafe: Use traditional chunk combination if streaming didn't complete
-        if not streaming_completed:
-            print(f"🔄 Using traditional chunk assembly for {safe_filename}")
-            
-            # 🚀 Auto-detect actual chunks (adaptive chunked upload support)
-            chunk_files = []
-            part_num = 1
-            while True:
-                chunk_path = TEMP_CHUNKS_FOLDER / f"{safe_filename}.part{part_num}"
-                if chunk_path.exists():
-                    chunk_files.append((part_num, chunk_path))
-                    part_num += 1
-                else:
-                    break
-            
-            actual_chunks = len(chunk_files)
-            
-            # If no chunks found but streaming was expected, assume streaming completed successfully
-            if actual_chunks == 0 and assembler:
-                # Check if streaming file was created
-                potential_file = UPLOAD_FOLDER / safe_filename
-                if potential_file.exists():
-                    print(f"🌊 Found streaming-assembled file: {safe_filename}")
-                    streaming_completed = True
-                    final_path = potential_file
-                else:
-                    return JSONResponse(
-                        status_code=HTTP_400_BAD_REQUEST,
-                        content={"status": "error", "msg": "No chunks found and no streaming file exists"}
-                    )
-            
-            if not streaming_completed:
-                if actual_chunks == 0:
-                    return JSONResponse(
-                        status_code=HTTP_400_BAD_REQUEST,
-                        content={"status": "error", "msg": "No chunks found for this file"}
-                    )
-                
-                # Determine final filename
-                final_filename = safe_filename + ".enc" if encrypt else safe_filename
-                final_path = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, final_filename)
-                
-                # 🚀 Fast chunk combination with proper error handling
-                with open(final_path, "wb") as final_file:
-                    for part_num, chunk_path in chunk_files:
-                        if not chunk_path.exists():
-                            # Clean up partial chunks and final file
-                            if final_path.exists():
-                                final_path.unlink()
-                            for _, clean_chunk_path in chunk_files:
-                                if clean_chunk_path.exists():
-                                    clean_chunk_path.unlink()
-                            
-                            return JSONResponse(
-                                status_code=HTTP_400_BAD_REQUEST,
-                                content={"status": "error", "msg": f"Missing chunk {part_num}"}
-                            )
-                        
-                        # Read chunk data
-                        chunk_data = chunk_path.read_bytes()
-                        
-                        # Encrypt if requested with error handling
-                        if encrypt:
-                            try:
-                                # Use secure session-based encryption for temporary chunks
-                                chunk_data, session_key, session_iv = encrypt_session_data(chunk_data)
-                                # Note: For production use, you'd want to store session_key and session_iv securely
-                                # For now, this is just for demonstration - chunks are temporary
-                            except Exception as encrypt_error:
-                                print(f"🚨 AES encryption failed for chunk {part_num}: {encrypt_error}")
-                                # Clean up and return error
-                                if final_path.exists():
-                                    final_path.unlink()
-                                for _, clean_chunk_path in chunk_files:
-                                    if clean_chunk_path.exists():
-                                        clean_chunk_path.unlink()
-                                
-                                return JSONResponse(
-                                    status_code=HTTP_400_BAD_REQUEST,
-                                    content={"status": "error", "msg": f"AES encryption failed: {encrypt_error}"}
-                                )
-                        
-                        # Write to final file
-                        final_file.write(chunk_data)
-                
-                # Clean up temporary chunks using actual chunks found
-                for _, chunk_path in chunk_files:
-                    if chunk_path.exists():
-                        chunk_path.unlink()
-        
-        else:
-            # Streaming assembly completed - just verify the file exists
-            if not final_path or not final_path.exists():
-                return JSONResponse(
-                    status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-                    content={"status": "error", "msg": "Streaming assembly completed but file not found"}
-                )
-            
-            # Apply encryption if requested for streaming-assembled file
-            if encrypt:
-                try:
-                    # Read the streaming-assembled file
-                    file_data = final_path.read_bytes()
-                    
-                    # Encrypt the data
-                    encrypted_data, session_key, session_iv = encrypt_session_data(file_data)
-                    
-                    # Write back encrypted data
-                    final_path.write_bytes(encrypted_data)
-                    
-                    # Rename to .enc extension
-                    encrypted_path = final_path.parent / (final_path.name + ".enc")
-                    final_path.rename(encrypted_path)
-                    final_path = encrypted_path
-                    
-                except Exception as encrypt_error:
-                    print(f"🚨 AES encryption failed for streaming file: {encrypt_error}")
-                    if final_path.exists():
-                        final_path.unlink()
-                    
-                    return JSONResponse(
-                        status_code=HTTP_400_BAD_REQUEST,
-                        content={"status": "error", "msg": f"AES encryption failed: {encrypt_error}"}
-                    )
+        actual_chunks = len(chunk_files)
+        if actual_chunks == 0:
+            return JSONResponse(
+                status_code=HTTP_400_BAD_REQUEST,
+                content={"status": "error", "msg": "No chunks found for this file"}
+            )
 
         # Check if encryption is requested and validate using centralized config
         if encrypt:
-            # Get file size after processing
-            total_size = final_path.stat().st_size if final_path.exists() else 0
+            # Calculate total size by checking all actual chunks
+            total_size = sum(chunk_path.stat().st_size for _, chunk_path in chunk_files)
             
             validation = AESConfig.validate_file_for_aes(total_size, is_https)
             if not validation['valid']:
-                # Clean up file
-                if final_path.exists():
-                    final_path.unlink()
+                # Clean up chunks
+                for _, chunk_path in chunk_files:
+                    if chunk_path.exists():
+                        chunk_path.unlink()
                         
                 return JSONResponse(
                     status_code=HTTP_400_BAD_REQUEST,
@@ -1583,16 +807,62 @@ async def finalize_upload(
                     }
                 )
         
-        # 🛡️ ENHANCED SECURITY: Validate the assembled file (skip if already done in background)
+        # Determine final filename
+        final_filename = safe_filename + ".enc" if encrypt else safe_filename
+        final_path = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, final_filename)
+        
+        # 🚀 Fast chunk combination with proper error handling
+        with open(final_path, "wb") as final_file:
+            for part_num, chunk_path in chunk_files:
+                if not chunk_path.exists():
+                    # Clean up partial chunks and final file
+                    if final_path.exists():
+                        final_path.unlink()
+                    for _, clean_chunk_path in chunk_files:
+                        if clean_chunk_path.exists():
+                            clean_chunk_path.unlink()
+                    
+                    return JSONResponse(
+                        status_code=HTTP_400_BAD_REQUEST,
+                        content={"status": "error", "msg": f"Missing chunk {part_num}"}
+                    )
+                
+                # Read chunk data
+                chunk_data = chunk_path.read_bytes()
+                
+                # Encrypt if requested with error handling
+                if encrypt:
+                    try:
+                        # Use secure session-based encryption for temporary chunks
+                        chunk_data, session_key, session_iv = encrypt_session_data(chunk_data)
+                        # Note: For production use, you'd want to store session_key and session_iv securely
+                        # For now, this is just for demonstration - chunks are temporary
+                    except Exception as encrypt_error:
+                        print(f"🚨 AES encryption failed for chunk {part_num}: {encrypt_error}")
+                        # Clean up and return error
+                        if final_path.exists():
+                            final_path.unlink()
+                        for _, clean_chunk_path in chunk_files:
+                            if clean_chunk_path.exists():
+                                clean_chunk_path.unlink()
+                        
+                        return JSONResponse(
+                            status_code=HTTP_400_BAD_REQUEST,
+                            content={"status": "error", "msg": f"AES encryption failed: {encrypt_error}"}
+                        )
+                
+                # Write to final file
+                final_file.write(chunk_data)
+        
+        # Clean up temporary chunks using actual chunks found
+        for _, chunk_path in chunk_files:
+            if chunk_path.exists():
+                chunk_path.unlink()
+        
+        # 🛡️ ENHANCED SECURITY: Validate the assembled file before finalizing
         try:
-            if background_processing_done and validation_from_background:
-                # 🚀 Use validation results from background processing - massive time savings!
-                print(f"⚡ Using background validation results - skipping duplicate processing!")
-                security_check = validation_from_background
-            else:
-                # 🐌 Traditional validation (slower)
-                print(f"🔄 Performing security validation (no background processing available)")
-                security_check = FileValidator.validate_uploaded_file(final_path, filename)
+            # Perform comprehensive security validation on the assembled file
+            security_check = AdvancedFileValidator.validate_uploaded_file(final_path)
             
             if not security_check['valid']:
                 # File failed security validation - delete it immediately
@@ -1631,13 +901,8 @@ async def finalize_upload(
         # Add background scan task
         background_tasks.add_task(scan_file, final_path)
         
-        # Clean up streaming registration if applicable
-        if assembler and assembler.get_file_status(safe_filename):
-            assembler.unregister_file(safe_filename)
-        
         # Success response with security confirmation
-        assembly_method = "streaming assembly" if streaming_completed else "traditional chunk combination"
-        success_msg = f"File '{final_path.name}' uploaded successfully via {'HTTPS' if is_https else 'HTTP'} ({assembly_method})"
+        success_msg = f"File '{final_path.name}' uploaded successfully via {'HTTPS' if is_https else 'HTTP'} ({actual_chunks} chunks combined)"
         if security_check.get('warnings'):
             success_msg += f" ⚠️ Security Notes: {'; '.join(security_check['warnings'])}"
         
@@ -1645,8 +910,8 @@ async def finalize_upload(
             "status": "success",
             "msg": success_msg,
             "filename": final_path.name,
-            "streaming_assembly": streaming_completed,
-            "assembly_method": assembly_method,
+            "actual_chunks": actual_chunks,
+            "estimated_chunks": total_parts,
             "protocol": "HTTPS" if is_https else "HTTP",
             "security_validated": True
         })
@@ -1854,11 +1119,6 @@ async def generate_offline_qr(text: str, size: int = 200):
 # === FULL PAGE CLIPBOARD ROUTE ===
 @router.get("/clipboard", response_class=HTMLResponse, name="clipboard_page")
 async def clipboard_page(request: Request):
-    # 🔀 HTTPS Fallback System: Auto-redirect HTTP to HTTPS when server runs in HTTPS mode
-    redirect_response = https_redirect_if_needed(request)
-    if redirect_response:
-        return redirect_response
-    
     files = get_file_list()  # Include files for seamless switching
     
     # Render the same template, but with clipboard as default view
@@ -2157,7 +1417,9 @@ async def upload_from_clipboard(
                 original_hash = hashlib.sha256(file_data).hexdigest()
                 
                 # Encrypt the data
-                encrypted_data, metadata = encrypt_file_stream(file_data, chunk_size=1024 * 1024)
+                # Use optimized chunk size for encryption
+                chunk_size = chunk_manager.get_chunk_size('encryption')  # OPTIMIZED: Fixed chunk size
+                encrypted_data, metadata = encrypt_file_stream(file_data, chunk_size=chunk_size)
                 
                 # Enhanced metadata
                 metadata['original_hash'] = original_hash

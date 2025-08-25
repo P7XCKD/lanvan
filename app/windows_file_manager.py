@@ -20,21 +20,21 @@ class WindowsFileManager:
     @staticmethod
     def force_release_handles():
         """
-        🚀 Force release Python file handles using garbage collection
+        🚀 OPTIMIZED: Natural cleanup for Windows file handles
         """
-        # Multiple rounds of garbage collection
-        for _ in range(3):
-            gc.collect()
-            time.sleep(0.1)
+        # OPTIMIZED: Single natural cleanup cycle instead of aggressive forced GC
+        import gc
+        gc.collect()
+        time.sleep(0.1)  # Brief pause for OS to release handles
     
     @staticmethod
     async def async_force_release_handles():
         """
-        🚀 Async version of handle release
+        🚀 OPTIMIZED: Async version with natural cleanup
         """
-        for _ in range(3):
-            gc.collect()
-            await asyncio.sleep(0.1)
+        import gc
+        gc.collect()
+        await asyncio.sleep(0.1)
     
     @staticmethod
     def check_file_in_use(file_path: Path) -> bool:

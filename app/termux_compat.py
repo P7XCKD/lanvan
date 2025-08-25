@@ -2,49 +2,31 @@
 """
 🚀 Termux Compatibility Layer for LANVan
 Ensures all adaptive systems work seamlessly on Android/Termux while preserving full functionality on other platforms.
+
+OPTIMIZED: Now uses cached platform detection for improved performance.
 """
 
 import os
 import sys
 import time
-import gc
 from typing import Any, Dict, Optional, Callable, Union
+
+# OPTIMIZED: Use cached platform detection
+from .platform_detector import platform_detector
 
 
 def is_termux_environment() -> bool:
     """
-    🔍 Reliable Termux environment detection
+    🔍 OPTIMIZED: Cached Termux environment detection
     """
-    # Check for Termux-specific environment variables and paths
-    is_termux = any([
-        "TERMUX_VERSION" in os.environ,
-        "ANDROID_STORAGE" in os.environ,
-        os.path.exists("/data/data/com.termux"),
-        os.path.exists("/system/bin/termux-setup-storage"),
-        "com.termux" in os.environ.get("PREFIX", ""),
-        "/data/data/com.termux" in sys.executable
-    ])
-    
-    # Only log once per session
-    if is_termux and not hasattr(is_termux_environment, '_logged'):
-        print("🤖 Termux environment detected - using safe compatibility mode")
-        is_termux_environment._logged = True
-    
-    return is_termux
+    return platform_detector.is_termux_environment()
 
 
 def is_android_environment() -> bool:
     """
-    🤖 Detect Android environment (broader than just Termux)
+    🤖 OPTIMIZED: Cached Android environment detection
     """
-    return any([
-        is_termux_environment(),
-        "ANDROID_STORAGE" in os.environ,
-        "ANDROID_ROOT" in os.environ,
-        os.path.exists("/system/build.prop"),
-        os.path.exists("/android_asset"),
-        "android" in sys.platform.lower()
-    ])
+    return platform_detector.is_android_environment()
 
 
 def safe_psutil_call(
@@ -65,8 +47,8 @@ def safe_psutil_call(
     Returns:
         Function result or appropriate fallback value
     """
-    # Use Termux-specific fallback if available and we're in Termux
-    if is_termux_environment() and termux_fallback is not None:
+    # OPTIMIZED: Use cached platform detection
+    if platform_detector.is_termux_environment() and termux_fallback is not None:
         # Silent fallback - only log once per session if needed
         return termux_fallback
     
@@ -93,63 +75,39 @@ def safe_psutil_call(
 
 def get_termux_system_info() -> Dict[str, Any]:
     """
-    📱 Get system information using Termux-safe methods
+    📱 OPTIMIZED: Get system information using cached platform detection
     """
-    info = {
-        'platform': 'android-termux',
-        'available_memory_mb': 1024,  # Conservative fallback
+    # Use cached platform information
+    platform_info = platform_detector.get_platform_info()
+    
+    return {
+        'platform': platform_info.platform_type.value,
+        'available_memory_mb': 2048 if platform_info.is_termux else 4096,
         'cpu_usage': 50.0,  # Neutral fallback
         'memory_usage': 60.0,  # Conservative fallback
-        'cpu_count': 4,  # Reasonable fallback
-        'termux_optimized': True
+        'cpu_count': platform_info.cpu_count,
+        'termux_optimized': platform_info.is_termux,
+        'recommended_chunk_size': platform_info.recommended_chunk_size,
+        'recommended_workers': platform_info.recommended_workers
     }
-    
-    try:
-        # Try to get CPU count from os (should work on Termux)
-        info['cpu_count'] = os.cpu_count() or 4
-    except:
-        pass
-    
-    try:
-        # Try alternative memory detection methods for Android
-        # Method 1: Check /proc/version for Android kernel info
-        if os.path.exists('/proc/version'):
-            with open('/proc/version', 'r') as f:
-                version_info = f.read().lower()
-                if 'android' in version_info:
-                    # Android detected, use conservative memory estimate
-                    info['available_memory_mb'] = 1536  # Slightly higher for confirmed Android
-    except:
-        pass
-    
-    try:
-        # Method 2: Check termux-info if available
-        import subprocess
-        result = subprocess.run(['termux-info'], 
-                              capture_output=True, text=True, timeout=2)
-        if result.returncode == 0:
-            # Parse termux-info output for better estimates
-            info_output = result.stdout.lower()
-            if 'android' in info_output:
-                info['available_memory_mb'] = 2048  # Higher estimate with termux-info
-    except:
-        pass
-    
-    return info
 
 
 def get_safe_cpu_usage() -> float:
     """
-    🏃 Get CPU usage with Termux-safe fallback
+    🏃 OPTIMIZED: Get CPU usage with cached platform detection
     """
     def cpu_func():
         import psutil
         return psutil.cpu_percent(interval=0.1)
     
+    # Use cached platform information for fallback values
+    platform_info = platform_detector.get_platform_info()
+    termux_fallback = 40.0 if platform_info.is_termux else 30.0
+    
     return safe_psutil_call(
         cpu_func, 
         default_value=50.0,  # Neutral CPU usage
-        termux_fallback=40.0  # Assume lighter load on mobile
+        termux_fallback=termux_fallback
     )
 
 
@@ -203,8 +161,7 @@ def optimize_for_termux():
         except:
             pass  # Non-critical
         
-        # Gentle memory cleanup
-        gc.collect()
+        # OPTIMIZED: Natural cleanup instead of forced GC
         
         return True
         
@@ -230,12 +187,13 @@ def get_termux_chunk_size(file_size: int) -> int:
 
 def should_use_lightweight_mode() -> bool:
     """
-    🪶 Determine if we should use lightweight mode
+    🪶 OPTIMIZED: Determine if we should use lightweight mode using cached detection
     """
-    return is_termux_environment() or is_android_environment()
+    return platform_detector.is_termux_environment() or platform_detector.is_android_environment()
 
 
-# Initialize Termux optimizations if we're in Termux
-if is_termux_environment():
+# OPTIMIZED: Initialize platform detection (cached, runs once)
+platform_info = platform_detector.get_platform_info()
+if platform_info.is_termux:
     print("🤖 Termux environment detected - initializing compatibility layer")
     optimize_for_termux()
