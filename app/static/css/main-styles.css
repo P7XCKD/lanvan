@@ -13,6 +13,445 @@ body {
   user-select: none;
 }
 
+/* Toggle Switch and Dark Mode Styles */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 30px;
+  margin-left: 1rem;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0;
+  right: 0; bottom: 0;
+  background-color: #222;
+  transition: 0.4s;
+  border-radius: 30px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 22px;
+  width: 22px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+.toggle-switch input:checked + .slider {
+  background-color: #4caf50;
+}
+
+.toggle-switch input:checked + .slider:before {
+  transform: translateX(30px);
+}
+
+/* Dark Mode Toggle Styling */
+.dark-mode-slider {
+  background-color: #2196F3 !important; /* Blue background when off */
+}
+
+.toggle-switch input:checked + .dark-mode-slider {
+  background-color: #1a1a1a !important; /* Dark background when on */
+}
+
+/* Dark Mode CSS Variables */
+:root {
+  --bg-color: #f2f3f7;
+  --text-color: #333;
+  --section-bg: #fff;
+  --header-bg: #ffffff;
+  --border-color: rgba(0, 0, 0, 0.05);
+  --toggle-bg: #f0f0f0;
+  --toggle-text: #333;
+  --protocol-bg: #e8f4fd;
+  --protocol-text: #2c3e50;
+  --settings-bg: #6c757d;
+  --file-item-bg: #fff;
+  --file-item-border: #ddd;
+  --button-bg: #007bff;
+  --button-hover-bg: #0056b3;
+  --input-bg: #fff;
+  --input-border: #ddd;
+  --mdns-green: #22c55e;
+}
+
+html[data-theme="dark"] {
+  --bg-color: #1a1a1a;
+  --text-color: #f0f0f0;
+  --section-bg: #2a2a2a;
+  --header-bg: #2a2a2a;
+  --border-color: rgba(255, 255, 255, 0.15);
+  --toggle-bg: #404040;
+  --toggle-text: #f0f0f0;
+  --protocol-bg: #1e3a8a;
+  --protocol-text: #93c5fd;
+  --settings-bg: #4a5568;
+  --file-item-bg: #353535;
+  --file-item-border: #555;
+  --button-bg: #0d6efd;
+  --button-hover-bg: #0b5ed7;
+  --input-bg: #353535;
+  --input-border: #555;
+  --mdns-green: #22c55e;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+section {
+  background-color: var(--section-bg);
+  box-shadow: 0 2px 8px var(--border-color);
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+header {
+  background-color: var(--header-bg) !important;
+  transition: background-color 0.3s ease;
+}
+
+/* Fix title visibility in dark mode */
+[data-theme="dark"] h1 {
+  color: var(--text-color) !important;
+}
+
+[data-theme="dark"] h2 {
+  color: var(--text-color) !important;
+}
+
+[data-theme="dark"] h3 {
+  color: var(--text-color) !important;
+}
+
+/* Fix all section headings and text */
+[data-theme="dark"] section h2,
+[data-theme="dark"] section h3,
+[data-theme="dark"] section p,
+[data-theme="dark"] section span,
+[data-theme="dark"] section div {
+  color: var(--text-color) !important;
+}
+
+/* Dark mode file item styling */
+[data-theme="dark"] .file-item {
+  background-color: var(--file-item-bg) !important;
+  border-color: var(--file-item-border) !important;
+  color: var(--text-color) !important;
+}
+
+/* Dark mode styling for download-btn class to ensure proper text color */
+[data-theme="dark"] .download-btn {
+  color: white !important;
+}
+
+/* Only apply blue background to download-btn elements without inline background styles */
+[data-theme="dark"] .download-btn:not([style*="background"]) {
+  background-color: #4a90e2 !important;
+}
+
+[data-theme="dark"] button:hover {
+  background-color: var(--button-hover-bg) !important;
+}
+
+/* Dark mode input styling */
+[data-theme="dark"] input[type="text"], 
+[data-theme="dark"] input[type="file"],
+[data-theme="dark"] textarea {
+  background-color: var(--input-bg) !important;
+  border-color: var(--input-border) !important;
+  color: var(--text-color) !important;
+}
+
+/* Dark mode dropdown and modal styling */
+[data-theme="dark"] .dropdown-menu,
+[data-theme="dark"] .modal-content {
+  background-color: var(--section-bg) !important;
+  color: var(--text-color) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Dark mode toast styling */
+[data-theme="dark"] #toast {
+  background-color: var(--section-bg) !important;
+  color: var(--text-color) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Dark mode toggle container styling */
+[data-theme="dark"] .toggle-container {
+  background-color: var(--toggle-bg);
+}
+
+[data-theme="dark"] .toggle-container span {
+  color: var(--toggle-text) !important;
+}
+
+/* Fix white background patches in dark mode */
+[data-theme="dark"] * {
+  background-color: inherit;
+}
+
+[data-theme="dark"] body,
+[data-theme="dark"] html {
+  background-color: var(--bg-color) !important;
+}
+
+/* Force dark backgrounds on all containers */
+[data-theme="dark"] div,
+[data-theme="dark"] section,
+[data-theme="dark"] main,
+[data-theme="dark"] article {
+  background-color: var(--section-bg) !important;
+}
+
+/* Ensure drop zones and upload areas are dark */
+[data-theme="dark"] #drop-zone,
+[data-theme="dark"] .upload-section,
+[data-theme="dark"] .file-preview {
+  background-color: var(--section-bg) !important;
+  color: var(--text-color) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Fix file list and available files section */
+[data-theme="dark"] .file-list,
+[data-theme="dark"] .available-files,
+[data-theme="dark"] .file-manager {
+  background-color: var(--section-bg) !important;
+  color: var(--text-color) !important;
+}
+
+/* Fix progress bars and status elements */
+[data-theme="dark"] .progress,
+[data-theme="dark"] .progress-bar,
+[data-theme="dark"] .status-text {
+  background-color: var(--input-bg) !important;
+  color: var(--text-color) !important;
+}
+
+/* Fix any remaining white backgrounds */
+[data-theme="dark"] .white-bg,
+[data-theme="dark"] .bg-white,
+[data-theme="dark"] [style*="background-color: white"],
+[data-theme="dark"] [style*="background-color: #fff"],
+[data-theme="dark"] [style*="background-color: #ffffff"],
+[data-theme="dark"] [style*="background: #fff"],
+[data-theme="dark"] [style*="background: #f8f9fa"] {
+  background-color: var(--section-bg) !important;
+  color: var(--text-color) !important;
+}
+
+/* Fix specific clipboard sections */
+[data-theme="dark"] div[style*="background: #f8f9fa"],
+[data-theme="dark"] div[style*="background: #fff"] {
+  background: var(--input-bg) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Force all text elements to use theme colors */
+[data-theme="dark"] label,
+[data-theme="dark"] span:not(.slider):not(.toggle-text),
+[data-theme="dark"] p,
+[data-theme="dark"] div {
+  color: var(--text-color) !important;
+}
+
+/* Specific fix for file names and clipboard items */
+[data-theme="dark"] .file-name,
+[data-theme="dark"] .upload-file-name,
+[data-theme="dark"] .file-card,
+[data-theme="dark"] .clipboard-item {
+  color: var(--text-color) !important;
+  background-color: var(--section-bg) !important;
+}
+
+/* Fix timestamp and metadata text */
+[data-theme="dark"] [style*="color: #999"],
+[data-theme="dark"] [style*="color: #666"],
+[data-theme="dark"] [style*="color: #333"] {
+  color: var(--text-color) !important;
+}
+
+/* Fix small text and secondary info */
+[data-theme="dark"] small,
+[data-theme="dark"] .text-muted,
+[data-theme="dark"] .secondary-text {
+  color: #ccc !important;
+}
+
+/* QR Code Loading Animation */
+@keyframes qr-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Smooth QR code reveal animation */
+.qr-reveal {
+  animation: qr-fade-in 0.5s ease-in-out;
+}
+
+@keyframes qr-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Device Logs Modal Text Override - Theme Aware */
+#deviceLogsModal {
+  color: var(--text-color);
+}
+
+/* Modal content theme aware */
+#deviceLogsModal * {
+  color: var(--text-color) !important;
+}
+
+#deviceLogsModal button {
+  color: white !important;
+}
+
+#deviceLogsModal .pagination-button {
+  color: var(--text-color) !important;
+  background: var(--section-bg) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Dark mode specific overrides for Device Logs Modal */
+html[data-theme="dark"] #deviceLogsModal {
+  background: rgba(0, 0, 0, 0.8) !important;
+}
+
+html[data-theme="dark"] #deviceLogsModal .modal-content {
+  background: var(--section-bg) !important;
+  border-color: var(--border-color) !important;
+}
+
+html[data-theme="dark"] #deviceLogsModal .pagination-button:hover {
+  background: var(--input-bg) !important;
+}
+
+#deviceLogsModal h3, #deviceLogsModal h4 {
+  color: #333 !important;
+}
+
+/* Force device logs content text color for light mode */
+#deviceLogsContent, #deviceLogsContent * {
+  color: var(--text-color) !important;
+}
+
+#deviceLogsContent div, #deviceLogsContent span {
+  color: var(--text-color) !important;
+}
+
+#deviceLogsStats, #deviceLogsStats * {
+  color: var(--text-color) !important;
+  opacity: 0.8;
+}
+
+/* Dark mode overrides for Device Logs Modal */
+[data-theme="dark"] #deviceLogsModal * {
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] #deviceLogsModal button {
+  color: white !important;
+}
+
+[data-theme="dark"] #deviceLogsModal .pagination-button {
+  color: #e0e0e0 !important;
+  background-color: var(--section-bg) !important;
+}
+
+[data-theme="dark"] #deviceLogsModal h3, 
+[data-theme="dark"] #deviceLogsModal h4 {
+  color: #e0e0e0 !important;
+}
+
+/* Force device logs content text color for dark mode */
+[data-theme="dark"] #deviceLogsContent, 
+[data-theme="dark"] #deviceLogsContent * {
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] #deviceLogsContent div, 
+[data-theme="dark"] #deviceLogsContent span {
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] #deviceLogsStats, 
+[data-theme="dark"] #deviceLogsStats * {
+  color: #ccc !important;
+}
+
+/* Modal background for dark mode */
+[data-theme="dark"] #deviceLogsModal > div {
+  background: var(--section-bg) !important;
+  color: var(--text-color) !important;
+}
+
+/* Enhanced Dropdown Styling */
+[id*="switchDropdown"] {
+  background: var(--section-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+[id*="switchDropdown"] > div {
+  color: var(--text-color) !important;
+}
+
+[id*="switchDropdown"] > div:hover {
+  background-color: var(--input-bg) !important;
+}
+
+[id*="switchDropdown"] span {
+  color: var(--text-color) !important;
+}
+
+/* Settings dropdown styling */
+#settingsMenu {
+  background: var(--section-bg) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+#settingsMenu button {
+  background: var(--section-bg) !important;
+  color: var(--text-color) !important;
+}
+
+#settingsMenu button:hover {
+  background: var(--input-bg) !important;
+}
+
+/* Dark mode specific dropdown improvements */
+html[data-theme="dark"] [id*="switchDropdown"] {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+html[data-theme="dark"] #settingsMenu {
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
+}
+
 /* Make text selectable where needed */
 input, textarea, .file-name, p {
   -webkit-user-select: text;
