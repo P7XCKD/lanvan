@@ -351,6 +351,7 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
             async with aiofiles.open(temp_destination, 'wb') as f:
                 bytes_written = 0
                 hash_calculator = hashlib.sha256()
+                processed_chunks = 0  # Initialize chunk counter
                 
                 while True:
                     # Read chunk asynchronously
@@ -364,10 +365,10 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                     
                     bytes_written += len(chunk)
                     hash_calculator.update(chunk)
+                    processed_chunks += 1
                     
                     # Yield control every 5 chunks to prevent blocking - OPTIMIZED: Less frequent yielding
-                    chunk_count = processed_chunks if 'processed_chunks' in locals() else 0
-                    if chunk_count % 5 == 0:
+                    if processed_chunks % 5 == 0:
                         await asyncio.sleep(0.01)  # OPTIMIZED: 10ms instead of 1ms
                     
                     # Progress for large files (reduce spam)
@@ -375,9 +376,8 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                         print(f"📦 Progress: {bytes_written // 1024 // 1024}MB")
                         
                         # OPTIMIZED: Strategic memory management - only GC for very large files
-                        from .universal_optimizer import universal_optimizer
-                        if is_android and universal_optimizer.should_run_gc(bytes_written // (10 * 1024 * 1024)):
-                            gc.collect()
+                        if should_run_gc():
+                            universal_optimizer.memory_cleanup(force=False)
                             await asyncio.sleep(0.01)  # Brief pause for GC
                 
                 print(f"✅ Upload to temp file completed: {temp_destination.name} ({bytes_written:,} bytes)")
@@ -618,10 +618,10 @@ async def api_files():
 async def platform_status():
     """API endpoint to get universal platform optimization status"""
     try:
-        from .universal_optimizer import universal_optimizer
+        from .android_optimizer import UniversalOptimizer
         
-        info = universal_optimizer.get_platform_info()
-        info['optimizations_active'] = universal_optimizer.keep_alive_active
+        optimizer = UniversalOptimizer()
+        info = optimizer.get_platform_info()
         
         return JSONResponse(content={
             "status": "success",
@@ -771,9 +771,67 @@ async def upload_auto_file(
             "msg": "No valid files to process"
         })
     
-    # 🚀 Execute concurrent uploads with adaptive optimization
-    print(f"🚀 Starting concurrent upload of {len(valid_files)} files...")
-    upload_results = await upload_multiple_files_concurrent(valid_files, destinations, encrypt)
+    # 🚀 Execute direct uploads with proper file handling
+    print(f"🚀 Starting direct upload of {len(valid_files)} files...")
+    
+    upload_results = []
+    
+    # Process each file directly
+    for i, file in enumerate(valid_files):
+        try:
+            # Get the prepared destination and info
+            destination = destinations[i]
+            info = file_info[i]
+            
+            print(f"📤 Processing file {i+1}/{len(valid_files)}: {info['original_name']}")
+            
+            # Read file content
+            content = await file.read()
+            await file.seek(0)  # Reset file pointer for any subsequent operations
+            
+            # Write file to destination first
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with open(destination, 'wb') as f:
+                f.write(content)
+            
+            # Handle encryption if needed (encrypt in place)
+            if encrypt:
+                try:
+                    from .http_safe_aes import encrypt_file_http_safe
+                    encrypted_path, metadata = encrypt_file_http_safe(str(destination), info['original_name'])
+                    print(f"🔐 File {i+1} encrypted successfully")
+                    # Update destination to the encrypted file
+                    destination = Path(encrypted_path)
+                except Exception as e:
+                    print(f"❌ Encryption failed for file {i+1}: {e}")
+                    # Clean up original file if encryption failed
+                    if destination.exists():
+                        destination.unlink()
+                    upload_results.append({
+                        'success': False,
+                        'error': f"Encryption failed: {str(e)}",
+                        'filename': info['original_name']
+                    })
+                    continue
+            
+            # Add to results
+            upload_results.append({
+                'success': True,
+                'destination': str(destination),
+                'filename': info['original_name']
+            })
+            
+            print(f"✅ File {i+1} uploaded successfully: {destination.name}")
+            
+        except Exception as e:
+            print(f"❌ File {i+1} upload failed: {str(e)}")
+            upload_results.append({
+                'success': False,
+                'error': str(e),
+                'filename': file.filename or f"file_{i+1}"
+            })
+    
+    uploaded = []
     
     # Process results and add background tasks
     for i, result in enumerate(upload_results):
@@ -1380,7 +1438,9 @@ async def upload_chunk(
             assembler = get_streaming_assembler()
             if assembler:
                 final_path = UPLOAD_FOLDER / safe_filename
-                assembler.register_file(safe_filename, total_parts, final_path)
+                # Estimate total size as chunk size * total parts (approximation)
+                estimated_size = len(chunk_data) * total_parts
+                assembler.register_file(safe_filename, total_parts, filename, estimated_size)
                 print(f"🌊 Registered {safe_filename} for streaming assembly")
         
         # Save the chunk with error handling
@@ -1477,7 +1537,7 @@ async def finalize_upload(
             
             # 🚀 Check if background processing was completed during streaming
             if assembler:
-                status = assembler.get_file_status(safe_filename)
+                status = assembler.check_status(safe_filename)
                 if status and status.get('validation_result'):
                     validation_from_background = status['validation_result']
                     background_processing_done = True
@@ -1485,9 +1545,9 @@ async def finalize_upload(
                     
         elif assembler:
             # Check streaming status if file doesn't exist yet
-            status = assembler.get_file_status(safe_filename)
+            status = assembler.check_status(safe_filename)
             print(f"🔍 Streaming status: {status}")
-            if status and status['completed'] and not status['error']:
+            if status and status.get('status') == 'ready':
                 streaming_completed = True
                 final_path = UPLOAD_FOLDER / safe_filename
                 
@@ -1628,9 +1688,9 @@ async def finalize_upload(
                     )
 
         # Check if encryption is requested and validate using centralized config
-        if encrypt:
+        if encrypt and final_path and final_path.exists():
             # Get file size after processing
-            total_size = final_path.stat().st_size if final_path.exists() else 0
+            total_size = final_path.stat().st_size
             
             validation = AESConfig.validate_file_for_aes(total_size, is_https)
             if not validation['valid']:
@@ -1652,24 +1712,32 @@ async def finalize_upload(
                 # 🚀 Use validation results from background processing - massive time savings!
                 print(f"⚡ Using background validation results - skipping duplicate processing!")
                 security_check = validation_from_background
-            else:
+            elif final_path:
                 # 🐌 Traditional validation (slower)
                 print(f"🔄 Performing security validation (no background processing available)")
                 security_check = FileValidator.validate_uploaded_file(final_path, filename)
+            else:
+                # No final_path available
+                security_check = {'valid': False, 'errors': ['File path not available']}
             
-            if not security_check['valid']:
+            # Handle case where security_check might be a string (error message)
+            if isinstance(security_check, str):
+                security_check = {'valid': False, 'errors': [security_check]}
+                
+            if not security_check.get('valid', False):
                 # File failed security validation - delete it immediately
-                if final_path.exists():
+                if final_path and final_path.exists():
                     final_path.unlink()
                     
+                errors = security_check.get('errors', ['Security validation failed'])
                 return JSONResponse(
                     status_code=HTTP_403_FORBIDDEN,
                     content={
                         "status": "security_blocked",
-                        "msg": f"🛡️ Security Check Failed: {security_check['error']}",
+                        "msg": f"🛡️ Security Check Failed: {errors[0] if errors else 'Unknown error'}",
                         "security_details": {
-                            "blocked_reason": security_check.get('error', 'Unknown security violation'),
-                            "detected_type": security_check.get('detected_type'),
+                            "blocked_reason": errors[0] if errors else 'Unknown security violation',
+                            "detected_type": security_check.get('actual_type'),
                             "claimed_extension": security_check.get('claimed_extension'),
                             "file_deleted": True
                         }
@@ -1677,9 +1745,9 @@ async def finalize_upload(
                 )
                 
         except Exception as validation_error:
-            print(f"⚠️ Security validation error for {final_path.name}: {validation_error}")
+            print(f"⚠️ Security validation error for {final_path.name if final_path else 'unknown file'}: {validation_error}")
             # If validation fails, delete the file as a precaution
-            if final_path.exists():
+            if final_path and final_path.exists():
                 final_path.unlink()
                 
             return JSONResponse(
@@ -1692,22 +1760,32 @@ async def finalize_upload(
             )
         
         # Add background scan task
-        background_tasks.add_task(scan_file, final_path)
+        if final_path:
+            background_tasks.add_task(scan_file, final_path)
         
         # Clean up streaming registration if applicable
-        if assembler and assembler.get_file_status(safe_filename):
-            assembler.unregister_file(safe_filename)
+        if assembler:
+            try:
+                status = assembler.check_status(safe_filename)
+                if status.get("status") != "not_found":
+                    assembler.cleanup(safe_filename)
+            except AttributeError:
+                # Assembler doesn't have these methods, skip cleanup
+                pass
         
         # Success response with security confirmation
         assembly_method = "streaming assembly" if streaming_completed else "traditional chunk combination"
-        success_msg = f"File '{final_path.name}' uploaded successfully via {'HTTPS' if is_https else 'HTTP'} ({assembly_method})"
-        if security_check.get('warnings'):
-            success_msg += f" ⚠️ Security Notes: {'; '.join(security_check['warnings'])}"
+        success_msg = f"File '{final_path.name if final_path else 'unknown'}' uploaded successfully via {'HTTPS' if is_https else 'HTTP'} ({assembly_method})"
+        
+        # Handle warnings safely
+        warnings = security_check.get('warnings', []) if isinstance(security_check, dict) else []
+        if warnings:
+            success_msg += f" ⚠️ Security Notes: {'; '.join(warnings)}"
         
         return JSONResponse(content={
             "status": "success",
             "msg": success_msg,
-            "filename": final_path.name,
+            "filename": final_path.name if final_path else "unknown",
             "streaming_assembly": streaming_completed,
             "assembly_method": assembly_method,
             "protocol": "HTTPS" if is_https else "HTTP",
