@@ -45,40 +45,63 @@ class AdvancedFileValidator:
         # Documents (safe)
         '.txt', '.pdf', '.doc', '.docx', '.rtf', '.odt', '.ods', '.odp',
         '.pages', '.numbers', '.key', '.epub', '.mobi',
-        # Images
+        # Images (comprehensive)
         '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp', '.tiff', '.tif',
         '.ico', '.raw', '.cr2', '.nef', '.arw', '.dng', '.psd', '.ai', '.eps',
-        # Audio
+        '.heic', '.heif', '.avif', '.jxl', '.jp2', '.j2k', '.jpx', '.jpm',
+        # Audio (comprehensive)
         '.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma', '.aiff',
-        '.opus', '.amr', '.ac3', '.dts',
-        # Video
+        '.opus', '.amr', '.ac3', '.dts', '.ape', '.mpc', '.ra', '.au',
+        '.snd', '.mid', '.midi', '.kar', '.rmi',
+        # Video (comprehensive - all common formats)
         '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v',
         '.mpg', '.mpeg', '.3gp', '.3g2', '.asf', '.vob', '.ts', '.mts',
+        '.m2ts', '.mxf', '.rm', '.rmvb', '.divx', '.xvid', '.f4v', '.m2v',
+        '.ogv', '.dv', '.amv', '.mp2', '.mpe', '.mpv', '.m4p', '.m4b',
         # Archives (content will be scanned)
         '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.lzma',
-        '.cab', '.iso', '.dmg', '.sit', '.sitx',
+        '.cab', '.iso', '.dmg', '.sit', '.sitx', '.ace', '.arj', '.lha',
+        '.lzh', '.zoo', '.arc', '.pak', '.pk3', '.pk4', '.war', '.ear',
         # Spreadsheets (safe versions)
-        '.xls', '.xlsx', '.csv', '.tsv', '.ods',
+        '.xls', '.xlsx', '.csv', '.tsv', '.ods', '.xlr', '.xlw',
         # Presentations (safe versions)
-        '.ppt', '.pptx', '.odp', '.key',
+        '.ppt', '.pptx', '.odp', '.key', '.pps', '.ppsx',
         # Code/Text (source code, not executable)
         '.py', '.java', '.cpp', '.c', '.h', '.cs', '.php', '.rb', '.go',
         '.rust', '.swift', '.kt', '.scala', '.r', '.m', '.pl', '.sh',
         '.html', '.htm', '.css', '.js', '.json', '.xml', '.yaml', '.yml',
         '.md', '.rst', '.tex', '.log', '.conf', '.cfg', '.ini', '.toml',
+        '.vue', '.jsx', '.tsx', '.ts', '.sass', '.scss', '.less', '.styl',
+        '.coffee', '.dart', '.elm', '.clj', '.cljs', '.erl', '.ex', '.exs',
+        '.f90', '.f95', '.for', '.pas', '.pp', '.asm', '.s', '.vhdl', '.v',
         # Data files
         '.sql', '.db', '.sqlite', '.sqlite3', '.json', '.xml', '.csv',
-        '.geojson', '.kml', '.gpx',
+        '.geojson', '.kml', '.gpx', '.gpkg', '.shp', '.dbf', '.prj',
         # Fonts
-        '.ttf', '.otf', '.woff', '.woff2', '.eot',
+        '.ttf', '.otf', '.woff', '.woff2', '.eot', '.pfb', '.pfm',
         # 3D/CAD
         '.obj', '.fbx', '.dae', '.3ds', '.blend', '.max', '.dwg', '.dxf',
+        '.step', '.stp', '.iges', '.igs', '.stl', '.ply', '.x3d', '.collada',
         # eBooks
-        '.epub', '.mobi', '.azw', '.azw3', '.fb2',
+        '.epub', '.mobi', '.azw', '.azw3', '.fb2', '.lit', '.pdb', '.prc',
+        # Virtual disk/system files (safe)
+        '.vdi', '.vhd', '.vhdx', '.vmdk', '.qcow2', '.img', '.bin', '.cue',
+        # Design/Graphics
+        '.sketch', '.fig', '.xd', '.indd', '.idml', '.qxd', '.pub',
+        # Scientific/Research
+        '.mat', '.h5', '.hdf5', '.nc', '.cdf', '.fits', '.fts',
+        # Configuration/Settings
+        '.properties', '.env', '.editorconfig', '.gitignore', '.dockerignore',
         # Encrypted (our format)
         '.enc', '.encrypted',
         # Backup files
-        '.bak', '.backup', '.old', '.tmp'
+        '.bak', '.backup', '.old', '.tmp', '.orig', '.save',
+        # Mobile app packages (source/data only)
+        '.apk', '.ipa', '.xap',
+        # Game files (data/assets)
+        '.pak', '.vpk', '.pk3', '.pk4', '.wad', '.bsp', '.map',
+        # Subtitles/Captions
+        '.srt', '.sub', '.sbv', '.ass', '.ssa', '.vtt', '.smi', '.sami'
     }
     
     # 🔍 MAGIC BYTES for file type detection (first few bytes of files)
@@ -105,11 +128,18 @@ class AdvancedFileValidator:
         b'fLaC': '.flac',
         b'\x00\x00\x00\x20ftypM4A': '.m4a',
         
-        # Video
-        b'\x00\x00\x00\x18ftypmp4': '.mp4',
-        b'\x00\x00\x00\x20ftypisom': '.mp4',
-        b'RIFF': '.avi',  # AVI files use RIFF
-        b'\x1A\x45\xDF\xA3': '.mkv',
+        # Video (Enhanced MP4 detection)
+        b'\x00\x00\x00\x18ftypmp4': '.mp4',           # Standard MP4
+        b'\x00\x00\x00\x20ftypisom': '.mp4',          # ISO Base Media MP4
+        b'\x00\x00\x00\x1cftyp': '.mp4',              # Generic ftyp box (MP4 family)
+        b'\x00\x00\x00\x14ftyp': '.mp4',              # Shorter ftyp box
+        b'ftypmp4': '.mp4',                            # MP4 signature (partial)
+        b'ftypisom': '.mp4',                           # ISO MP4 signature (partial)
+        b'ftypM4V': '.m4v',                            # iTunes M4V
+        b'ftypqt': '.mov',                             # QuickTime MOV
+        b'RIFF': '.avi',                               # AVI files use RIFF
+        b'\x1A\x45\xDF\xA3': '.mkv',                  # Matroska MKV
+        b'FLV\x01': '.flv',                            # Flash Video
         
         # Archives
         b'PK\x03\x04': '.zip',

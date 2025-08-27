@@ -653,11 +653,28 @@ async def upload_auto_file(
     # � ULTRA-FAST VALIDATION: Start uploads immediately with lightweight validation
     is_valid, error_messages, validated_files, security_warnings = await validate_upload_files_enhanced_fast(files, encrypt, is_https)
     if not is_valid:
+        # 🚨 LOG VALIDATION FAILURES for debugging
+        print(f"🚫 File validation failed:")
+        for i, file in enumerate(files):
+            file_ext = Path(file.filename or "unknown").suffix.lower()
+            print(f"   File {i+1}: {file.filename} ({file_ext}) - Size: {getattr(file, 'size', 'unknown')}")
+        for error in error_messages:
+            print(f"   ❌ {error}")
+        
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
             "status": "error", 
             "msg": "; ".join(error_messages),
             "security_blocked": True
         })
+    
+    # ✅ LOG SUCCESSFUL VALIDATION with file details
+    print(f"✅ File validation passed for {len(files)} files:")
+    for i, file in enumerate(files):
+        file_ext = Path(file.filename or "unknown").suffix.lower()
+        validated_file = validated_files[i] if i < len(validated_files) else {}
+        print(f"   File {i+1}: {file.filename} ({file_ext}) -> {validated_file.get('sanitized_name', 'unknown')}")
+        if file_ext in ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm']:
+            print(f"   🎥 Video file detected and approved!")
     
     # 🚨 Log security warnings if any
     if security_warnings:
