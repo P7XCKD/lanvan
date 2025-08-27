@@ -1782,6 +1782,39 @@
 
 <!-- 📋 Clipboard Real-Time WebSocket Auto-Refresh -->
 <script>
+  // 🔧 Conditional Logging System - Production Performance Optimization
+  const DEBUG_MODE = false; // Set to true for development, false for production
+  const DEBUG_LEVELS = {
+    ERROR: 0,   // Always shown (security, critical errors)
+    WARN: 1,    // Important warnings
+    INFO: 2,    // General information
+    DEBUG: 3    // Detailed debugging (upload progress, etc.)
+  };
+  
+  const currentLogLevel = DEBUG_MODE ? DEBUG_LEVELS.DEBUG : DEBUG_LEVELS.ERROR;
+  
+  // Optimized logging functions
+  const log = {
+    error: (msg, ...args) => {
+      if (currentLogLevel >= DEBUG_LEVELS.ERROR) console.error('❌', msg, ...args);
+    },
+    warn: (msg, ...args) => {
+      if (currentLogLevel >= DEBUG_LEVELS.WARN) console.warn('⚠️', msg, ...args);
+    },
+    info: (msg, ...args) => {
+      if (currentLogLevel >= DEBUG_LEVELS.INFO) console.info('ℹ️', msg, ...args);
+    },
+    debug: (msg, ...args) => {
+      if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('🔍', msg, ...args);
+    },
+    upload: (msg, ...args) => {
+      if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('📤', msg, ...args);
+    },
+    network: (msg, ...args) => {
+      if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('🌐', msg, ...args);
+    }
+  };
+
   // Clipboard WebSocket for clipboard-only mode
   if (typeof show_clipboard_only !== 'undefined' && show_clipboard_only) {
     let ws = null;
@@ -1825,7 +1858,7 @@
       const wsUrl = `${protocol}://${window.location.host}/ws/clipboard`;
       clipboardWS = new WebSocket(wsUrl);
       clipboardWS.onopen = () => {
-        console.log('📡 Regular mode clipboard WebSocket connected');
+        log.network('Regular mode clipboard WebSocket connected');
         // Refresh clipboard history when WebSocket (re)connects
         if (typeof refreshClipboardHistory === 'function') {
           setTimeout(() => refreshClipboardHistory(), 50); // Reduced from 100ms for responsiveness
@@ -1833,12 +1866,12 @@
       };
       clipboardWS.onmessage = (event) => {
         if (event.data === 'refresh') {
-          console.log('📋 Clipboard update received via WebSocket');
+          log.debug('Clipboard update received via WebSocket');
           if (typeof refreshClipboardHistory === 'function') refreshClipboardHistory();
         }
       };
       clipboardWS.onclose = () => {
-        console.log('📡 Clipboard WebSocket disconnected, will reconnect...');
+        log.warn('Clipboard WebSocket disconnected, will reconnect...');
         // Try to reconnect after reduced delay if disconnected
         setTimeout(connectRegularClipboardWS, 1000); // Reduced from 2000ms
       };
@@ -2195,7 +2228,7 @@
   
   function startUpload() {
     activeUploads++;
-    console.log(`📤 Upload started (${activeUploads}/${currentMaxConcurrent} active, optimal: ${getOptimalConcurrency()})`);
+    log.upload(`Upload started (${activeUploads}/${currentMaxConcurrent} active, optimal: ${getOptimalConcurrency()})`);
     
     // Pause auto-refresh during uploads to avoid conflicts
     if (activeUploads === 1) {
@@ -2205,7 +2238,7 @@
   
   function endUpload() {
     activeUploads = Math.max(0, activeUploads - 1);
-    console.log(`📤 Upload ended (${activeUploads}/${currentMaxConcurrent} active)`);
+    log.upload(`Upload ended (${activeUploads}/${currentMaxConcurrent} active)`);
     
     // Resume auto-refresh when all uploads complete
     if (activeUploads === 0) {
@@ -2241,7 +2274,7 @@
 
   function addToUploadQueue(files) {
     // No batch grouping - process each file individually
-    console.log(`📤 Adding ${files.length} file(s) to upload queue`);
+    log.upload(`Adding ${files.length} file(s) to upload queue`);
     
     for (let file of files) {
       const uploadId = ++uploadIdCounter;
@@ -3866,7 +3899,7 @@ Device Session will reset when browser is closed
       uploadItem.adaptiveChunkSize = CHUNK_SIZE;
       uploadItem.systemOptimized = chunkData.status === 'success';
       
-      console.log(`🔄 Starting adaptive chunked upload: ${totalChunks} chunks of ${(CHUNK_SIZE/1024/1024).toFixed(2)}MB each`);
+      log.debug(`Starting adaptive chunked upload: ${totalChunks} chunks of ${(CHUNK_SIZE/1024/1024).toFixed(2)}MB each`);
       
       // Upload chunks sequentially
       for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
