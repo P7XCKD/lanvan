@@ -32,6 +32,9 @@
 <!-- JSZip Library for creating ZIP files -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
+<!-- Extracted File Utils -->
+<script src="{{ request.url_for('static', path='js/file-utils.js') }}"></script>
+
 </head>
 <body>
 
@@ -626,11 +629,6 @@
   let lastFileSelectionTime = 0;
   let lastFileSelectionHash = '';
   const FILE_SELECTION_DEBOUNCE = 500; // 500ms debounce
-  
-  function generateFileListHash(files) {
-    if (!files || files.length === 0) return '';
-    return Array.from(files).map(f => `${f.name}_${f.size}_${f.lastModified}`).join('|');
-  }
   
   function shouldProcessFileSelection(files) {
     const now = Date.now();
