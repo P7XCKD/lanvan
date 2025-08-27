@@ -9,12 +9,8 @@ jinja2==3.1.2
 # File upload handling
 python-multipart==0.0.6
 
-# Utilities
-werkzeug==3.0.1
-
 # Cryptography for AES encryption
 cryptography==41.0.7
-pycryptodome==3.19.0
 
 # System monitoring
 psutil==5.9.6
