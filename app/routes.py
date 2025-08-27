@@ -9,7 +9,6 @@ from zipfile import ZipFile
 import base64
 
 import qrcode
-from PIL import Image
 
 from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form
 from fastapi.responses import (
@@ -1898,9 +1897,15 @@ async def generate_offline_qr(text: str, size: int = 200):
             content={"error": f"QR generation failed: {str(e)}"}
         )
 
-# === FULL PAGE CLIPBOARD ROUTE ===
+# === CLIPBOARD SYSTEM ENDPOINTS ===
+
+# In-memory clipboard storage for current session
+clipboard_history = []
+clipboard_id_counter = 0
+
 @router.get("/clipboard", response_class=HTMLResponse, name="clipboard_page")
 async def clipboard_page(request: Request):
+    """Full page clipboard route"""
     # 🔀 HTTPS Fallback System: Auto-redirect HTTP to HTTPS when server runs in HTTPS mode
     redirect_response = https_redirect_if_needed(request)
     if redirect_response:
@@ -1917,19 +1922,13 @@ async def clipboard_page(request: Request):
         "default_view": "clipboard"  # Default to clipboard view
     })
 
-# === CLIPBOARD SYSTEM ENDPOINTS ===
-
-# In-memory clipboard storage for current session
-clipboard_history = []
-clipboard_id_counter = 0
-
 @router.post("/api/clipboard/add", name="clipboard_add")
 async def add_to_clipboard(
     request: Request,
     data: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None)
 ):
-    """Add content to clipboard - supports text, images, and files"""
+    """Add content to clipboard - supports text and files (no image preview)"""
     global clipboard_id_counter, clipboard_history
     
     try:
@@ -1971,7 +1970,7 @@ async def add_to_clipboard(
                     content={"status": "error", "msg": "File too large for clipboard (max 10MB)"}
                 )
             
-            # Create clipboard item for file
+            # Create clipboard item for file (without image preview)
             clipboard_item = {
                 "id": clipboard_id_counter,
                 "type": "file",
@@ -1981,7 +1980,7 @@ async def add_to_clipboard(
                 "data": file_content,
                 "timestamp": timestamp,
                 "formatted_time": time.strftime("%I:%M:%S %p", time.localtime(timestamp)),
-                "preview": generate_file_preview(file.filename, file_content, content_type)
+                "preview": generate_simple_file_preview(file.filename, file_content, content_type)
             }
             
         elif data:
@@ -1991,7 +1990,7 @@ async def add_to_clipboard(
             # Detect content type
             if data.startswith('data:image/'):
                 content_type = 'image_base64'
-                preview = "Base64 image data"
+                preview = "Base64 image data (no preview)"  # No image preview
             elif data.startswith('http://') or data.startswith('https://'):
                 content_type = 'url'
                 preview = data[:100] + "..." if len(data) > 100 else data
@@ -2140,116 +2139,6 @@ async def get_clipboard_item(item_id: int):
             content={"status": "error", "msg": f"Failed to get clipboard item: {str(e)}"}
         )
 
-@router.post("/api/clipboard/upload/{item_id}", name="clipboard_upload")
-async def upload_from_clipboard(
-    item_id: int,
-    background_tasks: BackgroundTasks,
-    encrypt: bool = Query(False, description="Encrypt file with AES-256 if true")
-):
-    """Upload clipboard item to main file storage"""
-    try:
-        # Find clipboard item
-        item = None
-        for clipboard_item in clipboard_history:
-            if clipboard_item["id"] == item_id:
-                item = clipboard_item
-                break
-        
-        if not item:
-            return JSONResponse(
-                status_code=404,
-                content={"status": "error", "msg": "Clipboard item not found"}
-            )
-        
-        if item["type"] != "file":
-            return JSONResponse(
-                status_code=400,
-                content={"status": "error", "msg": "Only file items can be uploaded"}
-            )
-        
-        # Validate file for upload
-        filename = item["filename"]
-        file_data = item["data"]
-        file_size = len(file_data)
-        
-        # Check if file type is allowed
-        if not is_allowed_file(filename):
-            return JSONResponse(
-                status_code=400,
-                content={"status": "error", "msg": "File type not allowed"}
-            )
-        
-        # Check AES encryption requirements
-        if encrypt:
-            # Determine if HTTPS (can't determine from clipboard context, assume HTTP for safety)
-            is_https = False  # Conservative assumption
-            validation = AESConfig.validate_file_for_aes(file_size, is_https)
-            if not validation['valid']:
-                return JSONResponse(
-                    status_code=400,
-                    content={"status": "error", "msg": validation['error']}
-                )
-        
-        # Create unique filename
-        save_name = filename + ".enc" if encrypt else filename
-        filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, save_name)
-        
-        # Save file
-        if encrypt:
-            try:
-                from .aes_utils import encrypt_file_stream
-                import hashlib
-                
-                # Calculate original hash
-                original_hash = hashlib.sha256(file_data).hexdigest()
-                
-                # Encrypt the data
-                encrypted_data, metadata = encrypt_file_stream(file_data, chunk_size=1024 * 1024)
-                
-                # Enhanced metadata
-                metadata['original_hash'] = original_hash
-                metadata['original_size'] = str(len(file_data))
-                metadata['encrypted_size'] = str(len(encrypted_data))
-                metadata['encryption_method'] = 'streaming'
-                metadata['source'] = 'clipboard'
-                
-                # Save metadata
-                metadata_path = filepath.with_suffix('.enc.meta')
-                with metadata_path.open("w") as meta_file:
-                    import json
-                    json.dump(metadata, meta_file, indent=2)
-                
-                # Write encrypted data
-                with filepath.open("wb") as f:
-                    f.write(encrypted_data)
-                    
-            except Exception as e:
-                return JSONResponse(
-                    status_code=500,
-                    content={"status": "error", "msg": f"AES encryption failed: {str(e)}"}
-                )
-        else:
-            # Save as regular file
-            with filepath.open("wb") as f:
-                f.write(file_data)
-        
-        # Add background scan task
-        background_tasks.add_task(scan_file, filepath)
-        
-        return JSONResponse(content={
-            "status": "success",
-            "msg": f"Uploaded from clipboard: {filepath.name}",
-            "filename": filepath.name,
-            "size": format_size(file_size),
-            "encrypted": encrypt
-        })
-        
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "msg": f"Failed to upload from clipboard: {str(e)}"}
-        )
-
 @router.delete("/api/clipboard/clear", name="clipboard_clear")
 async def clear_clipboard():
     """Clear all clipboard history"""
@@ -2294,11 +2183,32 @@ async def remove_clipboard_item(item_id: int):
             content={"status": "error", "msg": f"Failed to remove clipboard item: {str(e)}"}
         )
 
-def generate_file_preview(filename: str, file_data: bytes, content_type: str) -> str:
-    """Generate preview text for file content"""
+def generate_simple_file_preview(filename: str, file_data: bytes, content_type: str) -> str:
+    """Generate simple preview text for file content (with base64 image preview)"""
     try:
         if content_type == 'image':
-            return f"Image: {filename} ({format_size(len(file_data))})"
+            # Generate base64 preview for images (no Pillow needed!)
+            import base64
+            try:
+                # Limit preview to reasonable size (max 1MB for preview)
+                if len(file_data) <= 1024 * 1024:
+                    # Detect image format from file extension
+                    file_ext = filename.split('.')[-1].lower() if '.' in filename else ''
+                    mime_map = {
+                        'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+                        'png': 'image/png', 'gif': 'image/gif',
+                        'bmp': 'image/bmp', 'webp': 'image/webp',
+                        'svg': 'image/svg+xml'
+                    }
+                    mime_type = mime_map.get(file_ext, 'image/jpeg')
+                    
+                    # Create base64 data URL
+                    base64_data = base64.b64encode(file_data).decode('utf-8')
+                    return f"data:{mime_type};base64,{base64_data}"
+                else:
+                    return f"Image: {filename} ({format_size(len(file_data))}) - Too large for preview"
+            except Exception:
+                return f"Image: {filename} ({format_size(len(file_data))}) - Preview failed"
         elif content_type == 'text':
             # Try to decode and show first few lines
             try:
@@ -2316,3 +2226,5 @@ def generate_file_preview(filename: str, file_data: bytes, content_type: str) ->
             return f"File: {filename} ({format_size(len(file_data))})"
     except:
         return f"File: {filename} ({format_size(len(file_data))})"
+
+# === END OF ROUTES ===

@@ -48,7 +48,7 @@ def print_qr_code(url):
         print(qr_text)
         
     except ImportError:
-        print("📱 Install qrcode library for QR codes: pip install qrcode[pil]")
+        print("📱 Install qrcode library for QR codes: pip install qrcode")
     except Exception as e:
         print(f"📱 QR Code generation failed: {e}")
 
