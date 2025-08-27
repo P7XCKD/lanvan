@@ -124,6 +124,12 @@ test_files/
 .coverage
 htmlcov/
 .tox/
+test_workspace/
+
+# qt.py test files (in test_workspace)
+test_workspace/quick_test*.txt
+test_workspace/test_output.txt
+test_workspace/*.tmp
 
 # Documentation builds
 docs/_build/
