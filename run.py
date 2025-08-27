@@ -45,12 +45,12 @@ except ImportError as e:
     try:
         result = subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], 
                               check=True, capture_output=True, text=True)
-        print("✅ Dependencies installed successfully!")
+        print("[OK] Dependencies installed successfully!")
         import psutil
         import uvicorn
     except subprocess.CalledProcessError as install_error:
-        print(f"❌ Failed to install from requirements.txt: {install_error}")
-        print("📦 Trying individual package installation...")
+        print(f"[ERROR] Failed to install from requirements.txt: {install_error}")
+        print("[INSTALL] Trying individual package installation...")
         subprocess.run([sys.executable, "-m", "pip", "install", "psutil", "uvicorn[standard]", "fastapi", "jinja2", "python-multipart", "werkzeug", "cryptography", "pycryptodome"])
         import psutil
         import uvicorn
@@ -240,8 +240,8 @@ def kill_servers_on_port(port):
 
 def signal_handler(signum, frame):
     """Handle Ctrl+C gracefully with immediate shutdown"""
-    print(f"\n🚨 IMMEDIATE SHUTDOWN REQUESTED (signal {signum})")
-    print("⚠️ Killing all server processes immediately...")
+    print(f"\n[STOP] IMMEDIATE SHUTDOWN REQUESTED (signal {signum})")
+    print("[WARN] Killing all server processes immediately...")
     
     # Kill servers on all possible ports immediately
     for port in [DEFAULT_HTTP_PORT, DEFAULT_HTTPS_PORT, FALLBACK_HTTP_PORT, FALLBACK_HTTPS_PORT]:
@@ -254,14 +254,14 @@ def signal_handler(signum, frame):
                 try:
                     if 'uvicorn' in proc.info['name'].lower() or \
                        any('uvicorn' in str(cmd).lower() for cmd in proc.info['cmdline'] or []):
-                        print(f"🔥 Killing uvicorn process {proc.info['pid']}")
+                        print(f"[KILL] Killing uvicorn process {proc.info['pid']}")
                         proc.kill()
                 except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     pass
     except Exception as e:
         print(f"Error killing uvicorn processes: {e}")
     
-    print("✅ SHUTDOWN COMPLETE - All servers terminated!")
+    print("[OK] SHUTDOWN COMPLETE - All servers terminated!")
     os._exit(0)  # Force immediate exit
 
 # === MAIN ENTRY ===
@@ -313,13 +313,13 @@ if __name__ == "__main__":
     
     # Display connection information based on actual ports used
     if ios_mode:
-        print("🍎 iOS Safari Mode: HTTP optimized for maximum compatibility")
+        print("[iOS] iOS Safari Mode: HTTP optimized for maximum compatibility")
         if port == 80:
-            print(f"📱 Connect with: http://{ip}")
+            print(f"[MOBILE] Connect with: http://{ip}")
         else:
-            print(f"📱 Connect with: http://{ip}:{port}")
+            print(f"[MOBILE] Connect with: http://{ip}:{port}")
     elif use_https:
-        print("📱 iOS/Safari Users:")
+        print("[MOBILE] iOS/Safari Users:")
         if port == 443:
             print(f"   Primary: https://lanvan.local")
             print(f"   Fallback: http://{ip}")
@@ -340,7 +340,7 @@ if __name__ == "__main__":
         os.environ['PORT'] = str(port)
         os.environ['USE_HTTPS'] = str(use_https).lower()
         
-        # ⛔️ Waitress removed: FastAPI is ASGI and no longer supports WSGI servers like Waitress.
+        # [REMOVED] Waitress removed: FastAPI is ASGI and no longer supports WSGI servers like Waitress.
         # subprocess.run([
         #     "waitress-serve",
         #     "--host=0.0.0.0",
@@ -389,21 +389,21 @@ if __name__ == "__main__":
             server = uvicorn.Server(config)
             
             # Run server with immediate shutdown capability
-            print("🚀 Server starting with enhanced shutdown handling...")
+            print("[INFO] Server starting with enhanced shutdown handling...")
             server.run()
             
         except KeyboardInterrupt:
-            print("\n🚨 KEYBOARD INTERRUPT - IMMEDIATE SHUTDOWN!")
+            print("\n[STOP] KEYBOARD INTERRUPT - IMMEDIATE SHUTDOWN!")
             kill_servers_on_port(port)
-            print("✅ Server force-stopped immediately.")
+            print("[OK] Server force-stopped immediately.")
         except Exception as e:
             print(f"\n[!] Server error: {e}")
-            print("🔥 Force-killing server processes...")
+            print("[KILL] Force-killing server processes...")
             kill_servers_on_port(port)
         finally:
             # Ensure complete cleanup
             try:
                 kill_servers_on_port(port)
-                print("✅ Final cleanup completed.")
+                print("[OK] Final cleanup completed.")
             except:
                 pass
