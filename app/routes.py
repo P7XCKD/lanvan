@@ -1970,7 +1970,9 @@ async def add_to_clipboard(
                     content={"status": "error", "msg": "File too large for clipboard (max 10MB)"}
                 )
             
-            # Create clipboard item for file (without image preview)
+            # Create clipboard item for file (with base64 image preview)
+            preview = generate_simple_file_preview(file.filename, file_content, content_type)
+            
             clipboard_item = {
                 "id": clipboard_id_counter,
                 "type": "file",
@@ -1980,7 +1982,8 @@ async def add_to_clipboard(
                 "data": file_content,
                 "timestamp": timestamp,
                 "formatted_time": time.strftime("%I:%M:%S %p", time.localtime(timestamp)),
-                "preview": generate_simple_file_preview(file.filename, file_content, content_type)
+                "preview": preview,
+                "is_image_preview": content_type == 'image' and preview.startswith('data:')
             }
             
         elif data:
@@ -2037,7 +2040,8 @@ async def add_to_clipboard(
                 "content_type": clipboard_item["content_type"],
                 "size": clipboard_item["size"],
                 "timestamp": clipboard_item["formatted_time"],
-                "preview": clipboard_item["preview"]
+                "preview": clipboard_item["preview"],
+                "is_image_preview": clipboard_item.get("is_image_preview", False)
             }
         })
         
@@ -2053,7 +2057,7 @@ async def get_clipboard_history():
     global clipboard_history
     
     try:
-        # Return sanitized clipboard history (without large data)
+        # Return sanitized clipboard history (without large data but with image previews)
         history = []
         for item in clipboard_history:
             sanitized_item = {
@@ -2062,7 +2066,8 @@ async def get_clipboard_history():
                 "content_type": item["content_type"],
                 "size": item["size"],
                 "timestamp": item["formatted_time"],
-                "preview": item["preview"]
+                "preview": item["preview"],
+                "is_image_preview": item.get("is_image_preview", False)
             }
             
             # Add filename for file items
