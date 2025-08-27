@@ -30,9 +30,15 @@ def check_mdns_dependencies() -> tuple[bool, str]:
                 result = subprocess.run(['which', 'avahi-daemon'], 
                                       capture_output=True, text=True)
                 if result.returncode != 0:
-                    return True, "⚠️ mDNS available but avahi-daemon not found. Install with: pkg install avahi"
+                    return True, "⚠️ mDNS on Android/Termux has limitations. Consider IP access instead."
             except:
                 pass
+            
+            # Additional warning for Android/Termux users
+            print("📱 Android/Termux mDNS Limitations:")
+            print("   • .local domains often don't work due to system restrictions")
+            print("   • Use direct IP access instead: [IP]:5000 or [IP]:5001")
+            print("   • QR codes will show IP-based URLs for better compatibility")
         
         return True, "✅ mDNS dependencies available"
     
@@ -496,22 +502,43 @@ class SimpleMDNSManager:
                 # 🌐 Protocol-Specific Access Information
                 protocol_name = "HTTPS" if self.use_https else "HTTP"
                 print(f"✅ mDNS service started: {self.domain}")
-                print(f"🌐 {protocol_name} Server Access:")
                 
-                if self.use_https:
-                    # HTTPS-only mode
-                    https_url = self._format_url(self.domain)
-                    https_ip_url = self._format_url(lan_ip)
-                    print(f"   HTTPS access: {https_url}")
-                    print(f"   Direct IP (HTTPS): {https_ip_url}")
-                    print(f"🔒 HTTPS-only mode - HTTP requests will not work")
+                # Check if we're on Android/Termux for special messaging
+                is_android = ("ANDROID_STORAGE" in os.environ or 
+                             os.path.exists("/data/data/com.termux") or 
+                             "TERMUX_VERSION" in os.environ)
+                
+                if is_android:
+                    print(f"📱 Android/Termux {protocol_name} Server:")
+                    print(f"🚨 mDNS (.local) may not work on Android/Termux!")
+                    print(f"✅ RECOMMENDED - Use Direct IP Access:")
+                    if self.use_https:
+                        https_ip_url = self._format_url(lan_ip)
+                        print(f"   📱 Mobile Access: {https_ip_url}")
+                        print(f"   💻 Desktop Access: {https_ip_url}")
+                        print(f"🔒 HTTPS-only mode")
+                    else:
+                        http_ip_url = self._format_url(lan_ip)
+                        print(f"   📱 Mobile Access: {http_ip_url}")
+                        print(f"   💻 Desktop Access: {http_ip_url}")
+                        print(f"🌐 HTTP-only mode")
+                    print(f"⚠️  Avoid using {self.domain} - use IP instead")
                 else:
-                    # HTTP-only mode  
-                    http_url = self._format_url(self.domain)
-                    http_ip_url = self._format_url(lan_ip)
-                    print(f"   HTTP access:  {http_url}")
-                    print(f"   Direct IP (HTTP):  {http_ip_url}")
-                    print(f"🌐 HTTP-only mode - HTTPS requests will not work")
+                    print(f"🌐 {protocol_name} Server Access:")
+                    if self.use_https:
+                        # HTTPS-only mode
+                        https_url = self._format_url(self.domain)
+                        https_ip_url = self._format_url(lan_ip)
+                        print(f"   HTTPS access: {https_url}")
+                        print(f"   Direct IP (HTTPS): {https_ip_url}")
+                        print(f"🔒 HTTPS-only mode - HTTP requests will not work")
+                    else:
+                        # HTTP-only mode  
+                        http_url = self._format_url(self.domain)
+                        http_ip_url = self._format_url(lan_ip)
+                        print(f"   HTTP access:  {http_url}")
+                        print(f"   Direct IP (HTTP):  {http_ip_url}")
+                        print(f"🌐 HTTP-only mode - HTTPS requests will not work")
                 
                 print(f"🎯 Single protocol mode - no redirects needed")
                 
@@ -619,11 +646,42 @@ class SimpleMDNSManager:
             return f"{protocol}://{host}:{self.port}"
     
     def get_hybrid_url(self) -> str:
-        """Get the best URL for QR code generation (mDNS first, fallback to IP)"""
-        if self.is_running and self.domain:
-            return self._format_url(self.domain)
-        else:
+        """Get the best URL for QR code generation - prioritize IP on Android/Termux"""
+        # Check if we're on Android/Termux
+        is_android = ("ANDROID_STORAGE" in os.environ or 
+                     os.path.exists("/data/data/com.termux") or 
+                     "TERMUX_VERSION" in os.environ)
+        
+        if is_android:
+            # On Android/Termux, always prefer IP-based URLs since .local often fails
             return self._format_url(self.get_lan_ip())
+        else:
+            # On other platforms, prefer mDNS with IP fallback
+            if self.is_running and self.domain:
+                return self._format_url(self.domain)
+            else:
+                return self._format_url(self.get_lan_ip())
+    
+    def get_android_optimized_info(self) -> Dict[str, Any]:
+        """Get Android/Termux optimized connection info"""
+        lan_ip = self.get_lan_ip()
+        ip_url = self._format_url(lan_ip)
+        
+        return {
+            "status": "android_optimized",
+            "recommended_url": ip_url,
+            "ip": lan_ip,
+            "port": self.port,
+            "protocol": self.protocol,
+            "warning": "Use IP address instead of .local domain on Android/Termux",
+            "mdns_domain": self.domain if self.is_running else None,
+            "mdns_working": False,  # Assume mDNS doesn't work on Android
+            "access_methods": [
+                f"Direct IP: {ip_url}",
+                f"QR Code: Scan for {ip_url}",
+                f"Manual: Enter {lan_ip}:{self.port} in browser"
+            ]
+        }
 
 # Global simple mDNS manager instance
 mdns_manager = SimpleMDNSManager()

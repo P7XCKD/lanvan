@@ -1853,6 +1853,12 @@ async def get_network_info():
     """Get network information including LAN IP and mDNS info"""
     try:
         import socket
+        import os
+        
+        # Check if we're on Android/Termux
+        is_android = ("ANDROID_STORAGE" in os.environ or 
+                     os.path.exists("/data/data/com.termux") or 
+                     "TERMUX_VERSION" in os.environ)
         
         # Use mDNS manager's offline-capable method to get LAN IP
         lan_ip = mdns_manager.get_lan_ip()
@@ -1860,7 +1866,7 @@ async def get_network_info():
         # Get mDNS info
         mdns_info = mdns_manager.get_mdns_info()
         
-        # Get hybrid URL (mDNS first, fallback to IP)
+        # Get hybrid URL (IP-optimized for Android/Termux)
         hybrid_url = mdns_manager.get_hybrid_url()
         
         # Also provide separate URL components for QR code generation
@@ -1873,7 +1879,7 @@ async def get_network_info():
         else:
             lan_ip_url = f"{protocol}://{lan_ip}:{port}"
         
-        return JSONResponse(content={
+        response_data = {
             "status": "success",
             "lan_ip": lan_ip,
             "lan_ip_url": lan_ip_url,
@@ -1881,8 +1887,21 @@ async def get_network_info():
             "mdns": mdns_info,
             "hybrid_url": hybrid_url,
             "protocol": protocol,
-            "port": port
-        })
+            "port": port,
+            "platform": "android" if is_android else "desktop"
+        }
+        
+        # Add Android/Termux specific recommendations
+        if is_android:
+            response_data["android_info"] = mdns_manager.get_android_optimized_info()
+            response_data["recommendations"] = [
+                f"Use IP address: {lan_ip_url}",
+                "Avoid .local domains on Android/Termux",
+                "Share QR code for easy mobile access",
+                "Bookmark the IP address for future use"
+            ]
+        
+        return JSONResponse(content=response_data)
     except Exception as e:
         # Create fallback URL using the same format logic as mdns_manager
         protocol = "https" if mdns_manager.use_https else "http"
