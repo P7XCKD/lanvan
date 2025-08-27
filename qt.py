@@ -527,98 +527,129 @@ class QuickTest:
             self.log(f"Web interface test: {str(e)}", "WARN")
 
     async def test_mdns(self):
-        """Test mDNS service comprehensively with enhanced detection"""
+        """Test mDNS service comprehensively with proper startup time - using REAL implementation"""
         if self.skip_mdns:
             self.log("mDNS: Skipped (Android mode)", "INFO")
             return
             
-        self.log("Testing mDNS service discovery...")
+        self.log("Testing mDNS service discovery (Real Implementation)...")
         mdns_working = False
         
         try:
-            # Method 1: Test via simple_mdns module
-            try:
-                from simple_mdns import mdns_manager
+            # Use the ACTUAL mDNS implementation that run.py uses
+            from app.simple_mdns import mdns_manager
+            
+            self.log("mDNS: Using real SimpleMDNSManager implementation", "INFO")
+            
+            # Step 1: Check current status
+            initial_info = mdns_manager.get_mdns_info()
+            initial_status = initial_info.get("status", "unknown")
+            self.log(f"mDNS initial status: {initial_status}", "INFO")
+            
+            # Step 2: If not running, try to start it (with proper time)
+            if initial_status != "active":
+                self.log("mDNS: Attempting to start service...", "INFO")
                 
-                # Test mDNS info
-                info = mdns_manager.get_mdns_info()
-                status = info.get("status", "unknown")
-                
-                if status == "active":
-                    self.log(f"mDNS: Active via simple_mdns", "PASS")
-                    mdns_working = True
-                    
-                    # Check additional mDNS details
-                    service_name = info.get("service_name", "unknown")
-                    service_type = info.get("service_type", "unknown")
-                    addresses = info.get("addresses", [])
-                    
-                    self.log(f"mDNS Service: {service_name}", "INFO")
-                    self.log(f"mDNS Type: {service_type}", "INFO")
-                    self.log(f"mDNS Addresses: {len(addresses)} found", "INFO")
-                    
-                    # Test mDNS URL generation
-                    urls = info.get("urls", [])
-                    if urls:
-                        self.log(f"mDNS URLs: {len(urls)} generated", "PASS")
-                        for i, url in enumerate(urls[:2]):  # Show first 2 URLs
-                            self.log(f"  URL {i+1}: {url}", "INFO")
-                    else:
-                        self.log("mDNS URLs: None generated", "WARN")
-                        
-                elif status == "inactive":
-                    self.log("mDNS: Inactive via simple_mdns", "WARN")
-                elif status == "disabled":
-                    self.log("mDNS: Disabled in configuration", "INFO")
-                else:
-                    self.log(f"mDNS: Status unknown ({status})", "WARN")
-                    
-            except Exception as e1:
-                self.log(f"simple_mdns test: {str(e1)}", "WARN")
-                
-                # Method 2: Test via app.mdns_manager
+                # Check dependencies first
                 try:
-                    from app.mdns_manager import mdns_manager as app_mdns
-                    if hasattr(app_mdns, 'get_mdns_info'):
-                        info = app_mdns.get_mdns_info()
-                        status = info.get("status", "unknown")
-                        if status in ["active", "running", "enabled"]:
-                            self.log(f"mDNS: Active via app.mdns_manager", "PASS")
-                            mdns_working = True
-                        else:
-                            self.log(f"mDNS: {status} via app.mdns_manager", "INFO")
-                    else:
-                        self.log("mDNS: app.mdns_manager available but no get_mdns_info", "WARN")
-                except Exception as e2:
-                    self.log(f"app.mdns_manager test: {str(e2)}", "WARN")
+                    from app.simple_mdns import check_mdns_dependencies
+                    deps_available, deps_msg = check_mdns_dependencies()
+                    self.log(f"mDNS dependencies: {deps_msg}", "INFO")
                     
-                    # Method 3: Check if mDNS modules are present and functional
-                    try:
-                        import zeroconf
-                        self.log("mDNS: Zeroconf library available", "INFO")
+                    if not deps_available:
+                        self.log("mDNS: Dependencies not available", "WARN")
+                        return
+                except:
+                    self.log("mDNS: Could not check dependencies", "WARN")
+                
+                # Try to start the service
+                try:
+                    start_result = mdns_manager.start_service()
+                    if start_result:
+                        self.log("mDNS: Service start initiated", "INFO")
                         
-                        # Quick zeroconf test
-                        from zeroconf import Zeroconf
-                        zc = Zeroconf()
-                        self.log("mDNS: Zeroconf instance created successfully", "PASS")
-                        mdns_working = True
-                        zc.close()
+                        # Give mDNS time to initialize (it takes time!)
+                        self.log("mDNS: Waiting for service to initialize...", "INFO")
+                        await asyncio.sleep(3)  # Give 3 seconds for mDNS to start
                         
-                    except Exception as e3:
-                        self.log(f"Zeroconf test: {str(e3)}", "WARN")
+                        # Check if it's running now
+                        for attempt in range(3):  # Try 3 times with delays
+                            updated_info = mdns_manager.get_mdns_info()
+                            status = updated_info.get("status", "unknown")
+                            
+                            if status == "active":
+                                self.log(f"mDNS: Service active after {(attempt + 1) * 2}s", "PASS")
+                                mdns_working = True
+                                
+                                # Get detailed info
+                                service_name = updated_info.get("service_name", "unknown")
+                                domain = updated_info.get("domain", "unknown")
+                                url = updated_info.get("url", "unknown")
+                                ip = updated_info.get("ip", "unknown")
+                                port = updated_info.get("port", "unknown")
+                                conflict_count = updated_info.get("conflict_count", 0)
+                                
+                                self.log(f"mDNS Service: {service_name}", "INFO")
+                                self.log(f"mDNS Domain: {domain}", "INFO")
+                                self.log(f"mDNS URL: {url}", "INFO")
+                                self.log(f"mDNS IP: {ip}:{port}", "INFO")
+                                
+                                if conflict_count > 0:
+                                    self.log(f"mDNS: Resolved {conflict_count} naming conflicts", "INFO")
+                                
+                                break
+                            else:
+                                self.log(f"mDNS: Status still {status}, waiting...", "INFO")
+                                await asyncio.sleep(2)  # Wait 2 more seconds
                         
-                        # Method 4: Check for any mDNS-related modules
-                        try:
-                            import app.simple_mdns
-                            self.log("mDNS: simple_mdns module available", "INFO")
-                            mdns_working = True
-                        except:
-                            self.log("mDNS: No working mDNS implementation found", "WARN")
+                        if not mdns_working:
+                            self.log("mDNS: Service started but not active yet", "WARN")
+                    else:
+                        self.log("mDNS: Service start failed", "WARN")
+                except Exception as start_e:
+                    self.log(f"mDNS start error: {str(start_e)}", "WARN")
+            else:
+                # Already active
+                self.log("mDNS: Service already active", "PASS")
+                mdns_working = True
+                
+                # Get detailed info for active service
+                service_name = initial_info.get("service_name", "unknown")
+                domain = initial_info.get("domain", "unknown")
+                url = initial_info.get("url", "unknown")
+                ip = initial_info.get("ip", "unknown")
+                port = initial_info.get("port", "unknown")
+                
+                self.log(f"mDNS Service: {service_name}", "INFO")
+                self.log(f"mDNS Domain: {domain}", "INFO")
+                self.log(f"mDNS URL: {url}", "INFO")
+                self.log(f"mDNS IP: {ip}:{port}", "INFO")
+            
+            # Step 3: Test mDNS functionality (if working)
+            if mdns_working:
+                try:
+                    # Test if the mDNS manager can get LAN IP
+                    lan_ip = mdns_manager.get_lan_ip()
+                    if lan_ip:
+                        self.log(f"mDNS LAN IP detection: {lan_ip}", "PASS")
+                    
+                    # Test hybrid URL generation (useful for QR codes)
+                    if hasattr(mdns_manager, 'get_hybrid_url'):
+                        hybrid_url = mdns_manager.get_hybrid_url()
+                        self.log(f"mDNS Hybrid URL: {hybrid_url}", "INFO")
+                
+                except Exception as func_e:
+                    self.log(f"mDNS functionality test: {str(func_e)}", "WARN")
 
             # Set component status
             if mdns_working:
                 self.components['mdns'] = True
+                self.log("mDNS: Component marked as WORKING", "PASS")
+            else:
+                self.log("mDNS: Component remains as FAILED", "WARN")
                 
+        except ImportError as import_e:
+            self.log(f"mDNS: Cannot import real implementation - {str(import_e)}", "WARN")
         except Exception as e:
             self.log(f"mDNS: Error - {str(e)}", "WARN")
 
