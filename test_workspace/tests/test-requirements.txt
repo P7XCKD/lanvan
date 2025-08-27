@@ -1,0 +1,7 @@
+# Test dependencies for LANVAN test suite
+# These are in addition to the main requirements.txt
+
+aiohttp>=3.8.0
+
+# Note: qrcode and other dependencies should already be in main requirements.txt
+# Removed Pillow - not needed since qrcode handles image generation

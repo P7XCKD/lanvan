@@ -124,12 +124,18 @@ test_files/
 .coverage
 htmlcov/
 .tox/
-test_workspace/
 
-# qt.py test files (in test_workspace)
+# qt.py test files - ignore generated test files
+quick_test*.txt
+test_output.txt
+*.tmp
+
+# Test workspace folder (keep structure, ignore temp files)
 test_workspace/quick_test*.txt
 test_workspace/test_output.txt
 test_workspace/*.tmp
+test_workspace/app/uploads/
+test_workspace/uploads/
 
 # Documentation builds
 docs/_build/
