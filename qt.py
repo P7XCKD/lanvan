@@ -208,7 +208,7 @@ class QuickTest:
                     
                     # Comprehensive tests for HTTPS with enhanced timeout
                     timeout = aiohttp.ClientTimeout(total=10)  # Longer timeout for HTTPS
-                    connector = aiohttp.TCPConnector(ssl=False, verify_ssl=False)  # Disable SSL verification for self-signed certs
+                    connector = aiohttp.TCPConnector(ssl=False)  # Disable SSL verification for self-signed certs
                     
                     async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
                         try:
