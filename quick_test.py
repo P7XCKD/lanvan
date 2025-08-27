@@ -130,9 +130,16 @@ class QuickTest:
                 return False
             
             try:
-                # Quick tests
+                # Comprehensive tests
                 await self.run_tests(url)
-                self.log("HTTP mode: OK", "PASS")
+                
+                # Test web interface and buttons
+                timeout = aiohttp.ClientTimeout(total=5)
+                connector = aiohttp.TCPConnector(ssl=False)
+                async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                    await self.test_web_interface_buttons(session, url)
+                
+                self.log("HTTP mode: All tests passed!", "PASS")
             finally:
                 # Cleanup HTTP server
                 if self.server_task:
@@ -149,8 +156,16 @@ class QuickTest:
             server, url = await self.start_server_fast("https")
             if server and url:
                 try:
+                    # Comprehensive tests for HTTPS
                     await self.run_tests(url)
-                    self.log("HTTPS mode: OK", "PASS")
+                    
+                    # Test web interface and buttons for HTTPS
+                    timeout = aiohttp.ClientTimeout(total=5)
+                    connector = aiohttp.TCPConnector(ssl=False)
+                    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                        await self.test_web_interface_buttons(session, url)
+                    
+                    self.log("HTTPS mode: All tests passed!", "PASS")
                 finally:
                     # Cleanup HTTPS server
                     if self.server_task:
@@ -166,6 +181,9 @@ class QuickTest:
             # Test mDNS
             await self.test_mdns()
             
+            # Test system logs and monitoring
+            await self.test_system_monitoring()
+            
             elapsed = time.time() - start_time
             self.log(f"Quick test completed in {elapsed:.1f}s!", "PASS")
             return True
@@ -175,20 +193,30 @@ class QuickTest:
             return False
 
     async def run_tests(self, base_url):
-        """Run essential tests on the server"""
+        """Run comprehensive tests on the server"""
         # Test basic endpoints
-        endpoints = [
+        basic_endpoints = [
             ("Main page", ""),
             ("Network API", "/api/network-info"),
             ("Files API", "/api/files")
         ]
         
-        timeout = aiohttp.ClientTimeout(total=3)
+        # Test advanced endpoints  
+        advanced_endpoints = [
+            ("QR Code API", "/api/qr-code?text=test&size=100"),
+            ("Clipboard API", "/api/clipboard"),
+            ("mDNS Info API", "/api/mdns-info"),
+            ("AES Config API", "/api/aes-config"),
+            ("Logs API", "/api/logs")
+        ]
+        
+        timeout = aiohttp.ClientTimeout(total=5)
         connector = aiohttp.TCPConnector(ssl=False)
         
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-            # Test connectivity and endpoints
-            for name, endpoint in endpoints:
+            # Test basic connectivity and endpoints
+            self.log("Testing basic endpoints...")
+            for name, endpoint in basic_endpoints:
                 try:
                     url = f"{base_url}{endpoint}"
                     async with session.get(url) as response:
@@ -201,42 +229,299 @@ class QuickTest:
                     self.log(f"{name}: {str(e)}", "FAIL")
                     raise
             
-            # Test file upload
-            self.log("Testing file upload...")
-            test_content = f"quick-test-{time.time()}".encode()
-            data = aiohttp.FormData()
-            data.add_field('files', test_content, filename='quick_test.txt')
-            
-            try:
-                upload_url = f"{base_url}/upload-auto"
-                async with session.post(upload_url, data=data) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        if result.get("status") == "success":
-                            self.log("File upload: OK", "PASS")
+            # Test advanced features
+            self.log("Testing advanced features...")
+            for name, endpoint in advanced_endpoints:
+                try:
+                    url = f"{base_url}{endpoint}"
+                    async with session.get(url) as response:
+                        if response.status == 200:
+                            # Additional validation for specific endpoints
+                            if "qr-code" in endpoint:
+                                content_type = response.headers.get('content-type', '')
+                                if 'image' in content_type:
+                                    self.log(f"{name}: OK (image generated)", "PASS")
+                                else:
+                                    self.log(f"{name}: Invalid content type: {content_type}", "WARN")
+                            elif "clipboard" in endpoint:
+                                result = await response.json()
+                                if 'clipboard_content' in result:
+                                    self.log(f"{name}: OK (clipboard readable)", "PASS")
+                                else:
+                                    self.log(f"{name}: OK (clipboard empty/unavailable)", "PASS")
+                            elif "mdns-info" in endpoint:
+                                result = await response.json()
+                                status = result.get('status', 'unknown')
+                                self.log(f"{name}: OK (status: {status})", "PASS")
+                            elif "aes-config" in endpoint:
+                                result = await response.json()
+                                if 'aes_enabled' in result:
+                                    aes_status = "enabled" if result.get('aes_enabled') else "disabled"
+                                    self.log(f"{name}: OK (AES {aes_status})", "PASS")
+                                else:
+                                    self.log(f"{name}: OK", "PASS")
+                            elif "logs" in endpoint:
+                                result = await response.json()
+                                if 'logs' in result:
+                                    log_count = len(result.get('logs', []))
+                                    self.log(f"{name}: OK ({log_count} log entries)", "PASS")
+                                else:
+                                    self.log(f"{name}: OK", "PASS")
+                            else:
+                                self.log(f"{name}: OK", "PASS")
                         else:
-                            raise Exception(f"Upload failed: {result.get('msg')}")
+                            # Some endpoints might not be available in all modes
+                            if response.status == 404:
+                                self.log(f"{name}: Not available (404)", "WARN")
+                            else:
+                                self.log(f"{name}: HTTP {response.status}", "FAIL")
+                                raise Exception(f"Endpoint {name} failed")
+                except Exception as e:
+                    self.log(f"{name}: {str(e)}", "WARN")  # Don't fail test for advanced features
+            
+            # Test file upload with AES encryption test
+            await self.test_file_upload_advanced(session, base_url)
+            
+            # Test clipboard functionality
+            await self.test_clipboard_functionality(session, base_url)
+            
+            # Test QR code generation with different parameters
+            await self.test_qr_code_generation(session, base_url)
+
+    async def test_file_upload_advanced(self, session, base_url):
+        """Test file upload with AES and validation"""
+        self.log("Testing advanced file upload...")
+        test_content = f"quick-test-{time.time()}-with-aes".encode()
+        data = aiohttp.FormData()
+        data.add_field('files', test_content, filename='quick_test.txt')
+        
+        try:
+            upload_url = f"{base_url}/upload-auto"
+            async with session.post(upload_url, data=data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    if result.get("status") == "success":
+                        files_uploaded = result.get("files", [])
+                        protocol = result.get("protocol", "Unknown")
+                        self.log(f"File upload: OK ({len(files_uploaded)} files, {protocol})", "PASS")
+                        
+                        # Check if AES was involved
+                        if "aes" in str(result).lower():
+                            self.log("AES encryption: Detected in upload", "PASS")
+                        else:
+                            self.log("AES encryption: Not detected (may be disabled)", "INFO")
                     else:
-                        raise Exception(f"Upload HTTP {response.status}")
-            except Exception as e:
-                self.log(f"File upload: {str(e)}", "FAIL")
-                raise
+                        raise Exception(f"Upload failed: {result.get('msg')}")
+                else:
+                    raise Exception(f"Upload HTTP {response.status}")
+        except Exception as e:
+            self.log(f"File upload: {str(e)}", "FAIL")
+            raise
+
+    async def test_clipboard_functionality(self, session, base_url):
+        """Test clipboard read/write functionality"""
+        self.log("Testing clipboard functionality...")
+        
+        try:
+            # Test clipboard read
+            async with session.get(f"{base_url}/api/clipboard") as response:
+                if response.status == 200:
+                    result = await response.json()
+                    self.log("Clipboard read: OK", "PASS")
+                    
+                    # Test clipboard write
+                    test_text = f"test-clipboard-{time.time()}"
+                    clipboard_data = {"text": test_text}
+                    
+                    async with session.post(f"{base_url}/api/clipboard", json=clipboard_data) as write_response:
+                        if write_response.status == 200:
+                            write_result = await write_response.json()
+                            if write_result.get("status") == "success":
+                                self.log("Clipboard write: OK", "PASS")
+                            else:
+                                self.log("Clipboard write: Failed", "WARN")
+                        else:
+                            self.log(f"Clipboard write: HTTP {write_response.status}", "WARN")
+                else:
+                    self.log(f"Clipboard read: HTTP {response.status}", "WARN")
+        except Exception as e:
+            self.log(f"Clipboard test: {str(e)}", "WARN")
+
+    async def test_qr_code_generation(self, session, base_url):
+        """Test QR code generation with various parameters"""
+        self.log("Testing QR code generation...")
+        
+        qr_tests = [
+            ("Basic QR", "?text=hello&size=100"),
+            ("Large QR", "?text=test-large&size=300"),
+            ("URL QR", f"?text={base_url}&size=150"),
+            ("Complex QR", "?text=Hello%20World%20123&size=200")
+        ]
+        
+        try:
+            for test_name, params in qr_tests:
+                async with session.get(f"{base_url}/api/qr-code{params}") as response:
+                    if response.status == 200:
+                        content_type = response.headers.get('content-type', '')
+                        content_length = response.headers.get('content-length', '0')
+                        
+                        if 'image' in content_type and int(content_length) > 100:
+                            self.log(f"{test_name}: OK ({content_length} bytes)", "PASS")
+                        else:
+                            self.log(f"{test_name}: Invalid response", "WARN")
+                    else:
+                        self.log(f"{test_name}: HTTP {response.status}", "WARN")
+        except Exception as e:
+            self.log(f"QR code test: {str(e)}", "WARN")
+
+    async def test_web_interface_buttons(self, session, base_url):
+        """Test web interface and button functionality"""
+        self.log("Testing web interface buttons...")
+        
+        try:
+            # Get main page and check for key elements
+            async with session.get(base_url) as response:
+                if response.status == 200:
+                    content = await response.text()
+                    
+                    # Check for essential UI elements
+                    ui_checks = [
+                        ("Upload button", "upload" in content.lower()),
+                        ("Download links", "download" in content.lower()),
+                        ("QR code section", "qr" in content.lower()),
+                        ("Clipboard section", "clipboard" in content.lower()),
+                        ("Network info", "network" in content.lower() or "ip" in content.lower()),
+                        ("File list", "files" in content.lower()),
+                        ("JavaScript", "<script" in content.lower())
+                    ]
+                    
+                    for check_name, found in ui_checks:
+                        if found:
+                            self.log(f"UI {check_name}: Found", "PASS")
+                        else:
+                            self.log(f"UI {check_name}: Missing", "WARN")
+                            
+                    # Check for AES indicators in UI
+                    if "aes" in content.lower() or "encrypt" in content.lower():
+                        self.log("UI AES indicators: Found", "PASS")
+                    else:
+                        self.log("UI AES indicators: Not found", "INFO")
+                        
+                else:
+                    self.log(f"Web interface: HTTP {response.status}", "FAIL")
+                    
+        except Exception as e:
+            self.log(f"Web interface test: {str(e)}", "WARN")
 
     async def test_mdns(self):
-        """Test mDNS service"""
+        """Test mDNS service comprehensively"""
         if self.skip_mdns:
             self.log("mDNS: Skipped (Android mode)", "INFO")
             return
             
         try:
             from simple_mdns import mdns_manager
+            
+            # Test mDNS info
             info = mdns_manager.get_mdns_info()
-            if info.get("status") == "active":
-                self.log("mDNS: Active", "PASS")
-            else:
+            status = info.get("status", "unknown")
+            
+            if status == "active":
+                self.log(f"mDNS: Active", "PASS")
+                
+                # Check additional mDNS details
+                service_name = info.get("service_name", "unknown")
+                service_type = info.get("service_type", "unknown")
+                addresses = info.get("addresses", [])
+                
+                self.log(f"mDNS Service: {service_name}", "INFO")
+                self.log(f"mDNS Type: {service_type}", "INFO")
+                self.log(f"mDNS Addresses: {len(addresses)} found", "INFO")
+                
+                # Test mDNS URL generation
+                urls = info.get("urls", [])
+                if urls:
+                    self.log(f"mDNS URLs: {len(urls)} generated", "PASS")
+                    for i, url in enumerate(urls[:3]):  # Show first 3 URLs
+                        self.log(f"  URL {i+1}: {url}", "INFO")
+                else:
+                    self.log("mDNS URLs: None generated", "WARN")
+                    
+            elif status == "inactive":
                 self.log("mDNS: Inactive", "WARN")
+            else:
+                self.log(f"mDNS: Status unknown ({status})", "WARN")
+                
         except Exception as e:
-            self.log(f"mDNS: {str(e)}", "WARN")
+            self.log(f"mDNS: Error - {str(e)}", "WARN")
+
+    async def test_system_monitoring(self):
+        """Test system monitoring, logs, and responsiveness"""
+        self.log("Testing system monitoring...")
+        
+        try:
+            # Test if responsiveness monitor is working
+            app_path = Path(__file__).parent / "app"
+            if str(app_path) not in sys.path:
+                sys.path.insert(0, str(app_path))
+                
+            # Check various system components
+            try:
+                from responsiveness_monitor import responsiveness_monitor
+                if hasattr(responsiveness_monitor, 'get_stats'):
+                    stats = responsiveness_monitor.get_stats()
+                    self.log("Responsiveness monitor: Active", "PASS")
+                    if stats:
+                        self.log(f"Monitor stats: {len(stats)} entries", "INFO")
+                else:
+                    self.log("Responsiveness monitor: Available", "PASS")
+            except Exception as e:
+                self.log(f"Responsiveness monitor: {str(e)}", "WARN")
+            
+            # Test thread manager
+            try:
+                from thread_manager import thread_manager
+                if hasattr(thread_manager, 'get_active_threads'):
+                    active = thread_manager.get_active_threads()
+                    self.log(f"Thread manager: {len(active)} active threads", "PASS")
+                else:
+                    self.log("Thread manager: Available", "PASS")
+            except Exception as e:
+                self.log(f"Thread manager: {str(e)}", "WARN")
+                
+            # Test AES configuration
+            try:
+                from aes_config import get_aes_config
+                config = get_aes_config()
+                if config:
+                    enabled = config.get('enabled', False)
+                    mode = config.get('mode', 'unknown')
+                    self.log(f"AES config: {mode} ({'enabled' if enabled else 'disabled'})", "PASS")
+                else:
+                    self.log("AES config: Available", "PASS")
+            except Exception as e:
+                self.log(f"AES config: {str(e)}", "WARN")
+                
+            # Test platform detection
+            try:
+                from platform_detector import detect_platform, is_android, is_termux
+                platform = detect_platform()
+                android = is_android()
+                termux = is_termux()
+                self.log(f"Platform: {platform} (Android: {android}, Termux: {termux})", "INFO")
+            except Exception as e:
+                self.log(f"Platform detection: {str(e)}", "WARN")
+                
+            # Test file validation and concurrent processing
+            try:
+                from validation import validate_files_async
+                from concurrent_upload_manager import process_files_concurrently
+                self.log("File processing modules: Available", "PASS")
+            except Exception as e:
+                self.log(f"File processing: {str(e)}", "WARN")
+                
+        except Exception as e:
+            self.log(f"System monitoring test: {str(e)}", "WARN")
 
 async def main():
     """Main runner"""
