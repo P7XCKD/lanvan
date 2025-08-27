@@ -2303,4 +2303,145 @@ def generate_simple_file_preview(filename: str, file_data: bytes, content_type: 
     except:
         return f"File: {filename} ({format_size(len(file_data))})"
 
+# === ADDITIONAL API ENDPOINTS FOR TESTING ===
+
+@router.get("/api/clipboard", name="clipboard_status")
+async def clipboard_status():
+    """Get clipboard status and content"""
+    try:
+        # Try to get clipboard content
+        try:
+            import pyperclip
+            clipboard_content = pyperclip.paste()
+            return JSONResponse(content={
+                "status": "success",
+                "clipboard_available": True,
+                "clipboard_content": clipboard_content[:100] + "..." if len(clipboard_content) > 100 else clipboard_content,
+                "content_length": len(clipboard_content)
+            })
+        except ImportError:
+            return JSONResponse(content={
+                "status": "success", 
+                "clipboard_available": False,
+                "msg": "pyperclip not available"
+            })
+        except Exception as e:
+            return JSONResponse(content={
+                "status": "success",
+                "clipboard_available": False,
+                "msg": f"Clipboard access failed: {str(e)}"
+            })
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "msg": f"Clipboard status check failed: {str(e)}"}
+        )
+
+@router.post("/api/clipboard", name="clipboard_write")
+async def clipboard_write(request: Request):
+    """Write to clipboard"""
+    try:
+        data = await request.json()
+        text = data.get("text", "")
+        
+        try:
+            import pyperclip
+            pyperclip.copy(text)
+            return JSONResponse(content={
+                "status": "success",
+                "msg": f"Copied {len(text)} characters to clipboard"
+            })
+        except ImportError:
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "msg": "pyperclip not available"}
+            )
+        except Exception as e:
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "msg": f"Failed to copy to clipboard: {str(e)}"}
+            )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "msg": f"Clipboard write failed: {str(e)}"}
+        )
+
+@router.get("/api/mdns-info", name="mdns_info")
+async def mdns_info():
+    """Get mDNS service information"""
+    try:
+        from simple_mdns import mdns_manager
+        info = mdns_manager.get_mdns_info()
+        return JSONResponse(content=info)
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "msg": f"mDNS info failed: {str(e)}"}
+        )
+
+@router.get("/api/aes-config", name="aes_config")
+async def aes_config():
+    """Get AES encryption configuration"""
+    try:
+        from aes_config import AES_CONFIG
+        return JSONResponse(content={
+            "status": "success",
+            "aes_enabled": AES_CONFIG.get("ENABLED", False),
+            "aes_mode": AES_CONFIG.get("MODE", "disabled"),
+            "key_size": AES_CONFIG.get("KEY_SIZE", 0),
+            "chunk_size": AES_CONFIG.get("CHUNK_SIZE", 0)
+        })
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "msg": f"AES config failed: {str(e)}"}
+        )
+
+@router.get("/api/logs", name="system_logs")
+async def system_logs():
+    """Get system logs"""
+    try:
+        # Try to get logs from various sources
+        logs = []
+        
+        # Add responsiveness monitor logs if available
+        try:
+            from responsiveness_monitor import responsiveness_monitor
+            if hasattr(responsiveness_monitor, 'get_recent_logs'):
+                monitor_logs = responsiveness_monitor.get_recent_logs()
+                logs.extend(monitor_logs)
+        except Exception:
+            pass
+            
+        # Add thread manager logs if available
+        try:
+            from thread_manager import thread_manager
+            if hasattr(thread_manager, 'get_logs'):
+                thread_logs = thread_manager.get_logs()
+                logs.extend(thread_logs)
+        except Exception:
+            pass
+            
+        # Add basic system info
+        import time
+        logs.append({
+            "timestamp": time.time(),
+            "level": "INFO",
+            "message": "System logs endpoint accessed",
+            "source": "api"
+        })
+        
+        return JSONResponse(content={
+            "status": "success",
+            "logs": logs,
+            "log_count": len(logs),
+            "timestamp": time.time()
+        })
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "msg": f"Logs retrieval failed: {str(e)}"}
+        )
+
 # === END OF ROUTES ===

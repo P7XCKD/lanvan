@@ -1133,3 +1133,41 @@ def validate_upload_files(files: List[UploadFile], encrypt: bool = False, is_htt
                 return False, aes_result['errors'], []
     
     return True, [], upload_result['validated_files']
+
+# Additional async functions for API compatibility
+async def validate_files_async(files, max_size_mb=1000):
+    """Async file validation for API compatibility"""
+    try:
+        validator = AdvancedFileValidator()
+        results = []
+        
+        for file in files:
+            if hasattr(file, 'filename') and hasattr(file, 'size'):
+                # Basic validation
+                result = {
+                    'valid': True,
+                    'filename': file.filename,
+                    'size': getattr(file, 'size', 0),
+                    'message': 'Validation passed'
+                }
+                
+                # Check extension
+                if file.filename:
+                    ext = Path(file.filename).suffix.lower()
+                    if ext in validator.BLOCKED_EXTENSIONS:
+                        result['valid'] = False
+                        result['message'] = f'Blocked extension: {ext}'
+                
+                results.append(result)
+            else:
+                # Basic validation for other file types
+                results.append({
+                    'valid': True,
+                    'filename': str(file),
+                    'size': 0,
+                    'message': 'Basic validation passed'
+                })
+        
+        return results
+    except Exception as e:
+        return [{'valid': False, 'error': str(e)}]

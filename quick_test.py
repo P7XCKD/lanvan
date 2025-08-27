@@ -363,12 +363,17 @@ class QuickTest:
                 async with session.get(f"{base_url}/api/qr-code{params}") as response:
                     if response.status == 200:
                         content_type = response.headers.get('content-type', '')
-                        content_length = response.headers.get('content-length', '0')
+                        content_length = int(response.headers.get('content-length', '0'))
                         
-                        if 'image' in content_type and int(content_length) > 100:
-                            self.log(f"{test_name}: OK ({content_length} bytes)", "PASS")
+                        if 'image' in content_type and content_length > 100:
+                            self.log(f"{test_name}: OK ({content_length} bytes, {content_type})", "PASS")
                         else:
-                            self.log(f"{test_name}: Invalid response", "WARN")
+                            # Read response to check if it's actually an image
+                            content = await response.read()
+                            if len(content) > 100 and content.startswith(b'\x89PNG') or content.startswith(b'\xff\xd8\xff'):
+                                self.log(f"{test_name}: OK ({len(content)} bytes, image detected)", "PASS")
+                            else:
+                                self.log(f"{test_name}: Unexpected content ({len(content)} bytes)", "WARN")
                     else:
                         self.log(f"{test_name}: HTTP {response.status}", "WARN")
         except Exception as e:

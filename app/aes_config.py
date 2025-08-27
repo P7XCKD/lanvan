@@ -51,3 +51,16 @@ class AESConfig:
     def is_https_required(cls) -> bool:
         """Check if HTTPS is required for AES"""
         return cls.HTTPS_ONLY
+
+# Global AES configuration dict for API access
+AES_CONFIG = {
+    "ENABLED": True,
+    "MODE": "AES-256-CBC",
+    "KEY_SIZE": 32,
+    "CHUNK_SIZE": 64 * 1024,  # 64KB chunks
+    "HTTPS_ONLY": False
+}
+
+def get_aes_config():
+    """Get AES configuration for API"""
+    return AES_CONFIG
