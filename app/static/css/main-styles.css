@@ -1,0 +1,1040 @@
+/* Main Styles - Extracted from index.html */
+
+/* iOS Safari safe area and touch improvements */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  background: #f2f3f7;
+  margin: 0;
+  padding: 0.5rem;
+  padding-bottom: env(safe-area-inset-bottom, 0.5rem);
+  color: #333;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Make text selectable where needed */
+input, textarea, .file-name, p {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 1rem;
+  padding: 0 0.5rem;
+}
+
+h1 {
+  color: #333;
+  font-size: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+section {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+section h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+  color: #555;
+  margin-bottom: 0.8rem;
+}
+
+input[type="file"] {
+  display: none;
+}
+
+.drop-zone {
+  border: 2px dashed #ccc;
+  padding: 1.5rem 1rem;
+  border-radius: 8px;
+  text-align: center;
+  background-color: #fafafa;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  font-size: 0.9rem;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.drop-zone.dragover {
+  border-color: #4a90e2;
+  background: #e8f0fe;
+}
+
+.file-preview {
+  font-size: 0.9rem;
+  color: #333;
+}
+
+button {
+  background-color: #4a90e2;
+  color: white;
+  border: none;
+  padding: 0.8rem 1rem;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  cursor: pointer;
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+}
+
+button:hover {
+  background-color: #357bd8;
+}
+
+ul {
+  list-style-type: none;
+  padding-left: 0;
+}
+
+ul li {
+  padding: 0.3rem 0;
+}
+
+ul li a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+ul li a:hover {
+  text-decoration: underline;
+}
+
+progress {
+  height: 20px;
+  border-radius: 10px;
+  width: 100%;
+  display: none;
+}
+
+#uploadStatus {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 320px));
+  gap: 1.5rem;
+  margin-top: 1rem;
+  justify-content: start;
+}
+
+/* Responsive adjustments for file grid */
+@media (max-width: 768px) {
+  .file-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .file-grid {
+    grid-template-columns: 1fr;
+    gap: 0.8rem;
+  }
+  
+  .file-card {
+    min-height: 120px;
+    padding: 1rem;
+  }
+  
+  .file-name {
+    font-size: 0.85rem;
+    white-space: normal;
+    word-break: break-word;
+    overflow: visible;
+    line-height: 1.3;
+  }
+}
+
+/* Larger screens get more padding and spacing */
+@media (min-width: 768px) {
+  body {
+    padding: 1rem;
+  }
+  
+  header {
+    margin-bottom: 2rem;
+  }
+  
+  h1 {
+    font-size: 2rem;
+  }
+  
+  section {
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  section h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  
+  .drop-zone {
+    padding: 2rem;
+    font-size: 1rem;
+    min-height: 100px;
+  }
+}
+
+.file-card {
+  background: #fdfdfd;
+  border: 1px solid #e1e1e1;
+  border-radius: 12px;
+  padding: 1rem;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 140px;
+  max-width: 320px;
+  transition: all 0.2s ease-in-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.file-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  transform: translateY(-2px);
+  border-color: #007bff;
+}
+
+.file-icon {
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.7;
+}
+
+.file-name {
+  font-size: 0.9rem;
+  color: var(--text-color);
+  margin-bottom: 0.8rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.download-btn {
+  display: inline-block;
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  background-color: #4a90e2;
+  color: white;
+  text-decoration: none;
+  border-radius: 8px;
+  transition: background-color 0.2s ease-in-out;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+.download-btn:hover {
+  background-color: #357bd8;
+}
+
+/* 📤 Upload Manager Styles */
+.upload-queue {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #e1e1e1;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.upload-item {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #e1e1e1;
+  background: white;
+  transition: all 0.3s ease;
+}
+
+.upload-item:last-child {
+  border-bottom: none;
+}
+
+.upload-item.completed {
+  background: #f8fff8;
+  border-left: 4px solid #28a745;
+}
+
+.upload-item.processing {
+  background: #fff8e1;
+  border-left: 4px solid #ffc107;
+  animation: processingPulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes processingPulse {
+  from { opacity: 0.8; }
+  to { opacity: 1; }
+}
+
+.upload-item.error {
+  background: #fff8f8;
+  border-left: 4px solid #dc3545;
+}
+
+.upload-item.cancelled {
+  background: #fff8f8;
+  border-left: 4px solid #dc3545;
+  opacity: 0.7;
+}
+
+.upload-file-info {
+  flex: 1;
+  margin-right: 1rem;
+}
+
+.upload-file-name {
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 0.25rem;
+  word-break: break-all;
+}
+
+.upload-file-details {
+  font-size: 0.8rem;
+  color: #666;
+  display: flex;
+  gap: 1rem;
+}
+
+.upload-progress-section {
+  flex: 1;
+  margin-right: 1rem;
+}
+
+.upload-progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.25rem;
+}
+
+.upload-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4a90e2, #357bd8);
+  transition: width 0.3s ease;
+  border-radius: 4px;
+}
+
+.upload-progress-text {
+  font-size: 0.75rem;
+  color: #666;
+  display: flex;
+  justify-content: space-between;
+}
+
+.upload-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.upload-manager-btn {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.upload-manager-btn:hover {
+  opacity: 0.8;
+}
+
+.upload-control-btn {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.8rem;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 36px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+}
+
+.upload-control-btn:hover {
+  background: #f8f9fa;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+}
+
+.upload-control-btn.cancel:hover {
+  background: linear-gradient(135deg, #c0392b, #a93226);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(231, 76, 60, 0.4);
+}
+
+.upload-control-btn.resume {
+  background: linear-gradient(135deg, #28a745, #32cd32);
+  border-color: #28a745;
+  color: white;
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+.upload-control-btn.cancel {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  border-color: #e74c3c;
+  color: white;
+  box-shadow: 0 2px 4px rgba(231, 76, 60, 0.3);
+}
+
+.upload-control-btn.disabled {
+  background: #6c757d !important;
+  border-color: #6c757d !important;
+  color: #adb5bd !important;
+  cursor: not-allowed !important;
+  opacity: 0.6;
+}
+
+.upload-control-btn.disabled:hover {
+  background: #6c757d !important;
+  border-color: #6c757d !important;
+  transform: none !important;
+}
+
+/* 🔔 Toast notification base styles */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10005;
+  pointer-events: none;
+}
+
+.toast-visible {
+  pointer-events: auto;
+}
+
+/* 🔄 Smooth section switching transitions */
+#fileTransferSection, #fileListSection, #clipboardSection {
+  transition: opacity 0.2s ease-in-out;
+}
+
+/* 🎯 Smooth tick indicator transitions */
+#fileTickMain, #clipboardTickMain, #fileTickClipboard, #clipboardTickClipboard {
+  transition: opacity 0.15s ease-in-out;
+}
+
+/* iOS Safari specific fixes - minimal changes to prevent cramped look */
+@media screen and (max-width: 600px) {
+  body {
+    padding: 0.6rem;
+    -webkit-text-size-adjust: 100%;
+  }
+  
+  section {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  button {
+    font-size: 0.9rem;
+    padding: 0.75rem 1rem;
+    margin: 0.25rem;
+    min-height: 44px; /* iOS touch target minimum */
+    border-radius: 8px;
+  }
+  
+  /* Header spacing fix without changing layout */
+  header {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  /* Mobile header layout fixes - maintain original horizontal layout */
+  header > div:first-child {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    gap: 0.5rem !important;
+  }
+  
+  header > div:first-child h1 {
+    font-size: 1.3rem !important;
+    margin: 0 !important;
+    flex-shrink: 1 !important;
+  }
+  
+  /* Keep toggles side by side like original */
+  header > div:first-child > div:last-child {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.4rem !important;
+    flex-shrink: 0 !important;
+    align-items: center !important;
+  }
+  
+  .toggle-container {
+    padding: 0.3rem 0.5rem !important;
+    min-height: 32px !important;
+    border-radius: 20px !important;
+  }
+  
+  .toggle-container span {
+    font-size: 0.75rem !important;
+    white-space: nowrap !important;
+  }
+  
+  /* Make toggle switches smaller on mobile */
+  .toggle-switch {
+    transform: scale(0.8) !important;
+  }
+  
+  h1 {
+    font-size: 1.6rem;
+    margin: 0.5rem 0;
+  }
+  
+  /* Fix protocol status spacing */
+  #protocolStatus {
+    padding: 0.5rem 0.9rem;
+    font-size: 0.9rem;
+  }
+  
+  /* Settings button sizing */
+  #settingsBtn {
+    min-height: 44px;
+    padding: 0.6rem 1rem;
+  }
+  
+  /* Drop zone better spacing */
+  .drop-zone {
+    padding: 2rem 1rem;
+    min-height: 100px;
+    font-size: 1rem;
+  }
+  
+  /* File grid - keep original layout */
+  .file-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.8rem;
+  }
+  
+  .file-card {
+    min-height: 120px;
+    padding: 1rem;
+  }
+  
+  /* Section titles */
+  section h2 {
+    font-size: 1.2rem;
+    margin-bottom: 0.8rem;
+  }
+  .upload-manager {
+    margin: 0.5rem 0;
+    padding: 0.8rem;
+    border-radius: 12px;
+  }
+  
+  .upload-item {
+    padding: 0.8rem;
+    margin-bottom: 0.8rem;
+    flex-direction: column;
+    gap: 0.6rem;
+    border-radius: 8px;
+  }
+  
+  .upload-file-info {
+    flex-direction: column;
+    gap: 0.4rem;
+    align-items: flex-start;
+    width: 100%;
+  }
+  
+  .upload-file-name {
+    font-size: 0.9rem;
+    line-height: 1.3;
+    word-break: break-word;
+    margin-bottom: 0.3rem;
+  }
+  
+  .upload-file-details {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    align-items: center;
+    width: 100%;
+  }
+  
+  .upload-progress-section {
+    margin: 0.6rem 0;
+    width: 100%;
+  }
+  
+  .upload-progress-bar {
+    height: 6px;
+    margin-bottom: 0.4rem;
+  }
+  
+  .upload-progress-text {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+  
+  .upload-controls {
+    gap: 0.6rem;
+    justify-content: center;
+    margin-top: 0.6rem;
+    flex-wrap: wrap;
+  }
+  
+  .upload-control-btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.8rem;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 8px;
+    flex: 0 0 auto;
+  }
+  
+  .upload-manager-btn {
+    padding: 0.7rem 1rem;
+    font-size: 0.8rem;
+    margin: 0.2rem;
+    border-radius: 8px;
+  }
+  
+  /* 📱 Toast responsive styles for mobile */
+  #toast {
+    bottom: 20px !important;
+    left: 10px !important;
+    right: 10px !important;
+    transform: none !important;
+    -webkit-transform: none !important;
+    max-width: none !important;
+    min-width: auto !important;
+    margin: 0 !important;
+    font-size: 0.8rem !important;
+    padding: 0.8rem 1rem !important;
+    text-align: left !important;
+    line-height: 1.3 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+  }
+  
+  /* 📊 Upload History mobile responsive styles */
+  #uploadHistorySection {
+    margin-top: 1rem !important;
+  }
+  
+  #uploadHistoryContent {
+    max-height: 200px !important;
+    padding: 0.8rem !important;
+    font-size: 0.8rem !important;
+    overflow-y: auto;
+  }
+  
+  /* History item grid responsive */
+  #uploadHistoryContent div[style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+    gap: 0.4rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  /* Clipboard system mobile improvements */
+  .clipboard-textarea {
+    min-height: 80px !important;
+    font-size: 0.85rem !important;
+    padding: 0.8rem !important;
+    border-radius: 8px !important;
+  }
+  
+  .clipboard-buttons {
+      display: flex;
+      flex-direction: row;
+      gap: 0.5rem;
+      flex-wrap: nowrap;
+      margin-top: 0.8rem;
+      justify-content: flex-end;
+      width: 100%;
+  }
+  
+  .clipboard-buttons button {
+      flex: 0 0 auto;
+      min-width: auto;
+      max-width: none;
+      box-sizing: border-box;
+  }
+  
+  @media (max-width: 600px) {
+    .clipboard-buttons {
+      flex-direction: row;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .clipboard-buttons button {
+      flex: 1;
+      min-width: 0;
+      min-height: 32px !important;
+      font-size: 0.6rem !important;
+      padding: 0.2rem 0.3rem !important;
+      white-space: nowrap !important;
+      border-radius: 4px !important;
+    }
+  }
+  
+  /* Section headers mobile responsive - fix switch button visibility */
+  section > div:first-child {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    gap: 0.3rem !important;
+  }
+  
+  /* Section title - allow more shrinking to make room for switch button */
+  section > div:first-child h2 {
+    font-size: 1rem !important;
+    margin: 0 !important;
+    flex-shrink: 2 !important;
+    min-width: 0 !important;
+  }
+  
+  /* Switch button - ensure it stays visible and properly sized */
+  section > div:first-child > div {
+    flex-shrink: 0 !important;
+    min-width: 80px !important;
+  }
+  
+  /* Button containers - fix clipboard history button spacing (NO SCROLLBARS!) */
+  section div[style*="display: flex"][style*="gap"]:not(.toggle-container) {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 0.25rem !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+  }
+  
+  /* Individual buttons - make them fit naturally */
+  section button, section .download-btn {
+    min-height: 32px !important;
+    padding: 0.25rem 0.4rem !important;
+    font-size: 0.65rem !important;
+    white-space: nowrap !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+    border-radius: 4px !important;
+  }
+  
+  /* Fix switch dropdown items - keep checkmark inline */
+  div[id*="switchDropdown"] > div {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    white-space: nowrap !important;
+    padding: 0.4rem 0.8rem !important;
+    min-height: 40px !important;
+  }
+  
+  div[id*="switchDropdown"] > div > span {
+    display: flex !important;
+    align-items: center !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+    @media (max-width: 600px) {
+      .clipboard-buttons {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .clipboard-buttons button {
+        min-width: 0;
+        width: 100%;
+      }
+    }
+  
+  /* File count display */
+  .file-section h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  
+  #fileCount {
+    font-weight: normal;
+    font-size: 0.85rem;
+    color: #666;
+  }
+  
+  /* Action buttons spacing */
+  .action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.8rem;
+  }
+  
+  .action-buttons button {
+    flex: 1;
+    min-width: 100px;
+  }
+}
+
+/* 📱 Enhanced Mobile Responsiveness */
+@media (max-width: 480px) {
+  /* Extra small mobile devices */
+  body {
+    padding: 0.4rem;
+    font-size: 0.9rem;
+  }
+  
+  header {
+    padding: 0.8rem;
+    margin-bottom: 0.8rem;
+  }
+  
+  section {
+    padding: 0.8rem;
+    margin-bottom: 0.8rem;
+  }
+  
+  /* Make buttons more touch-friendly */
+  button, .download-btn {
+    min-height: 48px !important;
+    padding: 0.75rem 1rem !important;
+    font-size: 0.85rem !important;
+    border-radius: 8px;
+    touch-action: manipulation;
+  }
+  
+  /* Improve button containers */
+  .clipboard-buttons {
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+  }
+  
+  .clipboard-buttons button {
+    width: 100% !important;
+    flex: none !important;
+    min-height: 44px !important;
+    font-size: 0.8rem !important;
+    padding: 0.6rem 1rem !important;
+  }
+  
+  /* Better upload form spacing */
+  #unifiedUploadForm {
+    padding: 1rem 0.5rem;
+  }
+  
+  .drop-zone {
+    padding: 1.5rem 1rem !important;
+    min-height: 80px !important;
+    font-size: 0.9rem !important;
+  }
+  
+  /* File cards more compact */
+  .file-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
+    gap: 0.6rem !important;
+  }
+  
+  .file-card {
+    min-height: 100px !important;
+    padding: 0.8rem !important;
+  }
+  
+  .file-name {
+    font-size: 0.8rem !important;
+    line-height: 1.2 !important;
+  }
+  
+  /* Clipboard textarea better sizing */
+  #clipboardTextInput {
+    min-height: 100px !important;
+    font-size: 0.85rem !important;
+    padding: 0.8rem !important;
+  }
+  
+  /* Switch dropdown improvements */
+  div[id*="switchDropdown"] {
+    min-width: 140px !important;
+    font-size: 0.85rem !important;
+  }
+  
+  div[id*="switchDropdown"] > div {
+    padding: 0.75rem !important;
+    min-height: 44px !important;
+  }
+  
+  /* Modal improvements for mobile */
+  .modal-content {
+    margin: 1rem !important;
+    padding: 1rem !important;
+    max-width: calc(100vw - 2rem) !important;
+    max-height: calc(100vh - 2rem) !important;
+  }
+  
+  #deviceLogsContent {
+    max-height: 250px !important;
+    font-size: 0.8rem !important;
+  }
+  
+  /* Upload manager mobile improvements */
+  .upload-item {
+    padding: 1rem 0.5rem !important;
+    flex-direction: column !important;
+    gap: 0.8rem !important;
+  }
+  
+  .upload-file-info {
+    width: 100% !important;
+    text-align: left !important;
+  }
+  
+  .upload-file-name {
+    font-size: 0.85rem !important;
+    margin-bottom: 0.4rem !important;
+  }
+  
+  .upload-controls {
+    width: 100% !important;
+    justify-content: center !important;
+    gap: 0.5rem !important;
+  }
+  
+  .upload-control-btn {
+    flex: 1 !important;
+    max-width: 120px !important;
+    min-height: 40px !important;
+    font-size: 0.75rem !important;
+  }
+}
+
+/* 📱 Landscape phone orientation */
+@media (max-width: 900px) and (orientation: landscape) {
+  header {
+    padding: 0.8rem;
+  }
+  
+  section {
+    padding: 1rem;
+  }
+  
+  .file-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
+  }
+  
+  /* Make modals smaller in landscape */
+  .modal-content {
+    max-height: 80vh !important;
+  }
+  
+  #deviceLogsContent {
+    max-height: 200px !important;
+  }
+}
+
+/* 📱 Dark mode mobile fixes */
+@media (max-width: 600px) {
+  html[data-theme="dark"] {
+    /* Ensure good contrast on mobile */
+    --text-color: #f0f0f0;
+    --border-color: rgba(255, 255, 255, 0.15);
+  }
+  
+  html[data-theme="dark"] .file-card {
+    background: #333;
+    border-color: #555;
+  }
+  
+  html[data-theme="dark"] .upload-item {
+    background: #333;
+    border-color: #555;
+  }
+  
+  html[data-theme="dark"] #clipboardTextInput {
+    background: #333;
+    border-color: #555;
+    color: #f0f0f0;
+  }
+  
+  html[data-theme="dark"] #clipboardTextInput::placeholder {
+    color: #aaa;
+  }
+}
+
+/* 📱 Tablet breakpoint for toast and upload manager */
+@media (max-width: 900px) and (min-width: 601px) {
+  body {
+    padding: 0.8rem;
+  }
+  
+  .upload-manager {
+    margin: 0.8rem 0;
+    padding: 1.2rem;
+  }
+  
+  .upload-item {
+    padding: 1rem;
+    gap: 0.8rem;
+    flex-direction: row;
+  }
+  
+  .upload-file-info {
+    flex: 1;
+    margin-right: 1rem;
+  }
+  
+  .upload-controls {
+    gap: 0.6rem;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  
+  .upload-control-btn {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.85rem;
+    min-width: 80px;
+    min-height: 36px;
+  }
+  
+  #toast {
+    bottom: 20px !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    -webkit-transform: translateX(-50%) !important;
+    max-width: 500px !important;
+    margin: 0 !important;
+    font-size: 0.85rem !important;
+    padding: 0.8rem 1.2rem !important;
+    border-radius: 10px !important;
+  }
+}
