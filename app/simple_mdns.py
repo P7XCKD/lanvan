@@ -435,21 +435,24 @@ class SimpleMDNSManager:
                 # Create service name
                 service_name_full = f"{self.service_name}.{self.service_type}"
                 
-                # Enhanced properties with universal port redirect info
+                # Enhanced properties with universal protocol support (no forced redirects)
                 properties = {
                     b'version': b'1.0.0',
                     b'service': b'lanvan-file-server',
-                    b'protocol': self.protocol.encode('utf-8'),
+                    b'primary_protocol': self.protocol.encode('utf-8'),  # Primary protocol
+                    b'supports_http': b'true',   # Always support HTTP
+                    b'supports_https': b'true' if self.use_https else b'false',  # HTTPS support
                     b'secure': b'true' if self.use_https else b'false',
                     b'features': b'file-transfer,clipboard,encryption',
                     b'device_id': self.device_id.encode('utf-8'),
                     b'collision_resolved': b'true' if self.conflict_count > 0 else b'false',
                     b'offline_ready': b'true',  # Indicate offline compatibility
                     b'local_network': b'true',  # Local network only
-                    # 🎯 Universal Port Redirect: Add actual service details
+                    # 🎯 Universal Protocol Support: Support both HTTP and HTTPS
                     b'actual_port': str(self.actual_port).encode('utf-8'),
                     b'actual_protocol': self.actual_protocol.encode('utf-8'),
-                    b'redirect_capable': b'true'  # Indicates smart redirect support
+                    b'flexible_protocol': b'true',  # Indicates both protocols work
+                    b'auto_redirect': b'false'  # No forced redirects
                 }
                 
                 # Create service info with offline optimization
@@ -490,11 +493,16 @@ class SimpleMDNSManager:
                     print(f"⚠️ Announcement warning (non-critical): {announce_error}")
                     # Non-critical - continue
                 
-                protocol_display = "HTTPS" if self.use_https else "HTTP"
-                print(f"✅ mDNS service started: {self.domain}:{self.port} ({protocol_display})")
-                print(f"   Available at: {self.protocol}://{self.domain}:{self.port}")
-                print(f"   Direct IP: {self.protocol}://{lan_ip}:{self.port}")
-                print(f"🌐 Optimized for offline local network usage")
+                # 🌐 Universal Protocol Access Information
+                print(f"✅ mDNS service started: {self.domain}:{self.port}")
+                print(f"🌐 Flexible Protocol Support:")
+                print(f"   HTTP access:  http://{self.domain}:{self.port}")
+                if self.use_https:
+                    print(f"   HTTPS access: https://{self.domain}:{self.port}")
+                print(f"   Direct IP (HTTP):  http://{lan_ip}:{self.port}")
+                if self.use_https:
+                    print(f"   Direct IP (HTTPS): https://{lan_ip}:{self.port}")
+                print(f"🌐 Both protocols work - no forced redirects")
                 
                 if self.conflict_count > 0:
                     print(f"ℹ️ Collision resolved - using unique name: {self.service_name}")

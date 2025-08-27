@@ -78,15 +78,10 @@ async def home(request: Request):
             
             return RedirectResponse(url=redirect_url, status_code=302)  # Temporary redirect
     
-    # 🔀 HTTPS Fallback System: Auto-redirect HTTP to HTTPS when server runs in HTTPS mode
-    redirect_response = https_redirect_if_needed(request)
-    if redirect_response:
-        return redirect_response
-    
-    # 🏠 Main page logic
+    # 🏠 Main page logic - direct access, no redirects
     files = get_file_list()
     
-    # Add helpful debug info for HTTPS troubleshooting
+    # Add helpful debug info for protocol detection
     protocol = request.url.scheme
     host = request.headers.get("host", "unknown")
     
@@ -152,43 +147,13 @@ MAX_CONCURRENT_UPLOADS = 5  # Maximum parallel uploads per session
 # === Utility Functions ===
 def format_size(size_bytes):
     """Format bytes to human readable string"""
+    if size_bytes == 0:
+        return "0 B"
     for unit in ['B', 'KB', 'MB', 'GB']:
         if size_bytes < 1024.0:
             return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024.0
     return f"{size_bytes:.1f} TB"
-
-def https_redirect_if_needed(request: Request) -> Optional[RedirectResponse]:
-    """
-    🔀 HTTPS Fallback System: Check if we need to redirect HTTP to HTTPS
-    Returns RedirectResponse if redirect is needed, None otherwise
-    """
-    if mdns_manager.use_https and request.url.scheme == "http":
-        # Extract host and port information
-        host = request.headers.get("host", "")
-        if host:
-            # 🎯 Universal Port Redirect: Handle lanvan.local with any port
-            if "lanvan.local" in host:
-                # For lanvan.local, redirect to the actual HTTPS service
-                actual_port = mdns_manager.actual_port
-                if actual_port == 443:
-                    https_url = f"https://lanvan.local{request.url.path}"
-                else:
-                    https_url = f"https://lanvan.local:{actual_port}{request.url.path}"
-            else:
-                # Regular redirect preserving original host
-                https_url = f"https://{host}{request.url.path}"
-            
-            if request.url.query:
-                https_url += f"?{request.url.query}"
-            
-            return RedirectResponse(url=https_url, status_code=301)  # Permanent redirect
-    return None
-    for unit in ["B", "KB", "MB", "GB"]:
-        if size_bytes < 1024:
-            return f"{size_bytes:.2f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.2f} TB"
 
 def get_file_list():
     return sorted([
@@ -587,11 +552,7 @@ async def generate_decoy_traffic(request: Request):
 @router.get("/loading", response_class=HTMLResponse, name="loading")
 async def loading_page(request: Request, redirect: str = "/"):
     """Loading page shown while resources are being prepared"""
-    # 🔀 HTTPS Fallback System: Auto-redirect HTTP to HTTPS when server runs in HTTPS mode
-    redirect_response = https_redirect_if_needed(request)
-    if redirect_response:
-        return redirect_response
-    
+    # 🏠 Direct loading page access - no redirects
     return templates.TemplateResponse("loading.html", {
         "request": request,
         "redirect_url": redirect
@@ -2001,11 +1962,7 @@ clipboard_id_counter = 0
 @router.get("/clipboard", response_class=HTMLResponse, name="clipboard_page")
 async def clipboard_page(request: Request):
     """Full page clipboard route"""
-    # 🔀 HTTPS Fallback System: Auto-redirect HTTP to HTTPS when server runs in HTTPS mode
-    redirect_response = https_redirect_if_needed(request)
-    if redirect_response:
-        return redirect_response
-    
+    # 🏠 Direct clipboard access - no redirects
     files = get_file_list()  # Include files for seamless switching
     
     # Render the same template, but with clipboard as default view
