@@ -1557,17 +1557,6 @@ Device Session will reset when browser is closed
     queue.appendChild(itemDiv);
   }
 
-  function getStatusDisplay(status) {
-    const statusMap = {
-      'queued': 'Queued',
-      'uploading': 'Uploading',
-      'completed': '✅ Complete',
-      'error': '❌ Error', 
-      'cancelled': '⏸️ Cancelled'
-    };
-    return statusMap[status] || status;
-  }
-
   function getControlButtons(uploadItem) {
     switch (uploadItem.status) {
       case 'uploading':
@@ -3951,23 +3940,6 @@ function detectGuestDevice() {
   } catch (e) {
     console.log('Device detection failed, assuming guest device for safety:', e);
     return true; // Default to guest device for safety
-  }
-}
-
-function getDeviceMemory() {
-  try {
-    return navigator.deviceMemory ? navigator.deviceMemory * 1024 : 2048; // Default to 2GB if unknown
-  } catch (e) {
-    return 2048; // Conservative default
-  }
-}
-
-function checkIncognitoMode() {
-  try {
-    // Simple incognito detection
-    return !window.indexedDB || !window.localStorage;
-  } catch (e) {
-    return true; // Assume incognito if checks fail
   }
 }
 

@@ -103,3 +103,44 @@ function formatClipboardSize(bytes) {
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
+
+/**
+ * Get status display text for upload status
+ * @param {string} status - Upload status code
+ * @returns {string} Human readable status text
+ */
+function getStatusDisplay(status) {
+  const statusMap = {
+    'queued': 'Queued',
+    'uploading': 'Uploading',
+    'completed': '✅ Complete',
+    'error': '❌ Error', 
+    'cancelled': '⏸️ Cancelled'
+  };
+  return statusMap[status] || status;
+}
+
+/**
+ * Get device memory in MB with fallback
+ * @returns {number} Device memory in MB
+ */
+function getDeviceMemory() {
+  try {
+    return navigator.deviceMemory ? navigator.deviceMemory * 1024 : 2048; // Default to 2GB if unknown
+  } catch (e) {
+    return 2048; // Conservative default
+  }
+}
+
+/**
+ * Check if browser is in incognito/private mode
+ * @returns {boolean} True if incognito mode detected
+ */
+function checkIncognitoMode() {
+  try {
+    // Simple incognito detection
+    return !window.indexedDB || !window.localStorage;
+  } catch (e) {
+    return true; // Assume incognito if checks fail
+  }
+}
