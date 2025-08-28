@@ -39,3 +39,14 @@ function getSystemResourceUsage() {
   
   return usage;
 }
+
+/**
+ * Format time duration in seconds to human readable format
+ * @param {number} seconds - Time in seconds
+ * @returns {string} Formatted time string (e.g., "45s", "2m", "1h")
+ */
+function formatTime(seconds) {
+  if (seconds < 60) return Math.round(seconds) + 's';
+  if (seconds < 3600) return Math.round(seconds / 60) + 'm';
+  return Math.round(seconds / 3600) + 'h';
+}

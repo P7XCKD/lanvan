@@ -2669,12 +2669,6 @@ Device Session will reset when browser is closed
     return parseFloat((bytesPerSecond / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 
-  function formatTime(seconds) {
-    if (seconds < 60) return Math.round(seconds) + 's';
-    if (seconds < 3600) return Math.round(seconds / 60) + 'm';
-    return Math.round(seconds / 3600) + 'h';
-  }
-
   function escapeHtml(text) {
     const map = {
       '&': '&amp;',
