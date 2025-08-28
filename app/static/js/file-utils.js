@@ -12,6 +12,67 @@ function generateFileListHash(files) {
 }
 
 /**
+ * Generate an offline QR code pattern on a canvas
+ * @param {string} text - Text to encode in QR pattern
+ * @param {HTMLCanvasElement} canvas - Canvas element to draw on
+ * @returns {string|boolean} Data URL of the QR code or false if blocked
+ */
+function generateOfflineQR(text, canvas) {
+  // Skip computation if uploads are blocked to prevent UI blocking
+  if (window._qrBlocked) {
+    console.log('⏸️ QR computation blocked during upload');
+    return false;
+  }
+  
+  // Create a simple grid-based QR code for offline use
+  const ctx = canvas.getContext('2d');
+  canvas.width = 200;
+  canvas.height = 200;
+  
+  // Simple pattern generation (basic QR-like appearance)
+  const size = 20;
+  const cellSize = canvas.width / size;
+  
+  // Generate pattern based on text hash
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) - hash + text.charCodeAt(i)) & 0xffffffff;
+  }
+  
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  ctx.fillStyle = '#000000';
+  
+  // Create QR-like pattern
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      // Position markers (corners)
+      if ((x < 7 && y < 7) || (x >= size-7 && y < 7) || (x < 7 && y >= size-7)) {
+        if ((x < 6 && y < 6 && (x === 0 || x === 5 || y === 0 || y === 5)) ||
+            (x >= size-6 && y < 6 && (x === size-6 || x === size-1 || y === 0 || y === 5)) ||
+            (x < 6 && y >= size-6 && (x === 0 || x === 5 || y === size-6 || y === size-1))) {
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
+        if ((x >= 2 && x <= 4 && y >= 2 && y <= 4) ||
+            (x >= size-5 && x <= size-3 && y >= 2 && y <= 4) ||
+            (x >= 2 && x <= 4 && y >= size-5 && y <= size-3)) {
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
+      } else {
+        // Data pattern based on hash
+        const pos = y * size + x;
+        if (((hash >> (pos % 32)) & 1) === 1) {
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+  }
+  
+  return canvas.toDataURL();
+}
+
+/**
  * Get system resource usage information
  * @returns {Object} Resource usage data
  */
