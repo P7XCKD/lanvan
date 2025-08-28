@@ -350,3 +350,40 @@ function connectRegularClipboardWS() {
     setTimeout(connectRegularClipboardWS, 1000); // Reduced from 2000ms
   };
 }
+
+// Function to manage a safety net for upload progress updates
+function startProgressUpdateSafetyNet() {
+  if (progressUpdateInterval) return; // Already running
+
+  progressUpdateInterval = setInterval(() => {
+    // Include ALL uploads that should show progress (uploading OR processing)
+    const activeUploads = uploadQueue.filter(item => 
+      (item.status === 'uploading' || item.status === 'processing') && 
+      item.progress !== undefined && item.progress < 100
+    );
+
+    // Force update uploads that might be stuck due to processing delays
+    activeUploads.forEach(uploadItem => {
+      const timeSinceUpdate = uploadItem.lastProgressUpdate ? (Date.now() - uploadItem.lastProgressUpdate) : 5000;
+      // More aggressive: force update every 800ms for ultra-responsive feel
+      if (timeSinceUpdate > 800) {
+        // Only log if critically stuck for more than 30 seconds to reduce spam
+        if (timeSinceUpdate > 30000) {
+          console.warn(`⚠️ Upload critically stuck for ${uploadItem.fileName} (${(timeSinceUpdate/1000).toFixed(1)}s), forcing update`);
+        }
+        updateUploadItem(uploadItem, true); // Force update flag
+      }
+    });
+
+    // Keep safety net running if ANY uploads exist (not just active ones)
+    const anyUploads = uploadQueue.filter(item => 
+      !['completed', 'cancelled', 'error'].includes(item.status)
+    );
+
+    if (anyUploads.length === 0) {
+      clearInterval(progressUpdateInterval);
+      progressUpdateInterval = null;
+      console.log('🔄 Safety net stopped - no active uploads');
+    }
+  }, 300); // Check every 300ms for ultra-responsive feel
+}
