@@ -298,3 +298,23 @@ function shouldInsertBefore(newItem, existingItem) {
   // Priority 3: Smaller files first
   return newItem.fileSize < existingItem.fileSize;
 }
+
+// Function to establish a WebSocket connection for clipboard-only mode
+function connectClipboardWS() {
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const wsUrl = `${protocol}://${window.location.host}/ws/clipboard`;
+  let ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    // Refresh clipboard history when WebSocket (re)connects
+    if (typeof refreshClipboardHistory === 'function') {
+      setTimeout(() => refreshClipboardHistory(), 50); // Reduced from 100ms for responsiveness
+    }
+  };
+
+  ws.onmessage = (event) => {
+    if (event.data === 'refresh') {
+      if (typeof refreshClipboardHistory === 'function') refreshClipboardHistory();
+    }
+  };
+}
