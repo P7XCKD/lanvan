@@ -155,6 +155,32 @@ def format_size(size_bytes):
         size_bytes /= 1024.0
     return f"{size_bytes:.1f} TB"
 
+def should_ignore_file(filename: str) -> bool:
+    """
+    Check if a file should be ignored based on qt.py patterns from .gitignore
+    🚫 Filters out qt.py generated test files from file listings
+    """
+    qt_patterns = [
+        # Direct qt.py test file patterns
+        "quick_test", "test_output", "temp_test", "debug_test",
+        # Qt.py generated logs and debug files  
+        "qt_test_", "qt_debug_", "qt_output_", "test_results_", "test_log_",
+        # Any files that look like qt.py test files
+        "test_file_"
+    ]
+    
+    # Check if filename matches any qt.py test patterns
+    filename_lower = filename.lower()
+    for pattern in qt_patterns:
+        if pattern in filename_lower:
+            return True
+    
+    # Additional specific extensions for qt.py test files
+    if filename_lower.endswith(('.tmp', '.log')) and any(p in filename_lower for p in qt_patterns):
+        return True
+        
+    return False
+
 def get_file_list():
     return sorted([
         {
@@ -163,19 +189,20 @@ def get_file_list():
             "mtime": f.stat().st_mtime
         }
         for f in UPLOAD_FOLDER.iterdir() 
-        if f.is_file() and not f.name.endswith('.tmp')  # 🚫 Filter out temporary files
+        if f.is_file() and not f.name.endswith('.tmp') and not should_ignore_file(f.name)  # 🚫 Filter out temporary files and qt.py test files
     ], key=lambda x: x["mtime"], reverse=True)
 
 async def get_file_list_async():
     """
     🚀 Async file list with yielding for large directories
     🚫 RACE CONDITION FIX: Filter out .tmp files to prevent downloading partial uploads
+    🚫 Qt.py FILTER: Hide qt.py generated test files from listings
     """
     files = []
     file_count = 0
     
     for f in UPLOAD_FOLDER.iterdir():
-        if f.is_file() and not f.name.endswith('.tmp'):  # 🚫 Filter out temporary files
+        if f.is_file() and not f.name.endswith('.tmp') and not should_ignore_file(f.name):  # 🚫 Filter out temporary files and qt.py test files
             files.append({
                 "name": f.name,
                 "size": format_size(f.stat().st_size),
