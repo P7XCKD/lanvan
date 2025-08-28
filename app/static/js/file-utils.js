@@ -791,7 +791,7 @@ function displayDeviceLogsWithPagination(logs, contentElement, paginationElement
   renderPagination();
 }
 
-// Global debug configurations
+// 🔧 Conditional Logging System - Production Performance Optimization
 const DEBUG_MODE = false; // Set to true for development, false for production
 const DEBUG_LEVELS = {
   ERROR: 0,   // Always shown (security, critical errors)
@@ -823,3 +823,37 @@ const log = {
     if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('🌐', msg, ...args);
   }
 };
+
+// Clipboard WebSocket connection
+function connectClipboardWS(showClipboardOnly) {
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const wsUrl = `${protocol}://${window.location.host}/ws/clipboard`;
+  const ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    log.network('Clipboard WebSocket connected');
+    if (typeof refreshClipboardHistory === 'function') {
+      setTimeout(() => refreshClipboardHistory(), 50);
+    }
+  };
+
+  ws.onmessage = (event) => {
+    if (event.data === 'refresh' && typeof refreshClipboardHistory === 'function') {
+      refreshClipboardHistory();
+    }
+  };
+
+  ws.onclose = () => {
+    log.warn('Clipboard WebSocket disconnected, reconnecting...');
+    setTimeout(() => connectClipboardWS(showClipboardOnly), 1000);
+  };
+
+  ws.onerror = () => {
+    ws.close();
+  };
+
+  if (showClipboardOnly) {
+    document.addEventListener('DOMContentLoaded', () => connectClipboardWS(true));
+    window.addEventListener('beforeunload', () => ws.close());
+  }
+}
