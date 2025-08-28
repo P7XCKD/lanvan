@@ -318,3 +318,35 @@ function connectClipboardWS() {
     }
   };
 }
+
+// Function to establish a WebSocket connection for regular clipboard mode
+function connectRegularClipboardWS() {
+  // Only connect if clipboard section exists
+  const clipboardSection = document.getElementById('clipboardSection');
+  if (!clipboardSection) return;
+
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const wsUrl = `${protocol}://${window.location.host}/ws/clipboard`;
+  let clipboardWS = new WebSocket(wsUrl);
+
+  clipboardWS.onopen = () => {
+    log.network('Regular mode clipboard WebSocket connected');
+    // Refresh clipboard history when WebSocket (re)connects
+    if (typeof refreshClipboardHistory === 'function') {
+      setTimeout(() => refreshClipboardHistory(), 50); // Reduced from 100ms for responsiveness
+    }
+  };
+
+  clipboardWS.onmessage = (event) => {
+    if (event.data === 'refresh') {
+      log.debug('Clipboard update received via WebSocket');
+      if (typeof refreshClipboardHistory === 'function') refreshClipboardHistory();
+    }
+  };
+
+  clipboardWS.onclose = () => {
+    log.warn('Clipboard WebSocket disconnected, will reconnect...');
+    // Try to reconnect after reduced delay if disconnected
+    setTimeout(connectRegularClipboardWS, 1000); // Reduced from 2000ms
+  };
+}
