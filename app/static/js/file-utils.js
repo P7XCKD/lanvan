@@ -50,3 +50,56 @@ function formatTime(seconds) {
   if (seconds < 3600) return Math.round(seconds / 60) + 'm';
   return Math.round(seconds / 3600) + 'h';
 }
+
+/**
+ * Format file size in bytes to human readable format
+ * @param {number} bytes - File size in bytes
+ * @returns {string} Formatted size string (e.g., "1.5 MB", "256 KB")
+ */
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+/**
+ * Format transfer speed in bytes per second to human readable format
+ * @param {number} bytesPerSecond - Speed in bytes per second
+ * @returns {string} Formatted speed string (e.g., "1.2 MB/s", "500 KB/s")
+ */
+function formatSpeed(bytesPerSecond) {
+  if (bytesPerSecond === 0) return '0 B/s';
+  const k = 1024;
+  const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+  const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k));
+  return parseFloat((bytesPerSecond / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+/**
+ * Escape HTML special characters to prevent XSS
+ * @param {string} text - Text to escape
+ * @returns {string} HTML-escaped text
+ */
+function escapeHtml(text) {
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+/**
+ * Format clipboard item size to human readable format
+ * @param {number} bytes - Size in bytes
+ * @returns {string} Formatted size string (e.g., "1.5 MB", "256.0 KB")
+ */
+function formatClipboardSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
