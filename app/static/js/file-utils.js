@@ -790,3 +790,36 @@ function displayDeviceLogsWithPagination(logs, contentElement, paginationElement
   renderPage(currentPage);
   renderPagination();
 }
+
+// Global debug configurations
+const DEBUG_MODE = false; // Set to true for development, false for production
+const DEBUG_LEVELS = {
+  ERROR: 0,   // Always shown (security, critical errors)
+  WARN: 1,    // Important warnings
+  INFO: 2,    // General information
+  DEBUG: 3    // Detailed debugging (upload progress, etc.)
+};
+
+const currentLogLevel = DEBUG_MODE ? DEBUG_LEVELS.DEBUG : DEBUG_LEVELS.ERROR;
+
+// Optimized logging functions
+const log = {
+  error: (msg, ...args) => {
+    if (currentLogLevel >= DEBUG_LEVELS.ERROR) console.error('❌', msg, ...args);
+  },
+  warn: (msg, ...args) => {
+    if (currentLogLevel >= DEBUG_LEVELS.WARN) console.warn('⚠️', msg, ...args);
+  },
+  info: (msg, ...args) => {
+    if (currentLogLevel >= DEBUG_LEVELS.INFO) console.info('ℹ️', msg, ...args);
+  },
+  debug: (msg, ...args) => {
+    if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('🔍', msg, ...args);
+  },
+  upload: (msg, ...args) => {
+    if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('📤', msg, ...args);
+  },
+  network: (msg, ...args) => {
+    if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('🌐', msg, ...args);
+  }
+};
