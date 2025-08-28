@@ -387,3 +387,157 @@ function startProgressUpdateSafetyNet() {
     }
   }, 300); // Check every 300ms for ultra-responsive feel
 }
+
+/**
+ * Function to determine if a file selection should be processed
+ * @param {FileList|Array} files - Files from the file input
+ * @returns {boolean} True if file selection should be processed
+ */
+function shouldProcessFileSelection(files) {
+  const now = Date.now();
+  const fileHash = generateFileListHash(files);
+
+  // Check if this is a duplicate selection within debounce period
+  if (now - lastFileSelectionTime < FILE_SELECTION_DEBOUNCE && fileHash === lastFileSelectionHash) {
+    console.log('🔄 Duplicate file selection ignored (debounced)');
+    return false;
+  }
+
+  // Update last selection time and hash
+  lastFileSelectionTime = now;
+  lastFileSelectionHash = fileHash;
+  return true;
+}
+
+/**
+ * Function to determine optimal concurrency for uploads
+ */
+function getOptimalConcurrency() {
+  // Get average network speed from recent samples
+  if (networkSpeedSamples.length === 0) {
+    return LANVAN_CONFIG.CONCURRENT.NETWORK_MEDIUM;
+  }
+
+  const avgSpeed = networkSpeedSamples.reduce((a, b) => a + b, 0) / networkSpeedSamples.length;
+
+  // Detect device capability
+  const isLowEndDevice = detectGuestDevice();
+  const deviceMemory = getDeviceMemory();
+
+  // Base concurrency on network speed
+  let optimal;
+  if (avgSpeed > 10) {
+    optimal = LANVAN_CONFIG.CONCURRENT.NETWORK_FAST;
+  } else if (avgSpeed > 5) {
+    optimal = LANVAN_CONFIG.CONCURRENT.NETWORK_MEDIUM;
+  } else {
+    optimal = LANVAN_CONFIG.CONCURRENT.NETWORK_SLOW;
+  }
+
+  // Reduce for low-end devices
+  if (isLowEndDevice || deviceMemory < 4096) {
+    optimal = Math.min(optimal, 2);
+  }
+
+  // Cap at maximum
+  return Math.min(optimal, LANVAN_CONFIG.CONCURRENT.MAX_UPLOADS);
+}
+
+// Function to handle the end of an upload
+function endUpload() {
+  activeUploads = Math.max(0, activeUploads - 1);
+  log.upload(`Upload ended (${activeUploads}/${currentMaxConcurrent} active)`);
+
+  // Resume auto-refresh when all uploads complete
+  if (activeUploads === 0) {
+    handleUploadEnd();
+  }
+}
+
+// Function to show the upload manager
+function showUploadManager() {
+  const manager = document.getElementById('uploadManager');
+  if (manager && !isUploadManagerVisible) {
+    manager.style.display = 'block';
+    isUploadManagerVisible = true;
+
+    // 🔔 Show helpful toast when upload manager first appears
+    showToast('📤 Upload Manager opened - Track your file uploads here!', 3000);
+  }
+}
+
+// Function to toggle the visibility of device logs
+function toggleDeviceLogs() {
+  // Open device logs in modal format
+  const modal = document.getElementById('deviceLogsModal');
+  modal.style.display = 'flex';
+
+  // Populate logs data
+  populateDeviceLogsModal();
+
+  // Close on escape key
+  document.addEventListener('keydown', function escapeHandler(e) {
+    if (e.key === 'Escape') {
+      closeDeviceLogsModal();
+      document.removeEventListener('keydown', escapeHandler);
+    }
+  });
+
+  // Close on background click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeDeviceLogsModal();
+    }
+  });
+}
+
+// Function to populate the device logs modal
+function populateDeviceLogsModal() {
+  const logsSection = document.getElementById('deviceLogsSection');
+  const logsContent = document.getElementById('deviceLogsContent');
+  const logsStats = document.getElementById('deviceLogsStats');
+  const logsPagination = document.getElementById('deviceLogsPagination');
+
+  // Show logs in modal
+  try {
+    const deviceUploadLogs = getDeviceUploadHistory();
+
+    if (deviceUploadLogs.length === 0) {
+      logsContent.innerHTML = `
+        <div style="text-align: center; color: var(--text-color); opacity: 0.6; padding: 2rem;">
+          <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
+          <div style="font-size: 1.1rem; color: var(--text-color) !important;">No device logs for this session yet</div>
+          <div style="font-size: 0.9rem; margin-top: 0.5rem; color: var(--text-color) !important; opacity: 0.7;">Upload some files to see activity logs here</div>
+          <div style="font-size: 0.85rem; margin-top: 1rem; color: var(--text-color) !important; opacity: 0.7;">
+            📱 Logs are device-specific and clear when you close the browser
+          </div>
+        </div>
+      `;
+      logsStats.innerHTML = '';
+      logsPagination.style.display = 'none';
+    } else {
+      // Generate logs stats
+      const totalFiles = deviceUploadLogs.length;
+      const totalSizeBytes = deviceUploadLogs.reduce((sum, log) => {
+        const sizeMB = parseFloat(log.size?.replace(/[^\d.-]/g, '') || '0');
+        return sum + sizeMB;
+      }, 0);
+      const sessionStartTime = deviceUploadLogs[deviceUploadLogs.length - 1]?.timestamp;
+      const sessionEndTime = deviceUploadLogs[0]?.timestamp;
+
+      logsStats.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+          <div><strong>📊 Total Entries:</strong> ${totalFiles}</div>
+          <div><strong>💾 Total Data:</strong> ${totalSizeBytes.toFixed(1)} MB</div>
+          <div><strong>📱 Device Session:</strong> ${getCurrentDeviceId().substring(0, 8)}...</div>
+          <div><strong>⏰ Session Started:</strong> ${sessionStartTime || 'Unknown'}</div>
+        </div>
+      `;
+
+      // Display logs with pagination (grouped by batch)
+      displayDeviceLogsWithPagination(deviceUploadLogs, logsContent, logsPagination);
+    }
+  } catch (error) {
+    console.error('Error populating device logs modal:', error);
+  }
+}

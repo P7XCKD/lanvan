@@ -629,21 +629,7 @@
   let lastFileSelectionTime = 0;
   let lastFileSelectionHash = '';
   const FILE_SELECTION_DEBOUNCE = 500; // 500ms debounce
-  
-  function shouldProcessFileSelection(files) {
-    const now = Date.now();
-    const fileHash = generateFileListHash(files);
-    
-    // Check if this is a duplicate selection within debounce period
-    if (now - lastFileSelectionTime < FILE_SELECTION_DEBOUNCE && fileHash === lastFileSelectionHash) {
-      console.log('🔄 Duplicate file selection ignored (debounced)');
-      return false;
-    }
-    
-    lastFileSelectionTime = now;
-    lastFileSelectionHash = fileHash;
-    return true;
-  }
+  // Removed shouldProcessFileSelection function; moved to file-utils.js
 
   // 🌐 Smart Concurrent Upload Management System
   let activeUploads = 0;
@@ -652,38 +638,8 @@
   let uploadCompletionTimes = [];
   let lastConcurrencyAdjustment = 0;
   let totalUploadsProcessed = 0;
-  
-  function getOptimalConcurrency() {
-    // Get average network speed from recent samples
-    if (networkSpeedSamples.length === 0) {
-      return LANVAN_CONFIG.CONCURRENT.NETWORK_MEDIUM;
-    }
-    
-    const avgSpeed = networkSpeedSamples.reduce((a, b) => a + b, 0) / networkSpeedSamples.length;
-    
-    // Detect device capability
-    const isLowEndDevice = detectGuestDevice();
-    const deviceMemory = getDeviceMemory();
-    
-    // Base concurrency on network speed
-    let optimal;
-    if (avgSpeed > 10) {
-      optimal = LANVAN_CONFIG.CONCURRENT.NETWORK_FAST;
-    } else if (avgSpeed > 5) {
-      optimal = LANVAN_CONFIG.CONCURRENT.NETWORK_MEDIUM;
-    } else {
-      optimal = LANVAN_CONFIG.CONCURRENT.NETWORK_SLOW;
-    }
-    
-    // Reduce for low-end devices
-    if (isLowEndDevice || deviceMemory < 4096) {
-      optimal = Math.min(optimal, 2);
-    }
-    
-    // Cap at maximum
-    return Math.min(optimal, LANVAN_CONFIG.CONCURRENT.MAX_UPLOADS);
-  }
-  
+  // Removed getOptimalConcurrency function; moved to file-utils.js
+
   function updateNetworkSpeed(speedMBps) {
     networkSpeedSamples.push(speedMBps);
     
@@ -727,16 +683,7 @@
       handleUploadStart();
     }
   }
-  
-  function endUpload() {
-    activeUploads = Math.max(0, activeUploads - 1);
-    log.upload(`Upload ended (${activeUploads}/${currentMaxConcurrent} active)`);
-    
-    // Resume auto-refresh when all uploads complete
-    if (activeUploads === 0) {
-      handleUploadEnd();
-    }
-  }
+  // Removed endUpload function; moved to file-utils.js
 
   // 🚀 Upload Manager Functions
   function createUploadItem(file, uploadId) {
@@ -775,7 +722,7 @@
       renderUploadItem(uploadItem);
     }
     updateUploadManager();
-    showUploadManager();
+    // Removed showUploadManager function; moved to file-utils.js
   }
 
   function showUploadManager() {
