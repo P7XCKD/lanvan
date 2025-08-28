@@ -982,20 +982,6 @@
     };
   }
 
-  function getBrowserInfo(userAgent) {
-    if (userAgent.includes('Firefox')) {
-      return { name: 'Firefox', version: 'Unknown' };
-    } else if (userAgent.includes('Chrome') && !userAgent.includes('Edge')) {
-      return { name: 'Chrome', version: 'Unknown' };
-    } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
-      return { name: 'Safari', version: 'Unknown' };
-    } else if (userAgent.includes('Edge')) {
-      return { name: 'Edge', version: 'Unknown' };
-    } else {
-      return { name: 'Unknown', version: 'Unknown' };
-    }
-  }
-
   function getDeviceUploadHistory() {
     try {
       const deviceId = getCurrentDeviceId();
@@ -8113,11 +8099,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // 🛡️ HTTP-Safe mode is now automatic - no toggle management needed
-
-  function updateHttpSecurityWarning() {
-    // HTTP-Safe mode is automatic when AES is enabled over HTTP
-    console.log('🛡️ HTTP-Safe mode: automatic when AES enabled over HTTP');
-  }
 
   // 🌙 Dark Mode Toggle Functionality
   const darkModeToggle = DOM_CACHE.darkModeToggle;

@@ -144,3 +144,30 @@ function checkIncognitoMode() {
     return true; // Assume incognito if checks fail
   }
 }
+
+/**
+ * Get browser information from user agent string
+ * @param {string} userAgent - User agent string
+ * @returns {Object} Browser name and version info
+ */
+function getBrowserInfo(userAgent) {
+  if (userAgent.includes('Firefox')) {
+    return { name: 'Firefox', version: 'Unknown' };
+  } else if (userAgent.includes('Chrome') && !userAgent.includes('Edge')) {
+    return { name: 'Chrome', version: 'Unknown' };
+  } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+    return { name: 'Safari', version: 'Unknown' };
+  } else if (userAgent.includes('Edge')) {
+    return { name: 'Edge', version: 'Unknown' };
+  } else {
+    return { name: 'Unknown', version: 'Unknown' };
+  }
+}
+
+/**
+ * Update HTTP security warning display
+ */
+function updateHttpSecurityWarning() {
+  // HTTP-Safe mode is automatic when AES is enabled over HTTP
+  console.log('🛡️ HTTP-Safe mode: automatic when AES enabled over HTTP');
+}

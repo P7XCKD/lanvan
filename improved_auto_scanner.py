@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Auto Function Scanner - Analyze ALL JavaScript functions in a file
-Identifies safe-to-extract functions with zero external dependencies
+Improved Auto Function Scanner - More accurate dependency detection
+Identifies truly safe-to-extract functions with zero external dependencies
 """
 
 import re
@@ -39,35 +39,36 @@ def extract_all_functions(js_code):
     
     return functions
 
-def find_function_dependencies(function_body, function_name):
-    """Find all variables used by a specific function"""
+def find_function_dependencies(function_body, function_name, function_params=None):
+    """Find all external dependencies used by a specific function"""
+    
+    if function_params is None:
+        function_params = set()
     
     variable_refs = set()
     
-    # Enhanced patterns for variable detection
-    patterns = [
-        # UPPERCASE constants (but exclude common string literals)
-        r'\b([A-Z_][A-Z_0-9]{2,})\b',  # At least 3 chars for constants
-        # Object property access (but not method calls)
-        r'\b([a-zA-Z_][a-zA-Z_0-9]*)\s*\.[a-zA-Z]',
-        # Function calls (external functions)
-        r'\b([a-zA-Z_][a-zA-Z_0-9]*)\s*\(',
-        # Global variable assignments
-        r'\b(window\.[a-zA-Z_][a-zA-Z_0-9]*)',
-        r'\b(document\.[a-zA-Z_][a-zA-Z_0-9]*)'
-    ]
+    # Remove comments and strings to avoid false positives
+    clean_body = re.sub(r'//.*$', '', function_body, flags=re.MULTILINE)
+    clean_body = re.sub(r'/\*.*?\*/', '', clean_body, flags=re.DOTALL)
+    clean_body = re.sub(r'"[^"]*"', '""', clean_body)
+    clean_body = re.sub(r"'[^']*'", "''", clean_body)
+    clean_body = re.sub(r'`[^`]*`', '``', clean_body)
     
     # Built-in JavaScript objects and functions that are safe
     builtins = {
+        # Core JS objects
         'Date', 'Array', 'JSON', 'Object', 'String', 'Number', 'Boolean', 'Math', 
+        'RegExp', 'Error', 'TypeError', 'ReferenceError', 'SyntaxError', 'RangeError',
+        'WeakMap', 'WeakSet', 'Map', 'Set', 'Symbol', 'Proxy', 'Reflect',
+        
+        # Browser APIs (considered safe for utility functions)
         'console', 'localStorage', 'sessionStorage', 'window', 'navigator', 'document',
         'fetch', 'Promise', 'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval',
         'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'encodeURIComponent', 'decodeURIComponent',
         'btoa', 'atob', 'Blob', 'FormData', 'URLSearchParams', 'URL', 'location', 'history',
-        'alert', 'confirm', 'prompt', 'XMLHttpRequest', 'AbortController', 'Error',
-        'TypeError', 'ReferenceError', 'SyntaxError', 'RangeError', 'RegExp',
-        'WeakMap', 'WeakSet', 'Map', 'Set', 'Symbol', 'Proxy', 'Reflect',
-        # Common method names that are usually safe
+        'alert', 'confirm', 'prompt', 'XMLHttpRequest', 'AbortController',
+        
+        # Safe method names 
         'toString', 'valueOf', 'toFixed', 'substring', 'substr', 'charAt', 'charCodeAt',
         'indexOf', 'lastIndexOf', 'slice', 'split', 'join', 'replace', 'match',
         'search', 'toLowerCase', 'toUpperCase', 'trim', 'push', 'pop', 'shift',
@@ -75,56 +76,94 @@ def find_function_dependencies(function_body, function_name):
         'forEach', 'find', 'findIndex', 'includes', 'some', 'every', 'length',
         'hasOwnProperty', 'propertyIsEnumerable', 'ceil', 'floor', 'round', 'abs',
         'min', 'max', 'pow', 'sqrt', 'random', 'log', 'exp', 'sin', 'cos', 'tan',
-        # Safe literals and keywords
+        
+        # Safe keywords and literals
         'true', 'false', 'null', 'undefined', 'this', 'return', 'if', 'else',
         'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'try', 'catch',
-        'finally', 'throw', 'new', 'var', 'let', 'const', 'function', 'async', 'await'
+        'finally', 'throw', 'new', 'var', 'let', 'const', 'function', 'async', 'await',
+        'typeof', 'instanceof', 'in', 'of', 'delete', 'void'
     }
     
-    # Local variable patterns (declared within function)
+    # Find local variable declarations
     local_vars = set()
-    
-    # Find local variable declarations - more comprehensive
     local_patterns = [
         r'\b(?:var|let|const)\s+([a-zA-Z_][a-zA-Z_0-9]*)',
-        r'function\s+([a-zA-Z_][a-zA-Z_0-9]*)',
         r'for\s*\(\s*(?:var|let|const)?\s*([a-zA-Z_][a-zA-Z_0-9]*)',
         r'catch\s*\(\s*([a-zA-Z_][a-zA-Z_0-9]*)',
         r'([a-zA-Z_][a-zA-Z_0-9]*)\s*=',  # Assignment targets
-        r'function\s*\([^)]*\b([a-zA-Z_][a-zA-Z_0-9]*)\b[^)]*\)',  # Parameters
-        r'\{[^}]*\b([a-zA-Z_][a-zA-Z_0-9]*)\s*:', # Object property shorthand
+        r'\{[^}]*\b([a-zA-Z_][a-zA-Z_0-9]*)\s*:',  # Object property names
     ]
     
     for pattern in local_patterns:
-        for match in re.finditer(pattern, function_body):
-            local_vars.add(match.group(1))
+        for match in re.finditer(pattern, clean_body):
+            if match.group(1):
+                local_vars.add(match.group(1))
     
-    # Find all variable references but be more selective
-    for pattern in patterns:
-        for match in re.finditer(pattern, function_body):
+    # Add function parameters to local vars
+    local_vars.update(function_params)
+    local_vars.add(function_name)  # Function can reference itself
+    
+    # Check for DOM dependencies (major red flag)
+    dom_patterns = [
+        r'getElementById',
+        r'querySelector',
+        r'getElementsBy\w+',
+        r'createElement',
+        r'appendChild',
+        r'removeChild',
+        r'innerHTML',
+        r'textContent',
+        r'addEventListener',
+        r'style\.',
+    ]
+    
+    for pattern in dom_patterns:
+        if re.search(pattern, clean_body):
+            variable_refs.add('DOM_DEPENDENCY')
+    
+    # Patterns to find potential external dependencies
+    dependency_patterns = [
+        # Global variables (likely external state)
+        r'\b([A-Z_][A-Z_0-9]{2,})\b',
+        
+        # Function calls to non-builtin functions
+        r'\b([a-z][a-zA-Z_0-9]*)\s*\(',
+        
+        # Object property access that might be external
+        r'\b([a-z][a-zA-Z_0-9]*)\s*\.',
+        
+        # CamelCase variables (often external)
+        r'\b([a-z][a-zA-Z_0-9]*[A-Z][a-zA-Z_0-9]*)\b',
+    ]
+    
+    # Find potential dependencies
+    for pattern in dependency_patterns:
+        for match in re.finditer(pattern, clean_body):
             var_name = match.group(1)
             
-            # Clean up the variable name
-            if '.' in var_name:
-                var_name = var_name.split('.')[0]
-            
-            # Skip if it's a builtin, local var, or the function itself
-            if (var_name not in builtins and 
-                var_name not in local_vars and 
-                var_name != function_name and
-                len(var_name) > 1 and  # Skip single letters
-                not var_name.isdigit() and  # Skip numbers
-                not re.match(r'^[A-Z]{1,2}$', var_name)):  # Skip short acronyms like 'GB', 'MB'
+            # Skip if it's safe
+            if (var_name in builtins or 
+                var_name in local_vars or
+                len(var_name) <= 2 or
+                var_name.isdigit()):
+                continue
                 
-                # Extra filtering for common safe patterns
-                if not any(safe_word in var_name.lower() for safe_word in 
-                          ['element', 'event', 'error', 'result', 'response', 'data']):
-                    variable_refs.add(var_name)
+            # Skip common local variable names
+            common_locals = {
+                'item', 'data', 'result', 'value', 'key', 'index', 'element', 'event',
+                'error', 'response', 'status', 'size', 'length', 'type', 'name',
+                'text', 'content', 'message', 'config', 'option', 'param'
+            }
+            
+            if var_name.lower() in common_locals:
+                continue
+                
+            variable_refs.add(var_name)
     
     return variable_refs
 
 def analyze_all_functions(file_path):
-    """Analyze all functions in a file and categorize them"""
+    """Analyze all functions in a file and categorize them more accurately"""
     
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -139,16 +178,22 @@ def analyze_all_functions(file_path):
         unsafe_functions = []
         
         for func_name, func_data in functions.items():
-            dependencies = find_function_dependencies(func_data['body'], func_name)
+            dependencies = find_function_dependencies(
+                func_data['body'], 
+                func_name, 
+                func_data['params']
+            )
             
             func_info = {
                 'name': func_name,
                 'dependencies': dependencies,
                 'async': func_data.get('async', False),
                 'size': len(func_data['full_match']),
-                'lines': func_data['full_match'].count('\n') + 1
+                'lines': func_data['full_match'].count('\n') + 1,
+                'params': func_data['params']
             }
             
+            # More strict classification
             if dependencies:
                 unsafe_functions.append(func_info)
             else:
@@ -158,7 +203,7 @@ def analyze_all_functions(file_path):
         safe_functions.sort(key=lambda x: x['size'], reverse=True)
         unsafe_functions.sort(key=lambda x: x['size'], reverse=True)
         
-        print(f"📊 ANALYSIS RESULTS:")
+        print(f"📊 IMPROVED ANALYSIS RESULTS:")
         print(f"   Total Functions: {len(functions)}")
         print(f"   ✅ Safe to Extract: {len(safe_functions)}")
         print(f"   ⚠️  Has Dependencies: {len(unsafe_functions)}")
@@ -170,7 +215,8 @@ def analyze_all_functions(file_path):
             total_safe_lines = 0
             for func in safe_functions:
                 async_marker = "async " if func['async'] else ""
-                print(f"✅ {async_marker}{func['name']} - {func['lines']} lines ({func['size']} chars)")
+                params_str = f"({', '.join(func['params'])})" if func['params'] else "()"
+                print(f"✅ {async_marker}{func['name']}{params_str} - {func['lines']} lines ({func['size']} chars)")
                 total_safe_lines += func['lines']
             
             print(f"\n💡 Total extractable lines: {total_safe_lines}")
@@ -197,7 +243,7 @@ def analyze_all_functions(file_path):
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python auto_function_scanner.py <file_path>")
+        print("Usage: python improved_auto_scanner.py <file_path>")
         sys.exit(1)
     
     file_path = sys.argv[1]
@@ -207,11 +253,14 @@ if __name__ == "__main__":
         print("\n🚀 EXTRACTION RECOMMENDATION:")
         print("=" * 80)
         print("Extract these functions in order (largest first):")
-        for i, func in enumerate(safe_functions[:5], 1):
+        for i, func in enumerate(safe_functions[:8], 1):
             async_marker = "async " if func['async'] else ""
-            print(f"{i}. {async_marker}{func['name']} ({func['lines']} lines)")
+            params_str = f"({', '.join(func['params'])})" if func['params'] else "()"
+            print(f"{i}. {async_marker}{func['name']}{params_str} ({func['lines']} lines)")
         
-        if len(safe_functions) > 5:
-            print(f"   ... and {len(safe_functions)-5} more safe functions")
+        if len(safe_functions) > 8:
+            print(f"   ... and {len(safe_functions)-8} more safe functions")
+        
+        print(f"\n📈 Potential reduction: {sum(f['lines'] for f in safe_functions)} lines")
     
     sys.exit(0)
