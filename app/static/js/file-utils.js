@@ -541,3 +541,252 @@ function populateDeviceLogsModal() {
     console.error('Error populating device logs modal:', error);
   }
 }
+
+/**
+ * Function to update network speed and adapt concurrency
+ * @param {number} speedMBps - Speed in MB/s
+ */
+function updateNetworkSpeed(speedMBps) {
+  networkSpeedSamples.push(speedMBps);
+
+  // Keep only recent samples
+  if (networkSpeedSamples.length > LANVAN_CONFIG.CONCURRENT.SPEED_SAMPLE_SIZE) {
+    networkSpeedSamples.shift();
+  }
+
+  // Adapt concurrency every N uploads
+  totalUploadsProcessed++;
+  if (totalUploadsProcessed % LANVAN_CONFIG.CONCURRENT.ADAPTATION_INTERVAL === 0) {
+    const newOptimal = getOptimalConcurrency();
+    if (newOptimal !== currentMaxConcurrent) {
+      console.log(`📊 Adaptive concurrency: ${currentMaxConcurrent} → ${newOptimal} (avg speed: ${(networkSpeedSamples.reduce((a, b) => a + b, 0) / networkSpeedSamples.length).toFixed(1)} MB/s)`);
+      currentMaxConcurrent = newOptimal;
+      lastConcurrencyAdjustment = Date.now();
+
+      // Update UI to reflect new concurrency
+      updateUploadManager();
+
+      // Start additional uploads if we increased concurrency
+      if (newOptimal > activeUploads) {
+        setTimeout(() => {
+          startNextUpload();
+        }, 100);
+      }
+    }
+  }
+}
+
+// Function to create an upload item
+function createUploadItem(file, uploadId) {
+  // Check if AES encryption is enabled
+  const isAESEnabled = isEncryptionEnabled && document.getElementById('enableEncryption').checked;
+
+  return {
+    id: uploadId,
+    file: file,
+    fileName: file.name,
+    fileSize: file.size,
+    status: 'queued', // queued, uploading, completed, error, cancelled
+    progress: 0,
+    uploadedBytes: 0,
+    startTime: null,
+    speed: 0,
+    timeRemaining: 0,
+    xhr: null,
+    error: null,
+    isAESEnabled: isAESEnabled, // Store AES encryption state
+    uploadedChunks: 0, // For resume functionality
+    totalChunks: 0, // For chunked uploads
+    // 📊 Statistics tracking
+    resumeCount: 0
+  };
+}
+
+// Function to close settings menu when clicking outside
+function closeSettingsOnOutsideClick(event) {
+  const settingsMenu = document.getElementById('settingsMenu');
+  const settingsBtn = document.getElementById('settingsBtn');
+
+  if (!settingsMenu.contains(event.target) && !settingsBtn.contains(event.target)) {
+    settingsMenu.style.display = 'none';
+    document.removeEventListener('click', closeSettingsOnOutsideClick);
+  }
+}
+
+// Function to get the current device ID
+function getCurrentDeviceId() {
+  let deviceId = sessionStorage.getItem('lanvan_device_id');
+  if (!deviceId) {
+    // Try to get actual device information
+    const deviceInfo = getDeviceInfo();
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(2, 8);
+
+    // Create readable device ID with actual device name if available
+    deviceId = `${deviceInfo.name}_${timestamp}_${randomId}`;
+    sessionStorage.setItem('lanvan_device_id', deviceId);
+
+    console.log(`📱 New device session created: ${deviceInfo.displayName}`);
+  }
+  return deviceId;
+}
+
+// Function to get device information
+function getDeviceInfo() {
+  // Try multiple methods to get device name
+  let deviceName = 'Unknown_Device';
+  let displayName = 'Unknown Device';
+
+  try {
+    // Method 1: Try to get hostname if available (some browsers)
+    if (typeof window.clientInformation !== 'undefined' && window.clientInformation.platform) {
+      const platform = window.clientInformation.platform;
+      deviceName = platform.replace(/\s+/g, '_');
+    }
+
+    // Method 2: Use navigator userAgent to detect device type
+    const userAgent = navigator.userAgent;
+    const browserInfo = getBrowserInfo(userAgent);
+
+    // Method 3: Try to detect common device patterns
+    if (userAgent.includes('Windows')) {
+      if (userAgent.includes('Windows NT 10')) deviceName = 'Windows_PC';
+      else if (userAgent.includes('Windows NT 6')) deviceName = 'Windows_Legacy';
+      displayName = deviceName.replace('_', ' ');
+    } else if (userAgent.includes('Mac')) {
+      if (userAgent.includes('iPhone')) {
+        deviceName = 'iPhone';
+        displayName = 'iPhone';
+      } else if (userAgent.includes('iPad')) {
+        deviceName = 'iPad';
+        displayName = 'iPad';
+      } else {
+        deviceName = 'Mac';
+        displayName = 'Mac';
+      }
+    } else if (userAgent.includes('Android')) {
+      deviceName = 'Android_Device';
+      displayName = 'Android Device';
+    } else if (userAgent.includes('Linux')) {
+      deviceName = 'Linux_PC';
+      displayName = 'Linux PC';
+    }
+
+    // Add browser info to make it more specific
+    deviceName = `${deviceName}_${browserInfo.name}`;
+    displayName = `${displayName} (${browserInfo.name})`;
+
+  } catch (error) {
+    console.log('Could not detect device info, using fallback');
+    deviceName = 'Unknown_Device';
+    displayName = 'Unknown Device';
+  }
+
+  return {
+    name: deviceName,
+    displayName: displayName
+  };
+}
+
+// Function to save upload stats to device history
+function saveToDeviceUploadHistory(stats) {
+  try {
+    const deviceId = getCurrentDeviceId();
+    const sessionKey = `uploadHistory_${deviceId}`;
+    const deviceHistory = getDeviceUploadHistory();
+
+    // Add device/session info to stats
+    const enhancedStats = {
+      ...stats,
+      deviceId: deviceId,
+      sessionTimestamp: Date.now()
+    };
+
+    deviceHistory.unshift(enhancedStats); // Add to beginning (newest first)
+
+    // Keep unlimited history for this session (no limit since it's session-specific)
+    // Session will auto-clear when browser closes
+
+    sessionStorage.setItem(sessionKey, JSON.stringify(deviceHistory));
+    console.log(`📱 Saved to device history (${deviceId}):`, stats.type, stats.size, stats.time);
+  } catch (e) {
+    console.log('⚠️ Failed to save to device upload history:', e);
+  }
+}
+
+/**
+ * Function to display device logs with pagination
+ * @param {Array} logs - Array of log objects to display
+ * @param {HTMLElement} contentElement - Element to display log content
+ * @param {HTMLElement} paginationElement - Element to display pagination controls
+ */
+function displayDeviceLogsWithPagination(logs, contentElement, paginationElement) {
+  const itemsPerPage = 10;
+
+  // Sort logs by timestamp (newest first) for individual file display
+  const sortedLogs = logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const totalPages = Math.ceil(sortedLogs.length / itemsPerPage);
+  let currentPage = 1;
+
+  function renderPage(page) {
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const pageItems = sortedLogs.slice(startIndex, endIndex);
+
+    let historyHTML = '';
+    pageItems.forEach((log, index) => {
+      const globalIndex = startIndex + index;
+      const isEven = globalIndex % 2 === 0;
+
+      // Individual file display only - no batch grouping
+      historyHTML += renderSingleUpload(log, isEven);
+    });
+
+    contentElement.innerHTML = historyHTML;
+  }
+
+  function renderPagination() {
+    if (totalPages <= 1) {
+      paginationElement.style.display = 'none';
+      return;
+    }
+
+    paginationElement.style.display = 'block';
+    let paginationHTML = `
+      <div style="display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin-top: 1rem;">
+        <button onclick="uploadHistoryPagination.goToPage(${currentPage - 1})" 
+                ${currentPage === 1 ? 'disabled' : ''} 
+                class="pagination-button"
+                style="padding: 0.4rem 0.8rem; border: 1px solid var(--border-color); background: var(--section-bg); border-radius: 4px; cursor: ${currentPage === 1 ? 'not-allowed' : 'pointer'}; color: var(--text-color) !important;">
+          ◀ Prev
+        </button>
+        <span style="padding: 0.4rem 1rem; color: var(--text-color) !important; opacity: 0.8;">
+          Page ${currentPage} of ${totalPages} (${logs.length} total uploads)
+        </span>
+        <button onclick="uploadHistoryPagination.goToPage(${currentPage + 1})" 
+                ${currentPage === totalPages ? 'disabled' : ''} 
+                class="pagination-button"
+                style="padding: 0.4rem 0.8rem; border: 1px solid var(--border-color); background: var(--section-bg); border-radius: 4px; cursor: ${currentPage === totalPages ? 'not-allowed' : 'pointer'}; color: var(--text-color) !important;">
+          Next ▶
+        </button>
+      </div>
+    `;
+
+    paginationElement.innerHTML = paginationHTML;
+  }
+
+  // Create global pagination controller
+  window.uploadHistoryPagination = {
+    goToPage: function(page) {
+      if (page >= 1 && page <= totalPages) {
+        currentPage = page;
+        renderPage(currentPage);
+        renderPagination();
+      }
+    }
+  };
+
+  // Initial render
+  renderPage(currentPage);
+  renderPagination();
+}

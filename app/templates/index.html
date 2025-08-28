@@ -684,37 +684,12 @@
     }
   }
   // Removed endUpload function; moved to file-utils.js
-
-  // 🚀 Upload Manager Functions
-  function createUploadItem(file, uploadId) {
-    // Check if AES encryption is enabled
-    const isAESEnabled = isEncryptionEnabled && document.getElementById('enableEncryption').checked;
-    
-    return {
-      id: uploadId,
-      file: file,
-      fileName: file.name,
-      fileSize: file.size,
-      status: 'queued', // queued, uploading, completed, error, cancelled
-      progress: 0,
-      uploadedBytes: 0,
-      startTime: null,
-      speed: 0,
-      timeRemaining: 0,
-      xhr: null,
-      error: null,
-      isAESEnabled: isAESEnabled, // Store AES encryption state
-      uploadedChunks: 0, // For resume functionality
-      totalChunks: 0, // For chunked uploads
-      // 📊 Statistics tracking
-      resumeCount: 0
-    };
-  }
+  // Removed createUploadItem function; moved to file-utils.js
 
   function addToUploadQueue(files) {
     // No batch grouping - process each file individually
     log.upload(`Adding ${files.length} file(s) to upload queue`);
-    
+
     for (let file of files) {
       const uploadId = ++uploadIdCounter;
       const uploadItem = createUploadItem(file, uploadId);
@@ -751,15 +726,7 @@
     }
   }
 
-  function closeSettingsOnOutsideClick(event) {
-    const settingsMenu = document.getElementById('settingsMenu');
-    const settingsBtn = document.getElementById('settingsBtn');
-    
-    if (!settingsMenu.contains(event.target) && !settingsBtn.contains(event.target)) {
-      settingsMenu.style.display = 'none';
-      document.removeEventListener('click', closeSettingsOnOutsideClick);
-    }
-  }
+  // Removed closeSettingsOnOutsideClick function; moved to file-utils.js
 
   function showAccessControlSettings() {
     showToast('🔐 Access Control features coming soon! Stay tuned for host-guest permissions, device whitelisting, and access tokens.', 5000);
