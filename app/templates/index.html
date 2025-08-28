@@ -1543,23 +1543,6 @@ Device Session will reset when browser is closed
     queue.appendChild(itemDiv);
   }
 
-  function getControlButtons(uploadItem) {
-    switch (uploadItem.status) {
-      case 'uploading':
-        return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
-      case 'queued':
-        return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
-      case 'completed':
-        return ``; // No individual remove button for completed uploads
-      case 'error':
-        return ``; // No cancel button for error state
-      case 'cancelled':
-        return ``; // No cancel button for already cancelled uploads
-      default:
-        return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
-    }
-  }
-
   // 📊 Smart insertion based on upload priority
   function insertUploadItemInOrder(queue, newItemDiv, newUploadItem) {
     const existingItems = Array.from(queue.children);
@@ -1583,22 +1566,6 @@ Device Session will reset when browser is closed
   }
 
   // 📊 Determine if new item should be inserted before existing item
-  function shouldInsertBefore(newItem, existingItem) {
-    // Priority 1: Incomplete/Failed uploads first
-    const newIncomplete = ['failed', 'paused'].includes(newItem.status);
-    const existingIncomplete = ['failed', 'paused'].includes(existingItem.status);
-    
-    if (newIncomplete && !existingIncomplete) return true;
-    if (!newIncomplete && existingIncomplete) return false;
-    
-    // Priority 2: AES files get priority within same completion status
-    if (newItem.isAESEnabled && !existingItem.isAESEnabled) return true;
-    if (!newItem.isAESEnabled && existingItem.isAESEnabled) return false;
-    
-    // Priority 3: Smaller files first
-    return newItem.fileSize < existingItem.fileSize;
-  }
-
   // 🎨 UI UPDATE OPTIMIZATION: Minimal throttling for responsive feel
   let lastUIUpdate = {};
   const UI_UPDATE_THROTTLE = 50; // ms - reduced from 100ms for ultra-responsive feel
@@ -6259,24 +6226,6 @@ function renderClipboardHistory(items) {
     setTimeout(() => {
       fixRemainingColors(true);
     }, 50);
-  }
-}
-
-// Get appropriate icon for clipboard item type
-function getClipboardItemIcon(item) {
-  if (item.type === 'file') {
-    switch (item.content_type) {
-      case 'image': return '🖼️';
-      case 'text': return '📄';
-      case 'document': return '📋';
-      default: return '📁';
-    }
-  } else {
-    switch (item.content_type) {
-      case 'image_base64': return '🖼️';
-      case 'url': return '🔗';
-      default: return '📝';
-    }
   }
 }
 

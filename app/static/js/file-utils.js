@@ -171,3 +171,69 @@ function updateHttpSecurityWarning() {
   // HTTP-Safe mode is automatic when AES is enabled over HTTP
   console.log('🛡️ HTTP-Safe mode: automatic when AES enabled over HTTP');
 }
+
+/**
+ * Get appropriate icon for clipboard item type
+ * @param {Object} item - Clipboard item with type and content_type
+ * @returns {string} Emoji icon for the item type
+ */
+function getClipboardItemIcon(item) {
+  if (item.type === 'file') {
+    switch (item.content_type) {
+      case 'image': return '🖼️';
+      case 'text': return '📄';
+      case 'document': return '📋';
+      default: return '📁';
+    }
+  } else {
+    switch (item.content_type) {
+      case 'image_base64': return '🖼️';
+      case 'url': return '🔗';
+      default: return '📝';
+    }
+  }
+}
+
+/**
+ * Get control buttons HTML for upload item
+ * @param {Object} uploadItem - Upload item with status and id
+ * @returns {string} HTML string for control buttons
+ */
+function getControlButtons(uploadItem) {
+  switch (uploadItem.status) {
+    case 'uploading':
+      return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
+    case 'queued':
+      return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
+    case 'completed':
+      return ``; // No individual remove button for completed uploads
+    case 'error':
+      return ``; // No cancel button for error state
+    case 'cancelled':
+      return ``; // No cancel button for already cancelled uploads
+    default:
+      return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
+  }
+}
+
+/**
+ * Determine if new upload item should be inserted before existing item
+ * @param {Object} newItem - New upload item to insert
+ * @param {Object} existingItem - Existing upload item in queue
+ * @returns {boolean} True if new item should come before existing item
+ */
+function shouldInsertBefore(newItem, existingItem) {
+  // Priority 1: Incomplete/Failed uploads first
+  const newIncomplete = ['failed', 'paused'].includes(newItem.status);
+  const existingIncomplete = ['failed', 'paused'].includes(existingItem.status);
+  
+  if (newIncomplete && !existingIncomplete) return true;
+  if (!newIncomplete && existingIncomplete) return false;
+  
+  // Priority 2: AES files get priority within same completion status
+  if (newItem.isAESEnabled && !existingItem.isAESEnabled) return true;
+  if (!newItem.isAESEnabled && existingItem.isAESEnabled) return false;
+  
+  // Priority 3: Smaller files first
+  return newItem.fileSize < existingItem.fileSize;
+}
