@@ -1,0 +1,31 @@
+# 🚀 LANVan File Transfer Server Dependencies
+# Core web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Template engine
+jinja2==3.1.2
+
+# File upload handling
+python-multipart==0.0.6
+
+# Cryptography for AES encryption
+cryptography==41.0.7
+
+# System monitoring
+psutil==5.9.6
+
+# QR Code generation for offline use (without PIL dependency)
+qrcode==7.4.2
+
+# mDNS service discovery
+zeroconf==0.132.2
+
+# File operations (async)
+aiofiles==23.2.0
+
+# Clipboard operations
+pyperclip==1.8.2
+
+# WebRTC for P2P implementation
+aiortc==1.9.0

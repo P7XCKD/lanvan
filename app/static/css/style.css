@@ -1,0 +1,81 @@
+/* LANVan Styles */
+/* This CSS file was missing and causing 500 errors */
+
+/* Basic reset and body styles */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Upload Mode Toggle Styles */
+.upload-mode-toggle {
+    display: flex;
+    background-color: var(--bg-secondary, #f8f9fa);
+    border-radius: 25px;
+    padding: 0.2rem;
+    border: 1px solid var(--border-color, #ddd);
+}
+
+.mode-btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    background: transparent;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    color: var(--text-color, #333);
+}
+
+.mode-btn:hover {
+    background-color: var(--hover-color, rgba(0,123,255,0.1));
+}
+
+.mode-btn.active {
+    background-color: var(--primary-color, #007bff);
+    color: white;
+    box-shadow: 0 2px 4px rgba(0,123,255,0.3);
+}
+
+/* Folder Grid Styles */
+#folderGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.file-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.file-actions .download-btn {
+    flex: 1;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+}
+
+/* Dark mode support */
+[data-theme="dark"] .upload-mode-toggle {
+    background-color: #2d3748;
+    border-color: #4a5568;
+}
+
+[data-theme="dark"] .mode-btn {
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .mode-btn:hover {
+    background-color: rgba(66, 153, 225, 0.2);
+}
+
+/* Additional styles can be added here as needed */
+/* Most styles are currently inline in the HTML template */
