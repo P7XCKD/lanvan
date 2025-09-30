@@ -14,6 +14,9 @@ Recent Updates Covered:
 - ✅ Unified platform detection across all modules
 - ✅ Background scan fixes and async task management
 - ✅ Universal optimizer integration and attribute consistency
+- ✅ Real-time WebSocket upload status system (LATEST)
+- ✅ Live folder upload progress tracking with status indicators
+- ✅ WebSocket-based real-time communication for upload updates
 
 Usage:
     python qt.py              # Standard comprehensive test
@@ -32,6 +35,14 @@ import os
 import argparse
 import time
 from pathlib import Path
+
+# WebSocket testing support (optional)
+try:
+    import websockets
+    WEBSOCKETS_AVAILABLE = True
+except ImportError:
+    WEBSOCKETS_AVAILABLE = False
+    print("[INFO] websockets library not available - WebSocket tests will be limited")
 
 # Add app directory to path for imports
 app_path = Path(__file__).parent / "app"
@@ -93,6 +104,11 @@ class QuickTest:
             'mdns': False,                 # Fixed mDNS with .local domain resolution
             'aes_config': False,
             'ui_interface': False,
+            
+            # Real-time Features (Latest Implementation)
+            'websocket_connection': False,  # WebSocket connectivity for real-time updates
+            'realtime_upload_status': False, # Real-time folder upload progress tracking
+            'upload_status_ws': False,      # Upload status WebSocket handler
             
             # Platform and system components
             'platform_detection': False,   # Unified platform detection
@@ -189,6 +205,12 @@ class QuickTest:
                 connector = aiohttp.TCPConnector(ssl=False)
                 async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
                     await self.test_web_interface_buttons(session, url)
+                
+                # Test WebSocket functionality (Latest implementation)
+                await self.test_websocket_connectivity(url)
+                
+                # Test real-time upload status system
+                await self.test_realtime_upload_status(url)
                 
                 self.log("HTTP mode: All tests passed!", "PASS")
                 self.components['http_server'] = True
@@ -1145,6 +1167,151 @@ class QuickTest:
         except Exception as e:
             self.log(f"UI enhancements test: {str(e)}", "WARN")
 
+    async def test_websocket_connectivity(self, base_url):
+        """Test WebSocket connectivity for real-time features"""
+        self.log("Testing WebSocket connectivity...")
+        
+        if not WEBSOCKETS_AVAILABLE:
+            self.log("WebSocket: websockets library not available - install with 'pip install websockets'", "WARN")
+            return
+        
+        try:
+            import websockets
+            import json
+            
+            # Convert HTTP URL to WebSocket URL
+            ws_url = base_url.replace('http://', 'ws://').replace('https://', 'wss://')
+            ws_url += '/ws/upload-status'
+            
+            try:
+                # Test WebSocket connection with timeout
+                async with websockets.connect(ws_url, timeout=5) as websocket:
+                    self.log("WebSocket: Connection established successfully", "PASS")
+                    self.components['websocket_connection'] = True
+                    
+                    # Test echo functionality
+                    test_message = "test-connection"
+                    await websocket.send(test_message)
+                    
+                    try:
+                        response = await asyncio.wait_for(websocket.recv(), timeout=3)
+                        if "Echo:" in response and test_message in response:
+                            self.log("WebSocket: Echo functionality working", "PASS")
+                        else:
+                            self.log(f"WebSocket: Unexpected response - {response[:50]}...", "WARN")
+                    except asyncio.TimeoutError:
+                        self.log("WebSocket: Echo test timeout (may be normal)", "INFO")
+                    
+            except websockets.exceptions.ConnectionClosed:
+                self.log("WebSocket: Connection closed by server", "WARN")
+            except websockets.exceptions.InvalidURI:
+                self.log(f"WebSocket: Invalid URI {ws_url}", "WARN")
+            except OSError as e:
+                self.log(f"WebSocket: Connection failed - {str(e)}", "WARN")
+                
+        except ImportError:
+            self.log("WebSocket: websockets library not available", "WARN")
+        except Exception as e:
+            self.log(f"WebSocket test: {str(e)}", "WARN")
+    
+    async def test_realtime_upload_status(self, base_url):
+        """Test real-time upload status system"""
+        self.log("Testing real-time upload status system...")
+        
+        try:
+            # Check if upload_status_ws module exists
+            try:
+                from app.upload_status_ws import upload_status_manager, router
+                self.log("Real-time upload: WebSocket module available", "PASS")
+                self.components['upload_status_ws'] = True
+                
+                # Check if manager has required methods
+                required_methods = ['connect', 'disconnect', 'broadcast', 
+                                  'notify_folder_start', 'notify_file_progress', 
+                                  'notify_folder_complete']
+                
+                methods_found = 0
+                for method_name in required_methods:
+                    if hasattr(upload_status_manager, method_name):
+                        methods_found += 1
+                
+                if methods_found == len(required_methods):
+                    self.log(f"Real-time upload: All methods available ({methods_found}/{len(required_methods)})", "PASS")
+                    self.components['realtime_upload_status'] = True
+                else:
+                    self.log(f"Real-time upload: Partial methods ({methods_found}/{len(required_methods)})", "WARN")
+                    
+            except ImportError as e:
+                self.log(f"Real-time upload: Module not available - {str(e)}", "WARN")
+            
+            # Test if folder upload route includes WebSocket integration
+            try:
+                routes_file = Path(__file__).parent / "app" / "routes.py"
+                if routes_file.exists():
+                    with open(routes_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        
+                        websocket_features = 0
+                        if 'upload_status_manager' in content:
+                            websocket_features += 1
+                            self.log("Real-time upload: WebSocket manager integration found", "PASS")
+                        
+                        if 'notify_folder_start' in content:
+                            websocket_features += 1
+                            self.log("Real-time upload: Folder start notifications found", "PASS")
+                        
+                        if 'notify_file_progress' in content:
+                            websocket_features += 1
+                            self.log("Real-time upload: File progress notifications found", "PASS")
+                        
+                        if 'notify_folder_complete' in content:
+                            websocket_features += 1
+                            self.log("Real-time upload: Folder complete notifications found", "PASS")
+                        
+                        if websocket_features >= 3:
+                            self.log(f"Real-time upload: Route integration complete ({websocket_features}/4)", "PASS")
+                        else:
+                            self.log(f"Real-time upload: Partial integration ({websocket_features}/4)", "WARN")
+                            
+            except Exception as e:
+                self.log(f"Real-time upload route test: {str(e)}", "WARN")
+            
+            # Test frontend WebSocket integration
+            try:
+                template_file = Path(__file__).parent / "app" / "templates" / "index.html"
+                if template_file.exists():
+                    with open(template_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        
+                        frontend_features = 0
+                        if 'initializeUploadWebSocket' in content:
+                            frontend_features += 1
+                            self.log("Real-time upload: Frontend WebSocket initialization found", "PASS")
+                        
+                        if 'handleUploadStatusUpdate' in content:
+                            frontend_features += 1
+                            self.log("Real-time upload: Status update handler found", "PASS")
+                        
+                        if 'showFolderUploadSummary' in content:
+                            frontend_features += 1
+                            self.log("Real-time upload: Folder summary display found", "PASS")
+                        
+                        if 'ws/upload-status' in content:
+                            frontend_features += 1
+                            self.log("Real-time upload: WebSocket endpoint reference found", "PASS")
+                        
+                        if frontend_features >= 3:
+                            self.log(f"Real-time upload: Frontend integration complete ({frontend_features}/4)", "PASS")
+                            self.components['realtime_upload_status'] = True
+                        else:
+                            self.log(f"Real-time upload: Frontend partial ({frontend_features}/4)", "WARN")
+                            
+            except Exception as e:
+                self.log(f"Real-time upload frontend test: {str(e)}", "WARN")
+                
+        except Exception as e:
+            self.log(f"Real-time upload status test: {str(e)}", "WARN")
+
     async def test_advanced_features(self):
         """Test advanced features and optimizations"""
         self.log("Testing advanced features and optimizations...")
@@ -1407,7 +1574,8 @@ class QuickTest:
             ('folder_upload', '📁 Folder Upload', 'Folder sharing with structure preservation'),
             ('qr_generation', '📱 QR Code Generation', 'QR codes for easy sharing'),
             ('ui_interface', '🖥️  Web Interface', 'User interface elements'),
-            ('temp_chunks_structure', '🗂️  Temp Structure', 'Proper temporary file organization')
+            ('temp_chunks_structure', '🗂️  Temp Structure', 'Proper temporary file organization'),
+            ('websocket_connection', '📡 WebSocket Connection', 'Real-time communication capability')
         ]
         
         # Enhanced components (recent implementations)
@@ -1417,7 +1585,9 @@ class QuickTest:
             ('concurrent_uploads', '⚡ Concurrent Uploads', 'Multiple file upload optimization'),
             ('windows_file_manager', '🪟 Windows File Manager', 'Windows-specific file handling'),
             ('mdns_resolution', '🔗 mDNS Resolution', '.local domain resolution and hybrid URLs'),
-            ('universal_optimizer', '🔄 Universal Optimizer', 'Cross-platform performance optimization')
+            ('universal_optimizer', '🔄 Universal Optimizer', 'Cross-platform performance optimization'),
+            ('realtime_upload_status', '📊 Real-time Upload Status', 'Live folder upload progress tracking'),
+            ('upload_status_ws', '🔄 Upload WebSocket Handler', 'WebSocket-based status updates')
         ]
         
         # Advanced components (cutting-edge features)

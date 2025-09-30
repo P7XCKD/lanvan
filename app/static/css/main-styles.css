@@ -931,7 +931,7 @@ progress {
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
-/* Folder Upload Styling */
+/* Folder Upload Styling - Light Mode */
 .upload-item.folder-upload {
   background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
   border-left: 4px solid #f39c12;
@@ -958,9 +958,38 @@ progress {
 }
 
 [data-theme="dark"] .upload-item {
-  background: var(--section-bg);
+  background: var(--section-bg) !important;
   border-color: var(--border-color);
   color: var(--text-color);
+}
+
+/* Dark mode folder upload styling */
+[data-theme="dark"] .upload-item.folder-upload {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.15) 0%, rgba(255, 193, 7, 0.25) 100%) !important;
+  border-left: 4px solid #ffc107 !important;
+  color: var(--text-color) !important;
+}
+
+[data-theme="dark"] .upload-item.folder-upload.completed {
+  background: linear-gradient(135deg, rgba(40, 167, 69, 0.15) 0%, rgba(40, 167, 69, 0.25) 100%) !important;
+  border-left: 4px solid #28a745 !important;
+}
+
+[data-theme="dark"] .upload-item.folder-upload .upload-file-name {
+  font-weight: 600;
+  color: #ffc107 !important;
+}
+
+[data-theme="dark"] .upload-item.folder-upload.completed .upload-file-name {
+  color: #28a745 !important;
+}
+
+[data-theme="dark"] .upload-item.folder-upload .upload-file-details {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+[data-theme="dark"] .upload-item.folder-upload .upload-progress-text {
+  color: var(--text-color) !important;
 }
 
 [data-theme="dark"] .upload-summary {
@@ -973,6 +1002,23 @@ progress {
 [data-theme="dark"] .upload-file-details,
 [data-theme="dark"] .upload-progress-text {
   color: var(--text-color) !important;
+}
+
+/* Dark mode progress bar styling */
+[data-theme="dark"] .upload-progress-bar {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+[data-theme="dark"] .upload-progress-fill {
+  background: linear-gradient(90deg, #0d6efd, #0b5ed7) !important;
+}
+
+[data-theme="dark"] .upload-item.folder-upload .upload-progress-fill {
+  background: linear-gradient(90deg, #ffc107, #e0a800) !important;
+}
+
+[data-theme="dark"] .upload-item.folder-upload.completed .upload-progress-fill {
+  background: linear-gradient(90deg, #28a745, #20c997) !important;
 }
 
 /* 🔔 Toast notification base styles */
