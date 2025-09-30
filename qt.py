@@ -1184,15 +1184,16 @@ class QuickTest:
             ws_url += '/ws/upload-status'
             
             try:
-                # Test WebSocket connection with timeout
-                async with websockets.connect(ws_url, timeout=5) as websocket:
+                # Test WebSocket connection with timeout (modern way)
+                websocket = await asyncio.wait_for(websockets.connect(ws_url), timeout=5)
+                try:
                     self.log("WebSocket: Connection established successfully", "PASS")
                     self.components['websocket_connection'] = True
-                    
+
                     # Test echo functionality
                     test_message = "test-connection"
                     await websocket.send(test_message)
-                    
+
                     try:
                         response = await asyncio.wait_for(websocket.recv(), timeout=3)
                         if "Echo:" in response and test_message in response:
@@ -1201,7 +1202,8 @@ class QuickTest:
                             self.log(f"WebSocket: Unexpected response - {response[:50]}...", "WARN")
                     except asyncio.TimeoutError:
                         self.log("WebSocket: Echo test timeout (may be normal)", "INFO")
-                    
+                finally:
+                    await websocket.close()
             except websockets.exceptions.ConnectionClosed:
                 self.log("WebSocket: Connection closed by server", "WARN")
             except websockets.exceptions.InvalidURI:
