@@ -218,18 +218,7 @@
       </div>
     </div>
     
-    <!-- Upload Summary for Folder Uploads -->
-    <div id="uploadSummary" class="upload-summary" style="display: none; margin-bottom: 1rem; padding: 1rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px;">
-      <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 0.5rem;">
-        <h4 style="margin: 0; color: #333;">📁 <span id="folderName">Folder Upload</span></h4>
-        <div style="font-size: 0.9rem; color: #666;">
-          <span id="fileProgress">0 of 0</span> files • <span id="overallProgress">0%</span>
-        </div>
-      </div>
-      <div class="upload-progress-bar" style="width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
-        <div id="summaryProgressFill" class="upload-progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #4a90e2, #357bd8); transition: width 0.3s ease;"></div>
-      </div>
-    </div>
+    <!-- Upload Summary removed - using single upload item display only -->
     
     <div id="uploadQueue" class="upload-queue">
       <!-- Upload items will be dynamically added here -->
@@ -1502,10 +1491,10 @@ Device Session will reset when browser is closed
     
     switch (data.type) {
       case 'folder_start':
-        showFolderUploadSummary(data.folder_name, data.total_files);
+        // Just show the upload manager, no separate summary
+        showUploadManager();
         break;
       case 'file_progress':
-        updateFolderProgress(data);
         updateFileInQueue(data);
         break;
       case 'folder_complete':
@@ -1518,101 +1507,71 @@ Device Session will reset when browser is closed
   }
   
   function showFolderUploadSummary(folderName, totalFiles) {
-    const summaryDiv = document.getElementById('uploadSummary');
-    const folderNameSpan = document.getElementById('folderName');
-    const fileProgress = document.getElementById('fileProgress');
-    const overallProgress = document.getElementById('overallProgress');
-    const progressFill = document.getElementById('summaryProgressFill');
-    
-    if (summaryDiv && folderNameSpan && fileProgress) {
-      folderNameSpan.textContent = folderName;
-      fileProgress.textContent = `0 of ${totalFiles}`;
-      overallProgress.textContent = '0%';
-      progressFill.style.width = '0%';
-      progressFill.style.background = 'linear-gradient(90deg, #4a90e2, #357bd8)';
-      summaryDiv.style.display = 'block';
-      
-      // Show upload manager
-      showUploadManager();
-    }
+    // Don't show separate summary - only use the main upload item
+    // Show upload manager for the main item
+    showUploadManager();
   }
   
-  function updateFolderProgress(data) {
-    const fileProgress = document.getElementById('fileProgress');
-    const overallProgress = document.getElementById('overallProgress');
-    const progressFill = document.getElementById('summaryProgressFill');
-    
-    if (fileProgress && overallProgress && progressFill) {
-      fileProgress.textContent = `${data.current_file} of ${data.total_files}`;
-      overallProgress.textContent = `${Math.round(data.overall_progress)}%`;
-      progressFill.style.width = `${data.overall_progress}%`;
-    }
-  }
+  // Removed updateFolderProgress - no longer needed as we only show one upload item
   
   function updateFileInQueue(data) {
-    // Create or update individual file entry in upload queue
+    // Create or update single folder entry in upload queue
     const existingItem = uploadQueue.find(item => 
-      item.fileName === data.file_name && item.folderName === data.folder_name
+      item.folderName === data.folder_name && item.isFolder
     );
     
     if (!existingItem) {
-      // Add new file to queue
+      // Add new folder to queue (single item for entire folder)
       const uploadItem = {
-        id: `folder_${Date.now()}_${data.file_name}`,
-        fileName: data.file_name,
+        id: `folder_${Date.now()}_${data.folder_name}`,
+        fileName: data.folder_name,
         folderName: data.folder_name,
         size: 0, // Size unknown for folder uploads
-        progress: data.file_progress,
-        status: data.file_progress >= 100 ? 'completed' : 'uploading',
+        progress: data.overall_progress,
+        status: data.overall_progress >= 100 ? 'completed' : 'uploading',
         startTime: Date.now(),
-        isFolder: true
+        isFolder: true,
+        currentFile: data.current_file,
+        totalFiles: data.total_files,
+        currentFileName: data.file_name
       };
       
       uploadQueue.push(uploadItem);
     } else {
-      // Update existing item
-      existingItem.progress = data.file_progress;
-      existingItem.status = data.file_progress >= 100 ? 'completed' : 'uploading';
+      // Update existing folder item with overall progress
+      existingItem.progress = data.overall_progress;
+      existingItem.status = data.overall_progress >= 100 ? 'completed' : 'uploading';
+      existingItem.currentFile = data.current_file;
+      existingItem.totalFiles = data.total_files;
+      existingItem.currentFileName = data.file_name;
     }
     
     updateUploadManager();
   }
   
   function completeFolderUpload(data) {
-    const summaryDiv = document.getElementById('uploadSummary');
-    const overallProgress = document.getElementById('overallProgress');
-    const progressFill = document.getElementById('summaryProgressFill');
-    
-    if (overallProgress && progressFill) {
-      overallProgress.textContent = '100%';
-      progressFill.style.width = '100%';
-      progressFill.style.background = '#28a745'; // Green for completion
-    }
-    
-    // Mark all folder files as completed
+    // Mark the folder as completed (single folder item)
     uploadQueue.forEach(item => {
-      if (item.folderName === data.folder_name) {
+      if (item.folderName === data.folder_name && item.isFolder) {
         item.status = 'completed';
         item.progress = 100;
+        item.currentFile = data.success_count;
+        item.totalFiles = data.total_files;
       }
     });
     
     updateUploadManager();
-    
-    // Hide summary after a delay
-    setTimeout(() => {
-      if (summaryDiv) {
-        summaryDiv.style.display = 'none';
-      }
-    }, 3000);
   }
   
   function showFolderError(data) {
-    const progressFill = document.getElementById('summaryProgressFill');
-    if (progressFill) {
-      progressFill.style.background = '#dc3545'; // Red for error
-    }
+    // Mark folder item as error in the main upload queue
+    uploadQueue.forEach(item => {
+      if (item.folderName === data.folder_name && item.isFolder) {
+        item.status = 'error';
+      }
+    });
     
+    updateUploadManager();
     console.error('📁 Folder upload error:', data.error);
   }
 
@@ -1702,21 +1661,32 @@ Device Session will reset when browser is closed
     }
 
     const itemDiv = document.createElement('div');
-    itemDiv.className = `upload-item ${uploadItem.status}`; // Use consistent format that matches CSS
+    const folderClass = uploadItem.isFolder ? ' folder-upload' : '';
+    itemDiv.className = `upload-item ${uploadItem.status}${folderClass}`; // Use consistent format that matches CSS
     itemDiv.id = `upload-${uploadItem.id}`;
     
-    const folderIndicator = uploadItem.isFolder ? `<span style="color: #666; font-size: 0.8rem;">📁 ${uploadItem.folderName}/</span><br>` : '';
     const statusIndicator = `<div class="status-indicator"></div>`;
+    
+    // For folder uploads, show folder info and current file being processed
+    let displayName, displayDetails;
+    if (uploadItem.isFolder) {
+      displayName = `📁 ${uploadItem.folderName}/`;
+      const currentFileInfo = uploadItem.currentFileName ? ` • ${uploadItem.currentFileName}` : '';
+      displayDetails = `${uploadItem.currentFile || 0} of ${uploadItem.totalFiles || 0} files${currentFileInfo}`;
+    } else {
+      displayName = escapeHtml(uploadItem.fileName);
+      displayDetails = `${formatFileSize(uploadItem.fileSize)} • ${getStatusDisplay(uploadItem.status)}`;
+    }
     
     itemDiv.innerHTML = `
       ${statusIndicator}
       <div class="upload-file-info">
         <div class="upload-file-name">
-          ${folderIndicator}${escapeHtml(uploadItem.fileName)}
+          ${displayName}
         </div>
         <div class="upload-file-details">
-          <span>${uploadItem.isFolder ? 'Folder file' : formatFileSize(uploadItem.fileSize)}</span>
-          <span id="speed-${uploadItem.id}">${getStatusDisplay(uploadItem.status)}</span>
+          <span>${displayDetails}</span>
+          <span id="speed-${uploadItem.id}"></span>
           <span id="remaining-${uploadItem.id}"></span>
         </div>
       </div>

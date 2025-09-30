@@ -931,6 +931,26 @@ progress {
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
+/* Folder Upload Styling */
+.upload-item.folder-upload {
+  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+  border-left: 4px solid #f39c12;
+}
+
+.upload-item.folder-upload.completed {
+  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+  border-left: 4px solid #28a745;
+}
+
+.upload-item.folder-upload .upload-file-name {
+  font-weight: 600;
+  color: #856404;
+}
+
+.upload-item.folder-upload.completed .upload-file-name {
+  color: #155724;
+}
+
 /* Dark mode upload status styling */
 [data-theme="dark"] .upload-queue {
   background: var(--input-bg);
