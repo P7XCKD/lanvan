@@ -198,12 +198,6 @@ from app.streaming_assembly import (
     get_streaming_assembler,
     shutdown_streaming_assembly
 )
-from app.upload_status_ws import (
-    notify_upload_progress,
-    notify_folder_progress,
-    notify_upload_complete,
-    notify_upload_error
-)
 
 # === Setup ===
 router = APIRouter()
@@ -1810,36 +1804,16 @@ async def get_optimal_chunk_size(file_size: int):
 @router.get("/api/upload/status", name="upload_status")
 async def get_upload_status():
     """Get current upload status for all concurrent uploads"""
-    try:
-        from .concurrent_upload_manager import concurrent_upload_manager
-        from .upload_status_ws import upload_status_manager
-        
-        system_status = concurrent_upload_manager.get_system_status()
-        detailed_status = concurrent_upload_manager.get_upload_status()
-        
-        # Add WebSocket connection info
-        ws_info = {
-            "active_connections": len(upload_status_manager.active_connections),
-            "active_uploads": len(upload_status_manager.upload_status),
-            "folder_uploads": len(upload_status_manager.folder_uploads)
-        }
-        
-        return JSONResponse({
-            "status": "success",
-            "system": system_status,
-            "uploads": detailed_status,
-            "websocket": ws_info,
-            "timestamp": time.time()
-        })
-    except ImportError:
-        # Fallback if concurrent manager not available
-        return JSONResponse({
-            "status": "success",
-            "system": {"platform": "unknown"},
-            "uploads": {},
-            "websocket": {"active_connections": 0},
-            "timestamp": time.time()
-        })
+    from .concurrent_upload_manager import concurrent_upload_manager
+    
+    status = concurrent_upload_manager.get_system_status()
+    detailed_status = concurrent_upload_manager.get_upload_status()
+    
+    return JSONResponse({
+        "status": "success",
+        "system": status,
+        "uploads": detailed_status
+    })
 
 # === CHUNKED UPLOAD ENDPOINTS ===
 
@@ -3180,45 +3154,25 @@ async def upload_folder(
     # 🔐 Protocol detection
     is_https = request.url.scheme == "https"
     
+    # 📡 Import WebSocket manager for real-time updates
+    from .upload_status_ws import upload_status_manager
+    
+    # 📊 Notify folder upload start
+    await upload_status_manager.notify_folder_start(folder_name, len(files))
+    
     # Create folder directory
     folder_path = UPLOAD_FOLDER / folder_name
     folder_path.mkdir(exist_ok=True)
     
-    # Initialize folder progress tracking
-    total_files = len(files)
-    completed_files = 0
+    # Process each file and maintain folder structure
     uploaded_files = []
     failed_files = []
+    start_time = time.time()
     
-    # Notify start of folder upload
-    await notify_folder_progress(
-        folder_name=folder_name,
-        total_files=total_files,
-        completed_files=0,
-        current_file="",
-        file_progress=0,
-        overall_progress=0,
-        file_status="starting"
-    )
-    
-    # Process each file with real-time updates
-    for i, file in enumerate(files):
+    for index, file in enumerate(files, 1):
         try:
             # Get relative path from file name (browsers include path in webkitRelativePath)
             if hasattr(file, 'filename') and file.filename:
-                current_filename = file.filename
-                
-                # Notify current file progress
-                await notify_folder_progress(
-                    folder_name=folder_name,
-                    total_files=total_files,
-                    completed_files=completed_files,
-                    current_file=current_filename,
-                    file_progress=0,
-                    overall_progress=(i / total_files) * 100,
-                    file_status="uploading"
-                )
-                
                 # Handle nested folder structure from webkitRelativePath
                 relative_path = file.filename
                 if '/' in relative_path:
@@ -3229,50 +3183,33 @@ async def upload_folder(
                 else:
                     final_path = folder_path / file.filename
                 
-                # Save the file with progress tracking
+                # 📡 Notify file progress start
+                await upload_status_manager.notify_file_progress(
+                    folder_name, file.filename, index, len(files), 0.0
+                )
+                
+                # Save the file
                 await save_upload_file_async(file, final_path, encrypt)
-                
-                # File completed successfully
                 uploaded_files.append(str(final_path.relative_to(UPLOAD_FOLDER)))
-                completed_files += 1
                 
-                # Notify file completion
-                await notify_folder_progress(
-                    folder_name=folder_name,
-                    total_files=total_files,
-                    completed_files=completed_files,
-                    current_file=current_filename,
-                    file_progress=100,
-                    overall_progress=(completed_files / total_files) * 100,
-                    file_status="completed"
+                # 📡 Notify file completion
+                await upload_status_manager.notify_file_progress(
+                    folder_name, file.filename, index, len(files), 100.0
                 )
                 
         except Exception as e:
             print(f"❌ Failed to upload file {file.filename}: {e}")
             failed_files.append(file.filename)
-            
-            # Notify file error
-            if hasattr(file, 'filename'):
-                await notify_folder_progress(
-                    folder_name=folder_name,
-                    total_files=total_files,
-                    completed_files=completed_files,
-                    current_file=file.filename,
-                    file_progress=0,
-                    overall_progress=(completed_files / total_files) * 100,
-                    file_status="error"
-                )
+            # 📡 Notify file error
+            await upload_status_manager.notify_folder_error(
+                folder_name, f"Failed to upload {file.filename}: {str(e)}"
+            )
     
-    # Final folder completion notification
-    success_rate = (completed_files / total_files) * 100 if total_files > 0 else 0
-    await notify_folder_progress(
-        folder_name=folder_name,
-        total_files=total_files,
-        completed_files=completed_files,
-        current_file="",
-        file_progress=100,
-        overall_progress=100,
-        file_status="folder_complete" if success_rate > 80 else "folder_partial"
+    total_time = time.time() - start_time
+    
+    # 📡 Notify folder completion
+    await upload_status_manager.notify_folder_complete(
+        folder_name, uploaded_files, failed_files, total_time
     )
     
     return JSONResponse(content={
@@ -3282,7 +3219,7 @@ async def upload_folder(
         "files_uploaded": uploaded_files,
         "files_failed": failed_files,
         "total_files": len(files),
-        "success_rate": f"{success_rate:.1f}%",
+        "upload_time": round(total_time, 2),
         "protocol": "HTTPS" if is_https else "HTTP"
     })
 

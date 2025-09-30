@@ -215,29 +215,24 @@
       <h3 style="margin: 0; color: var(--text-color);">🚀 Active Uploads <span id="uploadCount" style="color: var(--text-color); font-size: 0.9rem;">(0)</span></h3>
       <div style="display: flex; gap: 0.5rem;">
         <button onclick="cancelAllUploads()" class="upload-manager-btn" style="background: #dc3545;">❌ Cancel All</button>
-        <button onclick="toggleUploadDetails()" id="uploadDetailsBtn" class="upload-manager-btn" style="background: #17a2b8;">📊 Details</button>
       </div>
     </div>
     
-    <!-- Upload Summary Stats -->
-    <div id="uploadSummary" class="upload-summary" style="display: none; margin-bottom: 1rem; padding: 0.8rem; background: var(--input-bg); border-radius: 8px; border: 1px solid var(--border-color);">
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; font-size: 0.9rem; color: var(--text-color);">
-        <div><strong>📁 Total Files:</strong> <span id="totalFilesCount">0</span></div>
-        <div><strong>📊 Total Size:</strong> <span id="totalSizeDisplay">0 MB</span></div>
-        <div><strong>⚡ Avg Speed:</strong> <span id="avgSpeedDisplay">0 MB/s</span></div>
-        <div><strong>⏱️ Elapsed:</strong> <span id="elapsedTimeDisplay">0s</span></div>
-        <div><strong>🎯 Success Rate:</strong> <span id="successRateDisplay">0%</span></div>
-        <div><strong>🔄 Concurrent:</strong> <span id="concurrentDisplay">0/3</span></div>
+    <!-- Upload Summary for Folder Uploads -->
+    <div id="uploadSummary" class="upload-summary" style="display: none; margin-bottom: 1rem; padding: 1rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px;">
+      <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 0.5rem;">
+        <h4 style="margin: 0; color: #333;">📁 <span id="folderName">Folder Upload</span></h4>
+        <div style="font-size: 0.9rem; color: #666;">
+          <span id="fileProgress">0 of 0</span> files • <span id="overallProgress">0%</span>
+        </div>
+      </div>
+      <div class="upload-progress-bar" style="width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+        <div id="summaryProgressFill" class="upload-progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #4a90e2, #357bd8); transition: width 0.3s ease;"></div>
       </div>
     </div>
     
     <div id="uploadQueue" class="upload-queue">
       <!-- Upload items will be dynamically added here -->
-      <div id="noUploadsMessage" style="text-align: center; color: var(--text-color); opacity: 0.6; padding: 2rem;">
-        <div style="font-size: 3rem; margin-bottom: 1rem;">📤</div>
-        <div>No active uploads</div>
-        <div style="font-size: 0.9rem; margin-top: 0.5rem;">Select files or folders to start uploading</div>
-      </div>
     </div>
   </div>
   </section>
@@ -489,6 +484,56 @@
     let uploadQueue = window.uploadQueue; // Local reference
     let uploadIdCounter = 0;
     let isUploadManagerVisible = false;
+    
+    // 📡 WebSocket connection for real-time upload status
+    let uploadWebSocket = null;
+    let wsReconnectAttempts = 0;
+    let maxReconnectAttempts = 5;
+    
+    function initializeUploadWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/upload-status`;
+        
+        try {
+            uploadWebSocket = new WebSocket(wsUrl);
+            
+            uploadWebSocket.onopen = function(event) {
+                console.log('📡 Upload WebSocket connected');
+                wsReconnectAttempts = 0;
+            };
+            
+            uploadWebSocket.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleUploadStatusUpdate(data);
+                } catch (e) {
+                    console.log('📡 WebSocket echo:', event.data);
+                }
+            };
+            
+            uploadWebSocket.onclose = function(event) {
+                console.log('📡 Upload WebSocket disconnected');
+                if (wsReconnectAttempts < maxReconnectAttempts) {
+                    wsReconnectAttempts++;
+                    setTimeout(() => {
+                        console.log(`📡 Reconnecting WebSocket (attempt ${wsReconnectAttempts})...`);
+                        initializeUploadWebSocket();
+                    }, 2000 * wsReconnectAttempts);
+                }
+            };
+            
+            uploadWebSocket.onerror = function(error) {
+                console.error('📡 Upload WebSocket error:', error);
+            };
+        } catch (error) {
+            console.error('📡 Failed to initialize WebSocket:', error);
+        }
+    }
+    
+    // Initialize WebSocket when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeUploadWebSocket();
+    });
     
     // 🔄 Progress Update Safety Net - Ultra-responsive for live feel
     let progressUpdateInterval = null;
@@ -747,31 +792,9 @@
   function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  }
-
-  function formatSpeed(bytesPerSecond) {
-    if (!bytesPerSecond || bytesPerSecond === 0) return '0 B/s';
-    const k = 1024;
-    const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
-    const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k));
-    const speed = (bytesPerSecond / Math.pow(k, i)).toFixed(1);
-    return `${speed} ${sizes[i]}`;
-  }
-
-  function formatTime(seconds) {
-    if (!seconds || seconds < 1) return '0s';
-    if (seconds < 60) return `${Math.round(seconds)}s`;
-    if (seconds < 3600) {
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.round(seconds % 60);
-      return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
-    }
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   }
 
   function getStatusDisplay(status) {
@@ -809,16 +832,8 @@
       startTime: null,
       endTime: null,
       bytesUploaded: 0,
-      uploadedBytes: 0,
       speed: 0,
-      timeRemaining: 0,
-      xhr: null,
-      lastProgressUpdate: Date.now(),
-      isFolderUpload: false,
-      folderName: null,
-      totalChunks: null,
-      uploadedChunks: 0,
-      isAESEnabled: false
+      xhr: null
     };
   }
 
@@ -827,46 +842,17 @@
     console.log(`🔄 addToUploadQueue: Adding ${files.length} file(s) to upload queue`);
     window.log.upload(`Adding ${files.length} file(s) to upload queue`);
 
-    // Detect if this is a folder upload
-    const isFolderUpload = files.length > 1 && files.some(file => 
-      file.webkitRelativePath || (file.name && file.name.includes('/'))
-    );
-    
-    let folderName = null;
-    if (isFolderUpload) {
-      // Extract folder name from the first file's path
-      const firstFile = files.find(f => f.webkitRelativePath || f.name.includes('/'));
-      if (firstFile) {
-        const path = firstFile.webkitRelativePath || firstFile.name;
-        folderName = path.split('/')[0];
-      }
-    }
-
     for (let file of files) {
       const uploadId = ++uploadIdCounter;
       console.log(`📄 Creating upload item for: ${file.name} (ID: ${uploadId})`);
       const uploadItem = createUploadItem(file, uploadId);
-      
-      // Add folder upload metadata
-      if (isFolderUpload) {
-        uploadItem.isFolderUpload = true;
-        uploadItem.folderName = folderName;
-        uploadItem.fileName = file.webkitRelativePath || file.name;
-      }
-      
       uploadQueue.push(uploadItem);
       console.log(`📋 Upload queue now has ${uploadQueue.length} items`);
       renderUploadItem(uploadItem);
     }
-    
-    // Show folder upload notification
-    if (isFolderUpload && folderName) {
-      showToast(`📁 Added folder "${folderName}" with ${files.length} files to upload queue`, 4000);
-    }
-    
     console.log('🔄 Updating upload manager display...');
     updateUploadManager();
-    showUploadManager();
+    // Removed showUploadManager function; moved to file-utils.js
   }
 
   function showUploadManager() {
@@ -1510,11 +1496,129 @@ Device Session will reset when browser is closed
       showToast('❌ Failed to clear device logs', 3000);
     }
   }
+  
+  function handleUploadStatusUpdate(data) {
+    console.log('📡 Upload status update:', data);
+    
+    switch (data.type) {
+      case 'folder_start':
+        showFolderUploadSummary(data.folder_name, data.total_files);
+        break;
+      case 'file_progress':
+        updateFolderProgress(data);
+        updateFileInQueue(data);
+        break;
+      case 'folder_complete':
+        completeFolderUpload(data);
+        break;
+      case 'folder_error':
+        showFolderError(data);
+        break;
+    }
+  }
+  
+  function showFolderUploadSummary(folderName, totalFiles) {
+    const summaryDiv = document.getElementById('uploadSummary');
+    const folderNameSpan = document.getElementById('folderName');
+    const fileProgress = document.getElementById('fileProgress');
+    const overallProgress = document.getElementById('overallProgress');
+    const progressFill = document.getElementById('summaryProgressFill');
+    
+    if (summaryDiv && folderNameSpan && fileProgress) {
+      folderNameSpan.textContent = folderName;
+      fileProgress.textContent = `0 of ${totalFiles}`;
+      overallProgress.textContent = '0%';
+      progressFill.style.width = '0%';
+      progressFill.style.background = 'linear-gradient(90deg, #4a90e2, #357bd8)';
+      summaryDiv.style.display = 'block';
+      
+      // Show upload manager
+      showUploadManager();
+    }
+  }
+  
+  function updateFolderProgress(data) {
+    const fileProgress = document.getElementById('fileProgress');
+    const overallProgress = document.getElementById('overallProgress');
+    const progressFill = document.getElementById('summaryProgressFill');
+    
+    if (fileProgress && overallProgress && progressFill) {
+      fileProgress.textContent = `${data.current_file} of ${data.total_files}`;
+      overallProgress.textContent = `${Math.round(data.overall_progress)}%`;
+      progressFill.style.width = `${data.overall_progress}%`;
+    }
+  }
+  
+  function updateFileInQueue(data) {
+    // Create or update individual file entry in upload queue
+    const existingItem = uploadQueue.find(item => 
+      item.fileName === data.file_name && item.folderName === data.folder_name
+    );
+    
+    if (!existingItem) {
+      // Add new file to queue
+      const uploadItem = {
+        id: `folder_${Date.now()}_${data.file_name}`,
+        fileName: data.file_name,
+        folderName: data.folder_name,
+        size: 0, // Size unknown for folder uploads
+        progress: data.file_progress,
+        status: data.file_progress >= 100 ? 'completed' : 'uploading',
+        startTime: Date.now(),
+        isFolder: true
+      };
+      
+      uploadQueue.push(uploadItem);
+    } else {
+      // Update existing item
+      existingItem.progress = data.file_progress;
+      existingItem.status = data.file_progress >= 100 ? 'completed' : 'uploading';
+    }
+    
+    updateUploadManager();
+  }
+  
+  function completeFolderUpload(data) {
+    const summaryDiv = document.getElementById('uploadSummary');
+    const overallProgress = document.getElementById('overallProgress');
+    const progressFill = document.getElementById('summaryProgressFill');
+    
+    if (overallProgress && progressFill) {
+      overallProgress.textContent = '100%';
+      progressFill.style.width = '100%';
+      progressFill.style.background = '#28a745'; // Green for completion
+    }
+    
+    // Mark all folder files as completed
+    uploadQueue.forEach(item => {
+      if (item.folderName === data.folder_name) {
+        item.status = 'completed';
+        item.progress = 100;
+      }
+    });
+    
+    updateUploadManager();
+    
+    // Hide summary after a delay
+    setTimeout(() => {
+      if (summaryDiv) {
+        summaryDiv.style.display = 'none';
+      }
+    }, 3000);
+  }
+  
+  function showFolderError(data) {
+    const progressFill = document.getElementById('summaryProgressFill');
+    if (progressFill) {
+      progressFill.style.background = '#dc3545'; // Red for error
+    }
+    
+    console.error('📁 Folder upload error:', data.error);
+  }
 
   function updateUploadManager() {
     const countElement = document.getElementById('uploadCount');
     const uploadQueue_element = document.getElementById('uploadQueue');
-    const noUploadsMessage = document.getElementById('noUploadsMessage');
     
     const activeUploads = uploadQueue.filter(item => 
       ['queued', 'uploading'].includes(item.status)
@@ -1533,84 +1637,16 @@ Device Session will reset when browser is closed
       countElement.textContent = `(${activeUploads}${concurrencyInfo}${completedInfo})`;
     }
 
-    // Update summary statistics
-    updateUploadSummary();
-
     // Keep upload manager visible when there are ANY items (active or completed)
     const uploadManager = document.getElementById('uploadManager');
     if (uploadManager && uploadQueue.length > 0) {
       uploadManager.style.display = 'block';
       
-      // Hide no uploads message
-      if (noUploadsMessage) {
-        noUploadsMessage.style.display = 'none';
-      }
-      
       // 🔄 Re-sort and re-render upload items in proper order
       sortAndRenderUploadQueue();
-    } else if (uploadManager && uploadQueue.length === 0) {
-      // Show no uploads message when queue is empty
-      if (noUploadsMessage) {
-        noUploadsMessage.style.display = 'block';
-      }
     }
     // Users can manually use the logs to check completed uploads
     // The upload manager will stay visible so users can see their upload progress
-  }
-
-  function updateUploadSummary() {
-    if (uploadQueue.length === 0) return;
-    
-    const totalFiles = uploadQueue.length;
-    const completedFiles = uploadQueue.filter(item => item.status === 'completed').length;
-    const totalSize = uploadQueue.reduce((sum, item) => sum + (item.fileSize || 0), 0);
-    const uploadedSize = uploadQueue.reduce((sum, item) => {
-      return sum + ((item.uploadedBytes || 0));
-    }, 0);
-    
-    // Calculate average speed from active uploads
-    const activeUploads = uploadQueue.filter(item => item.status === 'uploading' && item.speed);
-    const avgSpeed = activeUploads.length > 0 
-      ? activeUploads.reduce((sum, item) => sum + (item.speed || 0), 0) / activeUploads.length
-      : 0;
-    
-    // Calculate elapsed time from oldest upload
-    const oldestUpload = uploadQueue.reduce((oldest, item) => 
-      (item.startTime && (!oldest.startTime || item.startTime < oldest.startTime)) ? item : oldest, {});
-    const elapsedTime = oldestUpload.startTime ? (Date.now() - oldestUpload.startTime) / 1000 : 0;
-    
-    const successRate = totalFiles > 0 ? (completedFiles / totalFiles * 100) : 0;
-    const currentlyUploading = uploadQueue.filter(item => item.status === 'uploading').length;
-    
-    // Update display elements
-    const elements = {
-      'totalFilesCount': totalFiles.toString(),
-      'totalSizeDisplay': formatFileSize(totalSize),
-      'avgSpeedDisplay': formatSpeed(avgSpeed),
-      'elapsedTimeDisplay': formatTime(elapsedTime),
-      'successRateDisplay': `${Math.round(successRate)}%`,
-      'concurrentDisplay': `${currentlyUploading}/${currentMaxConcurrent}`
-    };
-    
-    Object.entries(elements).forEach(([id, value]) => {
-      const element = document.getElementById(id);
-      if (element) element.textContent = value;
-    });
-  }
-
-  function toggleUploadDetails() {
-    const summary = document.getElementById('uploadSummary');
-    const btn = document.getElementById('uploadDetailsBtn');
-    
-    if (summary.style.display === 'none') {
-      summary.style.display = 'block';
-      btn.textContent = '📊 Hide Details';
-      btn.style.background = '#28a745';
-    } else {
-      summary.style.display = 'none';
-      btn.textContent = '📊 Details';
-      btn.style.background = '#17a2b8';
-    }
   }
 
   // 🔄 Sort and re-render upload queue with proper priority order
@@ -1666,46 +1702,31 @@ Device Session will reset when browser is closed
     }
 
     const itemDiv = document.createElement('div');
-    // Add folder-upload class if this is part of a folder upload
-    const isFolderUpload = uploadItem.isFolderUpload || (uploadItem.fileName && uploadItem.fileName.includes('/'));
-    const statusClass = uploadItem.status || 'queued';
-    itemDiv.className = `upload-item ${statusClass}${isFolderUpload ? ' folder-upload' : ''}`;
+    itemDiv.className = `upload-item ${uploadItem.status}`; // Use consistent format that matches CSS
     itemDiv.id = `upload-${uploadItem.id}`;
     
-    // Enhanced file name display with path info for folder uploads
-    const displayName = isFolderUpload && uploadItem.fileName.includes('/') 
-      ? uploadItem.fileName.split('/').pop() // Show just filename
-      : uploadItem.fileName;
-    const folderPath = isFolderUpload && uploadItem.fileName.includes('/') 
-      ? uploadItem.fileName.substring(0, uploadItem.fileName.lastIndexOf('/'))
-      : null;
-    
-    // Enhanced progress bar with animated fill
-    const progressPercent = Math.round(uploadItem.progress || 0);
-    const progressColor = getProgressColor(uploadItem.status, progressPercent);
+    const folderIndicator = uploadItem.isFolder ? `<span style="color: #666; font-size: 0.8rem;">📁 ${uploadItem.folderName}/</span><br>` : '';
+    const statusIndicator = `<div class="status-indicator"></div>`;
     
     itemDiv.innerHTML = `
+      ${statusIndicator}
       <div class="upload-file-info">
         <div class="upload-file-name">
-          ${isFolderUpload ? '📁 ' : '📄 '}${escapeHtml(displayName)}
-          ${folderPath ? `<div style="font-size: 0.8rem; color: var(--text-color); opacity: 0.7; margin-top: 0.2rem;">📂 ${escapeHtml(folderPath)}</div>` : ''}
+          ${folderIndicator}${escapeHtml(uploadItem.fileName)}
         </div>
         <div class="upload-file-details">
-          <span>📊 ${formatFileSize(uploadItem.fileSize)}</span>
+          <span>${uploadItem.isFolder ? 'Folder file' : formatFileSize(uploadItem.fileSize)}</span>
           <span id="speed-${uploadItem.id}">${getStatusDisplay(uploadItem.status)}</span>
           <span id="remaining-${uploadItem.id}"></span>
-          ${uploadItem.totalChunks ? `<span style="color: #17a2b8;">📦 ${uploadItem.totalChunks} chunks</span>` : ''}
         </div>
       </div>
       <div class="upload-progress-section">
         <div class="upload-progress-bar">
-          <div class="upload-progress-fill" id="progress-fill-${uploadItem.id}" 
-               style="width: ${progressPercent}%; background: ${progressColor}; transition: width 0.3s ease, background-color 0.3s ease;"></div>
+          <div class="upload-progress-fill" id="progress-fill-${uploadItem.id}" style="width: ${uploadItem.progress || 0}%"></div>
         </div>
         <div class="upload-progress-text">
-          <span id="progress-text-${uploadItem.id}">${progressPercent}%</span>
+          <span id="progress-text-${uploadItem.id}">${Math.round(uploadItem.progress || 0)}%</span>
           <span id="status-${uploadItem.id}">${getStatusDisplay(uploadItem.status)}</span>
-          <span id="eta-${uploadItem.id}" style="font-size: 0.7rem; opacity: 0.8;"></span>
         </div>
       </div>
       <div class="upload-controls">
@@ -1714,24 +1735,6 @@ Device Session will reset when browser is closed
     `;
     
     queue.appendChild(itemDiv);
-  }
-
-  function getProgressColor(status, progress) {
-    switch(status) {
-      case 'uploading':
-        if (progress < 30) return 'linear-gradient(90deg, #ff6b6b, #ee5a24)';
-        if (progress < 70) return 'linear-gradient(90deg, #ffa502, #ff6348)';
-        return 'linear-gradient(90deg, #26de81, #20bf6b)';
-      case 'completed':
-        return 'linear-gradient(90deg, #26de81, #20bf6b)';
-      case 'processing':
-        return 'linear-gradient(90deg, #ffa502, #ff9500)';
-      case 'error':
-      case 'cancelled':
-        return 'linear-gradient(90deg, #ff3742, #c44569)';
-      default:
-        return 'linear-gradient(90deg, #a4b0be, #747d8c)';
-    }
   }
 
   // 📊 Smart insertion based on upload priority

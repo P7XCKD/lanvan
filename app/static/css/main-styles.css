@@ -690,28 +690,20 @@ progress {
 
 /* 📤 Upload Manager Styles */
 .upload-queue {
-  max-height: 500px;
+  max-height: 400px;
   overflow-y: auto;
-  border: 1px solid var(--border-color);
+  border: 1px solid #e1e1e1;
   border-radius: 8px;
-  background: var(--input-bg);
-  transition: all 0.3s ease;
-}
-
-.upload-summary {
-  background: var(--input-bg);
-  border: 1px solid var(--border-color);
-  color: var(--text-color);
+  background: #fafafa;
 }
 
 .upload-item {
   display: flex;
   align-items: center;
   padding: 1rem;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--section-bg);
+  border-bottom: 1px solid #e1e1e1;
+  background: white;
   transition: all 0.3s ease;
-  position: relative;
 }
 
 .upload-item:last-child {
@@ -719,75 +711,29 @@ progress {
 }
 
 .upload-item.completed {
-  background: linear-gradient(90deg, #f8fff8, #f0f8f0);
+  background: #f8fff8;
   border-left: 4px solid #28a745;
-  animation: successPulse 0.5s ease-in-out;
 }
 
 .upload-item.processing {
-  background: linear-gradient(90deg, #fff8e1, #fef5d3);
+  background: #fff8e1;
   border-left: 4px solid #ffc107;
   animation: processingPulse 2s ease-in-out infinite alternate;
 }
 
 @keyframes processingPulse {
-  from { opacity: 0.8; transform: scale(1); }
-  to { opacity: 1; transform: scale(1.01); }
-}
-
-@keyframes successPulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.02); box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3); }
-  100% { transform: scale(1); }
+  from { opacity: 0.8; }
+  to { opacity: 1; }
 }
 
 .upload-item.error {
-  background: linear-gradient(90deg, #fff8f8, #fef0f0);
+  background: #fff8f8;
   border-left: 4px solid #dc3545;
-  animation: errorShake 0.5s ease-in-out;
-}
-
-@keyframes errorShake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-2px); }
-  75% { transform: translateX(2px); }
 }
 
 .upload-item.cancelled {
-  background: linear-gradient(90deg, #fff8f8, #fef0f0);
+  background: #fff8f8;
   border-left: 4px solid #dc3545;
-  opacity: 0.7;
-  filter: grayscale(0.3);
-}
-
-.upload-item.uploading {
-  background: linear-gradient(90deg, #f0f8ff, #e6f3ff);
-  border-left: 4px solid #007bff;
-  animation: uploadingPulse 1.5s ease-in-out infinite;
-}
-
-@keyframes uploadingPulse {
-  0%, 100% { border-left-color: #007bff; }
-  50% { border-left-color: #0056b3; }
-}
-
-.upload-item.queued {
-  background: linear-gradient(90deg, #f8f9fa, #e9ecef);
-  border-left: 4px solid #6c757d;
-  opacity: 0.9;
-}
-
-/* Folder Upload Indicator */
-.upload-item.folder-upload {
-  border-top: 2px solid #17a2b8;
-}
-
-.upload-item.folder-upload::before {
-  content: "📁";
-  position: absolute;
-  top: 0.5rem;
-  right: 1rem;
-  font-size: 1.2rem;
   opacity: 0.7;
 }
 
@@ -915,6 +861,10 @@ progress {
 }
 
 /* Real-time Status Indicators */
+.upload-item {
+  position: relative;
+}
+
 .upload-item .status-indicator {
   position: absolute;
   top: 0.5rem;
@@ -954,7 +904,7 @@ progress {
 .upload-progress-fill {
   background: linear-gradient(90deg, #4a90e2, #357bd8);
   background-size: 200% 100%;
-  animation: progressShimmer 2s linear infinite;
+  transition: width 0.3s ease;
 }
 
 .upload-item.uploading .upload-progress-fill {
@@ -969,6 +919,16 @@ progress {
 @keyframes progressPulse {
   from { opacity: 0.8; }
   to { opacity: 1; }
+}
+
+/* Upload Summary Styling */
+.upload-summary {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 /* Dark mode upload status styling */

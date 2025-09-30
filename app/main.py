@@ -93,7 +93,6 @@ connection_manager = ConnectionManager()
 
 # 🎯 Console command monitor for "close" command
 from app.clipboard_ws import clipboard_ws_router
-from app.upload_status_ws import upload_ws_router
 
 def console_command_monitor():
     """Monitor console for 'close' command"""
@@ -402,6 +401,9 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # ✅ Register app routes
 app.include_router(router)
 app.include_router(clipboard_ws_router)
+
+# 📡 Add WebSocket router for real-time upload status
+from app.upload_status_ws import router as upload_ws_router
 app.include_router(upload_ws_router)
 
 # ✅ Exception handlers for smart loading page system
