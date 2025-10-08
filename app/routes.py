@@ -72,7 +72,25 @@ from app.validation import (
     FileValidator,
     AdvancedFileValidator
 )
-from app.simple_mdns import mdns_manager
+# Import mDNS manager with universal support
+try:
+    from app.universal_mdns import get_mdns_manager
+    # Get the global mDNS manager instance
+    def get_current_mdns_manager():
+        from app.main import current_mdns_manager
+        return current_mdns_manager
+    UNIVERSAL_MDNS_AVAILABLE = True
+except ImportError:
+    # Fallback to simple mDNS
+    try:
+        from app.simple_mdns import mdns_manager
+        def get_current_mdns_manager():
+            return mdns_manager
+        UNIVERSAL_MDNS_AVAILABLE = False
+    except ImportError:
+        def get_current_mdns_manager():
+            return None
+        UNIVERSAL_MDNS_AVAILABLE = False
 
 # Android/Termux network utilities
 def get_android_network_info():
@@ -246,8 +264,14 @@ async def home(request: Request):
     # 🎯 Universal mDNS Redirect Logic for lanvan.local
     if "lanvan.local" in host:
         # Get current server configuration
-        actual_port = mdns_manager.actual_port
-        actual_protocol = mdns_manager.actual_protocol
+        current_mdns = get_current_mdns_manager()
+        if current_mdns and hasattr(current_mdns, 'actual_port'):
+            actual_port = current_mdns.actual_port
+            actual_protocol = current_mdns.actual_protocol
+        else:
+            # Fallback values
+            actual_port = int(os.environ.get('PORT', 5000))
+            actual_protocol = "http"
         current_port = request.url.port or (80 if request.url.scheme == "http" else 443)
         current_scheme = request.url.scheme
         
@@ -2382,18 +2406,37 @@ async def get_network_info():
                      os.path.exists("/data/data/com.termux") or 
                      "TERMUX_VERSION" in os.environ)
         
-        # Use mDNS manager's offline-capable method to get LAN IP
-        lan_ip = mdns_manager.get_lan_ip()
+        # Get current mDNS manager
+        current_mdns = get_current_mdns_manager()
         
-        # Get mDNS info
-        mdns_info = mdns_manager.get_mdns_info()
-        
-        # Get hybrid URL (IP-optimized for Android/Termux)
-        hybrid_url = mdns_manager.get_hybrid_url()
-        
-        # Also provide separate URL components for QR code generation
-        protocol = "https" if mdns_manager.use_https else "http"
-        port = mdns_manager.port
+        if current_mdns and UNIVERSAL_MDNS_AVAILABLE:
+            # Universal mDNS manager
+            status = current_mdns.get_status()
+            lan_ip = status.get('local_ip', '127.0.0.1')
+            mdns_info = {
+                'status': 'active' if status['active'] else 'inactive',
+                'active': status['active'],
+                'domain': status['domain'],
+                'url': status['url'],
+                'port': status['port']
+            }
+            protocol = "http"  # Universal mDNS uses HTTP by default
+            port = status['port']
+            hybrid_url = status['url'] if status['active'] else f"http://{lan_ip}:{port}"
+        elif current_mdns:
+            # Legacy mDNS manager
+            lan_ip = current_mdns.get_lan_ip()
+            mdns_info = current_mdns.get_mdns_info()
+            hybrid_url = current_mdns.get_hybrid_url()
+            protocol = "https" if current_mdns.use_https else "http"
+            port = current_mdns.port
+        else:
+            # No mDNS manager available
+            lan_ip = socket.gethostbyname(socket.gethostname())
+            mdns_info = {'active': False, 'domain': None, 'url': None}
+            protocol = "http"
+            port = int(os.environ.get('PORT', 5000))
+            hybrid_url = f"http://{lan_ip}:{port}"
         
         # Format LAN IP URL using the same logic as mDNS URLs
         if (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
@@ -2414,8 +2457,8 @@ async def get_network_info():
         }
         
         # Add Android/Termux specific recommendations
-        if is_android:
-            response_data["android_info"] = mdns_manager.get_android_optimized_info()
+        if is_android and current_mdns and hasattr(current_mdns, 'get_android_optimized_info'):
+            response_data["android_info"] = current_mdns.get_android_optimized_info()
             response_data["recommendations"] = [
                 f"Use IP address: {lan_ip_url}",
                 "Avoid .local domains on Android/Termux",
@@ -2425,9 +2468,15 @@ async def get_network_info():
         
         return JSONResponse(content=response_data)
     except Exception as e:
-        # Create fallback URL using the same format logic as mdns_manager
-        protocol = "https" if mdns_manager.use_https else "http"
-        port = mdns_manager.port
+        # Create fallback URL using the same format logic
+        current_mdns = get_current_mdns_manager()
+        if current_mdns and hasattr(current_mdns, 'use_https'):
+            protocol = "https" if current_mdns.use_https else "http"
+            port = current_mdns.port
+        else:
+            # Fallback values
+            protocol = "http"
+            port = int(os.environ.get('PORT', 5000))
         if (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
             fallback_url = f"{protocol}://127.0.0.1"
             lan_ip_fallback = f"{protocol}://127.0.0.1"
@@ -3042,9 +3091,31 @@ async def clipboard_write(request: Request):
 async def mdns_info():
     """Get mDNS service information"""
     try:
-        from simple_mdns import mdns_manager
-        info = mdns_manager.get_mdns_info()
-        return JSONResponse(content=info)
+        current_mdns = get_current_mdns_manager()
+        
+        if current_mdns and UNIVERSAL_MDNS_AVAILABLE:
+            # Universal mDNS manager
+            status = current_mdns.get_status()
+            return JSONResponse(content={
+                "status": "success",
+                "active": status['active'],
+                "domain": status['domain'],
+                "url": status['url'],
+                "port": status['port'],
+                "local_ip": status.get('local_ip'),
+                "backend": status.get('backend', 'universal')
+            })
+        elif current_mdns:
+            # Legacy mDNS manager
+            info = current_mdns.get_mdns_info()
+            return JSONResponse(content=info)
+        else:
+            # No mDNS available
+            return JSONResponse(content={
+                "status": "error",
+                "active": False,
+                "msg": "mDNS not available"
+            })
     except Exception as e:
         return JSONResponse(
             status_code=500,
