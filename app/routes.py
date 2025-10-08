@@ -583,20 +583,20 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
         # Android-specific feasibility check (but streaming works everywhere)
         if is_android:
             feasibility = optimize_for_upload(file_size)
-            if feasibility['warnings']:
+            if feasibility.get('warnings'):
                 for warning in feasibility['warnings']:
                     print(f"⚠️ {warning}")
-            if feasibility['recommendations']:
+            if feasibility.get('recommendations'):
                 print(f"💡 Android recommendations:")
                 for rec in feasibility['recommendations']:
                     print(f"   • {rec}")
         else:
             # General recommendations for PC/Linux/Mac
             feasibility = optimize_for_upload(file_size)
-            if feasibility['warnings']:
+            if feasibility.get('warnings'):
                 for warning in feasibility['warnings']:
                     print(f"⚠️ {warning}")
-            if feasibility['recommendations']:
+            if feasibility.get('recommendations'):
                 print(f"💡 {platform_name} recommendations:")
                 for rec in feasibility['recommendations']:
                     print(f"   • {rec}")
