@@ -8393,8 +8393,12 @@ window.handleFiles = function(files) {
 };
 
 function handleFileSelection(files, type) {
+  if (!files || files.length === 0) {
+    showToast('⚠️ No files selected!', 3000);
+    return;
+  }
   if (type === 'folder') {
-    // Count unique folders for better user feedback
+    // Only one folder at a time is supported for single bar
     const folderSet = new Set();
     Array.from(files).forEach(file => {
       if (file.webkitRelativePath) {
@@ -8402,132 +8406,95 @@ function handleFileSelection(files, type) {
         folderSet.add(rootFolder);
       }
     });
-    
-    const folderCount = folderSet.size;
+    const folderName = folderSet.size === 1 ? Array.from(folderSet)[0] : 'Selected Folders';
     const fileCount = files.length;
-    
-    if (folderCount > 1) {
-      showToast(`📁 Processing ${folderCount} folders with ${fileCount} files...`, 3000);
-      console.log(`📁 Multiple folders detected: ${Array.from(folderSet).join(', ')}`);
-    } else if (folderCount === 1) {
-      const folderName = Array.from(folderSet)[0];
-      showToast(`📁 Processing folder "${folderName}" with ${fileCount} files...`, 3000);
-    }
-    
-    uploadFolder(files);
-  } else {
-    // Use existing file upload logic
-    if (typeof window.handleFiles === 'function') {
-      window.handleFiles(files);
-    } else {
-      console.log('File upload handler not found');
-    }
-  }
-}
-
-async function uploadFolder(files) {
-  if (files.length === 0) {
-    showToast('⚠️ No files selected!', 3000);
+    showToast(`📁 Uploading folder "${folderName}" with ${fileCount} files...`, 3000);
+    // Add a single folder upload item to the queue
+    const uploadId = ++uploadIdCounter;
+    const folderUploadItem = {
+      id: uploadId,
+      fileName: folderName,
+      fileSize: Array.from(files).reduce((sum, f) => sum + f.size, 0),
+      file: null, // Not a single file
+      status: 'queued',
+      progress: 0,
+      uploadId: uploadId,
+      startTime: null,
+      endTime: null,
+      bytesUploaded: 0,
+      speed: 0,
+      xhr: null,
+      isFolder: true,
+      totalFiles: fileCount,
+      files: Array.from(files)
+    };
+    uploadQueue.push(folderUploadItem);
+    renderUploadItem(folderUploadItem);
+    showUploadManager();
+    // Start the folder upload
+    uploadFolderAsSingleBar(folderUploadItem);
+    updateUploadManager();
     return;
   }
-  
-  // Group files by their root folder (multiple folders support)
-  const folderGroups = new Map();
-  const standaloneFiles = [];
-  
-  for (let file of files) {
-    if (file.webkitRelativePath) {
-      const rootFolder = file.webkitRelativePath.split('/')[0];
-      if (!folderGroups.has(rootFolder)) {
-        folderGroups.set(rootFolder, []);
-      }
-      folderGroups.get(rootFolder).push(file);
-    } else {
-      standaloneFiles.push(file);
-    }
-  }
-  
-  // Handle multiple folders upload
-  if (folderGroups.size > 1) {
-    // Multiple folders detected - upload each separately
-    const uploadPromises = [];
-    
-    for (let [folderName, folderFiles] of folderGroups) {
-      const promise = uploadSingleFolder(folderName, folderFiles);
-      uploadPromises.push(promise);
-    }
-    
-    try {
-      const results = await Promise.all(uploadPromises);
-      const successCount = results.filter(r => r.success).length;
-      const totalFolders = folderGroups.size;
-      
-      if (successCount === totalFolders) {
-        showToast(`✅ All ${totalFolders} folders uploaded successfully!`, 4000);
-      } else {
-        showToast(`⚠️ ${successCount}/${totalFolders} folders uploaded successfully`, 4000);
-      }
-      
-      // Refresh file list
-      if (typeof refreshFileListManually === 'function') {
-        refreshFileListManually();
-      }
-      loadFolders();
-    } catch (error) {
-      console.error('Multiple folder upload error:', error);
-      showToast('❌ Multiple folder upload failed!', 4000);
-    }
-    return;
-  }
-  
-  // Single folder upload (existing functionality)
-  const folderName = folderGroups.size === 1 ? 
-    Array.from(folderGroups.keys())[0] : 'uploaded_folder';
-  const folderFiles = folderGroups.size === 1 ? 
-    Array.from(folderGroups.values())[0] : files;
-  
-  await uploadSingleFolder(folderName, folderFiles);
+  // Regular file upload
+  addToUploadQueue(Array.from(files));
+  showUploadManager();
+  startNextUpload();
 }
-
-// Helper function for single folder upload
-async function uploadSingleFolder(folderName, files) {
+// Upload a folder as a single progress bar item
+function uploadFolderAsSingleBar(folderUploadItem) {
+  folderUploadItem.status = 'uploading';
+  folderUploadItem.startTime = Date.now();
+  folderUploadItem.progress = 0;
+  updateUploadItem(folderUploadItem);
+  // Prepare FormData
   const formData = new FormData();
-  formData.append('folder_name', folderName);
-  
-  // Add all files with their relative paths (strip the root folder name to avoid duplication)
-  for (let file of files) {
+  formData.append('folder_name', folderUploadItem.fileName);
+  for (let file of folderUploadItem.files) {
     const relativePath = file.webkitRelativePath || file.name;
-    // Remove the root folder name from the path to avoid duplication
     const pathWithoutRoot = relativePath.includes('/') ? relativePath.substring(relativePath.indexOf('/') + 1) : file.name;
-    formData.append('files', file, pathWithoutRoot);
+    formData.append('files[]', file, pathWithoutRoot);
   }
-  
-  try {
-    const response = await fetch('/upload-folder', {
-      method: 'POST',
-      body: formData
-    });
-    
-    const result = await response.json();
-    
-    if (result.status === 'success') {
-      showToast(`✅ Folder "${folderName}" uploaded successfully! (${result.files_uploaded.length} files)`, 4000);
-      // Refresh file list to show new folder
-      if (typeof refreshFileListManually === 'function') {
-        refreshFileListManually();
-      }
-      loadFolders(); // Refresh folder list
-      return { success: true, folderName, fileCount: result.files_uploaded.length };
-    } else {
-      showToast(`❌ Upload failed: ${result.msg}`, 4000);
-      return { success: false, folderName, error: result.msg };
+  // Use XMLHttpRequest for progress
+  const xhr = new XMLHttpRequest();
+  folderUploadItem.xhr = xhr;
+  xhr.open('POST', '/upload-folder', true);
+  xhr.upload.addEventListener('progress', (e) => {
+    if (e.lengthComputable) {
+      const progress = (e.loaded / e.total) * 100;
+      folderUploadItem.progress = progress;
+      folderUploadItem.bytesUploaded = e.loaded;
+      folderUploadItem.fileSize = e.total;
+      folderUploadItem.lastProgressUpdate = Date.now();
+      updateUploadItem(folderUploadItem);
     }
-  } catch (error) {
-    console.error('Folder upload error:', error);
-    showToast(`❌ Folder "${folderName}" upload failed!`, 4000);
-    return { success: false, folderName, error: error.message };
-  }
+  });
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) {
+      if (xhr.status === 200) {
+        folderUploadItem.status = 'completed';
+        folderUploadItem.progress = 100;
+        folderUploadItem.endTime = Date.now();
+        updateUploadItem(folderUploadItem);
+        updateUploadManager();
+        showToast(`✅ Folder "${folderUploadItem.fileName}" uploaded successfully!`, 4000);
+        if (typeof refreshFileListManually === 'function') {
+          refreshFileListManually();
+        }
+        if (typeof loadFolders === 'function') {
+          loadFolders();
+        }
+      } else {
+        folderUploadItem.status = 'error';
+        updateUploadItem(folderUploadItem);
+        showToast(`❌ Folder upload failed!`, 4000);
+      }
+      updateUploadManager();
+    }
+  };
+  xhr.send(formData);
 }
+
 
 async function loadFolders() {
   try {

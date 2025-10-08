@@ -37,7 +37,7 @@ class ConcurrentUploadManager:
     🎯 Manages multiple file uploads concurrently with adaptive optimization
     """
     
-    def __init__(self, max_concurrent_uploads: int = 3):
+    def __init__(self, max_concurrent_uploads: int = 8):
         self.max_concurrent_uploads = max_concurrent_uploads
         self.active_uploads: Dict[str, Dict[str, Any]] = {}
         self.upload_lock = threading.Lock()
