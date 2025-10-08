@@ -1520,31 +1520,15 @@ Device Session will reset when browser is closed
   // Removed updateFolderProgress - no longer needed as we only show one upload item
   
   function updateFileInQueue(data) {
-    // Create or update single folder entry in upload queue
+    // Only update existing folder entries, don't create new ones
+    // The folder entry should already exist from the frontend selection
     const existingItem = uploadQueue.find(item => 
-      item.folderName === data.folder_name && item.isFolder
+      (item.folderName === data.folder_name || item.fileName === data.folder_name) && item.isFolder
     );
     
-    if (!existingItem) {
-      // Add new folder to queue (single item for entire folder)
-      const uploadItem = {
-        id: `folder_${Date.now()}_${data.folder_name}`,
-        fileName: data.folder_name,
-        folderName: data.folder_name,
-        size: 0, // Size unknown for folder uploads
-        progress: data.overall_progress,
-        status: data.overall_progress >= 100 ? 'completed' : 'uploading',
-        startTime: Date.now(),
-        isFolder: true,
-        currentFile: data.current_file,
-        totalFiles: data.total_files,
-        currentFileName: data.file_name
-      };
-      
-      uploadQueue.push(uploadItem);
-    } else {
+    if (existingItem) {
       // Update existing folder item with overall progress
-      existingItem.progress = data.overall_progress;
+      existingItem.progress = data.overall_progress || 0;
       existingItem.status = data.overall_progress >= 100 ? 'completed' : 'uploading';
       existingItem.currentFile = data.current_file;
       existingItem.totalFiles = data.total_files;
@@ -1557,7 +1541,7 @@ Device Session will reset when browser is closed
   function completeFolderUpload(data) {
     // Mark the folder as completed (single folder item)
     uploadQueue.forEach(item => {
-      if (item.folderName === data.folder_name && item.isFolder) {
+      if ((item.folderName === data.folder_name || item.fileName === data.folder_name) && item.isFolder) {
         item.status = 'completed';
         item.progress = 100;
         item.currentFile = data.success_count;
@@ -1571,7 +1555,7 @@ Device Session will reset when browser is closed
   function showFolderError(data) {
     // Mark folder item as error in the main upload queue
     uploadQueue.forEach(item => {
-      if (item.folderName === data.folder_name && item.isFolder) {
+      if ((item.folderName === data.folder_name || item.fileName === data.folder_name) && item.isFolder) {
         item.status = 'error';
       }
     });
@@ -8431,6 +8415,7 @@ function handleFileSelection(files, type) {
     const folderUploadItem = {
       id: uploadId,
       fileName: folderName,
+      folderName: folderName, // Add explicit folderName property for WebSocket matching
       fileSize: totalFolderSize,
       file: null, // Not a single file
       status: 'queued',
