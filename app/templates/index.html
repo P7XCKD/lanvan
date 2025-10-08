@@ -471,7 +471,8 @@
     // 📤 Upload Manager System - Make globally accessible
     window.uploadQueue = [];
     let uploadQueue = window.uploadQueue; // Local reference
-    let uploadIdCounter = 0;
+    window.uploadIdCounter = 0;
+    let uploadIdCounter = window.uploadIdCounter; // Local reference
     let isUploadManagerVisible = false;
     
     // 📡 WebSocket connection for real-time upload status
@@ -832,7 +833,8 @@
     window.log.upload(`Adding ${files.length} file(s) to upload queue`);
 
     for (let file of files) {
-      const uploadId = ++uploadIdCounter;
+      const uploadId = ++window.uploadIdCounter;
+      uploadIdCounter = window.uploadIdCounter;
       console.log(`📄 Creating upload item for: ${file.name} (ID: ${uploadId})`);
       const uploadItem = createUploadItem(file, uploadId);
       uploadQueue.push(uploadItem);
@@ -1682,10 +1684,10 @@ Device Session will reset when browser is closed
       ${statusIndicator}
       <div class="upload-file-info">
         <div class="upload-file-name">
-          ${displayName}
+          ${escapeHtml(displayName)}
         </div>
         <div class="upload-file-details">
-          <span>${displayDetails}</span>
+          <span>${escapeHtml(displayDetails)}</span>
           <span id="speed-${uploadItem.id}"></span>
           <span id="remaining-${uploadItem.id}"></span>
         </div>
@@ -8410,7 +8412,8 @@ function handleFileSelection(files, type) {
     const fileCount = files.length;
     showToast(`📁 Uploading folder "${folderName}" with ${fileCount} files...`, 3000);
     // Add a single folder upload item to the queue
-    const uploadId = ++uploadIdCounter;
+    const uploadId = ++window.uploadIdCounter;
+    uploadIdCounter = window.uploadIdCounter;
     const folderUploadItem = {
       id: uploadId,
       fileName: folderName,
@@ -8526,18 +8529,18 @@ function displayFolders(folders) {
   folderGrid.innerHTML = folders.map(folder => `
     <div class="file-card">
       <div class="file-icon">📁</div>
-      <div class="file-name" title="${folder.name}">${folder.name}</div>
-      <div class="file-size">${folder.file_count} files • ${folder.size_formatted}</div>
+      <div class="file-name" title="${escapeHtml(folder.name)}">${escapeHtml(folder.name)}</div>
+      <div class="file-size">${folder.file_count} files • ${escapeHtml(folder.size_formatted)}</div>
       <div class="file-actions">
-        <a href="/download-folder/${folder.name}" class="download-btn">⬇ Download</a>
-        <button onclick="deleteFolder('${folder.name}')" class="download-btn" style="background-color: #e74c3c;">🗑️</button>
+        <a href="/download-folder/${encodeURIComponent(folder.name)}" class="download-btn">⬇ Download</a>
+        <button onclick="deleteFolder('${escapeHtml(folder.name)}')" class="download-btn" style="background-color: #e74c3c;">🗑️</button>
       </div>
     </div>
   `).join('');
 }
 
 async function deleteFolder(folderName) {
-  if (!confirm(`Are you sure you want to delete the folder "${folderName}"?`)) {
+  if (!confirm(`Are you sure you want to delete the folder "${escapeHtml(folderName)}"?`)) {
     return;
   }
   
