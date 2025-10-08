@@ -8470,7 +8470,7 @@ function uploadFolderAsSingleBar(folderUploadItem) {
   for (let file of folderUploadItem.files) {
     const relativePath = file.webkitRelativePath || file.name;
     const pathWithoutRoot = relativePath.includes('/') ? relativePath.substring(relativePath.indexOf('/') + 1) : file.name;
-    formData.append('files[]', file, pathWithoutRoot);
+    formData.append('files', file, pathWithoutRoot);
   }
   // Use XMLHttpRequest for progress
   const xhr = new XMLHttpRequest();
