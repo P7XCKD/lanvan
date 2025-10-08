@@ -579,6 +579,9 @@
     AES_SIZE_LIMIT: null,  // NO LIMIT - streaming encryption handles any size
     GUEST_MEMORY_LIMIT: 1024 * 1024 * 1024, // 1GB - guest device warning threshold
     
+    // Upload limits
+    MAX_FOLDER_SIZE: 1024 * 1024 * 1024, // 1GB - maximum folder upload size
+    
     // Unified chunk sizing for optimal performance (same for all device types)
     CHUNK_SIZES: {
       GUEST_INITIAL: 16 * 1024 * 1024,   // 16MB initial for guest devices (unified)
@@ -8410,14 +8413,25 @@ function handleFileSelection(files, type) {
     });
     const folderName = folderSet.size === 1 ? Array.from(folderSet)[0] : 'Selected Folders';
     const fileCount = files.length;
-    showToast(`📁 Uploading folder "${folderName}" with ${fileCount} files...`, 3000);
+    
+    // Calculate total folder size and validate against 1GB limit
+    const totalFolderSize = Array.from(files).reduce((sum, f) => sum + f.size, 0);
+    const folderSizeFormatted = formatFileSize(totalFolderSize);
+    
+    // Check if folder exceeds 1GB limit
+    if (totalFolderSize > LANVAN_CONFIG.MAX_FOLDER_SIZE) {
+      showToast(`❌ Folder "${folderName}" is too large (${folderSizeFormatted}). Maximum folder size is 1 GB. Please select a smaller folder.`, 5000);
+      return;
+    }
+    
+    showToast(`📁 Uploading folder "${folderName}" with ${fileCount} files (${folderSizeFormatted})...`, 3000);
     // Add a single folder upload item to the queue
     const uploadId = ++window.uploadIdCounter;
     uploadIdCounter = window.uploadIdCounter;
     const folderUploadItem = {
       id: uploadId,
       fileName: folderName,
-      fileSize: Array.from(files).reduce((sum, f) => sum + f.size, 0),
+      fileSize: totalFolderSize,
       file: null, // Not a single file
       status: 'queued',
       progress: 0,
