@@ -16,21 +16,11 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.requests import ClientDisconnect
 from app.routes import router
 
-# Import universal mDNS manager for cross-platform service discovery
-try:
-    from app.universal_mdns import get_mdns_manager
-    UNIVERSAL_MDNS_AVAILABLE = True
-except ImportError:
-    # Fallback to simple mDNS
-    try:
-        from app.simple_mdns import mdns_manager
-        UNIVERSAL_MDNS_AVAILABLE = False
-    except ImportError:
-        mdns_manager = None
-        UNIVERSAL_MDNS_AVAILABLE = False
+# Import mDNS manager for service discovery
+from app.simple_mdns import mdns_manager
 
-# Global mDNS manager reference for shutdown
-current_mdns_manager = None
+# Import HTTPS redirect server for dual-protocol support
+# Removed: HTTPS redirect server import (no longer needed)
 
 # 🔇 Suppress noisy ClientDisconnect errors in logs
 class ClientDisconnectFilter(logging.Filter):
@@ -169,8 +159,6 @@ print("[INFO] Console command monitor disabled - use Ctrl+C to shutdown")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle app startup and shutdown"""
-    global current_mdns_manager
-    
     print("🚀 Server starting up with enhanced shutdown handling...")
     print("💡 Use Ctrl+C to shutdown gracefully (console commands disabled)")
     
@@ -183,17 +171,8 @@ async def lifespan(app: FastAPI):
     port = int(os.environ.get('PORT', 80))  # Default to HTTP port 80
     # Get HTTPS mode from environment variable set by run.py
     use_https = os.environ.get('USE_HTTPS', 'false').lower() == 'true'
-    
-    # Initialize mDNS manager based on availability
-    if UNIVERSAL_MDNS_AVAILABLE:
-        try:
-            current_mdns_manager = get_mdns_manager("lanvan", port)
-        except Exception as e:
-            print(f"⚠️ Universal mDNS initialization failed: {e}")
-    elif mdns_manager is not None:
-        current_mdns_manager = mdns_manager
-        current_mdns_manager.port = port
-        current_mdns_manager.use_https = use_https  # Configure HTTPS mode
+    mdns_manager.port = port
+    mdns_manager.use_https = use_https  # Configure HTTPS mode
     
     print(f"🔍 Starting mDNS service discovery ({'HTTPS' if use_https else 'HTTP'} mode)...")
     
@@ -216,36 +195,21 @@ async def lifespan(app: FastAPI):
     # Start mDNS in background thread to not block server startup
     def start_mdns_background():
         try:
-            if current_mdns_manager is None:
-                print("⚠️ mDNS manager not available - using IP access only")
-                return
-                
             time.sleep(1)  # Give server time to start
-            
-            if UNIVERSAL_MDNS_AVAILABLE:
-                # Universal mDNS manager
-                if current_mdns_manager.start_service():
-                    status = current_mdns_manager.get_status()
-                    print(f"✅ mDNS service active: {status['domain']}")
-                    print(f"   Access via: {status['url']}")
-                else:
-                    print("⚠️ mDNS service failed to start - using IP access only")
+            if mdns_manager.start_service():
+                mdns_info = mdns_manager.get_mdns_info()
+                print(f"✅ mDNS service active: {mdns_info['domain']}")
+                print(f"   Access via: {mdns_info['url']}")
+                if mdns_info['conflict_resolved']:
+                    print(f"   🔧 Conflict resolved (attempt #{mdns_info['conflict_count'] + 1})")
+                
+                # Show redirect info for HTTPS mode
+                if use_https and mdns_info['domain'] != "lanvan.local":
+                    print(f"🔀 Redirect available: http://lanvan.local → https://lanvan.local:{port}")
             else:
-                # Legacy mDNS manager
-                if current_mdns_manager.start_service():
-                    mdns_info = current_mdns_manager.get_mdns_info()
-                    print(f"✅ mDNS service active: {mdns_info['domain']}")
-                    print(f"   Access via: {mdns_info['url']}")
-                    if mdns_info['conflict_resolved']:
-                        print(f"   🔧 Conflict resolved (attempt #{mdns_info['conflict_count'] + 1})")
-                    
-                    # Show redirect info for HTTPS mode
-                    if use_https and mdns_info['domain'] != "lanvan.local":
-                        print(f"🔀 Redirect available: http://lanvan.local → https://lanvan.local:{port}")
-                else:
-                    print("⚠️ mDNS service failed to start - using IP access only")
+                print("⚠️  mDNS service failed to start - using IP access only")
         except Exception as e:
-            print(f"⚠️ mDNS service error: {e} - using IP access only")
+            print(f"⚠️  mDNS service error: {e} - using IP access only")
     
     # Start mDNS in background thread
     mdns_thread = threading.Thread(target=start_mdns_background, daemon=True)
@@ -296,13 +260,7 @@ async def lifespan(app: FastAPI):
     
     # Stop mDNS service
     print("🔴 Stopping mDNS service...")
-    try:
-        if current_mdns_manager is not None:
-            current_mdns_manager.stop_service()
-        elif mdns_manager is not None:
-            mdns_manager.stop_service()
-    except Exception as e:
-        print(f"⚠️ mDNS shutdown error: {e}")
+    mdns_manager.stop_service()
     
     # Force close all active connections
     await connection_manager.disconnect_all()
@@ -443,10 +401,6 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # ✅ Register app routes
 app.include_router(router)
 app.include_router(clipboard_ws_router)
-
-# 📡 Add WebSocket router for real-time upload status
-from app.upload_status_ws import router as upload_ws_router
-app.include_router(upload_ws_router)
 
 # ✅ Exception handlers for smart loading page system
 from fastapi import HTTPException, Request

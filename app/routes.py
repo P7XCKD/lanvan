@@ -72,25 +72,7 @@ from app.validation import (
     FileValidator,
     AdvancedFileValidator
 )
-# Import mDNS manager with universal support
-try:
-    from app.universal_mdns import get_mdns_manager
-    # Get the global mDNS manager instance
-    def get_current_mdns_manager():
-        from app.main import current_mdns_manager
-        return current_mdns_manager
-    UNIVERSAL_MDNS_AVAILABLE = True
-except ImportError:
-    # Fallback to simple mDNS
-    try:
-        from app.simple_mdns import mdns_manager
-        def get_current_mdns_manager():
-            return mdns_manager
-        UNIVERSAL_MDNS_AVAILABLE = False
-    except ImportError:
-        def get_current_mdns_manager():
-            return None
-        UNIVERSAL_MDNS_AVAILABLE = False
+from app.simple_mdns import mdns_manager
 
 # Android/Termux network utilities
 def get_android_network_info():
@@ -264,14 +246,8 @@ async def home(request: Request):
     # 🎯 Universal mDNS Redirect Logic for lanvan.local
     if "lanvan.local" in host:
         # Get current server configuration
-        current_mdns = get_current_mdns_manager()
-        if current_mdns and hasattr(current_mdns, 'actual_port'):
-            actual_port = current_mdns.actual_port
-            actual_protocol = current_mdns.actual_protocol
-        else:
-            # Fallback values
-            actual_port = int(os.environ.get('PORT', 5000))
-            actual_protocol = "http"
+        actual_port = mdns_manager.actual_port
+        actual_protocol = mdns_manager.actual_protocol
         current_port = request.url.port or (80 if request.url.scheme == "http" else 443)
         current_scheme = request.url.scheme
         
@@ -607,20 +583,20 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
         # Android-specific feasibility check (but streaming works everywhere)
         if is_android:
             feasibility = optimize_for_upload(file_size)
-            if feasibility.get('warnings'):
+            if feasibility['warnings']:
                 for warning in feasibility['warnings']:
                     print(f"⚠️ {warning}")
-            if feasibility.get('recommendations'):
+            if feasibility['recommendations']:
                 print(f"💡 Android recommendations:")
                 for rec in feasibility['recommendations']:
                     print(f"   • {rec}")
         else:
             # General recommendations for PC/Linux/Mac
             feasibility = optimize_for_upload(file_size)
-            if feasibility.get('warnings'):
+            if feasibility['warnings']:
                 for warning in feasibility['warnings']:
                     print(f"⚠️ {warning}")
-            if feasibility.get('recommendations'):
+            if feasibility['recommendations']:
                 print(f"💡 {platform_name} recommendations:")
                 for rec in feasibility['recommendations']:
                     print(f"   • {rec}")
@@ -2406,37 +2382,18 @@ async def get_network_info():
                      os.path.exists("/data/data/com.termux") or 
                      "TERMUX_VERSION" in os.environ)
         
-        # Get current mDNS manager
-        current_mdns = get_current_mdns_manager()
+        # Use mDNS manager's offline-capable method to get LAN IP
+        lan_ip = mdns_manager.get_lan_ip()
         
-        if current_mdns and UNIVERSAL_MDNS_AVAILABLE:
-            # Universal mDNS manager
-            status = current_mdns.get_status()
-            lan_ip = status.get('local_ip', '127.0.0.1')
-            mdns_info = {
-                'status': 'active' if status['active'] else 'inactive',
-                'active': status['active'],
-                'domain': status['domain'],
-                'url': status['url'],
-                'port': status['port']
-            }
-            protocol = "http"  # Universal mDNS uses HTTP by default
-            port = status['port']
-            hybrid_url = status['url'] if status['active'] else f"http://{lan_ip}:{port}"
-        elif current_mdns:
-            # Legacy mDNS manager
-            lan_ip = current_mdns.get_lan_ip()
-            mdns_info = current_mdns.get_mdns_info()
-            hybrid_url = current_mdns.get_hybrid_url()
-            protocol = "https" if current_mdns.use_https else "http"
-            port = current_mdns.port
-        else:
-            # No mDNS manager available
-            lan_ip = socket.gethostbyname(socket.gethostname())
-            mdns_info = {'active': False, 'domain': None, 'url': None}
-            protocol = "http"
-            port = int(os.environ.get('PORT', 5000))
-            hybrid_url = f"http://{lan_ip}:{port}"
+        # Get mDNS info
+        mdns_info = mdns_manager.get_mdns_info()
+        
+        # Get hybrid URL (IP-optimized for Android/Termux)
+        hybrid_url = mdns_manager.get_hybrid_url()
+        
+        # Also provide separate URL components for QR code generation
+        protocol = "https" if mdns_manager.use_https else "http"
+        port = mdns_manager.port
         
         # Format LAN IP URL using the same logic as mDNS URLs
         if (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
@@ -2457,8 +2414,8 @@ async def get_network_info():
         }
         
         # Add Android/Termux specific recommendations
-        if is_android and current_mdns and hasattr(current_mdns, 'get_android_optimized_info'):
-            response_data["android_info"] = current_mdns.get_android_optimized_info()
+        if is_android:
+            response_data["android_info"] = mdns_manager.get_android_optimized_info()
             response_data["recommendations"] = [
                 f"Use IP address: {lan_ip_url}",
                 "Avoid .local domains on Android/Termux",
@@ -2468,15 +2425,9 @@ async def get_network_info():
         
         return JSONResponse(content=response_data)
     except Exception as e:
-        # Create fallback URL using the same format logic
-        current_mdns = get_current_mdns_manager()
-        if current_mdns and hasattr(current_mdns, 'use_https'):
-            protocol = "https" if current_mdns.use_https else "http"
-            port = current_mdns.port
-        else:
-            # Fallback values
-            protocol = "http"
-            port = int(os.environ.get('PORT', 5000))
+        # Create fallback URL using the same format logic as mdns_manager
+        protocol = "https" if mdns_manager.use_https else "http"
+        port = mdns_manager.port
         if (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
             fallback_url = f"{protocol}://127.0.0.1"
             lan_ip_fallback = f"{protocol}://127.0.0.1"
@@ -3091,31 +3042,9 @@ async def clipboard_write(request: Request):
 async def mdns_info():
     """Get mDNS service information"""
     try:
-        current_mdns = get_current_mdns_manager()
-        
-        if current_mdns and UNIVERSAL_MDNS_AVAILABLE:
-            # Universal mDNS manager
-            status = current_mdns.get_status()
-            return JSONResponse(content={
-                "status": "success",
-                "active": status['active'],
-                "domain": status['domain'],
-                "url": status['url'],
-                "port": status['port'],
-                "local_ip": status.get('local_ip'),
-                "backend": status.get('backend', 'universal')
-            })
-        elif current_mdns:
-            # Legacy mDNS manager
-            info = current_mdns.get_mdns_info()
-            return JSONResponse(content=info)
-        else:
-            # No mDNS available
-            return JSONResponse(content={
-                "status": "error",
-                "active": False,
-                "msg": "mDNS not available"
-            })
+        from simple_mdns import mdns_manager
+        info = mdns_manager.get_mdns_info()
+        return JSONResponse(content=info)
     except Exception as e:
         return JSONResponse(
             status_code=500,
@@ -3215,7 +3144,7 @@ async def upload_folder(
     folder_name: str = Form(...),
     encrypt: bool = Query(False, description="Encrypt folder contents with AES-256 if true")
 ):
-    """Upload multiple files as a folder structure with real-time progress"""
+    """Upload multiple files as a folder structure"""
     if not files:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
             "status": "error",
@@ -3225,12 +3154,6 @@ async def upload_folder(
     # 🔐 Protocol detection
     is_https = request.url.scheme == "https"
     
-    # 📡 Import WebSocket manager for real-time updates
-    from .upload_status_ws import upload_status_manager
-    
-    # 📊 Notify folder upload start
-    await upload_status_manager.notify_folder_start(folder_name, len(files))
-    
     # Create folder directory
     folder_path = UPLOAD_FOLDER / folder_name
     folder_path.mkdir(exist_ok=True)
@@ -3238,9 +3161,8 @@ async def upload_folder(
     # Process each file and maintain folder structure
     uploaded_files = []
     failed_files = []
-    start_time = time.time()
     
-    for index, file in enumerate(files, 1):
+    for file in files:
         try:
             # Get relative path from file name (browsers include path in webkitRelativePath)
             if hasattr(file, 'filename') and file.filename:
@@ -3254,34 +3176,13 @@ async def upload_folder(
                 else:
                     final_path = folder_path / file.filename
                 
-                # 📡 Notify file progress start
-                await upload_status_manager.notify_file_progress(
-                    folder_name, file.filename, index, len(files), 0.0
-                )
-                
                 # Save the file
                 await save_upload_file_async(file, final_path, encrypt)
                 uploaded_files.append(str(final_path.relative_to(UPLOAD_FOLDER)))
                 
-                # 📡 Notify file completion
-                await upload_status_manager.notify_file_progress(
-                    folder_name, file.filename, index, len(files), 100.0
-                )
-                
         except Exception as e:
             print(f"❌ Failed to upload file {file.filename}: {e}")
             failed_files.append(file.filename)
-            # 📡 Notify file error
-            await upload_status_manager.notify_folder_error(
-                folder_name, f"Failed to upload {file.filename}: {str(e)}"
-            )
-    
-    total_time = time.time() - start_time
-    
-    # 📡 Notify folder completion
-    await upload_status_manager.notify_folder_complete(
-        folder_name, uploaded_files, failed_files, total_time
-    )
     
     return JSONResponse(content={
         "status": "success" if uploaded_files else "error",
@@ -3290,7 +3191,6 @@ async def upload_folder(
         "files_uploaded": uploaded_files,
         "files_failed": failed_files,
         "total_files": len(files),
-        "upload_time": round(total_time, 2),
         "protocol": "HTTPS" if is_https else "HTTP"
     })
 

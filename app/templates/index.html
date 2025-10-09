@@ -172,14 +172,14 @@
             <span style="font-size: 1.3em;">📁</span>
             <span>File Sharing</span>
           </span>
-          <span id="fileTickMain" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if not show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
+          <span id="fileTickMain" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if not show_clipboard_only %}inline{% else %}none{% endif %};"></span>
         </div>
         <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem; color: var(--text-color); transition: background-color 0.2s ease;" onclick="switchToPage('clipboard')" onmouseover="this.style.backgroundColor='var(--input-bg)'" onmouseout="this.style.backgroundColor='transparent'">
           <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; color: var(--text-color);">
             <span style="font-size: 1.3em;">📋</span>
             <span>Clipboard</span>
           </span>
-          <span id="clipboardTickMain" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
+          <span id="clipboardTickMain" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if show_clipboard_only %}inline{% else %}none{% endif %};"></span>
         </div>
       </div>
     </div>
@@ -217,8 +217,6 @@
         <button onclick="cancelAllUploads()" class="upload-manager-btn" style="background: #dc3545;">❌ Cancel All</button>
       </div>
     </div>
-    
-    <!-- Upload Summary removed - using single upload item display only -->
     
     <div id="uploadQueue" class="upload-queue">
       <!-- Upload items will be dynamically added here -->
@@ -291,11 +289,11 @@
         <div id="switchDropdownClipboard" style="display:none; position:absolute; right:0; top:110%; background:var(--section-bg); border:1px solid var(--border-color); border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); min-width:150px; z-index:10001;">
           <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem; color: var(--text-color); transition: background-color 0.2s ease;" onclick="switchToPage('file')" onmouseover="this.style.backgroundColor='var(--input-bg)'" onmouseout="this.style.backgroundColor='transparent'">
             <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; color: var(--text-color);"><span style="font-size: 1.3em;">📁</span><span>File Sharing</span></span>
-            <span id="fileTickClipboard" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if not show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
+            <span id="fileTickClipboard" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if not show_clipboard_only %}inline{% else %}none{% endif %};"></span>
           </div>
           <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem; color: var(--text-color); transition: background-color 0.2s ease;" onclick="switchToPage('clipboard')" onmouseover="this.style.backgroundColor='var(--input-bg)'" onmouseout="this.style.backgroundColor='transparent'">
             <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; color: var(--text-color);"><span style="font-size: 1.3em;">📋</span><span>Clipboard</span></span>
-            <span id="clipboardTickClipboard" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
+            <span id="clipboardTickClipboard" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if show_clipboard_only %}inline{% else %}none{% endif %};"></span>
           </div>
         </div>
       </div>
@@ -471,59 +469,8 @@
     // 📤 Upload Manager System - Make globally accessible
     window.uploadQueue = [];
     let uploadQueue = window.uploadQueue; // Local reference
-    window.uploadIdCounter = 0;
-    let uploadIdCounter = window.uploadIdCounter; // Local reference
+    let uploadIdCounter = 0;
     let isUploadManagerVisible = false;
-    
-    // 📡 WebSocket connection for real-time upload status
-    let uploadWebSocket = null;
-    let wsReconnectAttempts = 0;
-    let maxReconnectAttempts = 5;
-    
-    function initializeUploadWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws/upload-status`;
-        
-        try {
-            uploadWebSocket = new WebSocket(wsUrl);
-            
-            uploadWebSocket.onopen = function(event) {
-                console.log('📡 Upload WebSocket connected');
-                wsReconnectAttempts = 0;
-            };
-            
-            uploadWebSocket.onmessage = function(event) {
-                try {
-                    const data = JSON.parse(event.data);
-                    handleUploadStatusUpdate(data);
-                } catch (e) {
-                    console.log('📡 WebSocket echo:', event.data);
-                }
-            };
-            
-            uploadWebSocket.onclose = function(event) {
-                console.log('📡 Upload WebSocket disconnected');
-                if (wsReconnectAttempts < maxReconnectAttempts) {
-                    wsReconnectAttempts++;
-                    setTimeout(() => {
-                        console.log(`📡 Reconnecting WebSocket (attempt ${wsReconnectAttempts})...`);
-                        initializeUploadWebSocket();
-                    }, 2000 * wsReconnectAttempts);
-                }
-            };
-            
-            uploadWebSocket.onerror = function(error) {
-                console.error('📡 Upload WebSocket error:', error);
-            };
-        } catch (error) {
-            console.error('📡 Failed to initialize WebSocket:', error);
-        }
-    }
-    
-    // Initialize WebSocket when page loads
-    document.addEventListener('DOMContentLoaded', function() {
-        initializeUploadWebSocket();
-    });
     
     // 🔄 Progress Update Safety Net - Ultra-responsive for live feel
     let progressUpdateInterval = null;
@@ -578,9 +525,6 @@
     CHUNK_THRESHOLD: 250 * 1024 * 1024, // 250MB - when to use chunked upload
     AES_SIZE_LIMIT: null,  // NO LIMIT - streaming encryption handles any size
     GUEST_MEMORY_LIMIT: 1024 * 1024 * 1024, // 1GB - guest device warning threshold
-    
-    // Upload limits
-    MAX_FOLDER_SIZE: 1024 * 1024 * 1024, // 1GB - maximum folder upload size
     
     // Unified chunk sizing for optimal performance (same for all device types)
     CHUNK_SIZES: {
@@ -836,8 +780,7 @@
     window.log.upload(`Adding ${files.length} file(s) to upload queue`);
 
     for (let file of files) {
-      const uploadId = ++window.uploadIdCounter;
-      uploadIdCounter = window.uploadIdCounter;
+      const uploadId = ++uploadIdCounter;
       console.log(`📄 Creating upload item for: ${file.name} (ID: ${uploadId})`);
       const uploadItem = createUploadItem(file, uploadId);
       uploadQueue.push(uploadItem);
@@ -1490,79 +1433,6 @@ Device Session will reset when browser is closed
       showToast('❌ Failed to clear device logs', 3000);
     }
   }
-  
-  function handleUploadStatusUpdate(data) {
-    console.log('📡 Upload status update:', data);
-    
-    switch (data.type) {
-      case 'folder_start':
-        // Just show the upload manager, no separate summary
-        showUploadManager();
-        break;
-      case 'file_progress':
-        updateFileInQueue(data);
-        break;
-      case 'folder_complete':
-        completeFolderUpload(data);
-        break;
-      case 'folder_error':
-        showFolderError(data);
-        break;
-    }
-  }
-  
-  function showFolderUploadSummary(folderName, totalFiles) {
-    // Don't show separate summary - only use the main upload item
-    // Show upload manager for the main item
-    showUploadManager();
-  }
-  
-  // Removed updateFolderProgress - no longer needed as we only show one upload item
-  
-  function updateFileInQueue(data) {
-    // Only update existing folder entries, don't create new ones
-    // The folder entry should already exist from the frontend selection
-    const existingItem = uploadQueue.find(item => 
-      (item.folderName === data.folder_name || item.fileName === data.folder_name) && item.isFolder
-    );
-    
-    if (existingItem) {
-      // Update existing folder item with overall progress
-      existingItem.progress = data.overall_progress || 0;
-      existingItem.status = data.overall_progress >= 100 ? 'completed' : 'uploading';
-      existingItem.currentFile = data.current_file;
-      existingItem.totalFiles = data.total_files;
-      existingItem.currentFileName = data.file_name;
-    }
-    
-    updateUploadManager();
-  }
-  
-  function completeFolderUpload(data) {
-    // Mark the folder as completed (single folder item)
-    uploadQueue.forEach(item => {
-      if ((item.folderName === data.folder_name || item.fileName === data.folder_name) && item.isFolder) {
-        item.status = 'completed';
-        item.progress = 100;
-        item.currentFile = data.success_count;
-        item.totalFiles = data.total_files;
-      }
-    });
-    
-    updateUploadManager();
-  }
-  
-  function showFolderError(data) {
-    // Mark folder item as error in the main upload queue
-    uploadQueue.forEach(item => {
-      if ((item.folderName === data.folder_name || item.fileName === data.folder_name) && item.isFolder) {
-        item.status = 'error';
-      }
-    });
-    
-    updateUploadManager();
-    console.error('📁 Folder upload error:', data.error);
-  }
 
   function updateUploadManager() {
     const countElement = document.getElementById('uploadCount');
@@ -1650,32 +1520,15 @@ Device Session will reset when browser is closed
     }
 
     const itemDiv = document.createElement('div');
-    const folderClass = uploadItem.isFolder ? ' folder-upload' : '';
-    itemDiv.className = `upload-item ${uploadItem.status}${folderClass}`; // Use consistent format that matches CSS
+    itemDiv.className = `upload-item ${uploadItem.status}`; // Use consistent format that matches CSS
     itemDiv.id = `upload-${uploadItem.id}`;
     
-    const statusIndicator = `<div class="status-indicator"></div>`;
-    
-    // For folder uploads, show folder info and current file being processed
-    let displayName, displayDetails;
-    if (uploadItem.isFolder) {
-      displayName = `📁 ${uploadItem.folderName}/`;
-      const currentFileInfo = uploadItem.currentFileName ? ` • ${uploadItem.currentFileName}` : '';
-      displayDetails = `${uploadItem.currentFile || 0} of ${uploadItem.totalFiles || 0} files${currentFileInfo}`;
-    } else {
-      displayName = escapeHtml(uploadItem.fileName);
-      displayDetails = `${formatFileSize(uploadItem.fileSize)} • ${getStatusDisplay(uploadItem.status)}`;
-    }
-    
     itemDiv.innerHTML = `
-      ${statusIndicator}
       <div class="upload-file-info">
-        <div class="upload-file-name">
-          ${escapeHtml(displayName)}
-        </div>
+        <div class="upload-file-name">${escapeHtml(uploadItem.fileName)}</div>
         <div class="upload-file-details">
-          <span>${escapeHtml(displayDetails)}</span>
-          <span id="speed-${uploadItem.id}"></span>
+          <span>${formatFileSize(uploadItem.fileSize)}</span>
+          <span id="speed-${uploadItem.id}">${getStatusDisplay(uploadItem.status)}</span>
           <span id="remaining-${uploadItem.id}"></span>
         </div>
       </div>
@@ -8382,12 +8235,8 @@ window.handleFiles = function(files) {
 };
 
 function handleFileSelection(files, type) {
-  if (!files || files.length === 0) {
-    showToast('⚠️ No files selected!', 3000);
-    return;
-  }
   if (type === 'folder') {
-    // Only one folder at a time is supported for single bar
+    // Count unique folders for better user feedback
     const folderSet = new Set();
     Array.from(files).forEach(file => {
       if (file.webkitRelativePath) {
@@ -8395,108 +8244,132 @@ function handleFileSelection(files, type) {
         folderSet.add(rootFolder);
       }
     });
-    const folderName = folderSet.size === 1 ? Array.from(folderSet)[0] : 'Selected Folders';
+    
+    const folderCount = folderSet.size;
     const fileCount = files.length;
     
-    // Calculate total folder size and validate against 1GB limit
-    const totalFolderSize = Array.from(files).reduce((sum, f) => sum + f.size, 0);
-    const folderSizeFormatted = formatFileSize(totalFolderSize);
-    
-    // Check if folder exceeds 1GB limit
-    if (totalFolderSize > LANVAN_CONFIG.MAX_FOLDER_SIZE) {
-      showToast(`❌ Folder "${folderName}" is too large (${folderSizeFormatted}). Maximum folder size is 1 GB. Please select a smaller folder.`, 5000);
-      return;
+    if (folderCount > 1) {
+      showToast(`📁 Processing ${folderCount} folders with ${fileCount} files...`, 3000);
+      console.log(`📁 Multiple folders detected: ${Array.from(folderSet).join(', ')}`);
+    } else if (folderCount === 1) {
+      const folderName = Array.from(folderSet)[0];
+      showToast(`📁 Processing folder "${folderName}" with ${fileCount} files...`, 3000);
     }
     
-    showToast(`📁 Uploading folder "${folderName}" with ${fileCount} files (${folderSizeFormatted})...`, 3000);
-    // Add a single folder upload item to the queue
-    const uploadId = ++window.uploadIdCounter;
-    uploadIdCounter = window.uploadIdCounter;
-    const folderUploadItem = {
-      id: uploadId,
-      fileName: folderName,
-      folderName: folderName, // Add explicit folderName property for WebSocket matching
-      fileSize: totalFolderSize,
-      file: null, // Not a single file
-      status: 'queued',
-      progress: 0,
-      uploadId: uploadId,
-      startTime: null,
-      endTime: null,
-      bytesUploaded: 0,
-      speed: 0,
-      xhr: null,
-      isFolder: true,
-      totalFiles: fileCount,
-      files: Array.from(files)
-    };
-    uploadQueue.push(folderUploadItem);
-    renderUploadItem(folderUploadItem);
-    showUploadManager();
-    // Start the folder upload
-    uploadFolderAsSingleBar(folderUploadItem);
-    updateUploadManager();
+    uploadFolder(files);
+  } else {
+    // Use existing file upload logic
+    if (typeof window.handleFiles === 'function') {
+      window.handleFiles(files);
+    } else {
+      console.log('File upload handler not found');
+    }
+  }
+}
+
+async function uploadFolder(files) {
+  if (files.length === 0) {
+    showToast('⚠️ No files selected!', 3000);
     return;
   }
-  // Regular file upload
-  addToUploadQueue(Array.from(files));
-  showUploadManager();
-  startNextUpload();
+  
+  // Group files by their root folder (multiple folders support)
+  const folderGroups = new Map();
+  const standaloneFiles = [];
+  
+  for (let file of files) {
+    if (file.webkitRelativePath) {
+      const rootFolder = file.webkitRelativePath.split('/')[0];
+      if (!folderGroups.has(rootFolder)) {
+        folderGroups.set(rootFolder, []);
+      }
+      folderGroups.get(rootFolder).push(file);
+    } else {
+      standaloneFiles.push(file);
+    }
+  }
+  
+  // Handle multiple folders upload
+  if (folderGroups.size > 1) {
+    // Multiple folders detected - upload each separately
+    const uploadPromises = [];
+    
+    for (let [folderName, folderFiles] of folderGroups) {
+      const promise = uploadSingleFolder(folderName, folderFiles);
+      uploadPromises.push(promise);
+    }
+    
+    try {
+      const results = await Promise.all(uploadPromises);
+      const successCount = results.filter(r => r.success).length;
+      const totalFolders = folderGroups.size;
+      
+      if (successCount === totalFolders) {
+        showToast(`✅ All ${totalFolders} folders uploaded successfully!`, 4000);
+      } else {
+        showToast(`⚠️ ${successCount}/${totalFolders} folders uploaded successfully`, 4000);
+      }
+      
+      // Refresh file list
+      if (typeof refreshFileListManually === 'function') {
+        refreshFileListManually();
+      }
+      loadFolders();
+    } catch (error) {
+      console.error('Multiple folder upload error:', error);
+      showToast('❌ Multiple folder upload failed!', 4000);
+    }
+    return;
+  }
+  
+  // Single folder upload (existing functionality)
+  const folderName = folderGroups.size === 1 ? 
+    Array.from(folderGroups.keys())[0] : 'uploaded_folder';
+  const folderFiles = folderGroups.size === 1 ? 
+    Array.from(folderGroups.values())[0] : files;
+  
+  await uploadSingleFolder(folderName, folderFiles);
 }
-// Upload a folder as a single progress bar item
-function uploadFolderAsSingleBar(folderUploadItem) {
-  folderUploadItem.status = 'uploading';
-  folderUploadItem.startTime = Date.now();
-  folderUploadItem.progress = 0;
-  updateUploadItem(folderUploadItem);
-  // Prepare FormData
+
+// Helper function for single folder upload
+async function uploadSingleFolder(folderName, files) {
   const formData = new FormData();
-  formData.append('folder_name', folderUploadItem.fileName);
-  for (let file of folderUploadItem.files) {
+  formData.append('folder_name', folderName);
+  
+  // Add all files with their relative paths (strip the root folder name to avoid duplication)
+  for (let file of files) {
     const relativePath = file.webkitRelativePath || file.name;
+    // Remove the root folder name from the path to avoid duplication
     const pathWithoutRoot = relativePath.includes('/') ? relativePath.substring(relativePath.indexOf('/') + 1) : file.name;
     formData.append('files', file, pathWithoutRoot);
   }
-  // Use XMLHttpRequest for progress
-  const xhr = new XMLHttpRequest();
-  folderUploadItem.xhr = xhr;
-  xhr.open('POST', '/upload-folder', true);
-  xhr.upload.addEventListener('progress', (e) => {
-    if (e.lengthComputable) {
-      const progress = (e.loaded / e.total) * 100;
-      folderUploadItem.progress = progress;
-      folderUploadItem.bytesUploaded = e.loaded;
-      folderUploadItem.fileSize = e.total;
-      folderUploadItem.lastProgressUpdate = Date.now();
-      updateUploadItem(folderUploadItem);
-    }
-  });
-  xhr.onreadystatechange = function() {
-    if (xhr.readyState === 4) {
-      if (xhr.status === 200) {
-        folderUploadItem.status = 'completed';
-        folderUploadItem.progress = 100;
-        folderUploadItem.endTime = Date.now();
-        updateUploadItem(folderUploadItem);
-        updateUploadManager();
-        showToast(`✅ Folder "${folderUploadItem.fileName}" uploaded successfully!`, 4000);
-        if (typeof refreshFileListManually === 'function') {
-          refreshFileListManually();
-        }
-        if (typeof loadFolders === 'function') {
-          loadFolders();
-        }
-      } else {
-        folderUploadItem.status = 'error';
-        updateUploadItem(folderUploadItem);
-        showToast(`❌ Folder upload failed!`, 4000);
+  
+  try {
+    const response = await fetch('/upload-folder', {
+      method: 'POST',
+      body: formData
+    });
+    
+    const result = await response.json();
+    
+    if (result.status === 'success') {
+      showToast(`✅ Folder "${folderName}" uploaded successfully! (${result.files_uploaded.length} files)`, 4000);
+      // Refresh file list to show new folder
+      if (typeof refreshFileListManually === 'function') {
+        refreshFileListManually();
       }
-      updateUploadManager();
+      loadFolders(); // Refresh folder list
+      return { success: true, folderName, fileCount: result.files_uploaded.length };
+    } else {
+      showToast(`❌ Upload failed: ${result.msg}`, 4000);
+      return { success: false, folderName, error: result.msg };
     }
-  };
-  xhr.send(formData);
+  } catch (error) {
+    console.error('Folder upload error:', error);
+    showToast(`❌ Folder "${folderName}" upload failed!`, 4000);
+    return { success: false, folderName, error: error.message };
+  }
 }
-
 
 async function loadFolders() {
   try {
@@ -8528,18 +8401,18 @@ function displayFolders(folders) {
   folderGrid.innerHTML = folders.map(folder => `
     <div class="file-card">
       <div class="file-icon">📁</div>
-      <div class="file-name" title="${escapeHtml(folder.name)}">${escapeHtml(folder.name)}</div>
-      <div class="file-size">${folder.file_count} files • ${escapeHtml(folder.size_formatted)}</div>
+      <div class="file-name" title="${folder.name}">${folder.name}</div>
+      <div class="file-size">${folder.file_count} files • ${folder.size_formatted}</div>
       <div class="file-actions">
-        <a href="/download-folder/${encodeURIComponent(folder.name)}" class="download-btn">⬇ Download</a>
-        <button onclick="deleteFolder('${escapeHtml(folder.name)}')" class="download-btn" style="background-color: #e74c3c;">🗑️</button>
+        <a href="/download-folder/${folder.name}" class="download-btn">⬇ Download</a>
+        <button onclick="deleteFolder('${folder.name}')" class="download-btn" style="background-color: #e74c3c;">🗑️</button>
       </div>
     </div>
   `).join('');
 }
 
 async function deleteFolder(folderName) {
-  if (!confirm(`Are you sure you want to delete the folder "${escapeHtml(folderName)}"?`)) {
+  if (!confirm(`Are you sure you want to delete the folder "${folderName}"?`)) {
     return;
   }
   
