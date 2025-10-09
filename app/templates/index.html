@@ -29,15 +29,259 @@
   <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}">
   <link rel="stylesheet" href="{{ request.url_for('static', path='css/main-styles.css') }}">
   
-<!-- JSZip Library for creating ZIP files -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- 🚀 UNIVERSAL iOS SAFARI COMPATIBILITY - Async Resource Loading -->
+  <script>
+    // iOS Safari Detection and Optimization
+    window.isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    window.isiOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    window.isiOSSafari = window.isiOS && window.isSafari;
+    
+    // Universal Resource Loader - Non-blocking async loading
+    window.resourceLoader = {
+      loaded: {},
+      callbacks: {},
+      
+      loadScript: function(src, callback, timeout = 5000) {
+        if (this.loaded[src]) {
+          if (callback) callback();
+          return;
+        }
+        
+        const script = document.createElement('script');
+        script.async = true;
+        script.defer = true;
+        
+        // Safari-specific optimizations
+        if (window.isiOSSafari) {
+          script.crossOrigin = 'anonymous';
+          timeout = 3000; // Shorter timeout for Safari
+        }
+        
+        const timeoutId = setTimeout(() => {
+          console.warn(`Resource timeout: ${src}`);
+          script.remove();
+          if (this.callbacks[src]) {
+            this.callbacks[src].forEach(cb => cb(new Error('timeout')));
+            delete this.callbacks[src];
+          }
+        }, timeout);
+        
+        script.onload = () => {
+          clearTimeout(timeoutId);
+          this.loaded[src] = true;
+          if (callback) callback();
+          if (this.callbacks[src]) {
+            this.callbacks[src].forEach(cb => cb());
+            delete this.callbacks[src];
+          }
+        };
+        
+        script.onerror = () => {
+          clearTimeout(timeoutId);
+          console.warn(`Failed to load: ${src}`);
+          script.remove();
+          if (callback) callback(new Error('load failed'));
+          if (this.callbacks[src]) {
+            this.callbacks[src].forEach(cb => cb(new Error('load failed')));
+            delete this.callbacks[src];
+          }
+        };
+        
+        script.src = src;
+        document.head.appendChild(script);
+      },
+      
+      waitForScript: function(src, callback) {
+        if (this.loaded[src]) {
+          callback();
+          return;
+        }
+        if (!this.callbacks[src]) {
+          this.callbacks[src] = [];
+        }
+        this.callbacks[src].push(callback);
+      }
+    };
+    
+    // Progressive Loading System
+    window.progressiveLoader = {
+      critical: [],
+      enhanced: [],
+      
+      addCritical: function(fn) {
+        if (document.readyState === 'loading') {
+          this.critical.push(fn);
+        } else {
+          fn();
+        }
+      },
+      
+      addEnhanced: function(fn) {
+        this.enhanced.push(fn);
+      },
+      
+      init: function() {
+        // Load critical resources immediately
+        this.critical.forEach(fn => {
+          try { fn(); } catch(e) { console.warn('Critical load error:', e); }
+        });
+        
+        // Load enhanced resources after a delay (Safari-optimized)
+        const delay = window.isiOSSafari ? 500 : 100;
+        setTimeout(() => {
+          this.enhanced.forEach(fn => {
+            try { fn(); } catch(e) { console.warn('Enhanced load error:', e); }
+          });
+        }, delay);
+      }
+    };
+  </script>
 
-<!-- Extracted File Utils -->
-<script src="{{ request.url_for('static', path='js/file-utils.js') }}"></script>
+  <!-- Load JSZip asynchronously - Non-blocking for Safari -->
+  <script>
+    // JSZip Async Loader with Safari Optimization
+    window.jsZipReady = false;
+    window.jsZipCallbacks = [];
+    
+    function loadJSZip() {
+      window.resourceLoader.loadScript(
+        'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+        function(error) {
+          if (error) {
+            console.warn('JSZip failed to load from CDN, functionality limited');
+            // Could implement local fallback here
+          } else {
+            window.jsZipReady = true;
+            console.log('✅ JSZip loaded successfully');
+          }
+          
+          // Execute waiting callbacks
+          window.jsZipCallbacks.forEach(cb => cb(!error));
+          window.jsZipCallbacks = [];
+        },
+        window.isiOSSafari ? 3000 : 5000
+      );
+    }
+    
+    // Start loading JSZip immediately but non-blocking
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', loadJSZip);
+    } else {
+      loadJSZip();
+    }
+    
+    // Helper function to wait for JSZip
+    window.waitForJSZip = function(callback) {
+      if (window.jsZipReady && window.JSZip) {
+        callback(true);
+      } else {
+        window.jsZipCallbacks.push(callback);
+      }
+    };
+  </script>
+
+  <!-- Load File Utils asynchronously -->
+  <script>
+    window.progressiveLoader.addEnhanced(function() {
+      window.resourceLoader.loadScript(
+        "{{ request.url_for('static', path='js/file-utils.js') }}",
+        function(error) {
+          if (error) {
+            console.warn('File utils failed to load');
+          } else {
+            console.log('✅ File utils loaded');
+          }
+        }
+      );
+    });
+  </script>
 
 </head>
 <body>
 
+<!-- 🚀 Initialize Progressive Loading System -->
+<script>
+  // iOS Safari optimization - Initialize progressive loading
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.progressiveLoader.init();
+    });
+  } else {
+    window.progressiveLoader.init();
+  }
+  
+  // Universal QR Code Loader - Safari Optimized
+  window.qrLoader = {
+    loadImage: function(src, onSuccess, onError, timeout = null) {
+      const img = new Image();
+      const timeoutMs = timeout || (window.isiOSSafari ? 2000 : 5000);
+      
+      const timeoutId = setTimeout(() => {
+        img.onload = img.onerror = null;
+        if (onError) onError(new Error('QR load timeout'));
+      }, timeoutMs);
+      
+      img.onload = () => {
+        clearTimeout(timeoutId);
+        if (onSuccess) onSuccess(img);
+      };
+      
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        if (onError) onError(new Error('QR load failed'));
+      };
+      
+      // Safari-specific optimizations
+      if (window.isiOSSafari) {
+        img.crossOrigin = 'anonymous';
+      }
+      
+      img.src = src;
+    },
+    
+    loadWithFallback: function(urls, onSuccess, onError) {
+      let currentIndex = 0;
+      
+      const tryNext = () => {
+        if (currentIndex >= urls.length) {
+          if (onError) onError(new Error('All QR services failed'));
+          return;
+        }
+        
+        const url = urls[currentIndex++];
+        this.loadImage(url, onSuccess, () => {
+          console.warn(`QR service ${currentIndex} failed, trying next...`);
+          setTimeout(tryNext, window.isiOSSafari ? 200 : 100);
+        });
+      };
+      
+      tryNext();
+    }
+  };
+  
+  // Add Safari-specific optimizations
+  if (window.isiOSSafari) {
+    // Prevent Safari from aggressive caching that causes issues
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) {
+        console.log('Page restored from cache, refreshing critical components');
+        // Force refresh of dynamic content
+        setTimeout(() => {
+          if (typeof refreshFileListManually === 'function') {
+            refreshFileListManually();
+          }
+        }, 500);
+      }
+    });
+    
+    // Safari memory management
+    window.addEventListener('beforeunload', () => {
+      // Clean up resources before page unload
+      if (window.ws) window.ws.close();
+      if (window.clipboardWS) window.clipboardWS.close();
+    });
+  }
+</script>
 
 <header style="padding: 1rem; background-color: #ffffff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); margin-bottom: 1rem;">
   <!-- Title -->
@@ -172,14 +416,14 @@
             <span style="font-size: 1.3em;">📁</span>
             <span>File Sharing</span>
           </span>
-          <span id="fileTickMain" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if not show_clipboard_only %}inline{% else %}none{% endif %};"></span>
+          <span id="fileTickMain" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if not show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
         </div>
         <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem; color: var(--text-color); transition: background-color 0.2s ease;" onclick="switchToPage('clipboard')" onmouseover="this.style.backgroundColor='var(--input-bg)'" onmouseout="this.style.backgroundColor='transparent'">
           <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; color: var(--text-color);">
             <span style="font-size: 1.3em;">📋</span>
             <span>Clipboard</span>
           </span>
-          <span id="clipboardTickMain" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if show_clipboard_only %}inline{% else %}none{% endif %};"></span>
+          <span id="clipboardTickMain" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
         </div>
       </div>
     </div>
@@ -289,11 +533,11 @@
         <div id="switchDropdownClipboard" style="display:none; position:absolute; right:0; top:110%; background:var(--section-bg); border:1px solid var(--border-color); border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); min-width:150px; z-index:10001;">
           <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem; color: var(--text-color); transition: background-color 0.2s ease;" onclick="switchToPage('file')" onmouseover="this.style.backgroundColor='var(--input-bg)'" onmouseout="this.style.backgroundColor='transparent'">
             <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; color: var(--text-color);"><span style="font-size: 1.3em;">📁</span><span>File Sharing</span></span>
-            <span id="fileTickClipboard" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if not show_clipboard_only %}inline{% else %}none{% endif %};"></span>
+            <span id="fileTickClipboard" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if not show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
           </div>
           <div style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem; color: var(--text-color); transition: background-color 0.2s ease;" onclick="switchToPage('clipboard')" onmouseover="this.style.backgroundColor='var(--input-bg)'" onmouseout="this.style.backgroundColor='transparent'">
             <span style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; color: var(--text-color);"><span style="font-size: 1.3em;">📋</span><span>Clipboard</span></span>
-            <span id="clipboardTickClipboard" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if show_clipboard_only %}inline{% else %}none{% endif %};"></span>
+            <span id="clipboardTickClipboard" style="color: #7c3aed; font-size: 1.3em; margin-left: 10px; display: {% if show_clipboard_only %}inline{% else %}none{% endif %};">✔️</span>
           </div>
         </div>
       </div>
@@ -374,36 +618,106 @@
   // Use window.log directly throughout this script to avoid any conflicts
   // No local const log declaration needed
 
-  // Clipboard WebSocket for clipboard-only mode
+  // Safari-Optimized Clipboard WebSocket for clipboard-only mode
   if (typeof show_clipboard_only !== 'undefined' && show_clipboard_only) {
     let ws = null;
+    let wsConnectAttempts = 0;
+    let wsMaxAttempts = window.isiOSSafari ? 3 : 10;
+    let wsHealthCheck = null;
+    
     function connectClipboardWS() {
+      if (wsConnectAttempts >= wsMaxAttempts) {
+        window.log.warn('Max WebSocket attempts reached, switching to polling mode');
+        startPollingMode();
+        return;
+      }
+      
+      wsConnectAttempts++;
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
       const wsUrl = `${protocol}://${window.location.host}/ws/clipboard`;
-      ws = new WebSocket(wsUrl);
-      ws.onopen = () => {
-        //console.log('📡 Clipboard WebSocket connected');
-        // Refresh clipboard history when WebSocket (re)connects
-        if (typeof refreshClipboardHistory === 'function') {
-          setTimeout(() => refreshClipboardHistory(), 50); // Reduced from 100ms for responsiveness
-        }
-      };
-      ws.onmessage = (event) => {
-        if (event.data === 'refresh') {
-          if (typeof refreshClipboardHistory === 'function') refreshClipboardHistory();
-        }
-      };
-      ws.onclose = () => {
-        // Try to reconnect after reduced delay if disconnected
-        setTimeout(connectClipboardWS, 1000); // Reduced from 2000ms
-      };
-      ws.onerror = () => {
-        ws.close();
-      };
+      
+      try {
+        ws = new WebSocket(wsUrl);
+        
+        // Safari connection timeout
+        const connectTimeout = setTimeout(() => {
+          if (ws && ws.readyState === WebSocket.CONNECTING) {
+            window.log.warn('WebSocket connection timeout');
+            ws.close();
+          }
+        }, window.isiOSSafari ? 3000 : 8000);
+        
+        ws.onopen = () => {
+          clearTimeout(connectTimeout);
+          wsConnectAttempts = 0; // Reset on success
+          window.log.network('Clipboard WebSocket connected');
+          
+          // Start health check for Safari
+          if (window.isiOSSafari) {
+            wsHealthCheck = setInterval(() => {
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                try { ws.send('ping'); } catch(e) { /* ignore */ }
+              }
+            }, 30000);
+          }
+          
+          if (typeof refreshClipboardHistory === 'function') {
+            setTimeout(() => refreshClipboardHistory(), window.isiOSSafari ? 300 : 50);
+          }
+        };
+        
+        ws.onmessage = (event) => {
+          if (event.data === 'refresh') {
+            if (typeof refreshClipboardHistory === 'function') {
+              setTimeout(() => refreshClipboardHistory(), window.isiOSSafari ? 200 : 0);
+            }
+          }
+        };
+        
+        ws.onclose = () => {
+          clearTimeout(connectTimeout);
+          if (wsHealthCheck) {
+            clearInterval(wsHealthCheck);
+            wsHealthCheck = null;
+          }
+          
+          const retryDelay = window.isiOSSafari ? 
+            Math.min(5000, 1000 * wsConnectAttempts) : 1000; // Exponential backoff for Safari
+          
+          setTimeout(connectClipboardWS, retryDelay);
+        };
+        
+        ws.onerror = (error) => {
+          clearTimeout(connectTimeout);
+          window.log.warn('Clipboard WebSocket error:', error);
+          if (ws) ws.close();
+        };
+        
+      } catch (error) {
+        window.log.error('Failed to create clipboard WebSocket:', error);
+        if (window.isiOSSafari) startPollingMode();
+      }
     }
-    document.addEventListener('DOMContentLoaded', connectClipboardWS);
+    
+    // Polling fallback for Safari
+    function startPollingMode() {
+      window.log.info('Starting polling fallback for clipboard');
+      setInterval(() => {
+        if (typeof refreshClipboardHistory === 'function') {
+          refreshClipboardHistory();
+        }
+      }, window.isiOSSafari ? 10000 : 5000);
+    }
+    
+    // Delayed connection for Safari
+    window.progressiveLoader.addEnhanced(() => {
+      const delay = window.isiOSSafari ? 2000 : 100;
+      setTimeout(connectClipboardWS, delay);
+    });
+    
     window.addEventListener('beforeunload', () => {
       if (ws) ws.close();
+      if (wsHealthCheck) clearInterval(wsHealthCheck);
     });
   } else {
     // Clipboard WebSocket for regular mode (when both sections are available)
