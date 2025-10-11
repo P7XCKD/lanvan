@@ -151,12 +151,14 @@
     }
     
     /* Toggle Label Text Fixes */
-    #darkModeLabel, #aesLabel {
+    #darkModeLabel, #aesLabel, #filesLabel, #foldersLabel {
       color: #333 !important; /* Dark text for light mode */
     }
     
     [data-theme="dark"] #darkModeLabel,
-    [data-theme="dark"] #aesLabel {
+    [data-theme="dark"] #aesLabel,
+    [data-theme="dark"] #filesLabel,
+    [data-theme="dark"] #foldersLabel {
       color: #f0f0f0 !important; /* Light text for dark mode */
     }
     
@@ -672,7 +674,7 @@
     <!-- NEW: Beautiful Sliding Toggle -->
     <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;" id="newSliderContainer">
       <div class="upload-mode-slider">
-        <span id="filesLabel" class="mode-label active">📄 Files</span>
+        <span id="filesLabel" class="mode-label active" style="color: #333;">📄 Files</span>
         
         <label class="slider-toggle">
           <input type="checkbox" id="uploadModeSlider" onchange="toggleUploadModeNew()">
@@ -681,7 +683,7 @@
           </span>
         </label>
         
-        <span id="foldersLabel" class="mode-label">📁 Folders</span>
+        <span id="foldersLabel" class="mode-label" style="color: #333;">📁 Folders</span>
       </div>
     </div>
     
