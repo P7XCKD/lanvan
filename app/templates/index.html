@@ -150,6 +150,15 @@
       background: #ffffff;
     }
     
+    /* Dark Mode Label Text Fix */
+    #darkModeLabel {
+      color: #333 !important; /* Dark text for light mode */
+    }
+    
+    [data-theme="dark"] #darkModeLabel {
+      color: #f0f0f0 !important; /* Light text for dark mode */
+    }
+    
     /* 🎯 AES Encryption Toggle - Dark Theme Styling */
     .toggle-switch {
       position: relative;
@@ -500,7 +509,7 @@
     <div style="display: flex; align-items: center; gap: 0.8rem;">
       <!-- Dark Mode Toggle -->
       <div class="toggle-container" style="display: flex; align-items: center; background-color: var(--toggle-bg); padding: 0.5rem 0.8rem; border-radius: 25px; gap: 0.6rem; transition: background-color 0.3s ease;">
-        <span id="darkModeLabel" style="font-size: 0.95rem; color: var(--toggle-text); transition: color 0.3s ease;"><b>🌙 Dark Mode</b></span>
+        <span id="darkModeLabel" style="font-size: 0.95rem; color: #333; transition: color 0.3s ease;"><b>🌙 Dark Mode</b></span>
         <label class="toggle-switch">
           <input type="checkbox" id="enableDarkMode">
           <span class="slider dark-mode-slider"></span>
