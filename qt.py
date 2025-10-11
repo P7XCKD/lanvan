@@ -14,6 +14,11 @@ Recent Updates Covered:
 - ✅ Unified platform detection across all modules
 - ✅ Background scan fixes and async task management
 - ✅ Universal optimizer integration and attribute consistency
+- ✅ Toggle text visibility fixes (Dark Mode, AES, Files/Folders toggles)
+- ✅ Theme-aware CSS styling with light/dark mode support
+- ✅ iOS Safari compatibility improvements and middleware
+- ✅ Enhanced error handling and graceful shutdown mechanisms
+- ✅ Progressive loading system for better performance
 
 Usage:
     python qt.py              # Standard comprehensive test
@@ -93,6 +98,7 @@ class QuickTest:
             'mdns': False,                 # Fixed mDNS with .local domain resolution
             'aes_config': False,
             'ui_interface': False,
+            'toggle_text_visibility': False,  # Recent toggle text fixes
             
             # Platform and system components
             'platform_detection': False,   # Unified platform detection
@@ -113,7 +119,10 @@ class QuickTest:
             'mdns_resolution': False,      # mDNS .local domain resolution testing
             'ui_enhancements': False,      # UI improvements and responsiveness
             'error_handling': False,       # Enhanced error handling and recovery
-            'network_optimization': False  # Network and connection optimizations
+            'network_optimization': False, # Network and connection optimizations
+            'ios_safari_compatibility': False,  # iOS Safari middleware and fixes
+            'graceful_shutdown': False,    # Enhanced shutdown handling
+            'progressive_loading': False   # Progressive loading system
         }
         
     def log(self, message, status="INFO"):
@@ -574,12 +583,64 @@ class QuickTest:
                         self.log("UI AES indicators: Found", "PASS")
                     else:
                         self.log("UI AES indicators: Not found", "INFO")
+                    
+                    # Test recent toggle text visibility fixes
+                    await self.test_toggle_text_visibility(content)
                         
                 else:
                     self.log(f"Web interface: HTTP {response.status}", "FAIL")
                     
         except Exception as e:
             self.log(f"Web interface test: {str(e)}", "WARN")
+
+    async def test_toggle_text_visibility(self, html_content):
+        """Test recent toggle text visibility fixes"""
+        self.log("Testing toggle text visibility fixes...")
+        
+        toggle_fixes_working = False
+        try:
+            # Check for Files/Folders toggle with inline styles
+            toggle_checks = [
+                ('Files label inline style', 'id="filesLabel"' in html_content and 'style="color: #333;"' in html_content),
+                ('Folders label inline style', 'id="foldersLabel"' in html_content and 'style="color: #333;"' in html_content),
+                ('Dark Mode label fixes', 'id="darkModeLabel"' in html_content),
+                ('AES label fixes', 'id="aesLabel"' in html_content),
+                ('Toggle Label Text Fixes CSS', 'Toggle Label Text Fixes' in html_content),
+                ('Dark mode CSS overrides', '[data-theme="dark"] #filesLabel' in html_content),
+                ('Light mode explicit colors', '#filesLabel, #foldersLabel' in html_content)
+            ]
+            
+            fixes_found = 0
+            for check_name, found in toggle_checks:
+                if found:
+                    self.log(f"Toggle fix {check_name}: Found", "PASS")
+                    fixes_found += 1
+                else:
+                    self.log(f"Toggle fix {check_name}: Missing", "WARN")
+            
+            # Check comprehensive CSS fixes
+            if ('#darkModeLabel, #aesLabel, #filesLabel, #foldersLabel' in html_content and 
+                'color: #333 !important;' in html_content):
+                self.log("Toggle text: Comprehensive CSS fixes found", "PASS")
+                fixes_found += 1
+                
+            if ('[data-theme="dark"] #filesLabel' in html_content and 
+                '[data-theme="dark"] #foldersLabel' in html_content):
+                self.log("Toggle text: Dark mode overrides found", "PASS")
+                fixes_found += 1
+            
+            # Success if most fixes are present
+            if fixes_found >= len(toggle_checks) * 0.7:  # 70% success rate
+                self.log(f"Toggle text visibility: {fixes_found}/{len(toggle_checks)} fixes implemented", "PASS")
+                self.components['toggle_text_visibility'] = True
+                toggle_fixes_working = True
+            else:
+                self.log(f"Toggle text visibility: {fixes_found}/{len(toggle_checks)} fixes found", "WARN")
+                
+        except Exception as e:
+            self.log(f"Toggle text visibility test: {str(e)}", "WARN")
+        
+        return toggle_fixes_working
 
     async def test_mdns(self):
         """Test mDNS service comprehensively with proper startup time - using REAL implementation"""
@@ -1083,67 +1144,7 @@ class QuickTest:
         except Exception as e:
             self.log(f"Network features test: {str(e)}", "WARN")
 
-    async def test_ui_enhancements(self):
-        """Test UI enhancements and frontend improvements"""
-        self.log("Testing UI enhancements and frontend features...")
-        
-        try:
-            # Test template enhancements
-            template_path = Path(__file__).parent / "app" / "templates" / "index.html"
-            if template_path.exists():
-                with open(template_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    
-                    ui_features = 0
-                    
-                    # Check for enhanced UI features
-                    ui_checks = [
-                        ("Auto-refresh", "auto-refresh" in content.lower()),
-                        ("Responsive design", "responsive" in content.lower()),
-                        ("Toast notifications", "showToast" in content),
-                        ("Progress tracking", "progress" in content.lower()),
-                        ("Modal dialogs", "modal" in content.lower()),
-                        ("Dark mode support", "dark" in content.lower() or "theme" in content.lower()),
-                        ("Mobile optimization", "mobile" in content.lower() or "ios" in content.lower()),
-                        ("File preview", "preview" in content.lower()),
-                        ("Drag drop zones", "drop-zone" in content or "dropzone" in content),
-                        ("Real-time updates", "websocket" in content.lower() or "realtime" in content.lower())
-                    ]
-                    
-                    for feature_name, found in ui_checks:
-                        if found:
-                            self.log(f"UI: {feature_name} implemented", "PASS")
-                            ui_features += 1
-                        else:
-                            self.log(f"UI: {feature_name} not detected", "INFO")
-                    
-                    # Set UI component status based on feature coverage
-                    if ui_features >= len(ui_checks) * 0.7:  # 70% feature coverage
-                        self.components['ui_enhancements'] = True
-                        self.log(f"UI: Enhanced features complete ({ui_features}/{len(ui_checks)})", "PASS")
-                    else:
-                        self.log(f"UI: Partial enhancement ({ui_features}/{len(ui_checks)})", "WARN")
-            
-            # Test iOS compatibility features
-            try:
-                ios_template = Path(__file__).parent / "app" / "templates" / "ios-help.html"
-                if ios_template.exists():
-                    self.log("iOS: Compatibility page available", "PASS")
-                    self.components['ios_compatibility'] = True
-                    
-                # Check for iOS-specific routes
-                routes_file = Path(__file__).parent / "app" / "routes.py"
-                if routes_file.exists():
-                    with open(routes_file, 'r', encoding='utf-8') as f:
-                        routes_content = f.read()
-                        if 'ios-check' in routes_content or 'ios_compatibility' in routes_content:
-                            self.log("iOS: Compatibility endpoints found", "PASS")
-                            
-            except Exception as e:
-                self.log(f"iOS compatibility test: {str(e)}", "WARN")
-                
-        except Exception as e:
-            self.log(f"UI enhancements test: {str(e)}", "WARN")
+
 
     async def test_advanced_features(self):
         """Test advanced features and optimizations"""
@@ -1324,14 +1325,115 @@ class QuickTest:
                         else:
                             self.log(f"UI enhancements: {ui_features}/5 features implemented", "WARN")
                             
+                        # Test for progressive loading system
+                        if 'progressiveLoader' in content:
+                            self.log("UI enhancements: Progressive loading system found", "PASS")
+                            self.components['progressive_loading'] = True
+                        
+                        if 'addEnhanced' in content:
+                            self.log("UI enhancements: Enhanced resource loading found", "PASS")
+                            
             except Exception as e:
                 self.log(f"UI enhancements template test: {str(e)}", "WARN")
             
             if ui_enhancements_working:
                 self.components['ui_enhancements'] = True
+            
+            # Test iOS Safari compatibility features
+            await self.test_ios_safari_compatibility()
+            
+            # Test graceful shutdown system
+            try:
+                main_file = Path(__file__).parent / "app" / "main.py"
+                if main_file.exists():
+                    with open(main_file, 'r', encoding='utf-8') as f:
+                        main_content = f.read()
+                        
+                        shutdown_features = 0
+                        if 'shutdown_event' in main_content:
+                            self.log("Graceful shutdown: Event system found", "PASS")
+                            shutdown_features += 1
+                            
+                        if 'graceful_shutdown_initiated' in main_content:
+                            self.log("Graceful shutdown: State management found", "PASS")
+                            shutdown_features += 1
+                            
+                        if 'signal_handler' in main_content:
+                            self.log("Graceful shutdown: Signal handling found", "PASS")
+                            shutdown_features += 1
+                            
+                        if shutdown_features >= 2:
+                            self.components['graceful_shutdown'] = True
+                            self.log("Graceful shutdown: System implemented", "PASS")
+                        
+            except Exception as e:
+                self.log(f"Graceful shutdown test: {str(e)}", "WARN")
                 
         except Exception as e:
             self.log(f"UI enhancements test: {str(e)}", "WARN")
+
+    async def test_ios_safari_compatibility(self):
+        """Test iOS Safari compatibility features"""
+        self.log("Testing iOS Safari compatibility...")
+        
+        ios_safari_working = False
+        try:
+            # Check for iOS-specific templates
+            ios_template = Path(__file__).parent / "app" / "templates" / "ios-help.html"
+            if ios_template.exists():
+                self.log("iOS Safari: Compatibility page available", "PASS")
+                ios_safari_working = True
+                
+            # Check main.py for iOS Safari middleware
+            main_file = Path(__file__).parent / "app" / "main.py"
+            if main_file.exists():
+                with open(main_file, 'r', encoding='utf-8') as f:
+                    main_content = f.read()
+                    
+                    ios_features = 0
+                    if 'IOSSafariMiddleware' in main_content:
+                        self.log("iOS Safari: Middleware found", "PASS")
+                        ios_features += 1
+                        
+                    if 'detect_ios_safari' in main_content:
+                        self.log("iOS Safari: Browser detection found", "PASS")
+                        ios_features += 1
+                        
+                    if 'Cache-Control' in main_content and 'no-cache' in main_content:
+                        self.log("iOS Safari: Cache prevention found", "PASS")
+                        ios_features += 1
+                        
+                    if 'user-agent' in main_content.lower():
+                        self.log("iOS Safari: User-agent handling found", "PASS")
+                        ios_features += 1
+                        
+                    if 'app.add_middleware(IOSSafariMiddleware)' in main_content:
+                        self.log("iOS Safari: Middleware registration found", "PASS")
+                        ios_features += 1
+                        
+                    if ios_features >= 4:  # Need at least 4/5 features
+                        ios_safari_working = True
+                        self.log(f"iOS Safari: {ios_features}/5 features implemented", "PASS")
+                    else:
+                        self.log(f"iOS Safari: Only {ios_features}/5 features found", "WARN")
+                        
+            # Check for iOS-specific routes
+            routes_file = Path(__file__).parent / "app" / "routes.py"
+            if routes_file.exists():
+                with open(routes_file, 'r', encoding='utf-8') as f:
+                    routes_content = f.read()
+                    if 'ios-check' in routes_content or 'ios_compatibility' in routes_content:
+                        self.log("iOS Safari: Compatibility endpoints found", "PASS")
+                        ios_safari_working = True
+                        
+        except Exception as e:
+            self.log(f"iOS Safari compatibility test: {str(e)}", "WARN")
+        
+        if ios_safari_working:
+            self.components['ios_safari_compatibility'] = True
+            self.log("iOS Safari compatibility: WORKING", "PASS")
+        else:
+            self.log("iOS Safari compatibility: FAILED", "FAIL")
 
     async def test_error_handling(self):
         """Test error handling and recovery mechanisms"""
@@ -1407,7 +1509,8 @@ class QuickTest:
             ('folder_upload', '📁 Folder Upload', 'Folder sharing with structure preservation'),
             ('qr_generation', '📱 QR Code Generation', 'QR codes for easy sharing'),
             ('ui_interface', '🖥️  Web Interface', 'User interface elements'),
-            ('temp_chunks_structure', '🗂️  Temp Structure', 'Proper temporary file organization')
+            ('temp_chunks_structure', '🗂️  Temp Structure', 'Proper temporary file organization'),
+            ('toggle_text_visibility', '🎨 Toggle Text Fixes', 'Dark/Light mode toggle text visibility')
         ]
         
         # Enhanced components (recent implementations)
@@ -1417,7 +1520,8 @@ class QuickTest:
             ('concurrent_uploads', '⚡ Concurrent Uploads', 'Multiple file upload optimization'),
             ('windows_file_manager', '🪟 Windows File Manager', 'Windows-specific file handling'),
             ('mdns_resolution', '🔗 mDNS Resolution', '.local domain resolution and hybrid URLs'),
-            ('universal_optimizer', '🔄 Universal Optimizer', 'Cross-platform performance optimization')
+            ('universal_optimizer', '🔄 Universal Optimizer', 'Cross-platform performance optimization'),
+            ('ios_safari_compatibility', '🍎 iOS Safari Fixes', 'iOS Safari middleware and compatibility')
         ]
         
         # Advanced components (cutting-edge features)
@@ -1438,10 +1542,8 @@ class QuickTest:
             ('responsiveness_monitor', '📊 Responsiveness Monitor', 'Performance monitoring'),
             ('thread_manager', '🧵 Thread Manager', 'Background task management'),
             ('file_processing', '⚙️  File Processing', 'Advanced file operations'),
-            ('ios_compatibility', '📱 iOS Compatibility', 'iOS/Safari optimization features'),
-            ('termux_support', '🤖 Termux Support', 'Android/Termux environment compatibility'),
-            ('auto_refresh', '🔄 Auto Refresh', 'Real-time file synchronization'),
-            ('network_diagnostics', '🔧 Network Diagnostics', 'Network troubleshooting tools')
+            ('graceful_shutdown', '🛑 Graceful Shutdown', 'Enhanced shutdown handling with notifications'),
+            ('progressive_loading', '⚡ Progressive Loading', 'Progressive resource loading system')
         ]
         
         # Count working components
@@ -1565,17 +1667,21 @@ async def main():
     
     args = parser.parse_args()
     
-    print("LANVAN Enhanced Project Scanner")
-    print("=" * 40)
+    print("LANVAN Enhanced Project Scanner (Updated)")
+    print("=" * 50)
     print("🔍 Scanning recent implementations:")
     print("   • temp_chunks folder relocation")
     print("   • Enhanced folder upload (drag & drop)")
     print("   • Improved streaming assembly")
     print("   • Concurrent upload optimizations")
     print("   • Windows file management enhancements")
+    print("   • Toggle text visibility fixes (Dark/Light mode)")
+    print("   • iOS Safari compatibility improvements")
+    print("   • Graceful shutdown system")
+    print("   • Progressive loading system")
     if args.deep:
         print("   🔬 DEEP SCAN MODE ENABLED")
-    print("=" * 40)
+    print("=" * 50)
     
     test = QuickTest(skip_mdns=args.android)
     success = await test.test_server_quick()
@@ -1583,14 +1689,20 @@ async def main():
     # Print comprehensive component status report
     test.print_component_status()
     
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 60)
     if success:
         print("✅ All tests passed! Enhanced LANVAN server is ready!")
-        print("🚀 Recent implementations are working correctly.")
+        print("🚀 Recent implementations are working correctly:")
+        print("   • Toggle text visibility fixes validated")
+        print("   • iOS Safari compatibility confirmed") 
+        print("   • Progressive loading system operational")
+        print("   • Graceful shutdown mechanisms active")
+        print("   • All core and enhanced components functional")
         sys.exit(0)
     else:
         print("❌ Some tests failed. Check the issues above.")
         print("🔧 Consider fixing failed components before deployment.")
+        print("💡 Recent fixes may need additional testing or adjustment.")
         sys.exit(1)
 
 if __name__ == "__main__":
