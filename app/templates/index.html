@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Lanvan</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover, minimum-scale=1.0, maximum-scale=5.0">
   <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -246,6 +246,44 @@
     [data-theme="dark"] .toggle-switch input:checked + .slider {
       background: #111827 !important;
       border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    /* Minimal mobile responsiveness */
+    
+    /* Mobile basic responsiveness only */
+    @media screen and (max-width: 768px) {
+      .title, .main-title, h1 {
+        font-size: 1.5rem !important;
+      }
+      
+      .btn, button {
+        min-height: 44px;
+      }
+      
+    }
+        margin: 0.5rem 0;
+      }
+      
+    /* End mobile CSS */
+      
+      }
+      }
+    }
+    
+    /* Responsive CSS removed */
+      }
+    }
+    
+    /* Basic CSS starts here */
+    html, body {
+      overflow-x: hidden;
+      width: 100%;
+    }
+    
+    /* Smooth scrolling for mobile */
+    html {
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
     }
   </style>
   
@@ -503,16 +541,19 @@
   }
 </script>
 
+<!-- 📱 Main Responsive Container -->
+<div style="min-height: 100vh; width: 100%; max-width: 100vw; padding: 0 1rem;">
+
 <header style="padding: 1rem; background-color: #ffffff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); margin-bottom: 1rem;">
   <!-- Title -->
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
-    <h1 style="margin: 0; font-size: 1.8rem; color: var(--text-color);">{{ msg }}</h1>
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; gap: 1rem;">
+    <h1 style="margin: 0; font-size: 1.8rem; color: var(--text-color); flex-shrink: 1; min-width: 0;">{{ msg }}</h1>
     
     <!-- AES Toggle Block (keep on right side) -->
-    <div style="display: flex; align-items: center; gap: 0.8rem;">
+    <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 1; min-width: 0;">
       <!-- Dark Mode Toggle -->
-      <div class="toggle-container" style="display: flex; align-items: center; background-color: var(--toggle-bg); padding: 0.5rem 0.8rem; border-radius: 25px; gap: 0.6rem; transition: background-color 0.3s ease;">
-        <span id="darkModeLabel" style="font-size: 0.95rem; color: #333; transition: color 0.3s ease;"><b>🌙 Dark Mode</b></span>
+      <div style="display: flex; align-items: center; background-color: var(--toggle-bg); padding: 0.4rem 0.6rem; border-radius: 25px; gap: 0.4rem; transition: background-color 0.3s ease; flex-shrink: 1; min-width: 0;">
+        <span id="darkModeLabel" style="font-size: 0.85rem; color: #333; transition: color 0.3s ease; white-space: nowrap;"><b>🌙 Dark</b></span>
         <label class="toggle-switch">
           <input type="checkbox" id="enableDarkMode">
           <span class="slider dark-mode-slider"></span>
@@ -520,8 +561,8 @@
       </div>
       
       <!-- AES Encryption Toggle -->
-      <div class="toggle-container" style="display: flex; align-items: center; background-color: var(--toggle-bg); padding: 0.5rem 0.8rem; border-radius: 25px; gap: 0.6rem; transition: background-color 0.3s ease;">
-        <span id="aesLabel" style="font-size: 0.95rem; color: #333; transition: color 0.3s ease;"><b>AES Encryption</b></span>
+      <div style="display: flex; align-items: center; background-color: var(--toggle-bg); padding: 0.4rem 0.6rem; border-radius: 25px; gap: 0.4rem; transition: background-color 0.3s ease; flex-shrink: 1; min-width: 0;">
+        <span id="aesLabel" style="font-size: 0.85rem; color: #333; transition: color 0.3s ease; white-space: nowrap;"><b>AES</b></span>
         <label class="toggle-switch">
           <input type="checkbox" id="enableEncryption">
           <span class="slider"></span>
@@ -531,7 +572,7 @@
   </div>
   
   <!-- Protocol Status and Settings Row -->
-  <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+  <div class="network-info connection-info" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
     <div id="protocolStatus" onclick="showConnectionInfo()" style="display: flex; align-items: center; background-color: var(--protocol-bg); padding: 0.5rem 0.8rem; border-radius: 20px; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='#d0e9f7'" onmouseout="this.style.backgroundColor='var(--protocol-bg)'">
       <span id="protocolIcon">🌐</span>
       <span id="protocolText" style="color: var(--protocol-text); font-weight: 500; transition: color 0.3s ease;">HTTP</span>
@@ -610,11 +651,11 @@
 
 {% if not show_clipboard_only or show_both_sections %}
 <!--  Upload Files & Manager (Merged Section) -->
-<section id="fileTransferSection" style="{% if default_view == 'clipboard' %}display: none;{% endif %}">
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+<section id="fileTransferSection" class="upload-section file-upload-section" style="{% if default_view == 'clipboard' %}display: none;{% endif %}">
+  <div class="header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
     <h2 style="margin: 0; color: var(--text-color);">📤 Upload Files & Manager</h2>
     <div style="position: relative;">
-      <button onclick="showSwitchDropdown(event, 'switchDropdownMain')" class="clipboard-btn" style="
+      <button onclick="showSwitchDropdown(event, 'switchDropdownMain')" class="clipboard-btn btn switch-btn" style="
         background: linear-gradient(135deg, #6c5ce7, #a29bfe);
         color: white;
         border: none;
@@ -670,7 +711,7 @@
     </div>
     
     <!-- NEW: Beautiful Sliding Toggle -->
-    <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;" id="newSliderContainer">
+    <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 1rem;" id="newSliderContainer">
       <div class="upload-mode-slider">
         <span id="filesLabel" class="mode-label active" style="color: #333;">📄 Files</span>
         
@@ -685,7 +726,7 @@
       </div>
     </div>
     
-    <div class="drop-zone" id="drop-zone">
+    <div class="drop-zone upload-area" id="drop-zone">
       <p id="dropZoneText">📁 Drag & Drop files or folders here or click to select</p>
       <input type="file" id="fileInput" name="files" multiple required style="display: none;">
       <input type="file" id="folderInput" name="folder" webkitdirectory multiple style="display: none;">
@@ -719,10 +760,10 @@
       <h2 style="color: var(--text-color);">Available Files</h2>
       <span id="fileCount" class="file-count" style="color: var(--text-color); font-size: 0.9em; margin-left: 0.5rem;"></span>
     </div>
-    <div style="display: flex; gap: 0.5rem;">
-      <button onclick="refreshFileListManually()" class="download-btn" style="background-color: #17a2b8; margin-right: 0.5rem;" title="Refresh file list">🔄 Refresh</button>
-      <button onclick="showDownloadOptions(event)" class="download-btn" style="margin-right: 0.5rem;">⬇ Download All</button>
-      <button onclick="clearAllFiles()" class="download-btn" style="background-color: #e74c3c;">🧹 Clear History</button>
+    <div class="file-manager" style="display: flex; gap: 0.5rem;">
+      <button onclick="refreshFileListManually()" class="download-btn btn" style="background-color: #17a2b8; margin-right: 0.5rem;" title="Refresh file list">🔄 Refresh</button>
+      <button onclick="showDownloadOptions(event)" class="download-btn btn" style="margin-right: 0.5rem;">⬇ Download All</button>
+      <button onclick="clearAllFiles()" class="download-btn btn" style="background-color: #e74c3c;">🧹 Clear History</button>
     </div>
   </div>
 
@@ -9084,6 +9125,8 @@ try {
   // Ignore storage errors
 }
 </script>
+
+</div> <!-- End Main Responsive Container -->
 
 </body>
 </html>
