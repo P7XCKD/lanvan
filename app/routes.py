@@ -825,16 +825,18 @@ async def scan_file_async(path: Path):
 
 def scan_file(path: Path):
     """
-    🔄 Legacy sync wrapper - creates async task for background processing
+    🔄 Legacy sync wrapper - creates managed background task for processing
     """
     try:
         # Check if we have a running event loop before creating task
         try:
             loop = asyncio.get_running_loop()
-            # Create async task with proper error handling for background processing
-            task = asyncio.create_task(scan_file_async(path))
-            # Add done callback to handle any exceptions
-            task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+            # Use task manager for automatic cleanup and resource management
+            from app.task_manager import submit_background_task
+            task = submit_background_task(scan_file_async(path), f"scan_file:{path.name}")
+            if task is None:
+                # Task manager rejected task (likely due to limits) - graceful degradation
+                print(f"⚠️ Background file scan skipped (task limit): {path.name}")
         except RuntimeError:
             # No event loop running - skip background scan
             pass
@@ -3221,6 +3223,24 @@ async def system_logs():
         return JSONResponse(
             status_code=500,
             content={"status": "error", "msg": f"Logs retrieval failed: {str(e)}"}
+        )
+
+@router.get("/api/task-stats", name="task_stats")
+async def task_stats():
+    """Get background task statistics"""
+    try:
+        from app.task_manager import get_task_stats
+        stats = get_task_stats()
+        
+        return JSONResponse(content={
+            "status": "success",
+            "task_stats": stats,
+            "timestamp": time.time()
+        })
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "msg": f"Task stats retrieval failed: {str(e)}"}
         )
 
 @router.get("/favicon.ico", name="favicon")

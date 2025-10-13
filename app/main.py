@@ -192,6 +192,10 @@ async def lifespan(app: FastAPI):
     print("🚀 Server starting up with enhanced shutdown handling...")
     print("💡 Use Ctrl+C to shutdown gracefully (console commands disabled)")
     
+    # Initialize background task manager
+    from app.task_manager import task_manager
+    print("🎯 Background task manager initialized")
+    
     # Start responsiveness monitor
     from app.responsiveness_monitor import responsiveness_monitor
     await responsiveness_monitor.start_monitoring()
@@ -291,6 +295,11 @@ async def lifespan(app: FastAPI):
     # Stop mDNS service
     print("🔴 Stopping mDNS service...")
     mdns_manager.stop_service()
+    
+    # Shutdown task manager
+    print("🎯 Shutting down background task manager...")
+    from app.task_manager import shutdown_task_manager
+    await shutdown_task_manager()
     
     # Force close all active connections
     await connection_manager.disconnect_all()
