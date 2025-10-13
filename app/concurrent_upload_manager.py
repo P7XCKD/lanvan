@@ -8,6 +8,7 @@ Key Features:
 - Platform-aware optimizations
 - Real-time progress tracking
 - Memory-efficient streaming for large files
+- Advanced file locking to prevent race conditions
 """
 
 import asyncio
@@ -22,14 +23,52 @@ from fastapi import UploadFile
 from concurrent.futures import ThreadPoolExecutor
 import threading
 
+# Import universal optimizer with fallback
 try:
     from .universal_optimizer import universal_optimizer
 except ImportError:
-    from universal_optimizer import universal_optimizer
+    try:
+        from universal_optimizer import universal_optimizer
+    except ImportError:
+        # Fallback to a basic optimizer if not available
+        class BasicOptimizer:
+            platform_type = "unknown"
+            def get_adaptive_chunk_size(self, file_size): return 64 * 1024
+            def should_run_gc(self, bytes_written, chunk_size): return bytes_written % (50 * 1024 * 1024) == 0
+            def memory_cleanup(self, force=False): pass
+            def optimize_for_upload(self, file_size): return {"warnings": [], "recommendations": []}
+        universal_optimizer = BasicOptimizer()
+
+# Import responsiveness monitor with fallback
 try:
     from .responsiveness_monitor import responsiveness_monitor, ensure_responsiveness
 except ImportError:
-    from responsiveness_monitor import responsiveness_monitor, ensure_responsiveness
+    try:
+        from responsiveness_monitor import responsiveness_monitor, ensure_responsiveness  
+    except ImportError:
+        # Fallback responsiveness function
+        async def ensure_responsiveness(): 
+            await asyncio.sleep(0.001)
+
+# Import file locking with fallback
+try:
+    from .file_locking import get_file_lock_manager
+except ImportError:
+    try:
+        from file_locking import get_file_lock_manager
+    except ImportError:
+        # Fallback file lock manager
+        class BasicFileLockManager:
+            def __init__(self, base_path): 
+                self.base_path = base_path
+            def upload_lock(self, filename, timeout=30.0):
+                import contextlib
+                class DummyLock:
+                    async def __aenter__(self): return self
+                    async def __aexit__(self, *args): pass
+                return contextlib.asynccontextmanager(lambda: DummyLock())()
+        def get_file_lock_manager(upload_folder): 
+            return BasicFileLockManager(upload_folder)
 
 
 class ConcurrentUploadManager:
@@ -369,17 +408,10 @@ class ConcurrentUploadManager:
             print(f"❌ [{upload_id}] Stream upload error: {type(e).__name__}: {str(e)}")
             raise e
         
-        # 🎯 ATOMIC MOVE: Move from .tmp to final destination to prevent race conditions
-        try:
-            print(f"[INFO] [{upload_id}] Moving {temp_destination.name} -> {destination.name}")
-            temp_destination.rename(destination)
-            print(f"✅ [{upload_id}] File atomically moved to final destination")
-        except Exception as e:
-            # Clean up temp file if move fails
-            if temp_destination.exists():
-                temp_destination.unlink()
-            print(f"❌ [{upload_id}] Failed to move temp file: {e}")
-            raise Exception(f"Failed to finalize upload: {e}")
+        # 🎯 ENHANCED ATOMIC MOVE: Cross-platform atomic operations with retry logic
+        await self._perform_atomic_move(
+            temp_destination, destination, upload_id
+        )
         
         return {
             'success': True,
@@ -400,13 +432,18 @@ class ConcurrentUploadManager:
         hash_calculator = None
     ) -> Dict[str, Any]:
         """
-        Fallback synchronous upload with frequent yielding
+        🔄 Fallback synchronous upload with temporary file strategy and frequent yielding
+        🔒 RACE CONDITION FIX: Upload to .tmp file first, then atomically move to final name
         """
         if hash_calculator is None:
             hash_calculator = hashlib.sha256()
+        
+        # 🚀 TEMPORARY FILE STRATEGY: Upload to .tmp extension first  
+        temp_destination = destination.with_suffix(destination.suffix + '.tmp')
+        print(f"[INFO] [{upload_id}] Sync fallback - uploading to temporary file: {temp_destination.name}")
             
         try:
-            with open(destination, 'wb') as dest_file:
+            with open(temp_destination, 'wb') as dest_file:
                 chunk_count = 0
                 last_yield = time.time()
                 
@@ -450,10 +487,16 @@ class ConcurrentUploadManager:
                         last_yield = current_time
         
         except Exception as e:
-            if destination.exists():
-                destination.unlink()
+            # Clean up partial temp file
+            if temp_destination.exists():
+                temp_destination.unlink()
             print(f"❌ [{upload_id}] Sync fallback upload error: {type(e).__name__}: {str(e)}")
             raise e
+        
+        # 🎯 ENHANCED ATOMIC MOVE: Use the same cross-platform atomic operations
+        await self._perform_atomic_move(
+            temp_destination, destination, upload_id
+        )
         
         return {
             'success': True,
@@ -494,6 +537,70 @@ class ConcurrentUploadManager:
             'platform': universal_optimizer.platform_type,
             'memory_optimization_active': getattr(universal_optimizer, 'keep_alive_active', False)
         }
+
+    async def _perform_atomic_move(
+        self, 
+        temp_destination: Path, 
+        destination: Path, 
+        upload_id: str
+    ) -> None:
+        """
+        🎯 Enhanced atomic move with cross-platform support and retry logic
+        🔒 RACE CONDITION FIX: Implements platform-specific atomic operations
+        """
+        import os
+        import shutil
+        import asyncio
+        
+        # Platform detection
+        is_windows = os.name == 'nt'
+        is_android = ("ANDROID_STORAGE" in os.environ or 
+                     os.path.exists("/data/data/com.termux") or 
+                     "TERMUX_VERSION" in os.environ)
+        
+        platform_name = "Windows" if is_windows else "Android/Termux" if is_android else "Linux/Unix"
+        
+        # Configure retry parameters based on platform
+        max_retries = 3 if is_windows else 1  # Windows needs more retries due to file locking
+        retry_delay = 0.3 if is_windows else 0.1  # Longer delays for Windows
+        
+        # Extra delay for Windows to release file handles
+        if is_windows:
+            await asyncio.sleep(0.2)
+            
+        print(f"[INFO] [{upload_id}] Performing atomic move on {platform_name}")
+        
+        for attempt in range(max_retries):
+            try:
+                print(f"[INFO] [{upload_id}] Moving {temp_destination.name} → {destination.name} (attempt {attempt + 1})")
+                
+                if is_windows:
+                    # Use shutil.move for better Windows compatibility
+                    await asyncio.to_thread(shutil.move, str(temp_destination), str(destination))
+                else:
+                    # Use rename for atomic operation on Unix-like systems
+                    temp_destination.rename(destination)
+                
+                print(f"✅ [{upload_id}] File atomically moved to final destination: {destination.name}")
+                return  # Success - exit the retry loop
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"⚠️ [{upload_id}] Move attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 1.5  # Exponential backoff
+                else:
+                    # Final attempt failed, clean up and raise
+                    if temp_destination.exists():
+                        try:
+                            temp_destination.unlink()
+                            print(f"🧹 [{upload_id}] Cleaned up temp file after failed move")
+                        except:
+                            pass
+                    
+                    error_msg = f"Failed to finalize upload after {max_retries} attempts on {platform_name}: {e}"
+                    print(f"❌ [{upload_id}] {error_msg}")
+                    raise Exception(error_msg)
 
 
 # Global concurrent upload manager
