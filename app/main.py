@@ -93,6 +93,7 @@ connection_manager = ConnectionManager()
 
 # 🎯 Console command monitor for "close" command
 from app.clipboard_ws import clipboard_ws_router
+from app.upload_status_ws import upload_status_ws_router
 
 def console_command_monitor():
     """Monitor console for 'close' command"""
@@ -131,6 +132,35 @@ def initiate_graceful_shutdown_process():
             threading.Event().wait(1)  # Non-blocking sleep
         
         print("🚨 Server is now inactive...")
+        
+        # Clean up WebSocket connections before shutdown
+        print("🔌 Cleaning up WebSocket connections...")
+        try:
+            import asyncio
+            from app.clipboard_ws import clipboard_ws_manager
+            from app.upload_status_ws import upload_status_manager
+            
+            # Create new event loop for cleanup if needed
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Clean up WebSocket managers
+            async def cleanup_websockets():
+                await clipboard_ws_manager.shutdown()
+                await upload_status_manager.shutdown()
+                print("✅ WebSocket connections cleaned up")
+            
+            loop.run_until_complete(cleanup_websockets())
+            
+        except Exception as e:
+            print(f"⚠️ WebSocket cleanup warning: {e}")
+        
         shutdown_event.set()
         
         # Force exit to ensure immediate shutdown
@@ -468,6 +498,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # ✅ Register app routes
 app.include_router(router)
 app.include_router(clipboard_ws_router)
+app.include_router(upload_status_ws_router)
 
 # ✅ Exception handlers for smart loading page system
 from fastapi import HTTPException, Request
