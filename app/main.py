@@ -205,6 +205,20 @@ async def lifespan(app: FastAPI):
     port = int(os.environ.get('PORT', 80))  # Default to HTTP port 80
     # Get HTTPS mode from environment variable set by run.py
     use_https = os.environ.get('USE_HTTPS', 'false').lower() == 'true'
+    
+    # 🔒 Validate SSL certificates (non-breaking)
+    if use_https:
+        try:
+            from app.certificate_validator import validate_and_warn_certificates
+            from pathlib import Path
+            
+            certs_dir = Path(__file__).parent.parent / "certs"
+            print("🔒 Validating SSL certificates...")
+            validate_and_warn_certificates(certs_dir)
+            
+        except Exception as e:
+            print(f"⚠️ Certificate validation warning: {e}")
+            print("   HTTPS will continue to work normally")
     mdns_manager.port = port
     mdns_manager.use_https = use_https  # Configure HTTPS mode
     

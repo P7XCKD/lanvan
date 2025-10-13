@@ -3243,6 +3243,50 @@ async def task_stats():
             content={"status": "error", "msg": f"Task stats retrieval failed: {str(e)}"}
         )
 
+@router.get("/api/certificate-status", name="certificate_status")
+async def certificate_status():
+    """Get SSL certificate validation status"""
+    try:
+        from app.certificate_validator import SafeCertificateValidator
+        from pathlib import Path
+        import os
+        
+        certs_dir = Path(__file__).parent.parent / "certs"
+        cert_path = certs_dir / "cert.pem"
+        key_path = certs_dir / "key.pem"
+        
+        # Check if HTTPS is enabled
+        use_https = os.environ.get('USE_HTTPS', 'false').lower() == 'true'
+        
+        if not use_https:
+            return JSONResponse(content={
+                "status": "info",
+                "message": "HTTPS not enabled",
+                "https_enabled": False,
+                "timestamp": time.time()
+            })
+        
+        # Validate certificate
+        result = SafeCertificateValidator.validate_certificate_safe(cert_path, key_path)
+        
+        return JSONResponse(content={
+            "status": "success",
+            "https_enabled": True,
+            "certificate_valid": result.valid,
+            "is_self_signed": result.is_self_signed,
+            "days_until_expiry": result.days_until_expiry,
+            "warnings": result.warnings,
+            "errors": result.errors,
+            "recommendations": result.recommendations,
+            "timestamp": time.time()
+        })
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "msg": f"Certificate status check failed: {str(e)}"}
+        )
+
 @router.get("/favicon.ico", name="favicon")
 async def favicon():
     """Serve favicon.ico from static directory"""
