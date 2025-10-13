@@ -42,6 +42,9 @@ class UploadStatusConnectionManager:
         self.max_connections = 50
         self.cleanup_interval = 120    # Cleanup every 2 minutes
         
+        # Shutdown coordination
+        self._shutdown_requested = False
+        
         # Background cleanup
         self._cleanup_task = None
         self._start_cleanup_task()
@@ -57,15 +60,22 @@ class UploadStatusConnectionManager:
 
     async def _background_cleanup(self):
         """Background cleanup for stale connections and completed uploads"""
-        while True:
+        while not self._shutdown_requested:
             try:
                 await asyncio.sleep(self.cleanup_interval)
-                await self.cleanup_stale_connections()
-                await self.cleanup_completed_uploads()
+                if not self._shutdown_requested:
+                    await self.cleanup_stale_connections()
+                    await self.cleanup_completed_uploads()
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 print(f"Upload WebSocket cleanup error: {e}")
+        
+        # Final cleanup before shutdown
+        try:
+            await self.cleanup_stale_connections()
+        except Exception:
+            pass
 
     async def connect(self, websocket: WebSocket, upload_id: Optional[str] = None) -> str:
         """Connect WebSocket for upload status tracking"""

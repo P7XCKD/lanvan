@@ -136,27 +136,19 @@ def initiate_graceful_shutdown_process():
         # Clean up WebSocket connections before shutdown
         print("🔌 Cleaning up WebSocket connections...")
         try:
-            import asyncio
+            # Signal WebSocket managers to shutdown gracefully
             from app.clipboard_ws import clipboard_ws_manager
             from app.upload_status_ws import upload_status_manager
             
-            # Create new event loop for cleanup if needed
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_closed():
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+            # Use a simple signal-based shutdown instead of creating new event loops
+            clipboard_ws_manager._shutdown_requested = True
+            upload_status_manager._shutdown_requested = True
             
-            # Clean up WebSocket managers
-            async def cleanup_websockets():
-                await clipboard_ws_manager.shutdown()
-                await upload_status_manager.shutdown()
-                print("✅ WebSocket connections cleaned up")
+            # Give background tasks time to notice shutdown signal
+            import time
+            time.sleep(0.5)
             
-            loop.run_until_complete(cleanup_websockets())
+            print("✅ WebSocket cleanup signal sent")
             
         except Exception as e:
             print(f"⚠️ WebSocket cleanup warning: {e}")
@@ -309,6 +301,23 @@ async def lifespan(app: FastAPI):
     # Stop mDNS service
     print("🔴 Stopping mDNS service...")
     mdns_manager.stop_service()
+    
+    # Shutdown WebSocket managers gracefully
+    print("🔌 Shutting down WebSocket connections...")
+    try:
+        from app.clipboard_ws import clipboard_ws_manager
+        from app.upload_status_ws import upload_status_manager
+        
+        # Signal shutdown
+        clipboard_ws_manager._shutdown_requested = True
+        upload_status_manager._shutdown_requested = True
+        
+        # Give background tasks time to finish
+        await asyncio.sleep(0.2)
+        print("✅ WebSocket managers shutdown complete")
+        
+    except Exception as e:
+        print(f"⚠️ WebSocket shutdown warning: {e}")
     
     # Shutdown task manager
     print("🎯 Shutting down background task manager...")

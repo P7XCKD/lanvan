@@ -34,6 +34,9 @@ class ClipboardConnectionManager:
         self.max_connections = 100     # Prevent DoS
         self.cleanup_interval = 60     # Cleanup every minute
         
+        # Shutdown coordination
+        self._shutdown_requested = False
+        
         # Background cleanup task
         self._cleanup_task = None
         self._start_cleanup_task()
@@ -50,15 +53,22 @@ class ClipboardConnectionManager:
 
     async def _background_cleanup(self):
         """Background task to clean up stale connections"""
-        while True:
+        while not self._shutdown_requested:
             try:
                 await asyncio.sleep(self.cleanup_interval)
-                await self.cleanup_stale_connections()
+                if not self._shutdown_requested:
+                    await self.cleanup_stale_connections()
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 # Log error but don't crash cleanup task
                 print(f"WebSocket cleanup error: {e}")
+        
+        # Final cleanup before shutdown
+        try:
+            await self.cleanup_stale_connections()
+        except Exception:
+            pass
 
     async def connect(self, websocket: WebSocket) -> str:
         """Connect a new WebSocket with proper tracking"""
