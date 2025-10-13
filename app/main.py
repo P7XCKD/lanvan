@@ -277,10 +277,78 @@ app = FastAPI(
     lifespan=lifespan  # Enable graceful shutdown handling
 )
 
-# ✅ CORS Middleware: Enhanced for iOS Safari compatibility
+# ✅ CORS Middleware: Enhanced security with local network restriction
+import re
+from typing import List
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+
+class SecureCORSMiddleware(BaseHTTPMiddleware):
+    """Custom CORS middleware with pattern matching for local network security"""
+    
+    def __init__(self, app, **kwargs):
+        super().__init__(app)
+        self.allow_credentials = kwargs.get('allow_credentials', True)
+        self.allow_methods = kwargs.get('allow_methods', ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
+        self.allow_headers = kwargs.get('allow_headers', ["*"])
+        self.expose_headers = kwargs.get('expose_headers', ["*"])
+        self.max_age = kwargs.get('max_age', 3600)
+        
+        # Define allowed origin patterns for local network
+        self.allowed_patterns = [
+            r'^https?://localhost(:\d+)?$',
+            r'^https?://127\.0\.0\.1(:\d+)?$',
+            r'^https?://10\.\d+\.\d+\.\d+(:\d+)?$',                    # 10.0.0.0/8
+            r'^https?://172\.(1[6-9]|2\d|3[01])\.\d+\.\d+(:\d+)?$',   # 172.16.0.0/12
+            r'^https?://192\.168\.\d+\.\d+(:\d+)?$',                   # 192.168.0.0/16
+            r'^https?://169\.254\.\d+\.\d+(:\d+)?$',                   # 169.254.0.0/16 (link-local)
+            r'^https?://[^\.]+\.local(:\d+)?$',                        # .local domains (mDNS)
+            r'^https?://lanvan\.local(:\d+)?$',                        # LANVan mDNS domain
+        ]
+    
+    def is_origin_allowed(self, origin: str) -> bool:
+        """Check if origin matches any allowed patterns"""
+        if not origin:
+            return False
+        
+        # Check against all patterns
+        for pattern in self.allowed_patterns:
+            if re.match(pattern, origin):
+                return True
+        
+        return False
+    
+    async def dispatch(self, request, call_next):
+        origin = request.headers.get('origin')
+        
+        # Handle preflight requests
+        if request.method == 'OPTIONS':
+            if origin and self.is_origin_allowed(origin):
+                response = Response()
+                response.headers['Access-Control-Allow-Origin'] = origin
+                response.headers['Access-Control-Allow-Credentials'] = 'true'
+                response.headers['Access-Control-Allow-Methods'] = ', '.join(self.allow_methods)
+                response.headers['Access-Control-Allow-Headers'] = ', '.join(self.allow_headers)
+                response.headers['Access-Control-Max-Age'] = str(self.max_age)
+                return response
+            else:
+                # Reject preflight for non-allowed origins
+                return Response(status_code=403)
+        
+        # Process the request
+        response = await call_next(request)
+        
+        # Add CORS headers to actual requests
+        if origin and self.is_origin_allowed(origin):
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Expose-Headers'] = ', '.join(self.expose_headers)
+        
+        return response
+
+# Apply custom secure CORS middleware
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for LAN usage
+    SecureCORSMiddleware,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
     allow_headers=[
@@ -295,12 +363,11 @@ app.add_middleware(
         "Cache-Control",
         "X-Mx-ReqToken",
         "Keep-Alive",
-        "X-Requested-With",
         "If-Modified-Since",
         "X-File-Name"
     ],
     expose_headers=["*"],
-    max_age=3600,  # Cache preflight requests for 1 hour
+    max_age=3600,
 )
 
 # ✅ Middleware: Enable GZip compression for responses > 1000 bytes
