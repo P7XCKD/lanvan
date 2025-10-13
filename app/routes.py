@@ -196,7 +196,11 @@ def get_android_cellular_ip():
 from app.streaming_assembly import (
     initialize_streaming_assembly, 
     get_streaming_assembler,
-    shutdown_streaming_assembly
+    shutdown_streaming_assembly,
+    add_streaming_chunk,
+    check_streaming_status,
+    get_assembled_file,
+    cleanup_streaming_file
 )
 
 # === Setup ===
@@ -1926,6 +1930,45 @@ async def upload_chunk(
                 assembler.register_file(safe_filename, total_parts, filename, estimated_size)
                 print(f"🌊 Registered {safe_filename} for streaming assembly")
         
+        # 🚀 ADD CHUNK TO STREAMING ASSEMBLY SYSTEM
+        assembler = get_streaming_assembler()
+        streaming_result = None
+        if assembler:
+            # Add chunk to streaming assembly for real-time processing
+            streaming_result = add_streaming_chunk(safe_filename, part_number, chunk_data)
+            print(f"🌊 Added chunk to streaming assembly: {streaming_result}")
+            
+            # Check if file completed via streaming assembly
+            if streaming_result and streaming_result.get("status") == "completed":
+                print(f"✅ File completed via streaming assembly: {safe_filename}")
+                
+                # Clean up temp chunks since file is completed via streaming
+                try:
+                    pattern = f"{safe_filename}.part*"
+                    temp_chunks_cleaned = 0
+                    for chunk_file in TEMP_CHUNKS_FOLDER.glob(pattern):
+                        chunk_file.unlink()
+                        temp_chunks_cleaned += 1
+                    if temp_chunks_cleaned > 0:
+                        print(f"🧹 Cleaned up {temp_chunks_cleaned} temp chunk files for {safe_filename}")
+                except Exception as e:
+                    print(f"⚠️ Warning: Could not clean up temp chunks: {e}")
+                
+                # File is already assembled, no need to save chunk to temp folder
+                return JSONResponse(content={
+                    "status": "streaming_completed",
+                    "msg": f"File {safe_filename} completed via streaming assembly",
+                    "part_number": part_number,
+                    "total_parts": total_parts,
+                    "chunk_size_mb": round(len(chunk_data) / (1024 * 1024), 1),
+                    "file_path": str(streaming_result.get("path")),
+                    "file_size": streaming_result.get("size", 0),
+                    "protocol": "HTTPS" if is_https else "HTTP"
+                })
+        
+        # 🔄 FALLBACK: Save chunk to temp folder (for traditional assembly if streaming fails)
+        # This maintains backward compatibility while adding streaming assembly
+        
         # Save the chunk with error handling
         try:
             with open(chunk_path, "wb") as f:
@@ -1952,7 +1995,8 @@ async def upload_chunk(
         chunk_size_mb = chunk_size / (1024 * 1024)
         total_parts_msg = f"/{total_parts}" if total_parts else ""
         
-        return JSONResponse(content={
+        # Include streaming assembly status in response
+        response_data = {
             "status": "success",
             "msg": f"Chunk {part_number}{total_parts_msg} uploaded ({chunk_size_mb:.1f}MB)",
             "part_number": part_number,
@@ -1961,7 +2005,15 @@ async def upload_chunk(
             "chunk_written_size": written_size,
             "free_space_mb": round(free / (1024*1024), 1),
             "protocol": "HTTPS" if is_https else "HTTP"
-        })
+        }
+        
+        # Add streaming assembly progress if available
+        if streaming_result:
+            response_data["streaming_status"] = streaming_result.get("status", "unknown")
+            if "progress" in streaming_result:
+                response_data["streaming_progress"] = streaming_result["progress"]
+        
+        return JSONResponse(content=response_data)
         
     except Exception as e:
         return JSONResponse(
@@ -2008,13 +2060,26 @@ async def finalize_upload(
         background_processing_done = False
         validation_from_background = None
         
-        # First, check if streaming-assembled file already exists
-        potential_streaming_file = UPLOAD_FOLDER / safe_filename
-        print(f"🔍 Checking for streaming file: {potential_streaming_file}")
-        print(f"🔍 File exists: {potential_streaming_file.exists()}")
+        # 🚀 ENHANCED: Check streaming assembly status first
+        if assembler:
+            # Check if file was completed via streaming assembly
+            streaming_status = check_streaming_status(safe_filename)
+            print(f"🔍 Streaming assembly status: {streaming_status}")
+            
+            if streaming_status and streaming_status.get('status') == 'ready':
+                # File completed via streaming assembly
+                file_info = get_assembled_file(safe_filename)
+                if file_info and file_info.get('status') == 'ready':
+                    streaming_completed = True
+                    final_path = Path(file_info['path'])
+                    print(f"✅ File completed via streaming assembly: {safe_filename}")
+                    print(f"   📁 Path: {final_path}")
+                    print(f"   📊 Size: {final_path.stat().st_size:,} bytes")
         
-        if potential_streaming_file.exists():
-            print(f"🌊 Found streaming-assembled file: {safe_filename}")
+        # Second, check if streaming-assembled file already exists (legacy check)
+        potential_streaming_file = UPLOAD_FOLDER / safe_filename
+        if not streaming_completed and potential_streaming_file.exists():
+            print(f"🌊 Found legacy streaming-assembled file: {safe_filename}")
             streaming_completed = True
             final_path = potential_streaming_file
             
@@ -2025,21 +2090,6 @@ async def finalize_upload(
                     validation_from_background = status['validation_result']
                     background_processing_done = True
                     print(f"⚡ Background processing completed during upload - no additional processing needed!")
-                    
-        elif assembler:
-            # Check streaming status if file doesn't exist yet
-            status = assembler.check_status(safe_filename)
-            print(f"🔍 Streaming status: {status}")
-            if status and status.get('status') == 'ready':
-                streaming_completed = True
-                final_path = UPLOAD_FOLDER / safe_filename
-                
-                # Check for background processing results
-                if status.get('validation_result'):
-                    validation_from_background = status['validation_result']
-                    background_processing_done = True
-                    
-                print(f"✅ Streaming assembly completed for {safe_filename}")
         
         print(f"🔍 Streaming completed: {streaming_completed}")
         print(f"🔍 Background processing done: {background_processing_done}")
@@ -2252,6 +2302,20 @@ async def finalize_upload(
                 status = assembler.check_status(safe_filename)
                 if status.get("status") != "not_found":
                     assembler.cleanup(safe_filename)
+                    
+                    # Also clean up temp chunk files if streaming was successful
+                    if streaming_completed:
+                        try:
+                            pattern = f"{safe_filename}.part*"
+                            temp_chunks_cleaned = 0
+                            for chunk_file in TEMP_CHUNKS_FOLDER.glob(pattern):
+                                chunk_file.unlink()
+                                temp_chunks_cleaned += 1
+                            if temp_chunks_cleaned > 0:
+                                print(f"🧹 Cleaned up {temp_chunks_cleaned} temp chunk files for {safe_filename}")
+                        except Exception as cleanup_error:
+                            print(f"⚠️ Warning: Could not clean up temp chunks: {cleanup_error}")
+                            
             except AttributeError:
                 # Assembler doesn't have these methods, skip cleanup
                 pass
