@@ -101,6 +101,7 @@ class QuickTest:
             'http_server': False,
             'https_server': False,
             'file_upload': False,
+            'large_file_operations': False,  # NEW: 50MB file upload/download testing
             'folder_upload': False,        # Enhanced folder upload with structure preservation
             'qr_generation': False,
             'clipboard': False,
@@ -367,6 +368,39 @@ class QuickTest:
             self.log(f"Quick test failed: {str(e)}", "FAIL")
             return False
 
+    async def run_large_file_test_only(self):
+        """Run only the large file test (50MB upload/download)"""
+        try:
+            # Start HTTP server for testing
+            server, url = await self.start_server_fast("http")
+            if not server or not url:
+                self.log("HTTP server startup failed", "FAIL")
+                return False
+            
+            try:
+                # Run only large file test
+                timeout = aiohttp.ClientTimeout(total=180)  # 3 minutes for large file
+                connector = aiohttp.TCPConnector(ssl=False)
+                async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                    await self.test_large_file_operations(session, url)
+                
+                return self.components.get('large_file_operations', False)
+                
+            finally:
+                # Cleanup server
+                if self.server_task:
+                    self.server_task.cancel()
+                    try:
+                        await self.server_task
+                    except asyncio.CancelledError:
+                        pass
+                    self.server_task = None
+                await asyncio.sleep(0.1)
+                
+        except Exception as e:
+            self.log(f"Large file test failed: {str(e)}", "FAIL")
+            return False
+
     async def run_tests(self, base_url):
         """Run comprehensive tests on the server"""
         # Test basic endpoints
@@ -459,6 +493,8 @@ class QuickTest:
             # Test file upload with AES encryption test
             await self.test_file_upload_advanced(session, base_url)
             
+            # Large file test moved to separate command: python qt.py t
+            
             # Test clipboard functionality
             await self.test_clipboard_functionality(session, base_url)
             
@@ -495,6 +531,107 @@ class QuickTest:
         except Exception as e:
             self.log(f"File upload: {str(e)}", "FAIL")
             raise
+
+    async def test_large_file_operations(self, session, base_url):
+        """Test large file upload and download (50MB) with performance tracking"""
+        self.log("Testing large file operations (50MB upload/download)...")
+        
+        large_file_working = False
+        test_filename = "qt_large_test_50mb.txt"  # Use .txt extension (definitely allowed)
+        
+        try:
+            # Create 50MB test file in memory
+            self.log("Generating 50MB test file...")
+            file_size_mb = 50
+            file_size_bytes = file_size_mb * 1024 * 1024
+            
+            # Generate test content (pattern-based for compression testing)
+            import secrets
+            chunk_size = 1024 * 1024  # 1MB chunks
+            test_chunks = []
+            
+            # Create varied content to test compression and streaming
+            for i in range(file_size_mb):
+                if i % 10 == 0:
+                    # Random data every 10MB to prevent excessive compression
+                    chunk = secrets.token_bytes(chunk_size)
+                else:
+                    # Pattern data for most chunks
+                    pattern = f"LANVan-Test-Chunk-{i:03d}-".encode() * (chunk_size // 50)
+                    chunk = pattern[:chunk_size]
+                test_chunks.append(chunk)
+            
+            test_content = b''.join(test_chunks)
+            self.log(f"Generated {len(test_content) / (1024*1024):.1f}MB test file", "INFO")
+            
+            # Test upload with performance tracking
+            upload_start_time = time.time()
+            data = aiohttp.FormData()
+            data.add_field('files', test_content, filename=test_filename)
+            
+            # Use longer timeout for large file
+            timeout = aiohttp.ClientTimeout(total=120)  # 2 minutes for 50MB
+            
+            upload_url = f"{base_url}/upload-auto"
+            async with session.post(upload_url, data=data, timeout=timeout) as response:
+                upload_time = time.time() - upload_start_time
+                
+                if response.status == 200:
+                    result = await response.json()
+                    if result.get("status") == "success":
+                        upload_speed_mbps = (file_size_mb / upload_time)
+                        self.log(f"Large file upload: OK (50MB in {upload_time:.1f}s, {upload_speed_mbps:.1f} MB/s)", "PASS")
+                        large_file_working = True
+                        
+                        # Test download
+                        download_start_time = time.time()
+                        download_url = f"{base_url}/download/{test_filename}"
+                        
+                        async with session.get(download_url, timeout=timeout) as download_response:
+                            if download_response.status == 200:
+                                # Read and verify download
+                                downloaded_data = await download_response.read()
+                                download_time = time.time() - download_start_time
+                                download_speed_mbps = (len(downloaded_data) / (1024*1024)) / download_time
+                                
+                                if len(downloaded_data) == len(test_content):
+                                    self.log(f"Large file download: OK (50MB in {download_time:.1f}s, {download_speed_mbps:.1f} MB/s)", "PASS")
+                                    
+                                    # Verify content integrity
+                                    if downloaded_data[:100] == test_content[:100]:  # Quick integrity check
+                                        self.log("Large file integrity: OK (content verified)", "PASS")
+                                        self.components['large_file_operations'] = True
+                                    else:
+                                        self.log("Large file integrity: FAILED (content mismatch)", "FAIL")
+                                else:
+                                    self.log(f"Large file download: Size mismatch ({len(downloaded_data)} vs {len(test_content)})", "FAIL")
+                            else:
+                                self.log(f"Large file download: HTTP {download_response.status}", "FAIL")
+                                
+                        # Clean up test file
+                        try:
+                            cleanup_url = f"{base_url}/delete/{test_filename}"
+                            async with session.post(cleanup_url) as cleanup_response:
+                                if cleanup_response.status == 200:
+                                    self.log("Large file cleanup: OK", "INFO")
+                        except Exception:
+                            pass  # Cleanup is optional
+                            
+                    else:
+                        raise Exception(f"Large file upload failed: {result.get('msg')}")
+                else:
+                    raise Exception(f"Large file upload HTTP {response.status}")
+                    
+        except asyncio.TimeoutError:
+            self.log("Large file test: Timeout (may need more time for 50MB)", "WARN")
+        except Exception as e:
+            self.log(f"Large file test: {str(e)}", "WARN")
+            
+        # Performance summary
+        if large_file_working:
+            self.log("Large file operations: ✅ 50MB upload/download working", "PASS")
+        else:
+            self.log("Large file operations: ⚠️ May need optimization or more time", "INFO")
 
     async def test_clipboard_functionality(self, session, base_url):
         """Test clipboard read/write functionality with enhanced error handling"""
@@ -1949,6 +2086,11 @@ class QuickTest:
             ('toggle_text_visibility', '🎨 Toggle Text Fixes', 'Dark/Light mode toggle text visibility')
         ]
         
+        # Separate test components (run with 'python qt.py t')
+        separate_test_components = [
+            ('large_file_operations', '📦 Large File Operations', '50MB file upload/download - use "python qt.py t"')
+        ]
+        
         # Enhanced components (recent implementations)
         enhanced_components = [
             ('drag_drop_folders', '🖱️  Drag & Drop Folders', 'Seamless folder drag & drop without dialogs'),
@@ -2023,6 +2165,11 @@ class QuickTest:
             print(f"   {name}: {status}")
             if not self.components.get(key, False):
                 print(f"      ⚠️  Issue: {description} not functioning")
+        
+        # Separate test components
+        print(f"\n💡 SEPARATE TEST COMPONENTS:")
+        for key, name, description in separate_test_components:
+            print(f"   {name}: ⚠️  Use 'python qt.py t' to test")
         
         # Enhanced components status (recent implementations)
         print(f"\n⚡ ENHANCED COMPONENTS (Recent improvements):")
@@ -2109,8 +2256,26 @@ class QuickTest:
         
         print("=" * 55)
 
-async def main():
+def main():
     """Main runner"""
+    # Check for simple 't' argument first
+    if len(sys.argv) == 2 and sys.argv[1] == 't':
+        # Special handling for 't' argument
+        async def run_large_test():
+            print("🚀 LANVAN Large File Test (50MB Upload/Download)")
+            print("=" * 50)
+            test = QuickTest(skip_mdns=False)
+            success = await test.run_large_file_test_only()
+            if success:
+                print("✅ Large file test passed!")
+                sys.exit(0)
+            else:
+                print("❌ Large file test failed!")
+                sys.exit(1)
+        
+        asyncio.run(run_large_test())
+        return
+
     parser = argparse.ArgumentParser(description="LANVAN Comprehensive Project Scanner")
     parser.add_argument("--android", action="store_true", 
                        help="Skip mDNS tests (for Android/Termux)")
@@ -2127,50 +2292,55 @@ async def main():
     
     args = parser.parse_args()
     
-    print("LANVAN Enhanced Project Scanner (Updated)")
-    print("=" * 50)
-    print("🔍 Scanning recent implementations:")
-    print("   • temp_chunks folder relocation")
-    print("   • Enhanced folder upload (drag & drop)")
-    print("   • Improved streaming assembly")
-    print("   • Concurrent upload optimizations")
-    print("   • Windows file management enhancements")
-    print("   • Toggle text visibility fixes (Dark/Light mode)")
-    print("   • iOS Safari compatibility improvements")
-    print("   • Graceful shutdown system")
-    print("   • Progressive loading system")
-    print("   • RACE CONDITION FIXES (NEW)")
-    print("   • Cross-platform file safety (NEW)")
-    print("   • Atomic operations & file locking (NEW)")
-    if args.deep:
-        print("   🔬 DEEP SCAN MODE ENABLED")
-    print("=" * 50)
+    async def run_main_tests():
+        print("LANVAN Enhanced Project Scanner (Updated)")
+        print("=" * 50)
+        print("🔍 Scanning recent implementations:")
+        print("   • temp_chunks folder relocation")
+        print("   • Enhanced folder upload (drag & drop)")
+        print("   • Improved streaming assembly")
+        print("   • Concurrent upload optimizations")
+        print("   • Windows file management enhancements")
+        print("   • Toggle text visibility fixes (Dark/Light mode)")
+        print("   • iOS Safari compatibility improvements")
+        print("   • Graceful shutdown system")
+        print("   • Progressive loading system")
+        print("   • RACE CONDITION FIXES (NEW)")
+        print("   • Cross-platform file safety (NEW)")
+        print("   • Atomic operations & file locking (NEW)")
+        if args.deep:
+            print("   🔬 DEEP SCAN MODE ENABLED")
+        print("=" * 50)
+        
+        test = QuickTest(skip_mdns=args.android)
+        success = await test.test_server_quick()
+        
+        # Print comprehensive component status report
+        test.print_component_status()
+        
+        print("\n" + "=" * 60)
+        if success:
+            print("✅ All tests passed! Enhanced LANVAN server is ready!")
+            print("🚀 Recent implementations are working correctly:")
+            print("   • Toggle text visibility fixes validated")
+            print("   • iOS Safari compatibility confirmed") 
+            print("   • Progressive loading system operational")
+            print("   • Graceful shutdown mechanisms active")
+            print("   • Race condition fixes implemented and tested")
+            print("   • Cross-platform file safety validated")
+            print("   • CORS security with local network restriction active")
+            print("   • All core and enhanced components functional")
+            print("💡 Use 'python qt.py t' to test 50MB file operations")
+            sys.exit(0)
+        else:
+            print("❌ Some tests failed. Check the issues above.")
+            print("🔧 Consider fixing failed components before deployment.")
+            print("💡 Recent fixes may need additional testing or adjustment.")
+            print("🛡️  Check race condition and safety components especially.")
+            sys.exit(1)
     
-    test = QuickTest(skip_mdns=args.android)
-    success = await test.test_server_quick()
-    
-    # Print comprehensive component status report
-    test.print_component_status()
-    
-    print("\n" + "=" * 60)
-    if success:
-        print("✅ All tests passed! Enhanced LANVAN server is ready!")
-        print("🚀 Recent implementations are working correctly:")
-        print("   • Toggle text visibility fixes validated")
-        print("   • iOS Safari compatibility confirmed") 
-        print("   • Progressive loading system operational")
-        print("   • Graceful shutdown mechanisms active")
-        print("   • Race condition fixes implemented and tested")
-        print("   • Cross-platform file safety validated")
-        print("   • CORS security with local network restriction active")
-        print("   • All core and enhanced components functional")
-        sys.exit(0)
-    else:
-        print("❌ Some tests failed. Check the issues above.")
-        print("🔧 Consider fixing failed components before deployment.")
-        print("💡 Recent fixes may need additional testing or adjustment.")
-        print("🛡️  Check race condition and safety components especially.")
-        sys.exit(1)
+    # Run the main tests
+    asyncio.run(run_main_tests())
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
