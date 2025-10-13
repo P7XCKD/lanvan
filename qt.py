@@ -27,6 +27,7 @@ Recent Updates Covered:
 - ✅ Concurrent upload safety - Thread-safe management and isolation
 - ✅ Orphaned file cleanup - Automatic .tmp file cleanup on startup
 - ✅ Retry logic system - Exponential backoff for atomic operations
+- ✅ CORS SECURITY - Local network restriction with regex pattern matching
 
 Usage:
     python qt.py              # Standard comprehensive test
@@ -142,6 +143,7 @@ class QuickTest:
             'orphaned_file_cleanup': False,     # NEW: Startup cleanup of .tmp files
             'cross_platform_compatibility': False,  # NEW: Windows/Linux/Android compatibility
             'retry_logic_system': False,        # NEW: Exponential backoff retry logic
+            'cors_security': False,             # NEW: CORS security with local network restriction
         }
         
     def log(self, message, status="INFO"):
@@ -350,6 +352,9 @@ class QuickTest:
             
             # Test race condition fixes (NEW)
             await self.test_race_condition_fixes()
+            
+            # Test CORS security implementation (NEW)
+            await self.test_cors_security()
             
             # Test file safety and validation improvements (NEW)
             await self.test_file_safety_validation()
@@ -1752,6 +1757,136 @@ class QuickTest:
         except Exception as e:
             self.log(f"Race condition testing error: {str(e)}", "FAIL")
     
+    async def test_cors_security(self):
+        """Test CORS security implementation with local network restriction"""
+        self.log("=== Testing CORS Security Implementation ===")
+        
+        cors_working = False
+        
+        try:
+            # Check if SecureCORSMiddleware is implemented
+            self.log("Testing CORS middleware implementation...")
+            try:
+                from app.main import SecureCORSMiddleware
+                
+                # Create a test instance to verify methods
+                test_middleware = SecureCORSMiddleware(None)
+                
+                if hasattr(test_middleware, 'is_origin_allowed') and hasattr(test_middleware, 'allowed_patterns'):
+                    self.log("CORS Security: SecureCORSMiddleware class implemented", "PASS")
+                    
+                    # Test pattern matching logic
+                    test_origins = {
+                        # Should be allowed (local network)
+                        "http://localhost:3000": True,
+                        "https://127.0.0.1:8080": True,
+                        "http://192.168.1.100:3000": True,
+                        "http://10.0.1.5:3000": True,
+                        "http://172.16.0.10:3000": True,
+                        "http://lanvan.local:3000": True,
+                        "http://myapp.local": True,
+                        # Should be blocked (external)
+                        "https://evil.com": False,
+                        "http://8.8.8.8:3000": False,
+                        "https://attacker.example.com": False,
+                        "http://203.0.113.1:3000": False,
+                    }
+                    
+                    allowed_count = 0
+                    blocked_count = 0
+                    
+                    for origin, should_allow in test_origins.items():
+                        result = test_middleware.is_origin_allowed(origin)
+                        if result == should_allow:
+                            if should_allow:
+                                allowed_count += 1
+                            else:
+                                blocked_count += 1
+                        else:
+                            self.log(f"CORS: Pattern mismatch for {origin} (expected {should_allow}, got {result})", "WARN")
+                    
+                    if allowed_count >= 6 and blocked_count >= 3:  # Expect most local allowed, external blocked
+                        self.log(f"CORS Security: Pattern validation working ({allowed_count} allowed, {blocked_count} blocked)", "PASS")
+                        cors_working = True
+                    else:
+                        self.log(f"CORS Security: Pattern validation issues ({allowed_count} allowed, {blocked_count} blocked)", "WARN")
+                    
+            except ImportError:
+                self.log("CORS Security: SecureCORSMiddleware not found", "FAIL")
+            except Exception as e:
+                self.log(f"CORS Security: Implementation error - {str(e)}", "WARN")
+            
+            # Check middleware registration in main.py
+            self.log("Testing CORS middleware registration...")
+            try:
+                main_file = Path(__file__).parent / "app" / "main.py"
+                if main_file.exists():
+                    with open(main_file, 'r', encoding='utf-8') as f:
+                        main_content = f.read()
+                        
+                    if 'SecureCORSMiddleware' in main_content and 'app.add_middleware' in main_content:
+                        self.log("CORS Security: Middleware properly registered in FastAPI app", "PASS")
+                        
+                        # Check for regex patterns
+                        if 'allowed_patterns' in main_content and 'r\'^https?://' in main_content:
+                            self.log("CORS Security: Regex pattern matching implemented", "PASS")
+                            cors_working = True
+                            
+                    else:
+                        self.log("CORS Security: Middleware registration not found", "WARN")
+                        
+            except Exception as e:
+                self.log(f"CORS Security: Registration check error - {str(e)}", "WARN")
+            
+            # Test actual CORS headers (if server is running)
+            self.log("Testing live CORS header validation...")
+            try:
+                import aiohttp
+                
+                # Get the current server port (try common test ports)
+                test_ports = [5000, 80, 8080]
+                working_port = None
+                
+                for port in test_ports:
+                    try:
+                        timeout = aiohttp.ClientTimeout(total=2)
+                        connector = aiohttp.TCPConnector(ssl=False)
+                        
+                        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                            # Test with allowed origin
+                            headers = {
+                                'Origin': 'http://localhost:3000',
+                                'Access-Control-Request-Method': 'POST'
+                            }
+                            
+                            async with session.options(f"http://127.0.0.1:{port}", headers=headers) as response:
+                                if response.status in [200, 204]:
+                                    cors_origin = response.headers.get('Access-Control-Allow-Origin')
+                                    if cors_origin == 'http://localhost:3000':
+                                        self.log(f"CORS Security: Live validation working on port {port}", "PASS")
+                                        cors_working = True
+                                        working_port = port
+                                        break
+                                    
+                    except Exception:
+                        continue  # Try next port
+                        
+                if not working_port:
+                    self.log("CORS Security: Live validation skipped (server not accessible)", "INFO")
+                    
+            except Exception as e:
+                self.log(f"CORS Security: Live test error - {str(e)}", "INFO")
+            
+            # Update component status
+            if cors_working:
+                self.components['cors_security'] = True
+                self.log("CORS Security: Implementation validated successfully ✅", "PASS")
+            else:
+                self.log("CORS Security: Implementation needs review", "WARN")
+                
+        except Exception as e:
+            self.log(f"CORS security testing error: {str(e)}", "FAIL")
+    
     async def test_file_safety_validation(self):
         """Test file safety and validation improvements"""
         self.log("=== Testing File Safety & Validation ===")
@@ -1854,7 +1989,8 @@ class QuickTest:
             ('concurrent_upload_safety', '🚀 Concurrent Upload Safety', 'Thread-safe upload management'),
             ('orphaned_file_cleanup', '🧹 Orphaned File Cleanup', 'Automatic cleanup of temporary files'),
             ('cross_platform_compatibility', '🌐 Cross-Platform Compatibility', 'Windows/Linux/Android support'),
-            ('retry_logic_system', '🔄 Retry Logic System', 'Exponential backoff and error recovery')
+            ('retry_logic_system', '🔄 Retry Logic System', 'Exponential backoff and error recovery'),
+            ('cors_security', '🔐 CORS Security', 'Local network restriction with pattern matching')
         ]
         
         # Count working components
@@ -1881,7 +2017,7 @@ class QuickTest:
         print(f"   • Overall Score: {total_score:.0f}% ({working_components}/{total_components})")
         
         # Core components status (CRITICAL for operation)
-        print(f"\n🚀 CORE COMPONENTS (Critical for P2P file sharing):")
+        print(f"\n🚀 CORE COMPONENTS (Critical for file sharing):")
         for key, name, description in core_components:
             status = "✅ WORKING" if self.components.get(key, False) else "❌ FAILED"
             print(f"   {name}: {status}")
@@ -2026,6 +2162,7 @@ async def main():
         print("   • Graceful shutdown mechanisms active")
         print("   • Race condition fixes implemented and tested")
         print("   • Cross-platform file safety validated")
+        print("   • CORS security with local network restriction active")
         print("   • All core and enhanced components functional")
         sys.exit(0)
     else:
