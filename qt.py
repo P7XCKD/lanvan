@@ -1069,7 +1069,7 @@ class QuickTest:
             except Exception as e:
                 try:
                     # Fallback: check if AES modules exist
-                    import app.aes_config
+                    import app.aes_utils
                     import app.aes_utils
                     self.log("AES config: Modules available", "PASS")
                     aes_working = True

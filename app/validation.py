@@ -892,8 +892,8 @@ async def validate_upload_files_enhanced_async(files: List[UploadFile], encrypt:
                     file_size = getattr(file, 'size', 0)
                     if file_size == 0:
                         # Last resort: stream to get size, then reset using Termux-optimized chunks
-                        from .android_optimizer import universal_optimizer
-                        CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(0)  # Get platform-optimal chunk size
+                        from .universal_optimizer import get_adaptive_chunk_size
+                        CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
                         file_size = 0
                         temp_chunks = []
                         while True:
@@ -925,8 +925,8 @@ async def validate_upload_files_enhanced_async(files: List[UploadFile], encrypt:
                     import aiofiles
                     async with aiofiles.open(temp_file_path, 'wb') as temp_file:
                         # 🔄 MEMORY FIX: Use Termux-optimized chunk size for streaming
-                        from .android_optimizer import universal_optimizer
-                        CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(0)  # Get platform-optimal chunk size
+                        from .universal_optimizer import get_adaptive_chunk_size
+                        CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
                         while True:
                             chunk = await file.read(CHUNK_SIZE)
                             if not chunk:

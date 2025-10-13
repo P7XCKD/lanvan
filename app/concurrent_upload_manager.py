@@ -41,10 +41,10 @@ except ImportError:
 
 # Import responsiveness monitor with fallback
 try:
-    from .responsiveness_monitor import responsiveness_monitor, ensure_responsiveness
+    from .responsiveness_manager import responsiveness_monitor, ensure_responsiveness
 except ImportError:
     try:
-        from responsiveness_monitor import responsiveness_monitor, ensure_responsiveness  
+        from app.responsiveness_manager import responsiveness_monitor, ensure_responsiveness  
     except ImportError:
         # Fallback responsiveness function
         async def ensure_responsiveness(): 
@@ -155,8 +155,8 @@ class ConcurrentUploadManager:
                 file_size = getattr(upload_file, 'size', 0)
                 if file_size == 0:
                     # Last resort: stream to get size then reset using Termux-optimized chunks
-                    from .android_optimizer import universal_optimizer
-                    CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(0)  # Get platform-optimal chunk size
+                    from .universal_optimizer import get_adaptive_chunk_size
+                    CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
                     file_size = 0
                     temp_chunks = []
                     while True:

@@ -402,3 +402,63 @@ def stop_responsiveness_monitoring():
 def get_responsiveness_metrics() -> Dict[str, Any]:
     """Get current responsiveness metrics"""
     return responsiveness_manager.get_performance_metrics()
+
+# Legacy compatibility layer for responsiveness_monitor.py
+class ResponsivenessMonitor:
+    """Legacy compatibility wrapper for unified responsiveness manager"""
+    
+    def __init__(self):
+        self.responsiveness_metrics = {}
+        
+    async def start_monitoring(self):
+        """Start monitoring (compatibility wrapper)"""
+        responsiveness_manager.start_monitoring()
+        print("🚀 Responsiveness monitor started")
+    
+    async def stop_monitoring(self):
+        """Stop monitoring (compatibility wrapper)"""
+        responsiveness_manager.stop_monitoring()
+        print("⏸️ Responsiveness monitor stopped")
+    
+    def get_recommended_settings(self) -> Dict[str, Any]:
+        """Get recommended settings (compatibility wrapper)"""
+        metrics = responsiveness_manager.get_performance_metrics()
+        return {
+            'max_concurrent_uploads': 3,
+            'max_chunk_size': 32 * 1024 * 1024,  # 32MB
+            'yield_frequency': 0.1,  # 100ms
+            'emergency_mode': False,
+            'cpu_usage': metrics.get('cpu_percent', 0),
+            'memory_usage': metrics.get('memory_percent', 0),
+        }
+    
+    def update_upload_status(self, active_uploads: int, processing_files: int):
+        """Update upload status (compatibility wrapper)"""
+        # Update internal metrics for compatibility
+        self.responsiveness_metrics.update({
+            'active_uploads': active_uploads,
+            'processing_files': processing_files
+        })
+    
+    async def emergency_yield(self):
+        """Emergency yield (compatibility wrapper)"""
+        await responsiveness_manager.ayield_control("emergency")
+    
+    def get_recent_logs(self):
+        """Get recent logs (compatibility method)"""
+        return []
+    
+    def get_stats(self):
+        """Get stats (compatibility method)"""
+        return responsiveness_manager.get_performance_metrics()
+
+# Global instance for compatibility
+responsiveness_monitor = ResponsivenessMonitor()
+
+async def ensure_responsiveness():
+    """Ensure server responsiveness (legacy compatibility)"""
+    await responsiveness_manager.ayield_control("ensure_responsiveness")
+
+def get_adaptive_settings() -> Dict[str, Any]:
+    """Get adaptive performance settings (legacy compatibility)"""
+    return responsiveness_monitor.get_recommended_settings()

@@ -189,7 +189,7 @@ async def lifespan(app: FastAPI):
     print("🎯 Background task manager initialized")
     
     # Start responsiveness monitor
-    from app.responsiveness_monitor import responsiveness_monitor
+    from app.responsiveness_manager import responsiveness_monitor
     await responsiveness_monitor.start_monitoring()
     
     # Start mDNS service

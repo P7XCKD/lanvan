@@ -59,7 +59,7 @@ from app.clipboard_ws import clipboard_ws_manager
 from starlette.status import HTTP_302_FOUND, HTTP_400_BAD_REQUEST, HTTP_403_FORBIDDEN, HTTP_500_INTERNAL_SERVER_ERROR
 
 from app.aes_utils import encrypt_session_data, decrypt_session_data
-from app.aes_config import AESConfig
+from app.aes_utils import AESConfig
 from app.http_safe_aes import encrypt_file_http_safe, decrypt_http_safe_file
 from app.metadata_protection import generate_secure_filename, obfuscate_file_size, generate_decoy_requests
 from app.validation import (
@@ -560,7 +560,7 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
     import hashlib
     import gc
     import asyncio
-    from .android_optimizer import optimize_for_upload, get_adaptive_chunk_size, should_run_gc, universal_optimizer
+    from .universal_optimizer import optimize_for_upload, get_adaptive_chunk_size, should_run_gc, universal_optimizer
     
     # 🤖 TERMUX MEMORY CHECK: Enforce memory limits before starting upload
     try:
@@ -862,8 +862,8 @@ async def encrypt_http_safe(
         temp_input_path = UPLOAD_FOLDER / f"temp_input_{int(time.time())}_{file.filename}"
         
         # 🔄 MEMORY FIX: Use Termux-optimized chunk size for streaming
-        from .android_optimizer import universal_optimizer
-        CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(0)  # Get platform-optimal chunk size
+        from .universal_optimizer import universal_optimizer, get_adaptive_chunk_size
+        CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
         
         with open(temp_input_path, 'wb') as f:
             while True:
@@ -1010,10 +1010,9 @@ async def api_files():
 async def platform_status():
     """API endpoint to get universal platform optimization status"""
     try:
-        from .android_optimizer import UniversalOptimizer
+        from .simple_platform import get_platform_info
         
-        optimizer = UniversalOptimizer()
-        info = optimizer.get_platform_info()
+        info = get_platform_info()
         
         return JSONResponse(content={
             "status": "success",
@@ -1122,8 +1121,8 @@ async def upload_files(
                     counter += 1
                 
                 # 🔄 MEMORY FIX: Use Termux-optimized chunk size for streaming
-                from .android_optimizer import universal_optimizer
-                CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(0)  # Get platform-optimal chunk size
+                from .universal_optimizer import get_adaptive_chunk_size
+                CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
                 
                 with open(file_path, 'wb') as f:
                     while True:
@@ -1302,8 +1301,8 @@ async def upload_auto_file(
             print(f"📤 Processing file {i+1}/{len(valid_files)}: {info['original_name']}")
             
             # 🔄 MEMORY FIX: Use Termux-optimized chunk size for direct streaming
-            from .android_optimizer import universal_optimizer
-            CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(0)  # Get platform-optimal chunk size
+            from .universal_optimizer import get_adaptive_chunk_size
+            CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
             
             destination.parent.mkdir(parents=True, exist_ok=True)
             
@@ -1806,11 +1805,11 @@ async def delete_file(filename: str):
 @router.get("/api/upload/chunk-size/{file_size}", name="get_optimal_chunk_size")
 async def get_optimal_chunk_size(file_size: int):
     """Get optimal chunk size for a file upload based on system capabilities"""
-    from .android_optimizer import universal_optimizer
+    from .universal_optimizer import get_adaptive_chunk_size
     
     try:
         # Get adaptive chunk size
-        optimal_chunk_size = universal_optimizer.get_adaptive_chunk_size(file_size)
+        optimal_chunk_size = get_adaptive_chunk_size(file_size)
         
         # Get system info for client optimization
         system_info = universal_optimizer.get_system_info()
@@ -2791,8 +2790,8 @@ async def add_to_clipboard(
                     break
             
             # 🔄 MEMORY FIX: Use Termux-optimized chunk size for clipboard streaming
-            from .android_optimizer import universal_optimizer
-            CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(0)  # Get platform-optimal chunk size
+            from .universal_optimizer import get_adaptive_chunk_size
+            CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
             MAX_SIZE = 10 * 1024 * 1024  # 10MB limit
             file_content = b""
             file_size = 0
@@ -3165,7 +3164,7 @@ async def mdns_info():
 async def aes_config():
     """Get AES encryption configuration"""
     try:
-        from aes_config import AES_CONFIG
+        from .aes_utils import AES_CONFIG
         return JSONResponse(content={
             "status": "success",
             "aes_enabled": AES_CONFIG.get("ENABLED", False),
@@ -3188,7 +3187,7 @@ async def system_logs():
         
         # Add responsiveness monitor logs if available
         try:
-            from responsiveness_monitor import responsiveness_monitor
+            from app.responsiveness_manager import responsiveness_monitor
             if hasattr(responsiveness_monitor, 'get_recent_logs'):
                 monitor_logs = responsiveness_monitor.get_recent_logs()
                 logs.extend(monitor_logs)

@@ -62,6 +62,7 @@ class UniversalOptimizer:
         
         self.keep_alive_active = False
         self.background_keeper = None
+        self.upload_active = False  # Track upload state for legacy compatibility
         
         # Start Termux memory monitoring if applicable
         if self.is_termux or self.is_android:
@@ -281,6 +282,53 @@ class UniversalOptimizer:
             'memory_management': 'strategic_gc',  # OPTIMIZED: Strategic instead of frequent
             'performance_profile': 'optimized'
         }
+
+# Legacy Android optimizer functions (merged from android_optimizer.py)
+def optimize_for_upload(file_size: int) -> Dict:
+    """Optimize settings for file upload (legacy function)"""
+    return universal_optimizer.optimize_for_large_files("upload")
+
+def get_adaptive_chunk_size(file_size: int, available_memory: Optional[int] = None) -> int:
+    """Get adaptive chunk size based on file size and available memory (legacy function)"""
+    try:
+        if available_memory is None:
+            memory_info = get_safe_memory_info()
+            available_memory = int(memory_info.get('available_bytes', 1024 * 1024 * 1024))  # 1GB fallback
+        
+        # Ensure chunk size doesn't exceed 10% of available memory
+        max_chunk = available_memory // 10
+        
+        # Conservative chunk sizing for Android/Termux
+        if universal_optimizer.is_android or universal_optimizer.is_termux:
+            if available_memory < 1024 * 1024 * 1024:  # Less than 1GB RAM
+                optimal_chunk = min(1024 * 1024, file_size // 10)  # 1MB max
+            else:
+                optimal_chunk = min(8 * 1024 * 1024, file_size // 5)  # 8MB max
+        else:
+            # Desktop sizing
+            if file_size < 10 * 1024 * 1024:  # < 10MB
+                optimal_chunk = 1024 * 1024  # 1MB
+            elif file_size < 100 * 1024 * 1024:  # < 100MB
+                optimal_chunk = 8 * 1024 * 1024  # 8MB
+            else:
+                optimal_chunk = 32 * 1024 * 1024  # 32MB
+        
+        return min(optimal_chunk, max_chunk)
+    except Exception:
+        return 1024 * 1024  # 1MB fallback
+
+def should_run_gc() -> bool:
+    """Determine if garbage collection should be run (legacy function)"""
+    return universal_optimizer.should_run_gc()
+
+def get_available_memory_mb() -> float:
+    """Get available memory in MB (legacy function)"""
+    memory_info = get_safe_memory_info()
+    return memory_info.get('available_mb', 0.0)
+
+def get_cpu_usage() -> float:
+    """Get CPU usage percentage (legacy function)"""
+    return get_safe_cpu_usage()
 
 # Global optimizer instance
 universal_optimizer = UniversalOptimizer()
