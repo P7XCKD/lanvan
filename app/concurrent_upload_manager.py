@@ -115,8 +115,9 @@ class ConcurrentUploadManager:
                 # Fallback: try to get size from UploadFile.size if seek fails
                 file_size = getattr(upload_file, 'size', 0)
                 if file_size == 0:
-                    # Last resort: stream to get size then reset
-                    CHUNK_SIZE = 8192
+                    # Last resort: stream to get size then reset using Termux-optimized chunks
+                    from .android_optimizer import universal_optimizer
+                    CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(0)  # Get platform-optimal chunk size
                     file_size = 0
                     temp_chunks = []
                     while True:

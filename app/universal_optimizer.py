@@ -1,6 +1,7 @@
 """
 Universal Platform Optimizer with Termux Compatibility
 Performance optimizations for large file uploads on ALL platforms (Windows, Linux, Mac, Android)
+Enhanced with Termux memory monitoring and background processing management
 """
 
 import os
@@ -24,6 +25,12 @@ try:
         get_termux_chunk_size,
         safe_psutil_call
     )
+    from .termux_memory_monitor import (
+        start_termux_memory_monitoring,
+        get_memory_adaptive_chunk_size,
+        enforce_termux_memory_limit,
+        get_termux_memory_status
+    )
 except ImportError:
     from termux_compat import (
         is_termux_environment, 
@@ -34,6 +41,12 @@ except ImportError:
         get_safe_memory_info,
         get_termux_chunk_size,
         safe_psutil_call
+    )
+    from termux_memory_monitor import (
+        start_termux_memory_monitoring,
+        get_memory_adaptive_chunk_size,
+        enforce_termux_memory_limit,
+        get_termux_memory_status
     )
 
 class UniversalOptimizer:
@@ -50,9 +63,35 @@ class UniversalOptimizer:
         self.keep_alive_active = False
         self.background_keeper = None
         
+        # Start Termux memory monitoring if applicable
+        if self.is_termux or self.is_android:
+            try:
+                start_termux_memory_monitoring()
+                print("🤖 Termux memory monitoring initialized")
+            except Exception as e:
+                print(f"⚠️ Memory monitoring init warning: {e}")
+        
         print(f"[INFO] Platform detected: {self.platform_type.title()}")
         if self.is_termux:
             print(f"🤖 Termux environment detected")
+            
+    def get_adaptive_chunk_size(self, file_size: int) -> int:
+        """Get adaptive chunk size with Termux memory monitoring"""
+        if self.is_termux or self.is_android:
+            # Use memory-adaptive chunk size for Termux/Android - ALWAYS use Termux-optimized sizes
+            try:
+                return get_memory_adaptive_chunk_size(file_size)
+            except Exception:
+                # Fallback to standard Termux chunk size
+                return get_termux_chunk_size(file_size)
+        else:
+            # Use standard chunk sizing for other platforms
+            if file_size < 10 * 1024 * 1024:  # < 10MB
+                return 512 * 1024  # 512KB for smaller files
+            elif file_size < 100 * 1024 * 1024:  # < 100MB
+                return 2 * 1024 * 1024  # 2MB for medium files
+            else:  # Large files
+                return 4 * 1024 * 1024  # 4MB for large files
     
     def _detect_platform(self) -> str:
         """Detect the current platform"""
@@ -112,7 +151,7 @@ class UniversalOptimizer:
             return optimizations
     
     def _optimize_termux(self) -> Dict:
-        """Termux-specific optimizations"""
+        """Termux-specific optimizations with memory monitoring"""
         print("🤖 Applying Termux optimizations")
         
         try:
@@ -120,11 +159,16 @@ class UniversalOptimizer:
             os.environ['PYTHONUNBUFFERED'] = '1'
             os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
             
-            # Use Termux-compatible settings
+            # Check memory status before optimization
+            if not enforce_termux_memory_limit("termux_optimization"):
+                return {'performance_mode': 'termux_emergency'}
+            
+            # Use Termux-compatible settings with memory monitoring
             return {
-                'chunk_size': get_termux_chunk_size(),
+                'chunk_size': get_termux_chunk_size(1024 * 1024),  # Default 1MB for optimization
                 'memory_limit': get_safe_memory_info().get('available_mb', 512),
-                'performance_mode': 'termux_optimized'
+                'performance_mode': 'termux_optimized',
+                'memory_status': get_termux_memory_status()
             }
         except Exception as e:
             print(f"⚠️ Termux optimization warning: {e}")
@@ -173,25 +217,44 @@ class UniversalOptimizer:
             return False  # Don't run GC if we can't determine memory usage
     
     def start_background_keepalive(self):
-        """Start background keepalive for Termux stability"""
-        if self.keep_alive_active or not self.is_termux:
+        """Start background keepalive for Termux stability with memory monitoring"""
+        if self.keep_alive_active or not (self.is_termux or self.is_android):
             return
             
         def keepalive_worker():
-            """Background keepalive worker"""
+            """Enhanced background keepalive worker with memory awareness"""
+            keepalive_count = 0
             try:
                 keepalive_file = "/tmp/lanvan_keepalive"
                 while self.keep_alive_active:
+                    # Check memory status before doing any work
+                    if not enforce_termux_memory_limit("background_keepalive"):
+                        print("🤖 Background keepalive paused due to memory pressure")
+                        time.sleep(60)  # Wait longer during memory pressure
+                        continue
+                    
+                    # Create keepalive marker
                     with open(keepalive_file, 'w') as f:
-                        f.write(str(time.time()))
-                    time.sleep(30)  # Update every 30 seconds
+                        f.write(f"{time.time()}:{keepalive_count}")
+                    
+                    keepalive_count += 1
+                    
+                    # Gentle memory cleanup every 10 cycles
+                    if keepalive_count % 10 == 0:
+                        memory_status = get_termux_memory_status()
+                        if memory_status.get('status') in ['warning', 'critical', 'emergency']:
+                            gc.collect()
+                    
+                    # Conservative sleep time
+                    time.sleep(60)  # 1 minute between cycles
+                    
             except Exception as e:
                 print(f"⚠️ Keepalive warning: {e}")
         
         self.keep_alive_active = True
         self.background_keeper = threading.Thread(target=keepalive_worker, daemon=True)
         self.background_keeper.start()
-        print("[INFO] Background keepalive started")
+        print("🤖 Background keepalive started with memory monitoring")
     
     def stop_background_keepalive(self):
         """Stop background keepalive"""
@@ -207,19 +270,6 @@ class UniversalOptimizer:
             if self.is_termux:
                 # Extra cleanup for Termux/Android
                 gc.collect()
-    
-    def get_adaptive_chunk_size(self, file_size: int = 0) -> int:
-        """Get adaptive chunk size based on platform and file size"""
-        optimizations = self.optimize_for_large_files()
-        base_chunk_size = optimizations.get('chunk_size', 65536)  # 64KB default
-        
-        # Adaptive sizing based on file size
-        if file_size > 100 * 1024 * 1024:  # >100MB
-            return min(base_chunk_size * 4, 1024 * 1024)  # Up to 1MB chunks
-        elif file_size > 10 * 1024 * 1024:  # >10MB
-            return base_chunk_size * 2  # Double chunk size
-        else:
-            return base_chunk_size
     
     def get_performance_summary(self) -> Dict:
         """Get performance optimization summary"""

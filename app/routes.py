@@ -553,6 +553,7 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
     """
     🔄 ASYNC Universal Streaming Upload Handler - Non-blocking optimized for ALL platforms
     🔒 RACE CONDITION FIX: Upload to .tmp file first, then atomically move to final name
+    🤖 TERMUX OPTIMIZED: Memory monitoring and resource management
     Processes files in chunks asynchronously to avoid memory exhaustion and server blocking
     """
     import os
@@ -560,6 +561,14 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
     import gc
     import asyncio
     from .android_optimizer import optimize_for_upload, get_adaptive_chunk_size, should_run_gc, universal_optimizer
+    
+    # 🤖 TERMUX MEMORY CHECK: Enforce memory limits before starting upload
+    try:
+        from .termux_memory_monitor import enforce_termux_memory_limit
+        if not enforce_termux_memory_limit(f"upload_{upload_file.filename}"):
+            raise Exception("Upload blocked due to memory constraints")
+    except ImportError:
+        pass  # Graceful fallback if memory monitor not available
     
     # 🚀 TEMPORARY FILE STRATEGY: Upload to .tmp extension first
     temp_destination = destination.with_suffix(destination.suffix + '.tmp')
@@ -846,8 +855,10 @@ async def encrypt_http_safe(
         # Save uploaded file temporarily using chunked streaming
         temp_input_path = UPLOAD_FOLDER / f"temp_input_{int(time.time())}_{file.filename}"
         
-        # 🔄 MEMORY FIX: Stream file in chunks instead of loading entire file
-        CHUNK_SIZE = 8192  # 8KB chunks
+        # 🔄 MEMORY FIX: Use Termux-optimized chunk size for streaming
+        from .android_optimizer import universal_optimizer
+        CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(0)  # Get platform-optimal chunk size
+        
         with open(temp_input_path, 'wb') as f:
             while True:
                 chunk = await file.read(CHUNK_SIZE)
@@ -1092,7 +1103,7 @@ async def upload_files(
         
         for file in files:
             if file.filename:
-                # Basic file save with streaming
+                # Basic file save with Termux-optimized streaming
                 file_path = UPLOAD_FOLDER / file.filename
                 
                 # Ensure unique filename
@@ -1104,8 +1115,10 @@ async def upload_files(
                     file_path = UPLOAD_FOLDER / f"{stem}_{counter}{suffix}"
                     counter += 1
                 
-                # 🔄 MEMORY FIX: Stream file in chunks instead of loading entire file
-                CHUNK_SIZE = 8192  # 8KB chunks
+                # 🔄 MEMORY FIX: Use Termux-optimized chunk size for streaming
+                from .android_optimizer import universal_optimizer
+                CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(0)  # Get platform-optimal chunk size
+                
                 with open(file_path, 'wb') as f:
                     while True:
                         chunk = await file.read(CHUNK_SIZE)
@@ -1282,9 +1295,11 @@ async def upload_auto_file(
             
             print(f"📤 Processing file {i+1}/{len(valid_files)}: {info['original_name']}")
             
-            # 🔄 MEMORY FIX: Stream file directly to destination instead of loading entire file
+            # 🔄 MEMORY FIX: Use Termux-optimized chunk size for direct streaming
+            from .android_optimizer import universal_optimizer
+            CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(0)  # Get platform-optimal chunk size
+            
             destination.parent.mkdir(parents=True, exist_ok=True)
-            CHUNK_SIZE = 8192  # 8KB chunks
             
             with open(destination, 'wb') as f:
                 while True:
@@ -2769,8 +2784,9 @@ async def add_to_clipboard(
                     content_type = type_name
                     break
             
-            # 🔄 MEMORY FIX: Stream file with size limit checking for clipboard
-            CHUNK_SIZE = 8192  # 8KB chunks
+            # 🔄 MEMORY FIX: Use Termux-optimized chunk size for clipboard streaming
+            from .android_optimizer import universal_optimizer
+            CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(0)  # Get platform-optimal chunk size
             MAX_SIZE = 10 * 1024 * 1024  # 10MB limit
             file_content = b""
             file_size = 0
