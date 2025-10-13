@@ -73,6 +73,7 @@ from app.validation import (
     AdvancedFileValidator
 )
 from app.simple_mdns import mdns_manager
+from app.file_locking import get_file_lock_manager, cleanup_stale_locks
 
 # Android/Termux network utilities
 def get_android_network_info():
@@ -350,6 +351,28 @@ def cleanup_orphaned_temp_files():
 # Clean up orphaned temp files on startup
 cleanup_orphaned_temp_files()
 
+# 🔒 Initialize file locking system and clean up stale locks
+async def initialize_file_locking():
+    """Initialize file locking system and clean up stale locks"""
+    try:
+        lock_manager = get_file_lock_manager(UPLOAD_FOLDER)
+        locks_dir = lock_manager.locks_dir
+        
+        # Clean up stale locks from previous sessions
+        await cleanup_stale_locks(locks_dir, max_age_seconds=300)  # 5 minutes
+        print("🔒 File locking system initialized")
+    except Exception as e:
+        print(f"⚠️ File locking initialization error: {e}")
+
+# Initialize file locking asynchronously
+import asyncio
+try:
+    # Try to run cleanup if there's an event loop
+    asyncio.create_task(initialize_file_locking())
+except RuntimeError:
+    # No event loop running - defer initialization
+    print("🔒 File locking will be initialized on first use")
+
 # Templates - keep local for routes that need it
 templates = Jinja2Templates(directory="app/templates")
 
@@ -570,7 +593,10 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
     except ImportError:
         pass  # Graceful fallback if memory monitor not available
     
-    # 🚀 TEMPORARY FILE STRATEGY: Upload to .tmp extension first
+    # � FILE LOCKING: Initialize file lock manager for safe concurrent uploads
+    lock_manager = get_file_lock_manager(UPLOAD_FOLDER)
+    
+    # �🚀 TEMPORARY FILE STRATEGY: Upload to .tmp extension first
     temp_destination = destination.with_suffix(destination.suffix + '.tmp')
     print(f"🔄 Uploading to temporary file: {temp_destination.name}")
     
@@ -620,163 +646,169 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
     
     print(f"🔄 ASYNC Upload: {destination.name} ({file_size:,} bytes)")
     
-    if encrypt:
-        # 🔒 For now, fall back to original method for encrypted files
-        # TODO: Implement true streaming encryption in future update
-        print(f"🔒 Using existing encryption method (will be optimized in future)")
-        try:
-            data = await asyncio.to_thread(upload_file.file.read)
-            
-            # Import streaming encryption functions
-            from .aes_utils import encrypt_file_stream
-            
-            # Add file integrity validation for encrypted files
-            original_hash = hashlib.sha256(data).hexdigest()
-            print(f"🔒 Original file hash: {original_hash}")
-            
-            # Use memory-efficient streaming encryption
-            encrypted_data, metadata = encrypt_file_stream(data, chunk_size=CHUNK_SIZE)
-            
-            # Enhanced metadata with integrity information
-            metadata['original_hash'] = original_hash
-            metadata['original_size'] = str(len(data))
-            metadata['encrypted_size'] = str(len(encrypted_data))
-            
-            # Write encrypted data to file using async I/O
-            import aiofiles
-            async with aiofiles.open(temp_destination, 'wb') as f:
-                await f.write(encrypted_data)
-            
-            # 🎯 ATOMIC MOVE: Move encrypted file from .tmp to final destination
-            import shutil
-            max_retries = 3 if is_windows else 1
-            retry_delay = 0.3 if is_windows else 0.1
-            
-            for attempt in range(max_retries):
-                try:
-                    print(f"🔄 Moving encrypted {temp_destination.name} → {destination.name} (attempt {attempt + 1})")
-                    
-                    if is_windows:
-                        # Use shutil.move for better Windows compatibility
-                        await asyncio.to_thread(shutil.move, str(temp_destination), str(destination))
-                    else:
-                        temp_destination.rename(destination)
-                    
-                    print(f"✅ Encrypted file atomically moved to final destination: {destination.name}")
-                    break
-                    
-                except Exception as e:
-                    if attempt < max_retries - 1:
-                        print(f"⚠️ Encrypted move attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}")
-                        await asyncio.sleep(retry_delay)
-                        retry_delay *= 1.5  # Exponential backoff
-                    else:
-                        # Final attempt failed, clean up and raise
-                        if temp_destination.exists():
-                            try:
-                                temp_destination.unlink()
-                            except:
-                                pass
-                        print(f"❌ Failed to move encrypted temp file after {max_retries} attempts: {e}")
-                        raise Exception(f"Failed to finalize encrypted upload after {max_retries} attempts: {e}")
-            
-            # Yield control periodically - OPTIMIZED: 10ms instead of 1ms for better performance
-            await asyncio.sleep(0.01)
-            
-        except Exception as e:
-            # Clean up encrypted temp file
-            if temp_destination.exists():
-                temp_destination.unlink()
-            print(f"❌ Encryption error: {e}")
-            raise
-    else:
-        # 📦 Async Streaming upload without encryption
-        try:
-            import aiofiles
-            bytes_written = 0
-            hash_calculator = hashlib.sha256()
-            processed_chunks = 0  # Initialize chunk counter
-            
-            # Open file, write data, and explicitly close before moving
-            async with aiofiles.open(temp_destination, 'wb') as f:
-                while True:
-                    # Read chunk asynchronously
-                    chunk = await asyncio.to_thread(upload_file.file.read, CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    
-                    # Write chunk asynchronously
-                    await f.write(chunk)
-                    await f.flush()  # Ensure data is written
-                    
-                    bytes_written += len(chunk)
-                    hash_calculator.update(chunk)
-                    processed_chunks += 1
-                    
-                    # Yield control every 5 chunks to prevent blocking - OPTIMIZED: Less frequent yielding
-                    if processed_chunks % 5 == 0:
-                        await asyncio.sleep(0.01)  # OPTIMIZED: 10ms instead of 1ms
-                    
-                    # Progress for large files (reduce spam)
-                    if bytes_written > 10 * 1024 * 1024 and bytes_written % (20 * 1024 * 1024) == 0:
-                        print(f"📦 Progress: {bytes_written // 1024 // 1024}MB")
-                        
-                        # OPTIMIZED: Strategic memory management - only GC for very large files
-                        if should_run_gc():
-                            universal_optimizer.memory_cleanup(force=False)
-                            await asyncio.sleep(0.01)  # Brief pause for GC
-            
-            # File handle is now closed, add extra delay for Windows
-            print(f"✅ Upload to temp file completed: {temp_destination.name} ({bytes_written:,} bytes)")
-            if is_windows:
-                await asyncio.sleep(0.2)  # Extra delay for Windows to release file handle
-                
-            # 🎯 ATOMIC MOVE: Move from .tmp to final destination to prevent race conditions
-            import shutil
-            import time
-            max_retries = 3 if is_windows else 1
-            retry_delay = 0.3 if is_windows else 0.1
-            
-            for attempt in range(max_retries):
-                try:
-                    print(f"🔄 Moving {temp_destination.name} → {destination.name} (attempt {attempt + 1})")
-                    
-                    if is_windows:
-                        # Use shutil.move for better Windows compatibility
-                        await asyncio.to_thread(shutil.move, str(temp_destination), str(destination))
-                    else:
-                        temp_destination.rename(destination)
-                    
-                    print(f"✅ File atomically moved to final destination: {destination.name}")
-                    break
-                    
-                except Exception as e:
-                    if attempt < max_retries - 1:
-                        print(f"⚠️ Move attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}")
-                        await asyncio.sleep(retry_delay)
-                        retry_delay *= 1.5  # Exponential backoff
-                    else:
-                        # Final attempt failed, clean up and raise
-                        if temp_destination.exists():
-                            try:
-                                temp_destination.unlink()
-                            except:
-                                pass
-                        print(f"❌ Failed to move temp file after {max_retries} attempts: {e}")
-                        raise Exception(f"Failed to finalize upload after {max_retries} attempts: {e}")
+    # 🔒 ACQUIRE FILE LOCK: Prevent race conditions during upload
+    async with lock_manager.upload_lock(destination.name, timeout=60.0):
+        print(f"🔒 File lock acquired for: {destination.name}")
         
-        except Exception as e:
-            # Clean up partial temp file
-            if temp_destination.exists():
-                temp_destination.unlink()
-            print(f"❌ ASYNC Upload error: {e}")
-            raise
-        finally:
-            # 🧹 Universal cleanup (applies to ALL platforms)
-            if hasattr(universal_optimizer, 'upload_active'):
-                universal_optimizer.upload_active = False
-            universal_optimizer.memory_cleanup(force=True)
-            print(f"🔄 Universal async cleanup completed")
+        if encrypt:
+            # 🔒 For now, fall back to original method for encrypted files
+            # TODO: Implement true streaming encryption in future update
+            print(f"🔒 Using existing encryption method (will be optimized in future)")
+            try:
+                data = await asyncio.to_thread(upload_file.file.read)
+                
+                # Import streaming encryption functions
+                from .aes_utils import encrypt_file_stream
+                
+                # Add file integrity validation for encrypted files
+                original_hash = hashlib.sha256(data).hexdigest()
+                print(f"🔒 Original file hash: {original_hash}")
+                
+                # Use memory-efficient streaming encryption
+                encrypted_data, metadata = encrypt_file_stream(data, chunk_size=CHUNK_SIZE)
+                
+                # Enhanced metadata with integrity information
+                metadata['original_hash'] = original_hash
+                metadata['original_size'] = str(len(data))
+                metadata['encrypted_size'] = str(len(encrypted_data))
+                
+                # Write encrypted data to file using async I/O
+                import aiofiles
+                async with aiofiles.open(temp_destination, 'wb') as f:
+                    await f.write(encrypted_data)
+                
+                # 🎯 ATOMIC MOVE: Move encrypted file from .tmp to final destination
+                import shutil
+                max_retries = 3 if is_windows else 1
+                retry_delay = 0.3 if is_windows else 0.1
+                
+                for attempt in range(max_retries):
+                    try:
+                        print(f"🔄 Moving encrypted {temp_destination.name} → {destination.name} (attempt {attempt + 1})")
+                        
+                        if is_windows:
+                            # Use shutil.move for better Windows compatibility
+                            await asyncio.to_thread(shutil.move, str(temp_destination), str(destination))
+                        else:
+                            temp_destination.rename(destination)
+                        
+                        print(f"✅ Encrypted file atomically moved to final destination: {destination.name}")
+                        break
+                        
+                    except Exception as e:
+                        if attempt < max_retries - 1:
+                            print(f"⚠️ Encrypted move attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}")
+                            await asyncio.sleep(retry_delay)
+                            retry_delay *= 1.5  # Exponential backoff
+                        else:
+                            # Final attempt failed, clean up and raise
+                            if temp_destination.exists():
+                                try:
+                                    temp_destination.unlink()
+                                except:
+                                    pass
+                            print(f"❌ Failed to move encrypted temp file after {max_retries} attempts: {e}")
+                            raise Exception(f"Failed to finalize encrypted upload after {max_retries} attempts: {e}")
+                
+                # Yield control periodically - OPTIMIZED: 10ms instead of 1ms for better performance
+                await asyncio.sleep(0.01)
+                
+            except Exception as e:
+                # Clean up encrypted temp file
+                if temp_destination.exists():
+                    temp_destination.unlink()
+                print(f"❌ Encryption error: {e}")
+                raise
+        else:
+            # 📦 Async Streaming upload without encryption
+            try:
+                import aiofiles
+                bytes_written = 0
+                hash_calculator = hashlib.sha256()
+                processed_chunks = 0  # Initialize chunk counter
+                
+                # Open file, write data, and explicitly close before moving
+                async with aiofiles.open(temp_destination, 'wb') as f:
+                    while True:
+                        # Read chunk asynchronously
+                        chunk = await asyncio.to_thread(upload_file.file.read, CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        
+                        # Write chunk asynchronously
+                        await f.write(chunk)
+                        await f.flush()  # Ensure data is written
+                        
+                        bytes_written += len(chunk)
+                        hash_calculator.update(chunk)
+                        processed_chunks += 1
+                        
+                        # Yield control every 5 chunks to prevent blocking - OPTIMIZED: Less frequent yielding
+                        if processed_chunks % 5 == 0:
+                            await asyncio.sleep(0.01)  # OPTIMIZED: 10ms instead of 1ms
+                        
+                        # Progress for large files (reduce spam)
+                        if bytes_written > 10 * 1024 * 1024 and bytes_written % (20 * 1024 * 1024) == 0:
+                            print(f"📦 Progress: {bytes_written // 1024 // 1024}MB")
+                            
+                            # OPTIMIZED: Strategic memory management - only GC for very large files
+                            if should_run_gc():
+                                universal_optimizer.memory_cleanup(force=False)
+                                await asyncio.sleep(0.01)  # Brief pause for GC
+                
+                # File handle is now closed, add extra delay for Windows
+                print(f"✅ Upload to temp file completed: {temp_destination.name} ({bytes_written:,} bytes)")
+                if is_windows:
+                    await asyncio.sleep(0.2)  # Extra delay for Windows to release file handle
+                    
+                # 🎯 ATOMIC MOVE: Move from .tmp to final destination to prevent race conditions
+                import shutil
+                import time
+                max_retries = 3 if is_windows else 1
+                retry_delay = 0.3 if is_windows else 0.1
+                
+                for attempt in range(max_retries):
+                    try:
+                        print(f"🔄 Moving {temp_destination.name} → {destination.name} (attempt {attempt + 1})")
+                        
+                        if is_windows:
+                            # Use shutil.move for better Windows compatibility
+                            await asyncio.to_thread(shutil.move, str(temp_destination), str(destination))
+                        else:
+                            temp_destination.rename(destination)
+                        
+                        print(f"✅ File atomically moved to final destination: {destination.name}")
+                        break
+                        
+                    except Exception as e:
+                        if attempt < max_retries - 1:
+                            print(f"⚠️ Move attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}")
+                            await asyncio.sleep(retry_delay)
+                            retry_delay *= 1.5  # Exponential backoff
+                        else:
+                            # Final attempt failed, clean up and raise
+                            if temp_destination.exists():
+                                try:
+                                    temp_destination.unlink()
+                                except:
+                                    pass
+                            print(f"❌ Failed to move temp file after {max_retries} attempts: {e}")
+                            raise Exception(f"Failed to finalize upload after {max_retries} attempts: {e}")
+                
+            except Exception as e:
+                # Clean up partial temp file
+                if temp_destination.exists():
+                    temp_destination.unlink()
+                print(f"❌ ASYNC Upload error: {e}")
+                raise
+            finally:
+                # 🧹 Universal cleanup (applies to ALL platforms)
+                if hasattr(universal_optimizer, 'upload_active'):
+                    universal_optimizer.upload_active = False
+                universal_optimizer.memory_cleanup(force=True)
+                print(f"🔄 Universal async cleanup completed")
+        
+        print(f"🔓 File lock released for: {destination.name}")
 
 async def scan_file_async(path: Path):
     """

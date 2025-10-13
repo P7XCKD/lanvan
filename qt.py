@@ -1002,7 +1002,7 @@ class QuickTest:
             # Check responsiveness monitor with fallback detection
             responsiveness_working = False
             try:
-                from responsiveness_monitor import responsiveness_monitor
+                from app.responsiveness_manager import responsiveness_monitor
                 if hasattr(responsiveness_monitor, 'get_stats'):
                     stats = responsiveness_monitor.get_stats()
                     self.log("Responsiveness monitor: Active with stats", "PASS")
@@ -1825,18 +1825,21 @@ class QuickTest:
             # Test 2: File Locking System
             self.log("Testing file locking system...")
             try:
+                # Test new file locking system
                 from app.file_locking import CrossPlatformFileLock, get_file_lock_manager
                 
                 # Test basic file lock creation
-                lock = CrossPlatformFileLock("test_lock.lock", timeout=1.0)
-                if hasattr(lock, 'acquire') and hasattr(lock, 'release'):
-                    self.log("File locking: Cross-platform lock system available", "PASS")
+                test_lock = CrossPlatformFileLock("test.lock", timeout=1.0)
+                if hasattr(test_lock, 'acquire') and hasattr(test_lock, 'release'):
+                    self.log("File locking: CrossPlatformFileLock available", "PASS")
                     file_locking_working = True
-                    
-                    # Test lock manager
-                    manager = get_file_lock_manager(Path(__file__).parent / "app" / "uploads")
-                    if hasattr(manager, 'upload_lock'):
-                        self.log("File locking: Upload lock manager functional", "PASS")
+                
+                # Test file lock manager
+                from pathlib import Path
+                lock_manager = get_file_lock_manager(Path("app/uploads"))
+                if hasattr(lock_manager, 'upload_lock'):
+                    self.log("File locking: FileOperationLock manager working", "PASS")
+                    file_locking_working = True
                     
             except ImportError:
                 self.log("File locking: Module not available", "WARN")
