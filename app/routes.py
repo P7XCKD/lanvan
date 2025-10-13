@@ -843,12 +843,17 @@ async def encrypt_http_safe(
     encrypted_path = None
     
     try:
-        # Save uploaded file temporarily
+        # Save uploaded file temporarily using chunked streaming
         temp_input_path = UPLOAD_FOLDER / f"temp_input_{int(time.time())}_{file.filename}"
         
+        # 🔄 MEMORY FIX: Stream file in chunks instead of loading entire file
+        CHUNK_SIZE = 8192  # 8KB chunks
         with open(temp_input_path, 'wb') as f:
-            content = await file.read()
-            f.write(content)
+            while True:
+                chunk = await file.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                f.write(chunk)
         
         # Encrypt with HTTP-Safe protection
         encrypted_path, metadata = encrypt_file_http_safe(
@@ -1087,7 +1092,7 @@ async def upload_files(
         
         for file in files:
             if file.filename:
-                # Basic file save
+                # Basic file save with streaming
                 file_path = UPLOAD_FOLDER / file.filename
                 
                 # Ensure unique filename
@@ -1099,9 +1104,14 @@ async def upload_files(
                     file_path = UPLOAD_FOLDER / f"{stem}_{counter}{suffix}"
                     counter += 1
                 
-                # Save file
-                content = await file.read()
-                file_path.write_bytes(content)
+                # 🔄 MEMORY FIX: Stream file in chunks instead of loading entire file
+                CHUNK_SIZE = 8192  # 8KB chunks
+                with open(file_path, 'wb') as f:
+                    while True:
+                        chunk = await file.read(CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        f.write(chunk)
                 uploaded_files.append(file_path.name)
         
         return JSONResponse(content={
@@ -1272,14 +1282,18 @@ async def upload_auto_file(
             
             print(f"📤 Processing file {i+1}/{len(valid_files)}: {info['original_name']}")
             
-            # Read file content
-            content = await file.read()
-            await file.seek(0)  # Reset file pointer for any subsequent operations
-            
-            # Write file to destination first
+            # 🔄 MEMORY FIX: Stream file directly to destination instead of loading entire file
             destination.parent.mkdir(parents=True, exist_ok=True)
+            CHUNK_SIZE = 8192  # 8KB chunks
+            
             with open(destination, 'wb') as f:
-                f.write(content)
+                while True:
+                    chunk = await file.read(CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+            
+            await file.seek(0)  # Reset file pointer for any subsequent operations
             
             # Handle encryption if needed (encrypt in place)
             if encrypt:
@@ -2755,16 +2769,26 @@ async def add_to_clipboard(
                     content_type = type_name
                     break
             
-            # Read file content
-            file_content = await file.read()
-            file_size = len(file_content)
+            # 🔄 MEMORY FIX: Stream file with size limit checking for clipboard
+            CHUNK_SIZE = 8192  # 8KB chunks
+            MAX_SIZE = 10 * 1024 * 1024  # 10MB limit
+            file_content = b""
+            file_size = 0
             
-            # Limit file size for clipboard (10MB max)
-            if file_size > 10 * 1024 * 1024:
-                return JSONResponse(
-                    status_code=400,
-                    content={"status": "error", "msg": "File too large for clipboard (max 10MB)"}
-                )
+            while True:
+                chunk = await file.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                file_size += len(chunk)
+                
+                # Check size limit as we read
+                if file_size > MAX_SIZE:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"status": "error", "msg": "File too large for clipboard (max 10MB)"}
+                    )
+                
+                file_content += chunk
             
             # Create clipboard item for file (with base64 image preview)
             preview = generate_simple_file_preview(file.filename, file_content, content_type)

@@ -891,10 +891,18 @@ async def validate_upload_files_enhanced_async(files: List[UploadFile], encrypt:
                     # Fallback: use UploadFile.size if available
                     file_size = getattr(file, 'size', 0)
                     if file_size == 0:
-                        # Last resort: read to get size, then reset
-                        content = await file.read()
-                        file_size = len(content)
-                        file.file = io.BytesIO(content)
+                        # Last resort: stream to get size, then reset
+                        CHUNK_SIZE = 8192
+                        file_size = 0
+                        temp_chunks = []
+                        while True:
+                            chunk = await file.read(CHUNK_SIZE)
+                            if not chunk:
+                                break
+                            file_size += len(chunk)
+                            temp_chunks.append(chunk)
+                        # Recreate BytesIO with all chunks
+                        file.file = io.BytesIO(b''.join(temp_chunks))
                 
                 # 🚀 OPTIMIZED: Skip content analysis for very large files (>1GB)
                 if file_size > 1 * 1024 * 1024 * 1024:  # Files > 1GB
@@ -915,11 +923,15 @@ async def validate_upload_files_enhanced_async(files: List[UploadFile], encrypt:
                     # 🚀 ASYNC: Normal content analysis for smaller files
                     import aiofiles
                     async with aiofiles.open(temp_file_path, 'wb') as temp_file:
-                        content = await file.read()
-                        await temp_file.write(content)
+                        # 🔄 MEMORY FIX: Stream file in chunks instead of loading entire file
+                        CHUNK_SIZE = 8192  # 8KB chunks
+                        while True:
+                            chunk = await file.read(CHUNK_SIZE)
+                            if not chunk:
+                                break
+                            await temp_file.write(chunk)
                         await asyncio.to_thread(file.file.seek, 0)  # Reset for later use
                     
-                    file_size = len(content)
                     total_size += file_size
                 
             except Exception as e:

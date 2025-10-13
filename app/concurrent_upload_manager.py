@@ -115,11 +115,18 @@ class ConcurrentUploadManager:
                 # Fallback: try to get size from UploadFile.size if seek fails
                 file_size = getattr(upload_file, 'size', 0)
                 if file_size == 0:
-                    # Last resort: read once to get size then reset
-                    content = await upload_file.read()
-                    file_size = len(content)
+                    # Last resort: stream to get size then reset
+                    CHUNK_SIZE = 8192
+                    file_size = 0
+                    temp_chunks = []
+                    while True:
+                        chunk = await upload_file.read(CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        file_size += len(chunk)
+                        temp_chunks.append(chunk)
                     # Reset file pointer by recreating the upload file object
-                    upload_file.file = io.BytesIO(content)
+                    upload_file.file = io.BytesIO(b''.join(temp_chunks))
             
             # 🎯 Get adaptive chunk size for this file
             chunk_size = universal_optimizer.get_adaptive_chunk_size(file_size)

@@ -1,6 +1,8 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Android/Termux Setup Script for LANVAN File Server
 # Run this script in Termux to set up all dependencies
+# DO NOTE THAT THIS SCRIPT HASNT BEEN TESTED YET
+
 
 echo "🤖 LANVAN Android/Termux Setup Script"
 echo "======================================"
