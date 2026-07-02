@@ -20,12 +20,23 @@ def ensure_venv():
     if os.path.exists(venv_python):
         print("[*] Switching to virtual environment...")
         try:
-            # Re-run this script with venv python
-            result = subprocess.run([venv_python] + sys.argv, check=False)
-            sys.exit(result.returncode)
-        except KeyboardInterrupt:
-            print("\n[WARNING] Virtual environment switch interrupted.")
-            sys.exit(1)
+            # Use Popen so we can keep waiting through Ctrl+C events.
+            # DO NOT use signal.SIG_IGN here — on Windows it inherits to
+            # child processes and breaks Ctrl+C in the actual server.
+            child = subprocess.Popen([venv_python] + sys.argv)
+            # When Ctrl+C fires, the child gets it too (same console group)
+            # and handles shutdown.  The parent just keeps waiting.
+            # NOTE: Must use timeout polling — on Windows, wait() with no
+            # timeout calls WaitForSingleObject(INFINITE) which blocks the
+            # OS thread and prevents Python from delivering KeyboardInterrupt.
+            while child.poll() is None:
+                try:
+                    child.wait(timeout=0.5)
+                except subprocess.TimeoutExpired:
+                    pass
+                except KeyboardInterrupt:
+                    pass  # child got it too; let it handle shutdown
+            sys.exit(child.returncode)
         except Exception as e:
             print(f"[!] Failed to switch to virtual environment: {e}")
             print("[*] Continuing with system Python...")
@@ -238,37 +249,12 @@ def kill_servers_on_port(port):
         print(f"[!] Error killing servers (non-critical): {e}")
         # Don't let this error stop the server startup
 
-def signal_handler(signum, frame):
-    """Handle Ctrl+C gracefully with immediate shutdown"""
-    print(f"\n[STOP] IMMEDIATE SHUTDOWN REQUESTED (signal {signum})")
-    print("[WARN] Killing all server processes immediately...")
-    
-    # Kill servers on all possible ports immediately
-    for port in [DEFAULT_HTTP_PORT, DEFAULT_HTTPS_PORT, FALLBACK_HTTP_PORT, FALLBACK_HTTPS_PORT]:
-        kill_servers_on_port(port)
-    
-    # Also kill any uvicorn processes
-    try:
-        if psutil:
-            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                try:
-                    if 'uvicorn' in proc.info['name'].lower() or \
-                       any('uvicorn' in str(cmd).lower() for cmd in proc.info['cmdline'] or []):
-                        print(f"[KILL] Killing uvicorn process {proc.info['pid']}")
-                        proc.kill()
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    pass
-    except Exception as e:
-        print(f"Error killing uvicorn processes: {e}")
-    
-    print("[OK] SHUTDOWN COMPLETE - All servers terminated!")
-    os._exit(0)  # Force immediate exit
+# (signal_handler removed - uvicorn installs its own SIGINT handler inside server.run()
+#  and overrides any handler registered here, so our handler never fired.  Uvicorn will
+#  set server.should_exit = True on Ctrl+C which causes server.run() to return cleanly.)
 
 # === MAIN ENTRY ===
 if __name__ == "__main__":
-    # Register signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
     
     ip = get_ip()
     args = sys.argv
@@ -378,51 +364,69 @@ if __name__ == "__main__":
         subprocess.run(cmd)
 
     else:
-        print("[*] PC detected: launching Uvicorn with auto-reload...")
-        
-        # Set environment variable for the FastAPI app
+        print("[*] PC detected: launching Uvicorn...")
+
         os.environ['PORT'] = str(port)
         os.environ['USE_HTTPS'] = str(use_https).lower()
-        
+
         open_browser(ip, port, use_https)
-        
-        # Enhanced shutdown handling
-        server_process = None
-        try:
-            import uvicorn
-            
-            # Configure uvicorn for immediate shutdown
-            config = uvicorn.Config(
-                "app.main:app",
-                host="0.0.0.0",
-                port=port,
-                reload=True,
-                ssl_keyfile=SSL_KEY_PATH if use_https else None,
-                ssl_certfile=SSL_CERT_PATH if use_https else None,
-                log_level="warning",  # Suppress INFO logs
-                access_log=False,     # Disable access logs for better performance
-                timeout_keep_alive=1, # Faster connection cleanup
-                timeout_graceful_shutdown=1  # Quick graceful shutdown
-            )
-            
-            server = uvicorn.Server(config)
-            
-            # Run server with immediate shutdown capability
-            print("[INFO] Server starting with enhanced shutdown handling...")
-            server.run()
-            
-        except KeyboardInterrupt:
-            print("\n[STOP] KEYBOARD INTERRUPT - IMMEDIATE SHUTDOWN!")
-            kill_servers_on_port(port)
-            print("[OK] Server force-stopped immediately.")
-        except Exception as e:
-            print(f"\n[!] Server error: {e}")
-            print("[KILL] Force-killing server processes...")
-            kill_servers_on_port(port)
-        finally:
-            # Ensure complete cleanup
+
+        import threading
+
+        # Build the uvicorn command using the SAME python executable that is running run.py.
+        # This guarantees we use the venv packages and avoids any PATH ambiguity.
+        cmd = [
+            sys.executable, "-m", "uvicorn", "app.main:app",
+            "--host", "0.0.0.0",
+            "--port", str(port),
+            "--log-level", "warning",
+            "--no-access-log",
+            "--timeout-keep-alive", "5",
+            "--timeout-graceful-shutdown", "3",
+        ]
+        if use_https:
+            cmd += ["--ssl-keyfile", SSL_KEY_PATH, "--ssl-certfile", SSL_CERT_PATH]
+
+        # stdin=subprocess.DEVNULL: uvicorn doesn't need stdin;
+        # the PARENT reads stdin so the close-command monitor works correctly.
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL)
+
+        def _stdin_monitor():
+            """Read stdin for 'close'/'quit' commands and terminate the server."""
+            print("[INFO] Type 'close'  |  quit  |  shut  to stop. Or press Ctrl+C.")
             try:
-                kill_servers_on_port(port)
-                print("[OK] Final cleanup completed.")
-            except:
+                while proc.poll() is None:
+                    try:
+                        line = input().strip().lower()
+                    except EOFError:
+                        break
+                    if line in ('close', 'quit', 'exit', 'shutdown', 'shut', 'stop'):
+                        print(f"[INFO] '{line}' received - stopping server...")
+                        proc.terminate()
+                        break
+            except (OSError, KeyboardInterrupt):
                 pass
+
+        stdin_thread = threading.Thread(target=_stdin_monitor, daemon=True)
+        stdin_thread.start()
+
+        print("[INFO] Server starting (Ctrl+C or type 'close' to stop)...")
+        try:
+            # Must poll with timeout — on Windows, wait() with no timeout
+            # calls WaitForSingleObject(INFINITE) which blocks the OS thread
+            # and prevents Python from delivering KeyboardInterrupt.
+            while proc.poll() is None:
+                try:
+                    proc.wait(timeout=0.5)
+                except subprocess.TimeoutExpired:
+                    pass
+        except KeyboardInterrupt:
+            print("\n[INFO] Ctrl+C received - stopping server...")
+            try:
+                proc.wait(timeout=8)   # give uvicorn time to finish gracefully
+            except subprocess.TimeoutExpired:
+                print("[WARN] Server did not stop in time - force killing...")
+                proc.kill()
+
+        print("[OK] Server stopped.")
+        os._exit(0)
