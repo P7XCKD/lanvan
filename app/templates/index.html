@@ -735,7 +735,7 @@
         transition: all 0.3s ease;
         box-shadow: 0 2px 4px rgba(108, 92, 231, 0.3);
       " title="Switch between Files and Folders upload mode">
-            � Files
+             Files
           </button>
         </div>
 
@@ -2807,12 +2807,12 @@ Device Session will reset when browser is closed
               // All uploads complete - show clear button but DON'T auto-refresh files
               showClearCompletedButton();
 
-              // � Refresh file count immediately to show new total
+              //  Refresh file count immediately to show new total
               setTimeout(() => {
                 refreshFileCountOnly();
               }, 100); // Small delay to ensure server has processed all files
 
-              // � Show final completion toast for all uploads without creating batch log entry
+              //  Show final completion toast for all uploads without creating batch log entry
               // Only count successfully completed uploads (exclude cancelled, error, etc.)
               const completedUploads = uploadQueue.filter(item => item.status === 'completed');
               const totalFiles = completedUploads.length;
@@ -3884,7 +3884,7 @@ Device Session will reset when browser is closed
               toggle.disabled = false;
               const toggleWrapper = toggle.closest('div');
               toggleWrapper.style.opacity = '1';
-              toggleWrapper.title = "� AES over HTTP requires HTTP-Safe Mode for complete security protection.";
+              toggleWrapper.title = " AES over HTTP requires HTTP-Safe Mode for complete security protection.";
 
               // Add change listener
               toggle.addEventListener('change', function () {
@@ -4209,7 +4209,7 @@ Device Session will reset when browser is closed
         // Size limit check removed - AES now supports multi-gigabyte files
         console.log(' AES enabled - streaming encryption supports any file size');
 
-        // � HTTP-Safe AES: Allow AES over HTTP with metadata protection
+        //  HTTP-Safe AES: Allow AES over HTTP with metadata protection
         if (isAESEnabled && !isHTTPS) {
           console.log(' AES over HTTP - HTTP-Safe mode provides security');
           // No longer block AES over HTTP - HTTP-Safe mode handles security
@@ -4246,7 +4246,7 @@ Device Session will reset when browser is closed
         }
       }
 
-      // � HTTP-Safe AES Functions
+      //  HTTP-Safe AES Functions
       function isHttpSafeEnabled() {
         const aesToggle = document.getElementById('enableEncryption');
         const isHTTP = location.protocol === 'http:';
@@ -4428,7 +4428,7 @@ Device Session will reset when browser is closed
         }
       }
 
-      // � Regular upload function (original logic) - supports HTTP & HTTPS
+      //  Regular upload function (original logic) - supports HTTP & HTTPS
       function uploadFilesRegular(files, isAESEnabled) {
         // Block QR generation during uploads to prevent UI blocking
         window._qrBlocked = true;
@@ -6117,7 +6117,7 @@ Device Session will reset when browser is closed
         }
       }
 
-      // � Show IP QR Code in a popup
+      //  Show IP QR Code in a popup
       function showIPQRCode() {
         const networkInfo = window._currentNetworkInfo;
         if (!networkInfo || !networkInfo.lanIpUrl) {
@@ -6186,7 +6186,7 @@ Device Session will reset when browser is closed
         showToast(' IP QR Code displayed', 2000);
       }
 
-      // � Close connection info modal
+      //  Close connection info modal
       function closeConnectionModal() {
         const modal = window.currentConnectionModal;
         if (modal) {
@@ -6307,7 +6307,7 @@ Device Session will reset when browser is closed
         }
       }
 
-      // � Enhanced QR Loading Functions
+      //  Enhanced QR Loading Functions
       function showQRSuccess(imgElement, type) {
         // Hide loading animation
         const loadingDiv = document.getElementById('qr-loading');
@@ -6392,7 +6392,7 @@ Device Session will reset when browser is closed
         }
       }
 
-      // � QR Code Loading Functions
+      //  QR Code Loading Functions
       function showQRCode(imgElement) {
         // Hide loading animation
         const loadingDiv = document.getElementById('qr-loading');
@@ -6593,7 +6593,7 @@ Device Session will reset when browser is closed
           .then(response => response.json())
           .then(data => {
             if (data.status === 'success') {
-              showToast(`� Image added to clipboard: ${filename}`, 3000);
+              showToast(` Image added to clipboard: ${filename}`, 3000);
               refreshClipboardHistory();
             } else {
               showToast(` Failed to add image: ${data.msg}`, 4000);
