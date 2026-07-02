@@ -93,7 +93,6 @@ connection_manager = ConnectionManager()
 
 # 🎯 Console command monitor for "close" command
 from app.clipboard_ws import clipboard_ws_router
-from app.upload_status_ws import upload_status_ws_router
 
 def console_command_monitor():
     """Monitor console for 'close' command"""
@@ -132,27 +131,6 @@ def initiate_graceful_shutdown_process():
             threading.Event().wait(1)  # Non-blocking sleep
         
         print("🚨 Server is now inactive...")
-        
-        # Clean up WebSocket connections before shutdown
-        print("🔌 Cleaning up WebSocket connections...")
-        try:
-            # Signal WebSocket managers to shutdown gracefully
-            from app.clipboard_ws import clipboard_ws_manager
-            from app.upload_status_ws import upload_status_manager
-            
-            # Use a simple signal-based shutdown instead of creating new event loops
-            clipboard_ws_manager._shutdown_requested = True
-            upload_status_manager._shutdown_requested = True
-            
-            # Give background tasks time to notice shutdown signal
-            import time
-            time.sleep(0.5)
-            
-            print("✅ WebSocket cleanup signal sent")
-            
-        except Exception as e:
-            print(f"⚠️ WebSocket cleanup warning: {e}")
-        
         shutdown_event.set()
         
         # Force exit to ensure immediate shutdown
@@ -173,20 +151,16 @@ def signal_handler(signum, frame):
 signal.signal(signal.SIGINT, signal_handler)   # Ctrl+C
 signal.signal(signal.SIGTERM, signal_handler)  # Termination signal
 
-# Start console command monitor in background thread (disabled to prevent unexpected shutdowns)
-# console_thread = threading.Thread(target=console_command_monitor, daemon=True)
-# console_thread.start()
-print("[INFO] Console command monitor disabled - use Ctrl+C to shutdown")
+# Start console command monitor in background thread
+console_thread = threading.Thread(target=console_command_monitor, daemon=True)
+console_thread.start()
+print("[INFO] Type 'close' to shutdown, or use Ctrl+C")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle app startup and shutdown"""
     print("🚀 Server starting up with enhanced shutdown handling...")
     print("💡 Use Ctrl+C to shutdown gracefully (console commands disabled)")
-    
-    # Initialize background task manager
-    from app.task_manager import task_manager
-    print("🎯 Background task manager initialized")
     
     # Start responsiveness monitor
     from app.responsiveness_manager import responsiveness_monitor
@@ -197,20 +171,6 @@ async def lifespan(app: FastAPI):
     port = int(os.environ.get('PORT', 80))  # Default to HTTP port 80
     # Get HTTPS mode from environment variable set by run.py
     use_https = os.environ.get('USE_HTTPS', 'false').lower() == 'true'
-    
-    # 🔒 Validate SSL certificates (non-breaking)
-    if use_https:
-        try:
-            from app.certificate_validator import validate_and_warn_certificates
-            from pathlib import Path
-            
-            certs_dir = Path(__file__).parent.parent / "certs"
-            print("🔒 Validating SSL certificates...")
-            validate_and_warn_certificates(certs_dir)
-            
-        except Exception as e:
-            print(f"⚠️ Certificate validation warning: {e}")
-            print("   HTTPS will continue to work normally")
     mdns_manager.port = port
     mdns_manager.use_https = use_https  # Configure HTTPS mode
     
@@ -301,28 +261,6 @@ async def lifespan(app: FastAPI):
     # Stop mDNS service
     print("🔴 Stopping mDNS service...")
     mdns_manager.stop_service()
-    
-    # Shutdown WebSocket managers gracefully
-    print("🔌 Shutting down WebSocket connections...")
-    try:
-        from app.clipboard_ws import clipboard_ws_manager
-        from app.upload_status_ws import upload_status_manager
-        
-        # Signal shutdown
-        clipboard_ws_manager._shutdown_requested = True
-        upload_status_manager._shutdown_requested = True
-        
-        # Give background tasks time to finish
-        await asyncio.sleep(0.2)
-        print("✅ WebSocket managers shutdown complete")
-        
-    except Exception as e:
-        print(f"⚠️ WebSocket shutdown warning: {e}")
-    
-    # Shutdown task manager
-    print("🎯 Shutting down background task manager...")
-    from app.task_manager import shutdown_task_manager
-    await shutdown_task_manager()
     
     # Force close all active connections
     await connection_manager.disconnect_all()
@@ -530,7 +468,6 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # ✅ Register app routes
 app.include_router(router)
 app.include_router(clipboard_ws_router)
-app.include_router(upload_status_ws_router)
 
 # ✅ Exception handlers for smart loading page system
 from fastapi import HTTPException, Request
