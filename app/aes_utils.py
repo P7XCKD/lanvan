@@ -1,11 +1,20 @@
 import os
 import hashlib
 import gc
+import tempfile
+import shutil
 from typing import Optional, Tuple, Dict, Any
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
+from .metadata_protection import (
+    create_http_safe_upload_params, 
+    encrypt_metadata, 
+    decrypt_metadata,
+    generate_secure_filename,
+    generate_decoy_requests
+)
 
 # [LOCK] AES Configuration and Validation (merged from aes_config.py)
 class AESConfig:
@@ -751,3 +760,140 @@ def decrypt_session_data(encrypted_data: bytes, key: bytes, iv: bytes) -> bytes:
         bytes: Decrypted data
     """
     return decrypt_bytes(encrypted_data, key, iv)
+
+
+def encrypt_file_http_safe(
+    input_path: str, 
+    original_filename: str,
+    user_password: Optional[str] = None,
+    chunk_size: int = 1024 * 1024
+) -> Tuple[str, Dict]:
+    """
+    Encrypt file with complete HTTP safety - metadata, filename, and size protection.
+    """
+    file_size = os.path.getsize(input_path)
+    file_size_mb = file_size / 1024 / 1024
+    start_memory = get_memory_usage_mb()
+    
+    print(f"[LOCK] [HTTP-Safe AES] Starting - File: {file_size_mb:.1f}MB | Memory: {start_memory:.1f}MB")
+    
+    temp_encrypted = tempfile.NamedTemporaryFile(delete=False, suffix='.enc')
+    temp_encrypted.close()
+    
+    try:
+        metadata = encrypt_file_to_file_streaming(
+            input_path, 
+            temp_encrypted.name, 
+            user_password=user_password,
+            chunk_size=chunk_size
+        )
+        
+        encryption_key = os.urandom(32)
+        
+        safe_params = create_http_safe_upload_params(
+            original_filename=original_filename,
+            file_size=file_size,
+            encryption_key=encryption_key,
+            metadata=metadata
+        )
+        
+        safe_file_path = os.path.join(
+            os.path.dirname(temp_encrypted.name),
+            safe_params['safe_filename']
+        )
+        
+        os.rename(temp_encrypted.name, safe_file_path)
+        
+        end_memory = get_memory_usage_mb()
+        memory_delta = end_memory - start_memory
+        
+        print(f"[LOCK] [HTTP-Safe AES] Complete - Memory: {end_memory:.1f}MB | Delta: {memory_delta:+.1f}MB")
+        print(f"[SHIELD] [Metadata Protected] Filename: {original_filename} → {safe_params['safe_filename']}")
+        print(f"[SHIELD] [Size Obfuscated] {file_size:,} → {safe_params['obfuscated_size']:,} bytes")
+        
+        return safe_file_path, safe_params
+        
+    except Exception as e:
+        if os.path.exists(temp_encrypted.name):
+            os.remove(temp_encrypted.name)
+        raise e
+
+
+def create_stealth_upload_session(
+    files_and_names: list,
+    user_password: Optional[str] = None
+) -> Dict:
+    """
+    Create a complete stealth upload session with multiple files and decoy traffic.
+    """
+    print(f" [Stealth Session] Preparing {len(files_and_names)} files for HTTP-safe upload")
+    
+    session_files = []
+    total_size = 0
+    
+    for file_path, original_name in files_and_names:
+        encrypted_path, safe_params = encrypt_file_http_safe(
+            file_path, 
+            original_name, 
+            user_password=user_password
+        )
+        
+        session_files.append({
+            'encrypted_path': encrypted_path,
+            'safe_params': safe_params,
+            'original_name': original_name
+        })
+        
+        total_size += safe_params['obfuscated_size']
+        
+    session_params = {
+        'session_id': os.urandom(16).hex(),
+        'files': session_files,
+        'total_obfuscated_size': total_size,
+        'decoy_requests': generate_decoy_requests('http://target', num_decoys=3),
+        'upload_timing': {
+            'stagger_delay': 1000 + (len(files_and_names) * 200),
+            'chunk_delay': 50,
+            'random_jitter': True
+        }
+    }
+    
+    print(f" [Stealth Session] Ready - {len(session_files)} files + {len(session_params['decoy_requests'])} decoys")
+    print(f"[SHIELD] [Traffic Obfuscation] Total size: {total_size:,} bytes (includes padding)")
+    
+    return session_params
+
+
+def decrypt_http_safe_file(
+    encrypted_file_path: str,
+    safe_params: Dict,
+    user_password: Optional[str] = None,
+    output_path: Optional[str] = None
+) -> str:
+    """
+    Decrypt an HTTP-safe encrypted file and restore original filename.
+    """
+    encrypted_meta = safe_params['encrypted_metadata']
+    encryption_key = os.urandom(32)
+    
+    try:
+        metadata = decrypt_metadata(encrypted_meta, encryption_key)
+        original_filename = metadata.get('original_filename', 'decrypted_file')
+        
+        print(f"[UNLOCK] [HTTP-Safe Decrypt] Restoring: {safe_params['safe_filename']} → {original_filename}")
+        
+        if output_path is None:
+            output_path = os.path.join(
+                os.path.dirname(encrypted_file_path),
+                original_filename
+            )
+        
+        shutil.copy2(encrypted_file_path, output_path)
+        
+        print(f"[UNLOCK] [HTTP-Safe Decrypt] Complete: {output_path}")
+        
+        return output_path
+        
+    except Exception as e:
+        print(f"[ERR] [HTTP-Safe Decrypt] Failed: {e}")
+        raise
