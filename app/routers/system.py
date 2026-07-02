@@ -1,60 +1,31 @@
+"""
+Lanvan System Router
+Handles network diagnostics, platform optimization queries, offline QR code generation,
+mDNS service management, system activity logging, and server shutdown endpoints.
+"""
 
 import os
 import io
-import sys
-import json
 import time
-import gc
 import socket
-import shutil
-import hashlib
-import zipfile
-import base64
-import tempfile
 import asyncio
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 from pathlib import Path
-from mimetypes import guess_type
-from zipfile import ZipFile
 
+# Conditional import of qrcode to support offline environments safely
 try:
     import qrcode
     QR_AVAILABLE = True
 except ImportError:
     QR_AVAILABLE = False
 
-from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form, HTTPException, WebSocket
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse, Response
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, Request, Query, HTTPException
+from fastapi.responses import JSONResponse, StreamingResponse, Response
 
-from starlette.status import (
-    HTTP_302_FOUND,
-    HTTP_400_BAD_REQUEST,
-    HTTP_403_FORBIDDEN,
-    HTTP_500_INTERNAL_SERVER_ERROR
-)
-
-# Import common app utilities
-from app.aes_utils import encrypt_session_data, decrypt_session_data, encrypt_file_http_safe, decrypt_http_safe_file, decrypt_file_stream
 from app.aes_utils import AESConfig
-from app.metadata_protection import generate_secure_filename, obfuscate_file_size, generate_decoy_requests
-from app.validation import (
-    validate_upload_files, 
-    validate_upload_files_enhanced,
-    validate_upload_files_enhanced_async,
-    validate_upload_files_enhanced_fast,
-    secure_filename,
-    is_allowed_file,
-    FileValidator,
-    AdvancedFileValidator
-)
 from app.simple_mdns import mdns_manager
-from app.file_locking import get_file_lock_manager, cleanup_stale_locks
 from app.termux_compat import get_platform_info, detect_platform, is_android, is_termux
-from app.clipboard_ws import clipboard_ws_manager
-from app.concurrent_upload_manager import concurrent_upload_manager, ConcurrentUploadManager
-from app.windows_file_manager import WindowsFileManager
-from app.streaming_assembly import get_streaming_assembler, add_streaming_chunk, check_streaming_status, get_assembled_file
+from app.routers.files import detect_ios_device
 
 router = APIRouter()
 def get_android_network_info():

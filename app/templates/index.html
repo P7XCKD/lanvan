@@ -4567,11 +4567,10 @@ Device Session will reset when browser is closed
           // Check for limited device indicators
           const isLimitedMemory = navigator.deviceMemory && navigator.deviceMemory <= 2; // 2GB or less
           const isLimitedConcurrency = navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2; // 2 cores or less
-          const isIncognito = checkIncognitoMode();
-
-          // Additional checks for guest/shared devices
-          const hasLimitedStorage = checkStorageQuota();
-          const isSlowDevice = checkDevicePerformance();
+          
+          const isIncognito = typeof checkIncognitoMode === 'function' ? checkIncognitoMode() : false;
+          const hasLimitedStorage = typeof checkStorageQuota === 'function' ? checkStorageQuota() : false;
+          const isSlowDevice = typeof checkDevicePerformance === 'function' ? checkDevicePerformance() : false;
 
           return isLimitedMemory || isLimitedConcurrency || isIncognito || hasLimitedStorage || isSlowDevice;
         } catch (e) {
