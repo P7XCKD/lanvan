@@ -1,5 +1,5 @@
 """
-🔒 Metadata Protection for HTTP-Safe AES Encryption
+[LOCK] Metadata Protection for HTTP-Safe AES Encryption
 
 This module implements comprehensive metadata protection to make AES encryption
 secure over HTTP by hiding filenames, sizes, and patterns.

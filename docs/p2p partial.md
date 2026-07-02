@@ -1,8 +1,8 @@
-# 🚀 LANVan P2P Partial Enhancement: Complete Implementation Plan
+# 🚀 Lanvan P2P Partial Enhancement: Complete Implementation Plan
 
 ## 📋 Executive Summary
 
-This document contains the complete technical specification for adding optional P2P functionality to LANVan as an enhancement layer. The P2P system is designed as server-mediated peer connections with Android Termux compatibility and offline-first functionality. Each phase is self-contained and can be implemented independently.
+This document contains the complete technical specification for adding optional P2P functionality to Lanvan as an enhancement layer. The P2P system is designed as server-mediated peer connections with Android Termux compatibility and offline-first functionality. Each phase is self-contained and can be implemented independently.
 
 **Document Version:** 2.0  
 **Created:** August 28, 2025  
@@ -14,7 +14,7 @@ This document contains the complete technical specification for adding optional 
 ## 🎯 Core Design Principles
 
 ### 1. Server-First Architecture
-- **Existing Infrastructure** - Built on current LANVan server system
+- **Existing Infrastructure** - Built on current Lanvan server system
 - **Optional P2P Layer** - Users choose when to enable P2P mode
 - **Server-Mediated** - All P2P connections coordinated through server
 - **Graceful Degradation** - Always falls back to server mode
@@ -36,7 +36,7 @@ This document contains the complete technical specification for adding optional 
 ## 🏗️ System Architecture Overview
 
 ```
-🌐 LANVan P2P Partial Enhancement Architecture
+🌐 Lanvan P2P Partial Enhancement Architecture
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Browser Layer (All Devices)                 │
@@ -47,7 +47,7 @@ This document contains the complete technical specification for adding optional 
 │    [Enable P2P]                           [Accept Request]      │
 │         ↕                                       ↕               │
 │  ┌─────────────────────────────────────────────────────────────┐ │
-│  │           🎯 LANVan Server (Enhanced)                     │ │
+│  │           🎯 Lanvan Server (Enhanced)                     │ │
 │  │                                                           │ │
 │  │  Existing Services (Unchanged):                          │ │
 │  │  ├── File Transfer & Chunking                           │ │
@@ -304,7 +304,7 @@ The P2P system is built as an enhancement layer on top of the existing robust se
 
 ### Normal Server Mode (Default)
 ```
-Device A ────→ LANVan Server ←──── Device B
+Device A ────→ Lanvan Server ←──── Device B
      (Upload)              (Download)
 ```
 
@@ -1304,7 +1304,7 @@ class P2PDirectTransfer {
 ### **Server Fallback Transfer**
 ```javascript
 class ServerFallbackTransfer {
-  // Use existing LANVan WebSocket transfer system
+  // Use existing Lanvan WebSocket transfer system
   serverTransfer(file) {
     // Seamlessly use current upload/download system
     return this.currentWebSocketUpload(file);
@@ -1377,7 +1377,7 @@ const SecurityModel = {
 
 ### **Key Management**
 - **WebRTC handles transport encryption** automatically
-- **AES-256 for file content** using existing LANVan encryption
+- **AES-256 for file content** using existing Lanvan encryption
 - **No complex key exchange** - leverage WebRTC's built-in security
 - **Server backup** for key coordination if needed
 
@@ -1419,7 +1419,7 @@ const MobileBehaviors = {
 ### **Transparent Operation**
 ```
 User Experience Flow:
-1. User opens LANVan in browser tab ✅
+1. User opens Lanvan in browser tab ✅
 2. If another user also active → P2P automatically enabled 🚀
 3. Fast transfers (200+ MB/s) happen transparently ⚡
 4. User switches tab → immediately falls back to server 🔄
@@ -1474,7 +1474,7 @@ User Experience Flow:
 ## 📋 Implementation Checklist
 
 ### **Prerequisites**
-- ✅ Current LANVan codebase integration points identified
+- ✅ Current Lanvan codebase integration points identified
 - ✅ WebRTC browser compatibility verified (95%+ modern browsers)
 - ✅ Page Visibility API support confirmed
 - ✅ Mobile testing environment prepared
@@ -1794,7 +1794,7 @@ class WebRTCConnectionManager {
 ```python
 # File: app/webrtc_signaling.py
 """
-WebRTC signaling server for LANVan P2P connections
+WebRTC signaling server for Lanvan P2P connections
 """
 
 import asyncio
@@ -2124,7 +2124,7 @@ echo "Termux P2P setup completed!"
 ```python
 # File: app/termux_p2p_optimizer.py
 """
-Termux-specific P2P optimizations for LANVan
+Termux-specific P2P optimizations for Lanvan
 """
 
 import os
@@ -2186,7 +2186,7 @@ class TermuxP2POptimizer:
         if not self.is_termux:
             return default_config
         
-        config_path = Path.home() / 'lanvan' / 'config' / 'termux.json'
+        config_path = Path.home() / 'Lanvan' / 'config' / 'termux.json'
         
         try:
             if config_path.exists():
@@ -2218,7 +2218,7 @@ class TermuxP2POptimizer:
             os.nice(5)
             
             # Create temp directory
-            temp_dir = Path.home() / 'lanvan' / 'temp'
+            temp_dir = Path.home() / 'Lanvan' / 'temp'
             temp_dir.mkdir(parents=True, exist_ok=True)
             
             # Set environment variables
@@ -2456,7 +2456,7 @@ termux_optimizer = TermuxP2POptimizer()
 
 ## 🎯 Conclusion
 
-The **LANVan Optional P2P Enhancement System** provides a comprehensive, phase-based implementation that:
+The **Lanvan Optional P2P Enhancement System** provides a comprehensive, phase-based implementation that:
 
 - 🚀 **Offers P2P speed benefits** when users choose to enable it
 - 🔋 **Termux and mobile optimized** with battery-aware operation
@@ -2465,7 +2465,7 @@ The **LANVan Optional P2P Enhancement System** provides a comprehensive, phase-b
 - 📱 **Mobile friendly** - respects Android power management
 - 🔧 **Fully assignable** - any developer can pick up any phase
 
-This approach transforms LANVan into a **hybrid system** that's fast when desired, reliable always, and transparent to users who don't want P2P.
+This approach transforms Lanvan into a **hybrid system** that's fast when desired, reliable always, and transparent to users who don't want P2P.
 
 ---
 
@@ -2476,4 +2476,4 @@ This approach transforms LANVan into a **hybrid system** that's fast when desire
 **Termux Compatibility:** ✅ Fully optimized for Android Termux environment  
 **Offline Capability:** ✅ Enhanced offline mode with P2P local transfers
 
-*This document serves as the complete phase-based specification for implementing the LANVan Optional P2P Enhancement System with full Android Termux compatibility.*
+*This document serves as the complete phase-based specification for implementing the Lanvan Optional P2P Enhancement System with full Android Termux compatibility.*

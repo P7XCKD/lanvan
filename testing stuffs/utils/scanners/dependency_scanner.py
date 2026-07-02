@@ -15,7 +15,7 @@ def find_function_dependencies(js_code, function_name):
     match = re.search(function_pattern, js_code, re.DOTALL)
     
     if not match:
-        return f"❌ Function '{function_name}' not found"
+        return f"[ERR] Function '{function_name}' not found"
     
     function_body = match.group(1)
     
@@ -53,18 +53,18 @@ def analyze_function(file_path, function_name):
             print(dependencies)
             return False
         
-        print(f"🔍 Analyzing function: {function_name}")
-        print(f"📄 File: {file_path}")
+        print(f"[SEARCH] Analyzing function: {function_name}")
+        print(f"[FILE] File: {file_path}")
         
         if dependencies:
-            print(f"⚠️  External dependencies found: {', '.join(dependencies)}")
+            print(f"[WARN]  External dependencies found: {', '.join(dependencies)}")
             return False
         else:
-            print(f"✅ No external dependencies - SAFE TO EXTRACT!")
+            print(f"[OK] No external dependencies - SAFE TO EXTRACT!")
             return True
             
     except Exception as e:
-        print(f"❌ Error analyzing file: {e}")
+        print(f"[ERR] Error analyzing file: {e}")
         return False
 
 if __name__ == "__main__":

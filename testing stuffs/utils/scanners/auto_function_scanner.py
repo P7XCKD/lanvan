@@ -130,7 +130,7 @@ def analyze_all_functions(file_path):
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        print(f"🔍 Scanning all functions in: {file_path}")
+        print(f"[SEARCH] Scanning all functions in: {file_path}")
         print("=" * 80)
         
         functions = extract_all_functions(content)
@@ -158,33 +158,33 @@ def analyze_all_functions(file_path):
         safe_functions.sort(key=lambda x: x['size'], reverse=True)
         unsafe_functions.sort(key=lambda x: x['size'], reverse=True)
         
-        print(f"📊 ANALYSIS RESULTS:")
+        print(f"[STATS] ANALYSIS RESULTS:")
         print(f"   Total Functions: {len(functions)}")
-        print(f"   ✅ Safe to Extract: {len(safe_functions)}")
-        print(f"   ⚠️  Has Dependencies: {len(unsafe_functions)}")
+        print(f"   [OK] Safe to Extract: {len(safe_functions)}")
+        print(f"   [WARN]  Has Dependencies: {len(unsafe_functions)}")
         print()
         
         if safe_functions:
-            print("🎯 SAFE TO EXTRACT (Zero Dependencies):")
+            print("[TARGET] SAFE TO EXTRACT (Zero Dependencies):")
             print("-" * 50)
             total_safe_lines = 0
             for func in safe_functions:
                 async_marker = "async " if func['async'] else ""
-                print(f"✅ {async_marker}{func['name']} - {func['lines']} lines ({func['size']} chars)")
+                print(f"[OK] {async_marker}{func['name']} - {func['lines']} lines ({func['size']} chars)")
                 total_safe_lines += func['lines']
             
-            print(f"\n💡 Total extractable lines: {total_safe_lines}")
+            print(f"\n[TIP] Total extractable lines: {total_safe_lines}")
             print()
         
         if unsafe_functions:
-            print("⚠️  FUNCTIONS WITH DEPENDENCIES (Not Safe):")
+            print("[WARN]  FUNCTIONS WITH DEPENDENCIES (Not Safe):")
             print("-" * 50)
             for func in unsafe_functions[:10]:  # Show top 10
                 async_marker = "async " if func['async'] else ""
                 deps = ", ".join(list(func['dependencies'])[:5])
                 if len(func['dependencies']) > 5:
                     deps += f"... (+{len(func['dependencies'])-5} more)"
-                print(f"❌ {async_marker}{func['name']} - Dependencies: {deps}")
+                print(f"[ERR] {async_marker}{func['name']} - Dependencies: {deps}")
             
             if len(unsafe_functions) > 10:
                 print(f"   ... and {len(unsafe_functions)-10} more functions with dependencies")
@@ -192,7 +192,7 @@ def analyze_all_functions(file_path):
         return safe_functions, unsafe_functions
         
     except Exception as e:
-        print(f"❌ Error analyzing file: {e}")
+        print(f"[ERR] Error analyzing file: {e}")
         return [], []
 
 if __name__ == "__main__":
@@ -204,7 +204,7 @@ if __name__ == "__main__":
     safe_functions, unsafe_functions = analyze_all_functions(file_path)
     
     if safe_functions:
-        print("\n🚀 EXTRACTION RECOMMENDATION:")
+        print("\n[START] EXTRACTION RECOMMENDATION:")
         print("=" * 80)
         print("Extract these functions in order (largest first):")
         for i, func in enumerate(safe_functions[:5], 1):

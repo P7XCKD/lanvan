@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🔒 SSL Certificate Validation Test
+[LOCK] SSL Certificate Validation Test
 
 Tests the certificate validation system to ensure it:
 1. Detects self-signed certificates
@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent / "app"))
 
 def test_certificate_validation():
     """Test certificate validation functionality"""
-    print("🔒 Testing SSL Certificate Validation")
+    print("[LOCK] Testing SSL Certificate Validation")
     print("=" * 50)
     
     try:
@@ -31,11 +31,11 @@ def test_certificate_validation():
         key_path = certs_dir / "key.pem"
         
         # Test 1: Check if certificates exist
-        print("🧪 Test 1: Certificate file existence")
+        print(" Test 1: Certificate file existence")
         if cert_path.exists() and key_path.exists():
-            print("   ✅ Certificate files found")
+            print("   [OK] Certificate files found")
         else:
-            print("   ⚠️ Certificate files not found - generating for test...")
+            print("   [WARN] Certificate files not found - generating for test...")
             # Try to generate certificates for testing
             try:
                 import subprocess
@@ -44,76 +44,76 @@ def test_certificate_validation():
                 ], capture_output=True, text=True)
                 
                 if result.returncode == 0:
-                    print("   ✅ Test certificates generated")
+                    print("   [OK] Test certificates generated")
                 else:
-                    print(f"   ❌ Certificate generation failed: {result.stderr}")
+                    print(f"   [ERR] Certificate generation failed: {result.stderr}")
                     return
             except Exception as e:
-                print(f"   ❌ Could not generate test certificates: {e}")
+                print(f"   [ERR] Could not generate test certificates: {e}")
                 return
         
         # Test 2: Basic certificate validation
-        print("\n🧪 Test 2: Certificate validation")
+        print("\n Test 2: Certificate validation")
         result = SafeCertificateValidator.validate_certificate_safe(cert_path, key_path)
         
         if result.valid:
-            print("   ✅ Certificates are valid and usable")
+            print("   [OK] Certificates are valid and usable")
         else:
-            print("   ❌ Certificate validation failed:")
+            print("   [ERR] Certificate validation failed:")
             for error in result.errors:
                 print(f"      • {error}")
             return
         
         # Test 3: Self-signed detection
-        print("\n🧪 Test 3: Self-signed certificate detection")
+        print("\n Test 3: Self-signed certificate detection")
         if result.is_self_signed:
-            print("   ✅ Self-signed certificate detected (expected for development)")
+            print("   [OK] Self-signed certificate detected (expected for development)")
         else:
-            print("   ℹ️ Certificate appears to be CA-signed")
+            print("   ℹ Certificate appears to be CA-signed")
         
         # Test 4: Expiry checking
-        print("\n🧪 Test 4: Certificate expiry check")
+        print("\n Test 4: Certificate expiry check")
         if result.days_until_expiry is not None:
             if result.days_until_expiry > 30:
-                print(f"   ✅ Certificate valid for {result.days_until_expiry} days")
+                print(f"   [OK] Certificate valid for {result.days_until_expiry} days")
             elif result.days_until_expiry > 0:
-                print(f"   ⚠️ Certificate expires in {result.days_until_expiry} days")
+                print(f"   [WARN] Certificate expires in {result.days_until_expiry} days")
             else:
-                print("   ❌ Certificate has expired")
+                print("   [ERR] Certificate has expired")
         else:
-            print("   ℹ️ Could not determine expiry date (basic validation mode)")
+            print("   ℹ Could not determine expiry date (basic validation mode)")
         
         # Test 5: Security warnings
-        print("\n🧪 Test 5: Security warnings and recommendations")
+        print("\n Test 5: Security warnings and recommendations")
         if result.warnings:
-            print("   ⚠️ Security warnings detected:")
+            print("   [WARN] Security warnings detected:")
             for warning in result.warnings:
                 print(f"      • {warning}")
         else:
-            print("   ✅ No security warnings")
+            print("   [OK] No security warnings")
         
         if result.recommendations:
-            print("   💡 Security recommendations:")
+            print("   [TIP] Security recommendations:")
             for rec in result.recommendations:
                 print(f"      • {rec}")
         
         # Test 6: Quick check function
-        print("\n🧪 Test 6: Quick certificate check")
+        print("\n Test 6: Quick certificate check")
         quick_result = quick_certificate_check(certs_dir)
         if quick_result:
-            print("   ✅ Quick check passed - certificates usable")
+            print("   [OK] Quick check passed - certificates usable")
         else:
-            print("   ❌ Quick check failed")
+            print("   [ERR] Quick check failed")
         
         # Test 7: Full validation with warnings
-        print("\n🧪 Test 7: Full validation with user-friendly output")
+        print("\n Test 7: Full validation with user-friendly output")
         print("   (This should display formatted warnings)")
         validate_and_warn_certificates(certs_dir, "127.0.0.1")
         
-        print("\n✅ All certificate validation tests completed!")
+        print("\n[OK] All certificate validation tests completed!")
         
         # Summary
-        print("\n📋 Test Summary:")
+        print("\n[INFO] Test Summary:")
         print(f"   • Certificate valid: {result.valid}")
         print(f"   • Self-signed: {result.is_self_signed}")
         print(f"   • Warnings: {len(result.warnings)}")
@@ -123,18 +123,18 @@ def test_certificate_validation():
         return True
         
     except ImportError as e:
-        print(f"❌ Missing dependency: {e}")
+        print(f"[ERR] Missing dependency: {e}")
         print("   Note: Certificate validation will work with basic checks")
         return False
     except Exception as e:
-        print(f"❌ Test failed: {e}")
+        print(f"[ERR] Test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 def test_api_integration():
     """Test API endpoint integration"""
-    print("\n🔗 Testing API Integration")
+    print("\n[LINK] Testing API Integration")
     print("=" * 30)
     
     try:
@@ -145,27 +145,27 @@ def test_api_integration():
         
         if response.status_code == 200:
             data = response.json()
-            print("   ✅ API endpoint accessible")
-            print(f"   📊 HTTPS enabled: {data.get('https_enabled', 'unknown')}")
+            print("   [OK] API endpoint accessible")
+            print(f"   [STATS] HTTPS enabled: {data.get('https_enabled', 'unknown')}")
             
             if data.get('https_enabled'):
-                print(f"   📊 Certificate valid: {data.get('certificate_valid', 'unknown')}")
-                print(f"   📊 Self-signed: {data.get('is_self_signed', 'unknown')}")
+                print(f"   [STATS] Certificate valid: {data.get('certificate_valid', 'unknown')}")
+                print(f"   [STATS] Self-signed: {data.get('is_self_signed', 'unknown')}")
                 if data.get('warnings'):
-                    print(f"   ⚠️ Warnings: {len(data['warnings'])}")
+                    print(f"   [WARN] Warnings: {len(data['warnings'])}")
             
         else:
-            print(f"   ⚠️ API returned status {response.status_code}")
+            print(f"   [WARN] API returned status {response.status_code}")
             
     except Exception as e:
         if "ConnectionError" in str(type(e).__name__):
-            print("   ⚠️ Server not running - skipping API test")
+            print("   [WARN] Server not running - skipping API test")
         else:
-            print(f"   ❌ API test failed: {e}")
+            print(f"   [ERR] API test failed: {e}")
 
 def test_non_breaking_functionality():
     """Test that validation doesn't break HTTPS"""
-    print("\n🛡️ Testing Non-Breaking Functionality")
+    print("\n[SHIELD] Testing Non-Breaking Functionality")
     print("=" * 40)
     
     try:
@@ -174,20 +174,20 @@ def test_non_breaking_functionality():
         
         # This should always return True/False, never crash
         result = quick_certificate_check(certs_dir)
-        print(f"   ✅ Quick check completed: {result}")
+        print(f"   [OK] Quick check completed: {result}")
         
         # Test with invalid paths (should not crash)
         invalid_dir = Path("nonexistent_certs")
         result = quick_certificate_check(invalid_dir)
-        print(f"   ✅ Invalid path handled gracefully: {result}")
+        print(f"   [OK] Invalid path handled gracefully: {result}")
         
-        print("   ✅ Certificate validation is non-breaking")
+        print("   [OK] Certificate validation is non-breaking")
         
     except Exception as e:
-        print(f"   ❌ Non-breaking test failed: {e}")
+        print(f"   [ERR] Non-breaking test failed: {e}")
 
 if __name__ == "__main__":
-    print("🚀 SSL Certificate Security Validation Tests")
+    print("[START] SSL Certificate Security Validation Tests")
     print("=" * 60)
     
     success = test_certificate_validation()
@@ -196,12 +196,12 @@ if __name__ == "__main__":
         test_api_integration()
         test_non_breaking_functionality()
         
-        print("\n🎯 Key Benefits Achieved:")
-        print("   ✅ Certificate validation working")
-        print("   ✅ Security warnings displayed")
-        print("   ✅ HTTPS functionality preserved")
-        print("   ✅ Production recommendations provided")
-        print("   ✅ Non-breaking implementation")
+        print("\n[TARGET] Key Benefits Achieved:")
+        print("   [OK] Certificate validation working")
+        print("   [OK] Security warnings displayed")
+        print("   [OK] HTTPS functionality preserved")
+        print("   [OK] Production recommendations provided")
+        print("   [OK] Non-breaking implementation")
         
     else:
-        print("\n⚠️ Some tests failed, but HTTPS will still work normally")
+        print("\n[WARN] Some tests failed, but HTTPS will still work normally")

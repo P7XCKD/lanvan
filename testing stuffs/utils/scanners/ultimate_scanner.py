@@ -375,7 +375,7 @@ class UltimateScanner:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
         except Exception as e:
-            print(f"❌ Error reading file: {e}")
+            print(f"[ERR] Error reading file: {e}")
             return {}
         
         results = {
@@ -388,7 +388,7 @@ class UltimateScanner:
 
     def generate_report(self, results: Dict[str, List[ExtractionCandidate]]) -> None:
         """Generate comprehensive extraction report"""
-        print("🔍 ULTIMATE EXTRACTION SCANNER RESULTS")
+        print("[SEARCH] ULTIMATE EXTRACTION SCANNER RESULTS")
         print("=" * 80)
         
         # Summary statistics
@@ -399,10 +399,10 @@ class UltimateScanner:
             safe_in_category = [c for c in candidates if c.safety_score >= 70]
             safe_candidates.extend(safe_in_category)
         
-        print(f"📊 SUMMARY:")
+        print(f"[STATS] SUMMARY:")
         print(f"   Total Extraction Opportunities: {total_candidates}")
-        print(f"   ✅ Safe Extractions (Score ≥70): {len(safe_candidates)}")
-        print(f"   📏 Potential Line Reduction: {sum(c.size_lines for c in safe_candidates)}")
+        print(f"   [OK] Safe Extractions (Score ≥70): {len(safe_candidates)}")
+        print(f"    Potential Line Reduction: {sum(c.size_lines for c in safe_candidates)}")
         print()
         
         # Detailed breakdown by category
@@ -410,14 +410,14 @@ class UltimateScanner:
             if not candidates:
                 continue
                 
-            print(f"🎯 {category.upper().replace('_', ' ')}:")
+            print(f"[TARGET] {category.upper().replace('_', ' ')}:")
             print("-" * 50)
             
             # Sort by extraction value
             sorted_candidates = sorted(candidates, key=lambda x: x.extraction_value, reverse=True)
             
             for candidate in sorted_candidates[:10]:  # Show top 10
-                safety_emoji = "✅" if candidate.safety_score >= 70 else "⚠️" if candidate.safety_score >= 50 else "❌"
+                safety_emoji = "[OK]" if candidate.safety_score >= 70 else "[WARN]" if candidate.safety_score >= 50 else "[ERR]"
                 deps_str = ", ".join(list(candidate.dependencies)[:3])
                 if len(candidate.dependencies) > 3:
                     deps_str += f"... (+{len(candidate.dependencies)-3})"
@@ -434,7 +434,7 @@ class UltimateScanner:
         # Top extraction recommendations
         all_safe = [c for candidates in results.values() for c in candidates if c.safety_score >= 70]
         if all_safe:
-            print("🚀 TOP EXTRACTION RECOMMENDATIONS:")
+            print("[START] TOP EXTRACTION RECOMMENDATIONS:")
             print("=" * 80)
             
             # Sort by combined score

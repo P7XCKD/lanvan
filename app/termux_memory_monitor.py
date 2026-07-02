@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🤖 Termux Memory Monitor
+[BOT] Termux Memory Monitor
 Monitors memory usage and enforces limits on Termux/Android environments
 """
 
@@ -51,7 +51,7 @@ class TermuxMemoryMonitor:
         self.monitor_thread.start()
         
         if self.is_termux:
-            print("🤖 Termux memory monitoring started")
+            print("[BOT] Termux memory monitoring started")
         
     def stop_monitoring(self):
         """Stop memory monitoring"""
@@ -71,7 +71,7 @@ class TermuxMemoryMonitor:
                 
             except Exception as e:
                 if self.is_termux:
-                    print(f"⚠️ Memory monitor warning: {e}")
+                    print(f"[WARN] Memory monitor warning: {e}")
                 time.sleep(10)  # Longer sleep on error
                 
     def _check_memory_status(self):
@@ -106,17 +106,17 @@ class TermuxMemoryMonitor:
         """Handle memory status changes"""
         if self.current_status == "emergency":
             if self.is_termux:
-                print(f"🚨 EMERGENCY: Only {available_mb}MB memory remaining!")
+                print(f"[!] EMERGENCY: Only {available_mb}MB memory remaining!")
             self._emergency_cleanup()
             
         elif self.current_status == "critical":
             if self.is_termux:
-                print(f"⚠️ CRITICAL: Only {available_mb}MB memory remaining")
+                print(f"[WARN] CRITICAL: Only {available_mb}MB memory remaining")
             self._critical_cleanup()
             
         elif self.current_status == "warning":
             if self.is_termux:
-                print(f"💛 WARNING: {available_mb}MB memory remaining")
+                print(f" WARNING: {available_mb}MB memory remaining")
             self._warning_cleanup()
             
         elif self.current_status == "normal" and self._should_run_gc():
@@ -200,10 +200,10 @@ class TermuxMemoryMonitor:
     def enforce_memory_limit(self, operation_name: str = "operation") -> bool:
         """Check if operation should proceed based on memory status"""
         if self.current_status == "emergency":
-            print(f"🚨 Operation '{operation_name}' blocked - emergency memory situation")
+            print(f"[!] Operation '{operation_name}' blocked - emergency memory situation")
             return False
         elif self.current_status == "critical":
-            print(f"⚠️ Operation '{operation_name}' proceeding with caution - critical memory")
+            print(f"[WARN] Operation '{operation_name}' proceeding with caution - critical memory")
             return True
         else:
             return True

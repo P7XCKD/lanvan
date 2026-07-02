@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🧪 LANVAN Complete Server Functionality Test Suite
+ LANVAN Complete Server Functionality Test Suite
 Automated testing for all server components and features.
 
 Tests:
@@ -86,7 +86,7 @@ class LANVANTestSuite:
     def add_result(self, result: TestResult):
         """Add test result"""
         self.results.append(result)
-        status = f"{Colors.GREEN}✅ PASS{Colors.END}" if result.passed else f"{Colors.RED}❌ FAIL{Colors.END}"
+        status = f"{Colors.GREEN}[OK] PASS{Colors.END}" if result.passed else f"{Colors.RED}[ERR] FAIL{Colors.END}"
         self.log(f"{status} {result.name}: {result.message}")
         if result.details and self.verbose:
             self.log(f"     {result.details}", Colors.YELLOW)
@@ -498,7 +498,7 @@ class LANVANTestSuite:
     
     async def run_all_tests(self) -> Dict:
         """Run all tests and return summary"""
-        self.log(f"{Colors.BOLD}{Colors.BLUE}🧪 LANVAN Server Test Suite Starting...{Colors.END}\n")
+        self.log(f"{Colors.BOLD}{Colors.BLUE} LANVAN Server Test Suite Starting...{Colors.END}\n")
         
         total_start_time = time.time()
         
@@ -507,7 +507,7 @@ class LANVANTestSuite:
         self.add_result(result)
         
         if not result.passed:
-            self.log(f"\n{Colors.RED}❌ Server startup failed - aborting remaining tests{Colors.END}")
+            self.log(f"\n{Colors.RED}[ERR] Server startup failed - aborting remaining tests{Colors.END}")
             return self.generate_summary()
         
         # Run all other tests
@@ -531,7 +531,7 @@ class LANVANTestSuite:
         await asyncio.sleep(2)  # Wait for cleanup
         
         # Test HTTPS startup
-        self.log(f"\n{Colors.YELLOW}🔒 Testing HTTPS mode...{Colors.END}")
+        self.log(f"\n{Colors.YELLOW}[LOCK] Testing HTTPS mode...{Colors.END}")
         https_result = await self.test_server_startup(https_mode=True)
         self.add_result(https_result)
         
@@ -554,7 +554,7 @@ class LANVANTestSuite:
         }
         
         # Print summary
-        self.log(f"\n{Colors.BOLD}📊 TEST SUMMARY{Colors.END}")
+        self.log(f"\n{Colors.BOLD}[STATS] TEST SUMMARY{Colors.END}")
         self.log("=" * 50)
         
         status_color = Colors.GREEN if failed == 0 else Colors.RED
@@ -566,13 +566,13 @@ class LANVANTestSuite:
             self.log(f"Total Duration: {total_duration:.1f}s")
         
         if failed > 0:
-            self.log(f"\n{Colors.RED}❌ FAILED TESTS:{Colors.END}")
+            self.log(f"\n{Colors.RED}[ERR] FAILED TESTS:{Colors.END}")
             for result in self.results:
                 if not result.passed:
                     self.log(f"  • {result.name}: {result.message}")
         else:
-            self.log(f"\n{Colors.GREEN}🎉 ALL TESTS PASSED!{Colors.END}")
-            self.log("✅ LANVAN server is fully functional and ready to use!")
+            self.log(f"\n{Colors.GREEN}[DONE] ALL TESTS PASSED!{Colors.END}")
+            self.log("[OK] LANVAN server is fully functional and ready to use!")
         
         return summary
 
@@ -596,10 +596,10 @@ async def main():
         sys.exit(0 if summary["failed"] == 0 else 1)
         
     except KeyboardInterrupt:
-        test_suite.log(f"\n{Colors.YELLOW}⚠️ Tests interrupted by user{Colors.END}")
+        test_suite.log(f"\n{Colors.YELLOW}[WARN] Tests interrupted by user{Colors.END}")
         sys.exit(1)
     except Exception as e:
-        test_suite.log(f"\n{Colors.RED}❌ Test suite error: {str(e)}{Colors.END}")
+        test_suite.log(f"\n{Colors.RED}[ERR] Test suite error: {str(e)}{Colors.END}")
         sys.exit(1)
     finally:
         test_suite.cleanup_server()

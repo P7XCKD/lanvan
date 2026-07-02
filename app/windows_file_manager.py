@@ -1,5 +1,5 @@
 """
-🔧 Windows File Handle Management Utilities
+[CFG] Windows File Handle Management Utilities
 Helps with file locking issues specific to Windows systems
 """
 
@@ -14,13 +14,13 @@ from typing import List, Optional
 
 class WindowsFileManager:
     """
-    🔧 Handles Windows-specific file management challenges
+    [CFG] Handles Windows-specific file management challenges
     """
     
     @staticmethod
     def force_release_handles():
         """
-        🚀 Force release Python file handles using garbage collection
+        [START] Force release Python file handles using garbage collection
         """
         # Multiple rounds of garbage collection
         for _ in range(3):
@@ -30,7 +30,7 @@ class WindowsFileManager:
     @staticmethod
     async def async_force_release_handles():
         """
-        🚀 Async version of handle release
+        [START] Async version of handle release
         """
         for _ in range(3):
             gc.collect()
@@ -39,7 +39,7 @@ class WindowsFileManager:
     @staticmethod
     def check_file_in_use(file_path: Path) -> bool:
         """
-        🔍 Check if a file is currently in use by trying to open it exclusively
+        [SEARCH] Check if a file is currently in use by trying to open it exclusively
         """
         try:
             with open(file_path, 'r+b') as test_handle:
@@ -52,7 +52,7 @@ class WindowsFileManager:
     @staticmethod
     async def safe_delete_file(file_path: Path, max_attempts: int = 5) -> tuple[bool, str]:
         """
-        🗑️ Safely delete a file with progressive retry and handle release
+        [DEL] Safely delete a file with progressive retry and handle release
         
         Returns:
             tuple[bool, str]: (success, message)
@@ -74,28 +74,28 @@ class WindowsFileManager:
                     
                     # Check if file is still in use
                     if WindowsFileManager.check_file_in_use(file_path):
-                        print(f"🔄 File still locked (attempt {attempt + 1}/{max_attempts}): {file_path.name}")
+                        print(f"[RETRY] File still locked (attempt {attempt + 1}/{max_attempts}): {file_path.name}")
                         continue
                 
                 # Try to delete
                 file_path.unlink()
-                return True, f"✅ Deleted: {file_path.name}"
+                return True, f"[OK] Deleted: {file_path.name}"
                 
             except PermissionError as e:
                 last_error = str(e)
                 if attempt < max_attempts - 1:
-                    print(f"🔄 Permission denied (attempt {attempt + 1}/{max_attempts}): {file_path.name}")
+                    print(f"[RETRY] Permission denied (attempt {attempt + 1}/{max_attempts}): {file_path.name}")
                 else:
-                    return False, f"🔒 File still in use after {max_attempts} attempts: {file_path.name} - {e}"
+                    return False, f"[LOCK] File still in use after {max_attempts} attempts: {file_path.name} - {e}"
             except Exception as e:
-                return False, f"❌ Error deleting file {file_path.name}: {e}"
+                return False, f"[ERR] Error deleting file {file_path.name}: {e}"
         
-        return False, f"🔒 Failed to delete {file_path.name} after {max_attempts} attempts. Last error: {last_error}"
+        return False, f"[LOCK] Failed to delete {file_path.name} after {max_attempts} attempts. Last error: {last_error}"
     
     @staticmethod
     def get_processes_using_file(file_path: Path) -> List[dict]:
         """
-        🔍 Get list of processes that have the file open (Windows only)
+        [SEARCH] Get list of processes that have the file open (Windows only)
         """
         processes = []
         try:
@@ -113,14 +113,14 @@ class WindowsFileManager:
                 except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     pass
         except Exception as e:
-            print(f"⚠️ Error checking processes: {e}")
+            print(f"[WARN] Error checking processes: {e}")
         
         return processes
     
     @staticmethod
     async def enhanced_cleanup_with_diagnostics(upload_folder: Path, temp_folder: Optional[Path] = None):
         """
-        🧹 Enhanced cleanup with detailed diagnostics and reporting
+        [CLEAN] Enhanced cleanup with detailed diagnostics and reporting
         """
         results = {
             'files_deleted': 0,
@@ -147,7 +147,7 @@ class WindowsFileManager:
                         processes = WindowsFileManager.get_processes_using_file(file_path)
                         if processes:
                             results['processes_using_files'].extend(processes)
-                            print(f"📊 Processes using {file_path.name}: {[p['name'] for p in processes]}")
+                            print(f"[STATS] Processes using {file_path.name}: {[p['name'] for p in processes]}")
         
         # Clean temp chunks
         if temp_folder and temp_folder.exists():

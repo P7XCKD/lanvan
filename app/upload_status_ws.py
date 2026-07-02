@@ -1,5 +1,5 @@
 """
-🔄 Upload Status WebSocket Manager
+[RETRY] Upload Status WebSocket Manager
 Memory-safe WebSocket implementation for real-time upload progress tracking
 """
 
@@ -15,7 +15,7 @@ upload_status_ws_router = APIRouter()
 
 class UploadStatusConnectionManager:
     """
-    📊 Memory-Safe Upload Status WebSocket Manager
+    [STATS] Memory-Safe Upload Status WebSocket Manager
     
     Features:
     - Per-upload session tracking

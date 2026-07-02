@@ -1,5 +1,5 @@
 """
-🔒 Advanced File Locking System for LANVan
+[LOCK] Advanced File Locking System for Lanvan
 Cross-platform file locking to prevent race conditions in concurrent file operations.
 
 Key Features:
@@ -38,7 +38,7 @@ class FileLockTimeout(FileLockError):
 
 class CrossPlatformFileLock:
     """
-    🔒 Cross-platform file locking implementation
+    [LOCK] Cross-platform file locking implementation
     """
     
     def __init__(
@@ -59,7 +59,7 @@ class CrossPlatformFileLock:
         
     async def acquire(self) -> bool:
         """
-        🎯 Acquire file lock with platform-specific implementation
+        [TARGET] Acquire file lock with platform-specific implementation
         """
         start_time = time.time()
         
@@ -75,11 +75,11 @@ class CrossPlatformFileLock:
                 if success:
                     self.is_locked = True
                     self._lock_acquired_time = time.time()
-                    logger.debug(f"✅ [{PLATFORM_NAME}] Lock acquired: {self.lock_file}")
+                    logger.debug(f"[OK] [{PLATFORM_NAME}] Lock acquired: {self.lock_file}")
                     return True
                     
             except Exception as e:
-                logger.warning(f"⚠️ [{PLATFORM_NAME}] Lock acquisition error: {e}")
+                logger.warning(f"[WARN] [{PLATFORM_NAME}] Lock acquisition error: {e}")
             
             # Wait before retry
             await asyncio.sleep(self.retry_interval)
@@ -90,7 +90,7 @@ class CrossPlatformFileLock:
         # Timeout reached
         elapsed = time.time() - start_time
         error_msg = f"Lock timeout after {elapsed:.1f}s on {PLATFORM_NAME}: {self.lock_file}"
-        logger.error(f"❌ {error_msg}")
+        logger.error(f"[ERR] {error_msg}")
         raise FileLockTimeout(error_msg)
     
     async def _acquire_windows_lock(self) -> bool:
@@ -185,7 +185,7 @@ class CrossPlatformFileLock:
                     lock_age = time.time() - self.lock_file.stat().st_mtime
                     if lock_age > 300:  # 5 minutes
                         await asyncio.to_thread(self.lock_file.unlink)
-                        logger.debug(f"🧹 Removed stale lock file: {self.lock_file}")
+                        logger.debug(f"[CLEAN] Removed stale lock file: {self.lock_file}")
                     else:
                         return False  # Valid lock exists
                 except:
@@ -218,7 +218,7 @@ class CrossPlatformFileLock:
     
     async def release(self) -> None:
         """
-        🔓 Release file lock and clean up resources
+        [UNLOCK] Release file lock and clean up resources
         """
         if not self.is_locked:
             return
@@ -238,10 +238,10 @@ class CrossPlatformFileLock:
             # Calculate lock duration for debugging
             if self._lock_acquired_time:
                 duration = time.time() - self._lock_acquired_time
-                logger.debug(f"🔓 [{PLATFORM_NAME}] Lock released after {duration:.2f}s: {self.lock_file}")
+                logger.debug(f"[UNLOCK] [{PLATFORM_NAME}] Lock released after {duration:.2f}s: {self.lock_file}")
             
         except Exception as e:
-            logger.warning(f"⚠️ [{PLATFORM_NAME}] Error releasing lock: {e}")
+            logger.warning(f"[WARN] [{PLATFORM_NAME}] Error releasing lock: {e}")
     
     async def __aenter__(self):
         """Async context manager entry"""
@@ -254,7 +254,7 @@ class CrossPlatformFileLock:
 
 class FileOperationLock:
     """
-    🎯 High-level file operation locking for upload operations
+    [TARGET] High-level file operation locking for upload operations
     """
     
     def __init__(self, base_path: Union[str, Path]):
@@ -269,7 +269,7 @@ class FileOperationLock:
         timeout: float = 30.0
     ) -> AsyncIterator[CrossPlatformFileLock]:
         """
-        🔒 Context manager for upload file locking
+        [LOCK] Context manager for upload file locking
         """
         # Create lock file based on target filename
         lock_file = self.locks_dir / f"{filename}.upload.lock"
@@ -282,10 +282,10 @@ class FileOperationLock:
         
         try:
             async with lock:
-                logger.info(f"🔒 [{PLATFORM_NAME}] Upload lock acquired for: {filename}")
+                logger.info(f"[LOCK] [{PLATFORM_NAME}] Upload lock acquired for: {filename}")
                 yield lock
         finally:
-            logger.info(f"🔓 [{PLATFORM_NAME}] Upload lock released for: {filename}")
+            logger.info(f"[UNLOCK] [{PLATFORM_NAME}] Upload lock released for: {filename}")
     
     @contextlib.asynccontextmanager 
     async def directory_lock(
@@ -294,7 +294,7 @@ class FileOperationLock:
         timeout: float = 10.0
     ) -> AsyncIterator[CrossPlatformFileLock]:
         """
-        🔒 Context manager for directory operation locking
+        [LOCK] Context manager for directory operation locking
         """
         dir_path = Path(directory)
         lock_file = self.locks_dir / f"{dir_path.name}.dir.lock"
@@ -307,10 +307,10 @@ class FileOperationLock:
         
         try:
             async with lock:
-                logger.info(f"🔒 [{PLATFORM_NAME}] Directory lock acquired for: {dir_path}")
+                logger.info(f"[LOCK] [{PLATFORM_NAME}] Directory lock acquired for: {dir_path}")
                 yield lock
         finally:
-            logger.info(f"🔓 [{PLATFORM_NAME}] Directory lock released for: {dir_path}")
+            logger.info(f"[UNLOCK] [{PLATFORM_NAME}] Directory lock released for: {dir_path}")
 
 # Global file operation lock manager
 file_lock_manager = None
@@ -324,7 +324,7 @@ def get_file_lock_manager(upload_folder: Path) -> FileOperationLock:
 
 async def cleanup_stale_locks(locks_dir: Path, max_age_seconds: int = 300):
     """
-    🧹 Clean up stale lock files (older than max_age_seconds)
+    [CLEAN] Clean up stale lock files (older than max_age_seconds)
     """
     try:
         if not locks_dir.exists():
@@ -342,16 +342,16 @@ async def cleanup_stale_locks(locks_dir: Path, max_age_seconds: int = 300):
                     # Try to remove stale lock
                     await asyncio.to_thread(lock_file.unlink)
                     cleaned_count += 1
-                    logger.info(f"🧹 [{PLATFORM_NAME}] Removed stale lock: {lock_file.name}")
+                    logger.info(f"[CLEAN] [{PLATFORM_NAME}] Removed stale lock: {lock_file.name}")
                     
             except Exception as e:
-                logger.warning(f"⚠️ [{PLATFORM_NAME}] Error cleaning lock {lock_file.name}: {e}")
+                logger.warning(f"[WARN] [{PLATFORM_NAME}] Error cleaning lock {lock_file.name}: {e}")
         
         if cleaned_count > 0:
-            logger.info(f"🧹 [{PLATFORM_NAME}] Cleaned {cleaned_count} stale lock files")
+            logger.info(f"[CLEAN] [{PLATFORM_NAME}] Cleaned {cleaned_count} stale lock files")
             
     except Exception as e:
-        logger.error(f"❌ [{PLATFORM_NAME}] Error during lock cleanup: {e}")
+        logger.error(f"[ERR] [{PLATFORM_NAME}] Error during lock cleanup: {e}")
 
 # Initialize logging
 if not logger.handlers:

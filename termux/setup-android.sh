@@ -1,10 +1,10 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Android/Termux Setup Script for LANVAN File Server
+# Android/Termux Setup Script for Lanvan File Server
 # Run this script in Termux to set up all dependencies
 # DO NOTE THAT THIS SCRIPT HASNT BEEN TESTED YET
 
 
-echo "🤖 LANVAN Android/Termux Setup Script"
+echo "🤖 Lanvan Android/Termux Setup Script"
 echo "======================================"
 echo ""
 
@@ -64,18 +64,18 @@ python -m pip install --upgrade pyperclip || echo "⚠️ Clipboard support fail
 echo "📁 Setting up storage permissions..."
 termux-setup-storage
 
-# Create LANVAN directory in home
-echo "📂 Setting up LANVAN directory..."
+# Create Lanvan directory in home
+echo "📂 Setting up Lanvan directory..."
 cd $HOME
-if [ ! -d "lanvan" ]; then
+if [ ! -d "Lanvan" ]; then
     mkdir -p lanvan
 fi
 
 echo ""
-echo "✅ LANVAN Android/Termux setup completed!"
+echo "✅ Lanvan Android/Termux setup completed!"
 echo ""
 echo "📋 Next steps:"
-echo "1. Copy your LANVAN project files to ~/lanvan/"
+echo "1. Copy your Lanvan project files to ~/lanvan/"
 echo "2. cd ~/lanvan"
 echo "3. python run.py"
 echo ""

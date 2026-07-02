@@ -14,7 +14,7 @@ try:
     import qrcode
     QR_AVAILABLE = True
 except ImportError:
-    print("⚠️ QR code library not available - installing for Android/Termux...")
+    print("[WARN] QR code library not available - installing for Android/Termux...")
     QR_AVAILABLE = False
     try:
         import subprocess
@@ -23,17 +23,17 @@ except ImportError:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "qrcode[pil]"])
         import qrcode
         QR_AVAILABLE = True
-        print("✅ QR code library installed successfully")
+        print("[OK] QR code library installed successfully")
     except Exception as install_error:
-        print(f"❌ Could not install QR code library: {install_error}")
-        print("📱 Android/Termux: QR codes will use text fallback")
+        print(f"[ERR] Could not install QR code library: {install_error}")
+        print("[MOBILE] Android/Termux: QR codes will use text fallback")
 
 # WebSocket support with Android/Termux fallback
 try:
     from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form, HTTPException, WebSocket
     WEBSOCKET_AVAILABLE = True
 except ImportError:
-    print("⚠️ WebSocket support not available - installing for Android/Termux...")
+    print("[WARN] WebSocket support not available - installing for Android/Termux...")
     WEBSOCKET_AVAILABLE = False
     try:
         import subprocess
@@ -42,10 +42,10 @@ except ImportError:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "uvicorn[standard]"])
         from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form, HTTPException, WebSocket
         WEBSOCKET_AVAILABLE = True
-        print("✅ WebSocket support installed successfully")
+        print("[OK] WebSocket support installed successfully")
     except Exception as ws_error:
-        print(f"❌ Could not install WebSocket support: {ws_error}")
-        print("📱 Android/Termux: Real-time features will use polling fallback")
+        print(f"[ERR] Could not install WebSocket support: {ws_error}")
+        print("[MOBILE] Android/Termux: Real-time features will use polling fallback")
         from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form, HTTPException
         # Create dummy WebSocket class to prevent import errors
         class WebSocket:
@@ -96,12 +96,12 @@ def get_android_network_info():
                 ip = method()
                 if ip and not ip.startswith('127.') and ip != '192.0.0.4':
                     return ip, hostname
-            except:
+            except Exception:
                 continue
                 
         return "192.168.1.100", hostname  # Ultimate fallback
     except Exception as e:
-        print(f"📱 Android network detection error: {e}")
+        print(f"[MOBILE] Android network detection error: {e}")
         return "192.168.1.100", "android-device"
 
 def get_android_wifi_ip():
@@ -119,7 +119,7 @@ def get_android_wifi_ip():
                     src_idx = parts.index('src')
                     if src_idx + 1 < len(parts):
                         return parts[src_idx + 1]
-    except:
+    except Exception:
         pass
     return None
 
@@ -132,67 +132,7 @@ def get_android_cellular_ip():
             s.settimeout(2)
             s.connect(('8.8.8.8', 80))
             return s.getsockname()[0]
-    except:
-        return None
-
-# Android/Termux network utilities
-def get_android_network_info():
-    """Get network information optimized for Android/Termux"""
-    try:
-        import socket
-        # Android-specific network detection
-        hostname = socket.gethostname()
-        
-        # Try multiple methods to get correct IP on Android
-        methods = [
-            lambda: socket.gethostbyname(hostname),
-            lambda: get_android_wifi_ip(),
-            lambda: get_android_cellular_ip(),
-            lambda: "192.168.1.100"  # Fallback
-        ]
-        
-        for method in methods:
-            try:
-                ip = method()
-                if ip and not ip.startswith('127.') and ip != '192.0.0.4':
-                    return ip, hostname
-            except:
-                continue
-                
-        return "192.168.1.100", hostname  # Ultimate fallback
-    except Exception as e:
-        print(f"📱 Android network detection error: {e}")
-        return "192.168.1.100", "android-device"
-
-def get_android_wifi_ip():
-    """Get WiFi IP on Android using ifconfig parsing"""
-    try:
-        import subprocess
-        result = subprocess.run(['ip', 'route', 'get', '8.8.8.8'], 
-                              capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            # Parse IP from route output
-            lines = result.stdout.split('\n')
-            for line in lines:
-                if 'src' in line:
-                    parts = line.split()
-                    src_idx = parts.index('src')
-                    if src_idx + 1 < len(parts):
-                        return parts[src_idx + 1]
-    except:
-        pass
-    return None
-
-def get_android_cellular_ip():
-    """Get cellular IP on Android"""
-    try:
-        import socket
-        # Connect to external service to determine our IP
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.settimeout(2)
-            s.connect(('8.8.8.8', 80))
-            return s.getsockname()[0]
-    except:
+    except Exception:
         return None
 from app.streaming_assembly import (
     initialize_streaming_assembly, 
@@ -239,16 +179,16 @@ def detect_ios_device(user_agent: str) -> dict:
 @router.get("/", response_class=HTMLResponse, name="home") 
 async def home(request: Request):
     """
-    🎯 Universal mDNS Redirect + Main Page Handler with iOS Detection
+    [TARGET] Universal mDNS Redirect + Main Page Handler with iOS Detection
     Handles lanvan.local access regardless of port/protocol with smart redirects
     """
     host = request.headers.get("host", "").lower()
     user_agent = request.headers.get("user-agent", "")
     
-    # 📱 iOS Device Detection
+    # [MOBILE] iOS Device Detection
     ios_info = detect_ios_device(user_agent)
     
-    # 🎯 Universal mDNS Redirect Logic for lanvan.local
+    # [TARGET] Universal mDNS Redirect Logic for lanvan.local
     if "lanvan.local" in host:
         # Get current server configuration
         actual_port = mdns_manager.actual_port
@@ -264,10 +204,10 @@ async def home(request: Request):
             if request.url.query:
                 redirect_url += f"?{request.url.query}"
             
-            print(f"🍎 iOS Safari detected - redirecting to HTTP for better compatibility: {redirect_url}")
+            print(f" iOS Safari detected - redirecting to HTTP for better compatibility: {redirect_url}")
             return RedirectResponse(url=redirect_url, status_code=302)
         
-        # 🔀 Standard redirect logic for non-iOS devices
+        #  Standard redirect logic for non-iOS devices
         if current_scheme == "http" and actual_protocol == "https" and not ios_info['is_mobile_safari']:
             # Construct correct HTTPS URL
             if actual_port == 443:
@@ -280,14 +220,14 @@ async def home(request: Request):
             
             return RedirectResponse(url=redirect_url, status_code=302)
     
-    # 🏠 Main page logic - direct access, no redirects
+    #  Main page logic - direct access, no redirects
     files = get_file_list()
     
     # Add helpful debug info for protocol detection
     protocol = request.url.scheme
     host = request.headers.get("host", "unknown")
     
-    # 📱 iOS-specific optimizations for template
+    # [MOBILE] iOS-specific optimizations for template
     template_context = {
         "request": request,
         "msg": "Lanvan",
@@ -304,9 +244,9 @@ async def home(request: Request):
         "is_mobile_safari": ios_info['is_mobile_safari']
     }
     
-    # 📱 Log iOS device access for debugging
+    # [MOBILE] Log iOS device access for debugging
     if ios_info['is_ios']:
-        print(f"🍎 iOS device detected: {ios_info['device_type']} - Safari: {ios_info['is_safari']} - Protocol: {protocol} - Host: {host}")
+        print(f" iOS device detected: {ios_info['device_type']} - Safari: {ios_info['is_safari']} - Protocol: {protocol} - Host: {host}")
     
     return templates.TemplateResponse("index.html", template_context)
 
@@ -331,12 +271,12 @@ def ensure_streaming_initialized():
 
 def cleanup_orphaned_temp_files():
     """
-    🧹 Clean up orphaned .tmp files on startup (from interrupted uploads)
+    [CLEAN] Clean up orphaned .tmp files on startup (from interrupted uploads)
     """
     try:
         temp_files = list(UPLOAD_FOLDER.glob("*.tmp"))
         if temp_files:
-            print(f"🧹 Cleaning up {len(temp_files)} orphaned .tmp files...")
+            print(f"[CLEAN] Cleaning up {len(temp_files)} orphaned .tmp files...")
             for temp_file in temp_files:
                 try:
                     temp_file.unlink()
@@ -351,7 +291,7 @@ def cleanup_orphaned_temp_files():
 # Clean up orphaned temp files on startup
 cleanup_orphaned_temp_files()
 
-# 🔒 Initialize file locking system and clean up stale locks
+# [LOCK] Initialize file locking system and clean up stale locks
 async def initialize_file_locking():
     """Initialize file locking system and clean up stale locks"""
     try:
@@ -360,9 +300,9 @@ async def initialize_file_locking():
         
         # Clean up stale locks from previous sessions
         await cleanup_stale_locks(locks_dir, max_age_seconds=300)  # 5 minutes
-        print("🔒 File locking system initialized")
+        print("[LOCK] File locking system initialized")
     except Exception as e:
-        print(f"⚠️ File locking initialization error: {e}")
+        print(f"[WARN] File locking initialization error: {e}")
 
 # Initialize file locking asynchronously
 import asyncio
@@ -371,7 +311,7 @@ try:
     asyncio.create_task(initialize_file_locking())
 except RuntimeError:
     # No event loop running - defer initialization
-    print("🔒 File locking will be initialized on first use")
+    print("[LOCK] File locking will be initialized on first use")
 
 # Templates - keep local for routes that need it
 templates = Jinja2Templates(directory="app/templates")
@@ -427,12 +367,39 @@ async def ios_compatibility_check(request: Request):
 # === Server Status Endpoint ===
 @router.get("/api/server-status", response_class=JSONResponse)
 async def server_status(request: Request):
-    """Server status endpoint for loading page and diagnostics"""
+    """Server status endpoint for loading page, diagnostics, and shutdown detection"""
+    # --- Shutdown-state check (merged from secondary handler) ---
+    try:
+        from app.main import shutdown_event, graceful_shutdown_initiated, shutdown_countdown
+        
+        if graceful_shutdown_initiated:
+            return JSONResponse({
+                "status": "shutting_down",
+                "message": f"[WARN] Server shutdown initiated. {shutdown_countdown} seconds remaining.",
+                "shutdown": False,
+                "shutdownWarning": True,
+                "warningMessage": "Server is shutting down gracefully",
+                "countdown": shutdown_countdown
+            })
+        
+        if shutdown_event.is_set():
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "shutdown",
+                    "message": "[!] Server is now inactive. Please restart the server.",
+                    "shutdown": True,
+                    "timeRemaining": 0
+                }
+            )
+    except ImportError:
+        pass  # main module may not expose these during tests
+    
+    # --- Normal status response ---
     user_agent = request.headers.get("user-agent", "")
     ios_info = detect_ios_device(user_agent)
     
     # Check if resources are ready (similar to main.py logic)
-    import time
     server_start_time = getattr(server_status, 'start_time', time.time())
     resources_ready = (time.time() - server_start_time) > 3  # 3 second grace period
     
@@ -442,8 +409,10 @@ async def server_status(request: Request):
     
     status_data = {
         "status": "online",
+        "message": "[OK] Server is running normally",
         "timestamp": time.time(),
         "resources_ready": resources_ready,
+        "shutdown": False,
         "server_info": {
             "protocol": protocol,
             "host": host,
@@ -487,9 +456,6 @@ async def ios_help_page(request: Request):
     """iOS Safari troubleshooting and help page"""
     return templates.TemplateResponse("ios-help.html", {"request": request})
 
-# === 🔍 CONSTANTS ===
-MAX_CONCURRENT_UPLOADS = 5  # Maximum parallel uploads per session
-
 # === Utility Functions ===
 def format_size(size_bytes):
     """Format bytes to human readable string"""
@@ -504,7 +470,7 @@ def format_size(size_bytes):
 def should_ignore_file(filename: str) -> bool:
     """
     Check if a file should be ignored based on qt.py patterns from .gitignore
-    🚫 Filters out qt.py generated test files from file listings
+     Filters out qt.py generated test files from file listings
     """
     qt_patterns = [
         # Direct qt.py test file patterns
@@ -535,20 +501,20 @@ def get_file_list():
             "mtime": f.stat().st_mtime
         }
         for f in UPLOAD_FOLDER.iterdir() 
-        if f.is_file() and not f.name.endswith('.tmp') and not should_ignore_file(f.name)  # 🚫 Filter out temporary files and qt.py test files
+        if f.is_file() and not f.name.endswith('.tmp') and not should_ignore_file(f.name)  #  Filter out temporary files and qt.py test files
     ], key=lambda x: x["mtime"], reverse=True)
 
 async def get_file_list_async():
     """
-    🚀 Async file list with yielding for large directories
-    🚫 RACE CONDITION FIX: Filter out .tmp files to prevent downloading partial uploads
-    🚫 Qt.py FILTER: Hide qt.py generated test files from listings
+    [START] Async file list with yielding for large directories
+     RACE CONDITION FIX: Filter out .tmp files to prevent downloading partial uploads
+     Qt.py FILTER: Hide qt.py generated test files from listings
     """
     files = []
     file_count = 0
     
     for f in UPLOAD_FOLDER.iterdir():
-        if f.is_file() and not f.name.endswith('.tmp') and not should_ignore_file(f.name):  # 🚫 Filter out temporary files and qt.py test files
+        if f.is_file() and not f.name.endswith('.tmp') and not should_ignore_file(f.name):  #  Filter out temporary files and qt.py test files
             files.append({
                 "name": f.name,
                 "size": format_size(f.stat().st_size),
@@ -574,18 +540,17 @@ def get_unique_filename(directory: Path, filename: str) -> str:
 
 async def save_upload_file_async(upload_file: UploadFile, destination: Path, encrypt=False):
     """
-    🔄 ASYNC Universal Streaming Upload Handler - Non-blocking optimized for ALL platforms
-    🔒 RACE CONDITION FIX: Upload to .tmp file first, then atomically move to final name
-    🤖 TERMUX OPTIMIZED: Memory monitoring and resource management
+    [RETRY] ASYNC Universal Streaming Upload Handler - Non-blocking optimized for ALL platforms
+    [LOCK] RACE CONDITION FIX: Upload to .tmp file first, then atomically move to final name
+    [BOT] TERMUX OPTIMIZED: Memory monitoring and resource management
     Processes files in chunks asynchronously to avoid memory exhaustion and server blocking
     """
     import os
     import hashlib
     import gc
-    import asyncio
     from .universal_optimizer import optimize_for_upload, get_adaptive_chunk_size, should_run_gc, universal_optimizer
     
-    # 🤖 TERMUX MEMORY CHECK: Enforce memory limits before starting upload
+    # [BOT] TERMUX MEMORY CHECK: Enforce memory limits before starting upload
     try:
         from .termux_memory_monitor import enforce_termux_memory_limit
         if not enforce_termux_memory_limit(f"upload_{upload_file.filename}"):
@@ -596,11 +561,11 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
     # � FILE LOCKING: Initialize file lock manager for safe concurrent uploads
     lock_manager = get_file_lock_manager(UPLOAD_FOLDER)
     
-    # �🚀 TEMPORARY FILE STRATEGY: Upload to .tmp extension first
+    # �[START] TEMPORARY FILE STRATEGY: Upload to .tmp extension first
     temp_destination = destination.with_suffix(destination.suffix + '.tmp')
-    print(f"🔄 Uploading to temporary file: {temp_destination.name}")
+    print(f"[RETRY] Uploading to temporary file: {temp_destination.name}")
     
-    # 📱 Platform Detection (but optimizations apply to ALL)
+    # [MOBILE] Platform Detection (but optimizations apply to ALL)
     is_android = ("ANDROID_STORAGE" in os.environ or 
                  os.path.exists("/data/data/com.termux") or 
                  "TERMUX_VERSION" in os.environ)
@@ -610,23 +575,23 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
     
     platform_name = "Android/Termux" if is_android else "Windows" if is_windows else "Linux/Unix"
     
-    # 📊 ASYNC File size estimation for progress tracking (NON-BLOCKING)
+    # [STATS] ASYNC File size estimation for progress tracking (NON-BLOCKING)
     await asyncio.to_thread(upload_file.file.seek, 0, 2)  # Seek to end - ASYNC
     file_size = await asyncio.to_thread(upload_file.file.tell)  # Tell position - ASYNC  
     await asyncio.to_thread(upload_file.file.seek, 0)  # Reset to beginning - ASYNC
     
     # � Apply optimizations for large files on ALL platforms
     if file_size > 50 * 1024 * 1024:  # Files > 50MB
-        print(f"🔄 Large file detected ({file_size//1024//1024}MB) - enabling streaming optimizations")
+        print(f"[RETRY] Large file detected ({file_size//1024//1024}MB) - enabling streaming optimizations")
         
         # Android-specific feasibility check (but streaming works everywhere)
         if is_android:
             feasibility = optimize_for_upload(file_size)
             if feasibility['warnings']:
                 for warning in feasibility['warnings']:
-                    print(f"⚠️ {warning}")
+                    print(f"[WARN] {warning}")
             if feasibility['recommendations']:
-                print(f"💡 Android recommendations:")
+                print(f"[TIP] Android recommendations:")
                 for rec in feasibility['recommendations']:
                     print(f"   • {rec}")
         else:
@@ -634,26 +599,26 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
             feasibility = optimize_for_upload(file_size)
             if feasibility['warnings']:
                 for warning in feasibility['warnings']:
-                    print(f"⚠️ {warning}")
+                    print(f"[WARN] {warning}")
             if feasibility['recommendations']:
-                print(f"💡 {platform_name} recommendations:")
+                print(f"[TIP] {platform_name} recommendations:")
                 for rec in feasibility['recommendations']:
                     print(f"   • {rec}")
     
-    # 🎯 Universal adaptive chunk sizing optimized for each platform
+    # [TARGET] Universal adaptive chunk sizing optimized for each platform
     CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(file_size)
-    print(f"🎯 {platform_name} - chunk size: {CHUNK_SIZE//1024}KB")
+    print(f"[TARGET] {platform_name} - chunk size: {CHUNK_SIZE//1024}KB")
     
-    print(f"🔄 ASYNC Upload: {destination.name} ({file_size:,} bytes)")
+    print(f"[RETRY] ASYNC Upload: {destination.name} ({file_size:,} bytes)")
     
-    # 🔒 ACQUIRE FILE LOCK: Prevent race conditions during upload
+    # [LOCK] ACQUIRE FILE LOCK: Prevent race conditions during upload
     async with lock_manager.upload_lock(destination.name, timeout=60.0):
-        print(f"🔒 File lock acquired for: {destination.name}")
+        print(f"[LOCK] File lock acquired for: {destination.name}")
         
         if encrypt:
-            # 🔒 For now, fall back to original method for encrypted files
+            # [LOCK] For now, fall back to original method for encrypted files
             # TODO: Implement true streaming encryption in future update
-            print(f"🔒 Using existing encryption method (will be optimized in future)")
+            print(f"[LOCK] Using existing encryption method (will be optimized in future)")
             try:
                 data = await asyncio.to_thread(upload_file.file.read)
                 
@@ -662,7 +627,7 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                 
                 # Add file integrity validation for encrypted files
                 original_hash = hashlib.sha256(data).hexdigest()
-                print(f"🔒 Original file hash: {original_hash}")
+                print(f"[LOCK] Original file hash: {original_hash}")
                 
                 # Use memory-efficient streaming encryption
                 encrypted_data, metadata = encrypt_file_stream(data, chunk_size=CHUNK_SIZE)
@@ -677,14 +642,14 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                 async with aiofiles.open(temp_destination, 'wb') as f:
                     await f.write(encrypted_data)
                 
-                # 🎯 ATOMIC MOVE: Move encrypted file from .tmp to final destination
+                # [TARGET] ATOMIC MOVE: Move encrypted file from .tmp to final destination
                 import shutil
                 max_retries = 3 if is_windows else 1
                 retry_delay = 0.3 if is_windows else 0.1
                 
                 for attempt in range(max_retries):
                     try:
-                        print(f"🔄 Moving encrypted {temp_destination.name} → {destination.name} (attempt {attempt + 1})")
+                        print(f"[RETRY] Moving encrypted {temp_destination.name} → {destination.name} (attempt {attempt + 1})")
                         
                         if is_windows:
                             # Use shutil.move for better Windows compatibility
@@ -692,12 +657,12 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                         else:
                             temp_destination.rename(destination)
                         
-                        print(f"✅ Encrypted file atomically moved to final destination: {destination.name}")
+                        print(f"[OK] Encrypted file atomically moved to final destination: {destination.name}")
                         break
                         
                     except Exception as e:
                         if attempt < max_retries - 1:
-                            print(f"⚠️ Encrypted move attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}")
+                            print(f"[WARN] Encrypted move attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}")
                             await asyncio.sleep(retry_delay)
                             retry_delay *= 1.5  # Exponential backoff
                         else:
@@ -707,7 +672,7 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                                     temp_destination.unlink()
                                 except:
                                     pass
-                            print(f"❌ Failed to move encrypted temp file after {max_retries} attempts: {e}")
+                            print(f"[ERR] Failed to move encrypted temp file after {max_retries} attempts: {e}")
                             raise Exception(f"Failed to finalize encrypted upload after {max_retries} attempts: {e}")
                 
                 # Yield control periodically - OPTIMIZED: 10ms instead of 1ms for better performance
@@ -717,10 +682,10 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                 # Clean up encrypted temp file
                 if temp_destination.exists():
                     temp_destination.unlink()
-                print(f"❌ Encryption error: {e}")
+                print(f"[ERR] Encryption error: {e}")
                 raise
         else:
-            # 📦 Async Streaming upload without encryption
+            # [PKG] Async Streaming upload without encryption
             try:
                 import aiofiles
                 bytes_written = 0
@@ -749,7 +714,7 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                         
                         # Progress for large files (reduce spam)
                         if bytes_written > 10 * 1024 * 1024 and bytes_written % (20 * 1024 * 1024) == 0:
-                            print(f"📦 Progress: {bytes_written // 1024 // 1024}MB")
+                            print(f"[PKG] Progress: {bytes_written // 1024 // 1024}MB")
                             
                             # OPTIMIZED: Strategic memory management - only GC for very large files
                             if should_run_gc():
@@ -757,11 +722,11 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                                 await asyncio.sleep(0.01)  # Brief pause for GC
                 
                 # File handle is now closed, add extra delay for Windows
-                print(f"✅ Upload to temp file completed: {temp_destination.name} ({bytes_written:,} bytes)")
+                print(f"[OK] Upload to temp file completed: {temp_destination.name} ({bytes_written:,} bytes)")
                 if is_windows:
                     await asyncio.sleep(0.2)  # Extra delay for Windows to release file handle
                     
-                # 🎯 ATOMIC MOVE: Move from .tmp to final destination to prevent race conditions
+                # [TARGET] ATOMIC MOVE: Move from .tmp to final destination to prevent race conditions
                 import shutil
                 import time
                 max_retries = 3 if is_windows else 1
@@ -769,7 +734,7 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                 
                 for attempt in range(max_retries):
                     try:
-                        print(f"🔄 Moving {temp_destination.name} → {destination.name} (attempt {attempt + 1})")
+                        print(f"[RETRY] Moving {temp_destination.name} → {destination.name} (attempt {attempt + 1})")
                         
                         if is_windows:
                             # Use shutil.move for better Windows compatibility
@@ -777,12 +742,12 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                         else:
                             temp_destination.rename(destination)
                         
-                        print(f"✅ File atomically moved to final destination: {destination.name}")
+                        print(f"[OK] File atomically moved to final destination: {destination.name}")
                         break
                         
                     except Exception as e:
                         if attempt < max_retries - 1:
-                            print(f"⚠️ Move attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}")
+                            print(f"[WARN] Move attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}")
                             await asyncio.sleep(retry_delay)
                             retry_delay *= 1.5  # Exponential backoff
                         else:
@@ -792,31 +757,31 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                                     temp_destination.unlink()
                                 except:
                                     pass
-                            print(f"❌ Failed to move temp file after {max_retries} attempts: {e}")
+                            print(f"[ERR] Failed to move temp file after {max_retries} attempts: {e}")
                             raise Exception(f"Failed to finalize upload after {max_retries} attempts: {e}")
                 
             except Exception as e:
                 # Clean up partial temp file
                 if temp_destination.exists():
                     temp_destination.unlink()
-                print(f"❌ ASYNC Upload error: {e}")
+                print(f"[ERR] ASYNC Upload error: {e}")
                 raise
             finally:
-                # 🧹 Universal cleanup (applies to ALL platforms)
+                # [CLEAN] Universal cleanup (applies to ALL platforms)
                 if hasattr(universal_optimizer, 'upload_active'):
                     universal_optimizer.upload_active = False
                 universal_optimizer.memory_cleanup(force=True)
-                print(f"🔄 Universal async cleanup completed")
+                print(f"[RETRY] Universal async cleanup completed")
         
-        print(f"🔓 File lock released for: {destination.name}")
+        print(f"[UNLOCK] File lock released for: {destination.name}")
 
 async def scan_file_async(path: Path):
     """
-    🚀 Truly non-blocking async file scanning with frequent yielding
+    [START] Truly non-blocking async file scanning with frequent yielding
     """
     # Only show scan messages in verbose mode
     if os.getenv('LANVAN_VERBOSE') or os.getenv('DEBUG'):
-        print(f"🧪 Scanning file in background: {path}")
+        print(f" Scanning file in background: {path}")
     
     # OPTIMIZED: Yield control with better interval
     await asyncio.sleep(0.01)  # 10ms instead of 1ms
@@ -828,7 +793,7 @@ async def scan_file_async(path: Path):
         
         # For large files, break processing into smaller chunks with yielding
         if file_size > 100 * 1024 * 1024:  # >100MB
-            print(f"🔍 Large file processing with yielding: {path.name} ({file_size // 1024 // 1024}MB)")
+            print(f"[SEARCH] Large file processing with yielding: {path.name} ({file_size // 1024 // 1024}MB)")
             
             # Simulate chunked processing with frequent yielding
             chunk_count = max(1, file_size // (50 * 1024 * 1024))  # 50MB chunks
@@ -839,12 +804,12 @@ async def scan_file_async(path: Path):
                 # Simulate some processing work
                 if i % 10 == 0:  # Progress every 10 chunks
                     progress = (i + 1) / chunk_count * 100
-                    print(f"🔄 Processing {path.name}: {progress:.1f}% complete")
+                    print(f"[RETRY] Processing {path.name}: {progress:.1f}% complete")
         else:
             # Small files process quickly with minimal yielding - OPTIMIZED
             await asyncio.sleep(0.01)  # 10ms instead of 1ms
             
-        print(f"✅ File scan completed: {path.name}")
+        print(f"[OK] File scan completed: {path.name}")
         
     except Exception as e:
         # Silently handle scan errors during testing/normal operation
@@ -857,7 +822,7 @@ async def scan_file_async(path: Path):
 
 def scan_file(path: Path):
     """
-    🔄 Legacy sync wrapper - creates managed background task for processing
+    [RETRY] Legacy sync wrapper - creates managed background task for processing
     """
     try:
         # Check if we have a running event loop before creating task
@@ -868,7 +833,7 @@ def scan_file(path: Path):
             task = submit_background_task(scan_file_async(path), f"scan_file:{path.name}")
             if task is None:
                 # Task manager rejected task (likely due to limits) - graceful degradation
-                print(f"⚠️ Background file scan skipped (task limit): {path.name}")
+                print(f"[WARN] Background file scan skipped (task limit): {path.name}")
         except RuntimeError:
             # No event loop running - skip background scan
             pass
@@ -878,7 +843,7 @@ def scan_file(path: Path):
 
 # === Routes ===
 
-# 🛡️ HTTP-Safe AES Routes
+# [SHIELD] HTTP-Safe AES Routes
 @router.post("/encrypt_http_safe", name="encrypt_http_safe")
 async def encrypt_http_safe(
     request: Request,
@@ -893,7 +858,7 @@ async def encrypt_http_safe(
         # Save uploaded file temporarily using chunked streaming
         temp_input_path = UPLOAD_FOLDER / f"temp_input_{int(time.time())}_{file.filename}"
         
-        # 🔄 MEMORY FIX: Use Termux-optimized chunk size for streaming
+        # [RETRY] MEMORY FIX: Use Termux-optimized chunk size for streaming
         from .universal_optimizer import universal_optimizer, get_adaptive_chunk_size
         CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
         
@@ -1015,7 +980,7 @@ async def generate_decoy_traffic(request: Request):
 @router.get("/loading", response_class=HTMLResponse, name="loading")
 async def loading_page(request: Request, redirect: str = "/"):
     """Loading page shown while resources are being prepared"""
-    # 🏠 Direct loading page access - no redirects
+    #  Direct loading page access - no redirects
     return templates.TemplateResponse("loading.html", {
         "request": request,
         "redirect_url": redirect
@@ -1032,7 +997,7 @@ async def api_files():
             "count": len(files)
         })
     except Exception as e:
-        print(f"❌ Error getting file list: {e}")
+        print(f"[ERR] Error getting file list: {e}")
         return JSONResponse(
             status_code=500,
             content={"status": "error", "msg": f"Failed to get file list: {str(e)}"}
@@ -1152,7 +1117,7 @@ async def upload_files(
                     file_path = UPLOAD_FOLDER / f"{stem}_{counter}{suffix}"
                     counter += 1
                 
-                # 🔄 MEMORY FIX: Use Termux-optimized chunk size for streaming
+                # [RETRY] MEMORY FIX: Use Termux-optimized chunk size for streaming
                 from .universal_optimizer import get_adaptive_chunk_size
                 CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
                 
@@ -1194,19 +1159,19 @@ async def upload_auto_file(
             "msg": "No files uploaded"
         })
 
-    # 🔐 Protocol detection
+    # [AUTH] Protocol detection
     is_https = request.url.scheme == "https"
     
     # � ULTRA-FAST VALIDATION: Start uploads immediately with lightweight validation
     is_valid, error_messages, validated_files, security_warnings = await validate_upload_files_enhanced_fast(files, encrypt, is_https)
     if not is_valid:
-        # 🚨 LOG VALIDATION FAILURES for debugging
-        print(f"🚫 File validation failed:")
+        # [!] LOG VALIDATION FAILURES for debugging
+        print(f" File validation failed:")
         for i, file in enumerate(files):
             file_ext = Path(file.filename or "unknown").suffix.lower()
             print(f"   File {i+1}: {file.filename} ({file_ext}) - Size: {getattr(file, 'size', 'unknown')}")
         for error in error_messages:
-            print(f"   ❌ {error}")
+            print(f"   [ERR] {error}")
         
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
             "status": "error", 
@@ -1214,20 +1179,20 @@ async def upload_auto_file(
             "security_blocked": True
         })
     
-    # ✅ LOG SUCCESSFUL VALIDATION with file details
-    print(f"✅ File validation passed for {len(files)} files:")
+    # [OK] LOG SUCCESSFUL VALIDATION with file details
+    print(f"[OK] File validation passed for {len(files)} files:")
     for i, file in enumerate(files):
         file_ext = Path(file.filename or "unknown").suffix.lower()
         validated_file = validated_files[i] if i < len(validated_files) else {}
         print(f"   File {i+1}: {file.filename} ({file_ext}) -> {validated_file.get('sanitized_name', 'unknown')}")
         if file_ext in ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm']:
-            print(f"   🎥 Video file detected and approved!")
+            print(f"    Video file detected and approved!")
     
-    # 🚨 Log security warnings if any
+    # [!] Log security warnings if any
     if security_warnings:
-        print(f"⚠️ Security warnings for upload: {'; '.join(security_warnings)}")
+        print(f"[WARN] Security warnings for upload: {'; '.join(security_warnings)}")
 
-    # 🚫 Enforce encryption restrictions using centralized config
+    #  Enforce encryption restrictions using centralized config
     if encrypt:
         validation = AESConfig.validate_file_for_aes(0, is_https)  # Size will be checked per file
         if not validation['valid'] and 'HTTPS' in validation['error']:
@@ -1236,18 +1201,18 @@ async def upload_auto_file(
                 "msg": validation['error']
             })
 
-    # 🚀 CONCURRENT PROCESSING: Upload all files simultaneously with adaptive optimization
+    # [START] CONCURRENT PROCESSING: Upload all files simultaneously with adaptive optimization
     from .concurrent_upload_manager import upload_multiple_files_concurrent
     
     uploaded = []
     
-    print(f"🔍 Processing {len(files)} files for concurrent upload...")
+    print(f"[SEARCH] Processing {len(files)} files for concurrent upload...")
 
-    # 🚀 CONCURRENT PREPARATION: Prepare all file destinations simultaneously
+    # [START] CONCURRENT PREPARATION: Prepare all file destinations simultaneously
     async def prepare_file_for_upload(i: int, file: UploadFile) -> Dict[str, Any]:
         """Prepare a single file for upload concurrently"""
         try:
-            print(f"📁 Preparing file {i+1}/{len(files)}: {file.filename}")
+            print(f"[DIR] Preparing file {i+1}/{len(files)}: {file.filename}")
             
             if not file.filename:
                 return {"error": f"File {i+1}: No filename"}
@@ -1259,7 +1224,7 @@ async def upload_auto_file(
                 
             filename = validated_file['sanitized_name']
             file_size = validated_file['size']
-            print(f"📋 File {i+1} details: {filename} ({file_size} bytes)")
+            print(f"[INFO] File {i+1} details: {filename} ({file_size} bytes)")
 
             # Double-check with existing validation (defense in depth)
             if not is_allowed_file(filename):
@@ -1274,7 +1239,7 @@ async def upload_auto_file(
             save_name = filename + ".enc" if encrypt else filename
             filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, save_name)
 
-            print(f"💾 Will save file {i+1} as: {filepath.name}")
+            print(f"[SAVE] Will save file {i+1} as: {filepath.name}")
             
             return {
                 "success": True,
@@ -1291,7 +1256,7 @@ async def upload_auto_file(
         except Exception as e:
             return {"error": f"File {i+1}: Preparation failed - {str(e)}"}
     
-    # 🚀 PREPARE ALL FILES CONCURRENTLY
+    # [START] PREPARE ALL FILES CONCURRENTLY
     print(f"� Starting concurrent preparation of {len(files)} files...")
     preparation_tasks = [prepare_file_for_upload(i, file) for i, file in enumerate(files)]
     preparation_results = await asyncio.gather(*preparation_tasks, return_exceptions=True)
@@ -1303,14 +1268,14 @@ async def upload_auto_file(
     
     for i, result in enumerate(preparation_results):
         if isinstance(result, Exception):
-            print(f"❌ File {i+1} preparation exception: {str(result)}")
+            print(f"[ERR] File {i+1} preparation exception: {str(result)}")
         elif isinstance(result, dict) and "error" in result:
-            print(f"❌ {result['error']}")
+            print(f"[ERR] {result['error']}")
         elif isinstance(result, dict) and "success" in result:
             destinations.append(result["destination"])
             valid_files.append(result["file"])
             file_info.append(result["file_info"])
-            print(f"✅ File {i+1} prepared successfully")
+            print(f"[OK] File {i+1} prepared successfully")
     
     if not valid_files:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
@@ -1318,8 +1283,8 @@ async def upload_auto_file(
             "msg": "No valid files to process"
         })
     
-    # 🚀 Execute direct uploads with proper file handling
-    print(f"🚀 Starting direct upload of {len(valid_files)} files...")
+    # [START] Execute direct uploads with proper file handling
+    print(f"[START] Starting direct upload of {len(valid_files)} files...")
     
     upload_results = []
     
@@ -1330,9 +1295,9 @@ async def upload_auto_file(
             destination = destinations[i]
             info = file_info[i]
             
-            print(f"📤 Processing file {i+1}/{len(valid_files)}: {info['original_name']}")
+            print(f"[OUT] Processing file {i+1}/{len(valid_files)}: {info['original_name']}")
             
-            # 🔄 MEMORY FIX: Use Termux-optimized chunk size for direct streaming
+            # [RETRY] MEMORY FIX: Use Termux-optimized chunk size for direct streaming
             from .universal_optimizer import get_adaptive_chunk_size
             CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
             
@@ -1352,11 +1317,11 @@ async def upload_auto_file(
                 try:
                     from .http_safe_aes import encrypt_file_http_safe
                     encrypted_path, metadata = encrypt_file_http_safe(str(destination), info['original_name'])
-                    print(f"🔐 File {i+1} encrypted successfully")
+                    print(f"[AUTH] File {i+1} encrypted successfully")
                     # Update destination to the encrypted file
                     destination = Path(encrypted_path)
                 except Exception as e:
-                    print(f"❌ Encryption failed for file {i+1}: {e}")
+                    print(f"[ERR] Encryption failed for file {i+1}: {e}")
                     # Clean up original file if encryption failed
                     if destination.exists():
                         destination.unlink()
@@ -1374,10 +1339,10 @@ async def upload_auto_file(
                 'filename': info['original_name']
             })
             
-            print(f"✅ File {i+1} uploaded successfully: {destination.name}")
+            print(f"[OK] File {i+1} uploaded successfully: {destination.name}")
             
         except Exception as e:
-            print(f"❌ File {i+1} upload failed: {str(e)}")
+            print(f"[ERR] File {i+1} upload failed: {str(e)}")
             upload_results.append({
                 'success': False,
                 'error': str(e),
@@ -1392,11 +1357,11 @@ async def upload_auto_file(
             filepath = Path(result['destination'])
             background_tasks.add_task(scan_file, filepath)
             uploaded.append(filepath.name)
-            print(f"✅ File {i+1} uploaded successfully: {filepath.name}")
+            print(f"[OK] File {i+1} uploaded successfully: {filepath.name}")
         else:
-            print(f"❌ File {i+1} failed: {result.get('error', 'Unknown error')}")
+            print(f"[ERR] File {i+1} failed: {result.get('error', 'Unknown error')}")
 
-    print(f"🎉 Concurrent upload complete! {len(uploaded)} files uploaded: {uploaded}")
+    print(f"[DONE] Concurrent upload complete! {len(uploaded)} files uploaded: {uploaded}")
 
     if not uploaded:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
@@ -1415,27 +1380,27 @@ async def upload_auto_file(
         "files_skipped": len(files) - len(uploaded)
     }
     
-    print(f"🎯 Upload response: {response_data}")
+    print(f"[TARGET] Upload response: {response_data}")
     return JSONResponse(content=response_data)
 
 @router.get("/download/{filename}", name="download_file")
 @router.head("/download/{filename}")
 async def download_file(filename: str, request: Request):
-    print(f"📥 Download request for: {filename}")
+    print(f"[IN] Download request for: {filename}")
     
     safe_name = secure_filename(filename)
     file_path = UPLOAD_FOLDER / safe_name
     
-    print(f"📂 Looking for file at: {file_path}")
+    print(f"[DIR] Looking for file at: {file_path}")
 
     if not file_path.is_file():
-        print(f"❌ File not found: {file_path}")
+        print(f"[ERR] File not found: {file_path}")
         return Response("File not found", status_code=404)
 
     mime_type, _ = guess_type(str(file_path))
     file_size = file_path.stat().st_size
     
-    print(f"📊 File info - Size: {file_size} bytes, MIME: {mime_type}")
+    print(f"[STATS] File info - Size: {file_size} bytes, MIME: {mime_type}")
     
     # OK: Handle HEAD requests - return headers only for file info
     if request.method == "HEAD":
@@ -1451,7 +1416,7 @@ async def download_file(filename: str, request: Request):
     # OK: Determine protocol (HTTP vs HTTPS)
     is_https = request.url.scheme == "https"
     
-    # 🔐 Enforcement Rules:
+    # [AUTH] Enforcement Rules:
     # 1. .enc files: Always use full download (no chunking)
     # 2. Files ≥250MB: Use chunked download if not .enc
     # 3. Files <250MB: Always use full download
@@ -1459,31 +1424,31 @@ async def download_file(filename: str, request: Request):
     is_enc_file = safe_name.endswith(".enc")
     is_large_file = file_size >= 250 * 1024 * 1024  # 250MB threshold
     
-    print(f"🔍 Download strategy - Encrypted: {is_enc_file}, Large: {is_large_file}")
+    print(f"[SEARCH] Download strategy - Encrypted: {is_enc_file}, Large: {is_large_file}")
     
-    # 📦 Chunked download logic
+    # [PKG] Chunked download logic
     if is_large_file and not is_enc_file:
-        print("📦 Using chunked download")
+        print("[PKG] Using chunked download")
         return await chunked_download_file(file_path, safe_name, mime_type, file_size, request)
     else:
-        print("📄 Using full download")
+        print("[FILE] Using full download")
         return await full_download_file(file_path, safe_name, mime_type, file_size)
 
 async def full_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int):
     """Ultra-optimized full file download - for small files and .enc files"""
-    print(f"📤 Starting full download for: {safe_name}")
+    print(f"[OUT] Starting full download for: {safe_name}")
     
-    # 🚀 Much larger buffer for maximum speed - 32MB buffer (4x improvement)
+    # [START] Much larger buffer for maximum speed - 32MB buffer (4x improvement)
     STREAM_BUFFER_SIZE = 32 * 1024 * 1024  # 32MB buffer (was 8MB)
     
     def stream_file_ultra_optimized(path: Path):
-        print(f"🔄 Streaming file: {path}")
+        print(f"[RETRY] Streaming file: {path}")
         file_handle = None  # Track file handle for proper cleanup
         
         try:
             if path.suffix == ".enc":
-                print("🔐 Processing encrypted file")
-                # 🔐 Enhanced .enc file handling with streaming decryption and metadata validation
+                print("[AUTH] Processing encrypted file")
+                # [AUTH] Enhanced .enc file handling with streaming decryption and metadata validation
                 try:
                     # Check for metadata file first
                     metadata_path = path.with_suffix('.enc.meta')
@@ -1493,20 +1458,20 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                         with open(metadata_path, "r") as meta_file:
                             import json
                             metadata = json.load(meta_file)
-                            print(f"🔒 Found metadata for encrypted file: {metadata.get('encryption_method', 'legacy')}")
+                            print(f"[LOCK] Found metadata for encrypted file: {metadata.get('encryption_method', 'legacy')}")
                     
                     with open(path, "rb") as file:
                         encrypted_data = file.read()
-                        print(f"📊 Read {len(encrypted_data)} bytes of encrypted data")
+                        print(f"[STATS] Read {len(encrypted_data)} bytes of encrypted data")
                         
                         # Use appropriate decryption method based on metadata
                         if metadata and metadata.get('encryption_method') == 'streaming':
                             from .aes_utils import decrypt_file_stream
                             decrypted_data = decrypt_file_stream(encrypted_data, metadata, chunk_size=1024 * 1024)
-                            print(f"🔒 Used streaming decryption for {path.name}")
+                            print(f"[LOCK] Used streaming decryption for {path.name}")
                         else:
                             # Note: Legacy encryption not supported - file may be corrupted
-                            print(f"⚠️ Cannot decrypt {path.name} - legacy encryption no longer supported")
+                            print(f"[WARN] Cannot decrypt {path.name} - legacy encryption no longer supported")
                             yield f"Error: File {path.name} uses unsupported legacy encryption".encode('utf-8')
                             return
                         
@@ -1521,24 +1486,24 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                                 raise Exception(f"File integrity check failed! Expected: {expected_hash}, Got: {actual_hash}")
                             print(f"OK: File integrity validated successfully")
                         
-                        # 🚀 Stream in very large chunks for maximum speed
+                        # [START] Stream in very large chunks for maximum speed
                         data_length = len(decrypted_data)
                         chunks_sent = 0
                         for i in range(0, data_length, STREAM_BUFFER_SIZE):
                             chunk_end = min(i + STREAM_BUFFER_SIZE, data_length)
                             chunk = decrypted_data[i:chunk_end]
                             chunks_sent += 1
-                            print(f"📤 Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
+                            print(f"[OUT] Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
                             yield chunk
                             
                 except Exception as e:
-                    print(f"🚨 AES decryption failed for {path}: {e}")
+                    print(f"[!] AES decryption failed for {path}: {e}")
                     # Return error content instead of crashing
                     error_message = f"Error: Failed to decrypt file {path.name}. {str(e)}"
                     yield error_message.encode('utf-8')
             else:
-                print("📄 Processing regular file")
-                # 🚀 Ultra-fast regular file streaming with optimized buffer and proper cleanup
+                print("[FILE] Processing regular file")
+                # [START] Ultra-fast regular file streaming with optimized buffer and proper cleanup
                 try:
                     file_handle = open(path, "rb")
                     chunks_sent = 0
@@ -1547,11 +1512,11 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                         if not chunk:
                             break
                         chunks_sent += 1
-                        print(f"📤 Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
+                        print(f"[OUT] Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
                         yield chunk
                     print(f"OK: Completed streaming {chunks_sent} chunks")
                 except Exception as e:
-                    print(f"🚨 File streaming failed for {path}: {e}")
+                    print(f"[!] File streaming failed for {path}: {e}")
                     error_message = f"Error: Failed to read file {path.name}. {str(e)}"
                     yield error_message.encode('utf-8')
         finally:
@@ -1559,9 +1524,9 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
             if file_handle is not None:
                 try:
                     file_handle.close()
-                    print(f"✅ File handle closed for: {path.name}")
+                    print(f"[OK] File handle closed for: {path.name}")
                 except Exception as e:
-                    print(f"⚠️ Error closing file handle: {e}")
+                    print(f"[WARN] Error closing file handle: {e}")
             
             # Force garbage collection to release any remaining handles
             import gc
@@ -1579,9 +1544,9 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                     metadata = json.load(meta_file)
                     if 'original_size' in metadata:
                         final_file_size = int(metadata['original_size'])
-                        print(f"🔒 Using original size from metadata: {final_file_size}")
+                        print(f"[LOCK] Using original size from metadata: {final_file_size}")
             except Exception as e:
-                print(f"⚠️ Could not read metadata for size: {e}")
+                print(f"[WARN] Could not read metadata for size: {e}")
     
     headers = {
         "Content-Disposition": f'attachment; filename="{safe_name}"',
@@ -1596,7 +1561,7 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
     if not file_path.suffix == ".enc":
         headers["Content-Length"] = str(final_file_size)
     
-    print(f"📋 Response headers: {headers}")
+    print(f"[INFO] Response headers: {headers}")
     
     return StreamingResponse(
         stream_file_ultra_optimized(file_path),
@@ -1606,7 +1571,7 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
 
 async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, request: Request | None = None):
     """High-performance chunked file download - for large files (≥250MB) that are not .enc"""
-    # 🚀 Much larger chunk size for faster downloads - 16MB chunks (16x improvement)
+    # [START] Much larger chunk size for faster downloads - 16MB chunks (16x improvement)
     CHUNK_SIZE = 16 * 1024 * 1024  # 16MB chunks (was 1MB)
     
     # Check for Range header (for proper chunked downloads)
@@ -1635,7 +1600,7 @@ async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str 
             file.seek(start)
             remaining = content_length
             
-            # 🚀 Use larger buffer reads for maximum speed
+            # [START] Use larger buffer reads for maximum speed
             while remaining > 0:
                 # Dynamic chunk sizing - use full CHUNK_SIZE unless near end
                 chunk_size = min(CHUNK_SIZE, remaining)
@@ -1689,14 +1654,14 @@ async def download_all_files():
                 try:
                     if file.suffix == ".enc":
                         # Note: Legacy .enc files no longer supported for security reasons
-                        print(f"⚠️ Skipping legacy encrypted file: {file.name}")
+                        print(f"[WARN] Skipping legacy encrypted file: {file.name}")
                         error_content = f"File {file.name} uses legacy encryption which is no longer supported for security reasons."
                         zip_file.writestr(f"{file.stem}_LEGACY_ENCRYPTION_WARNING.txt", error_content.encode('utf-8'))
                     else:
                         # Add regular files directly
                         zip_file.write(file, arcname=file.name)
                 except Exception as e:
-                    print(f"⚠️ Error adding {file.name} to ZIP: {e}")
+                    print(f"[WARN] Error adding {file.name} to ZIP: {e}")
                     # Continue with other files even if one fails
                     continue
         
@@ -1722,7 +1687,7 @@ async def download_all_files():
         )
         
     except Exception as e:
-        print(f"❌ Error creating ZIP archive: {e}")
+        print(f"[ERR] Error creating ZIP archive: {e}")
         return JSONResponse(
             status_code=500,
             content={"error": f"Failed to create ZIP archive: {str(e)}"}
@@ -1734,7 +1699,7 @@ async def clear_files():
     from .windows_file_manager import WindowsFileManager
     
     try:
-        print("🧹 Starting enhanced file cleanup with Windows diagnostics...")
+        print("[CLEAN] Starting enhanced file cleanup with Windows diagnostics...")
         
         # Use enhanced cleanup with diagnostics
         results = await WindowsFileManager.enhanced_cleanup_with_diagnostics(
@@ -1753,7 +1718,7 @@ async def clear_files():
             # Provide helpful information about locked files
             lock_details = []
             for locked_file in locked_files:
-                detail = f"📄 {locked_file}"
+                detail = f"[FILE] {locked_file}"
                 # Find processes using this file
                 file_processes = [p for p in processes_using_files if locked_file in p.get('file_path', '')]
                 if file_processes:
@@ -1782,7 +1747,7 @@ async def clear_files():
             })
         else:
             message = f"Cleared {files_deleted} files and {chunks_deleted} chunks"
-            print(f"✅ {message}")
+            print(f"[OK] {message}")
             return JSONResponse(content={
                 "status": "success",
                 "msg": message,
@@ -1791,7 +1756,7 @@ async def clear_files():
                 "files_locked": 0
             })
     except Exception as e:
-        print(f"❌ Error during file clearing: {e}")
+        print(f"[ERR] Error during file clearing: {e}")
         # Return a JSON error response instead of crashing
         return JSONResponse(
             status_code=500,
@@ -1828,7 +1793,7 @@ async def delete_file(filename: str):
             )
             
     except Exception as e:
-        print(f"❌ Error deleting file {filename}: {e}")
+        print(f"[ERR] Error deleting file {filename}: {e}")
         return JSONResponse(
             status_code=500,
             content={"status": "error", "msg": f"Failed to delete file: {str(e)}"}
@@ -1897,10 +1862,10 @@ async def upload_chunk(
 ):
     """Handle individual chunk uploads for large files - supports both HTTP and HTTPS with adaptive chunking"""
     try:
-        # 🔐 Protocol detection
+        # [AUTH] Protocol detection
         is_https = request.url.scheme == "https"
         
-        # 🔍 COMPREHENSIVE VALIDATION: Validate upload request using centralized validation
+        # [SEARCH] COMPREHENSIVE VALIDATION: Validate upload request using centralized validation
         validation_result = FileValidator.validate_filename(filename)
         if not validation_result['valid']:
             return JSONResponse(
@@ -1908,18 +1873,18 @@ async def upload_chunk(
                 content={"status": "error", "msg": f"Validation failed: {validation_result['error']}"}
             )
         
-        # 🛡️ PRELIMINARY SECURITY: Basic extension check (full validation at finalization)
+        # [SHIELD] PRELIMINARY SECURITY: Basic extension check (full validation at finalization)
         extension = os.path.splitext(filename)[1].lower()
         if extension in AdvancedFileValidator.BLOCKED_EXTENSIONS:
             return JSONResponse(
                 status_code=HTTP_403_FORBIDDEN,
                 content={
                     "status": "security_blocked",
-                    "msg": f"🛡️ Blocked file type: {extension} files are not allowed for security reasons"
+                    "msg": f"[SHIELD] Blocked file type: {extension} files are not allowed for security reasons"
                 }
             )
         
-        # 🔍 Enhanced validation: Check part number validity
+        # [SEARCH] Enhanced validation: Check part number validity
         if part_number < 1:
             return JSONResponse(
                 status_code=HTTP_400_BAD_REQUEST,
@@ -1940,7 +1905,7 @@ async def upload_chunk(
                 content={"status": "error", "msg": "Invalid filename"}
             )
         
-        # 🚫 Enforce .enc file restrictions on HTTPS
+        #  Enforce .enc file restrictions on HTTPS
         if is_https and safe_filename.endswith(".enc"):
             return JSONResponse(
                 status_code=HTTP_400_BAD_REQUEST,
@@ -1950,7 +1915,7 @@ async def upload_chunk(
                 }
             )
         
-        # 📊 Check available disk space before writing
+        # [STATS] Check available disk space before writing
         import shutil
         total, used, free = shutil.disk_usage(TEMP_CHUNKS_FOLDER)
         
@@ -1979,12 +1944,12 @@ async def upload_chunk(
         chunk_filename = f"{safe_filename}.part{part_number}"
         chunk_path = TEMP_CHUNKS_FOLDER / chunk_filename
         
-        # 🔍 Check for duplicate chunks (prevent overwrites)
+        # [SEARCH] Check for duplicate chunks (prevent overwrites)
         if chunk_path.exists():
             # Log potential issue but allow overwrite (might be a retry)
-            print(f"⚠️ Warning: Chunk {chunk_filename} already exists, overwriting (possible retry)")
+            print(f"[WARN] Warning: Chunk {chunk_filename} already exists, overwriting (possible retry)")
         
-        # 🌊 Ensure streaming assembly is initialized and register file if this is the first chunk
+        # [STREAM] Ensure streaming assembly is initialized and register file if this is the first chunk
         ensure_streaming_initialized()
         
         if part_number == 1 and total_parts:
@@ -1994,19 +1959,19 @@ async def upload_chunk(
                 # Estimate total size as chunk size * total parts (approximation)
                 estimated_size = len(chunk_data) * total_parts
                 assembler.register_file(safe_filename, total_parts, filename, estimated_size)
-                print(f"🌊 Registered {safe_filename} for streaming assembly")
+                print(f"[STREAM] Registered {safe_filename} for streaming assembly")
         
-        # 🚀 ADD CHUNK TO STREAMING ASSEMBLY SYSTEM
+        # [START] ADD CHUNK TO STREAMING ASSEMBLY SYSTEM
         assembler = get_streaming_assembler()
         streaming_result = None
         if assembler:
             # Add chunk to streaming assembly for real-time processing
             streaming_result = add_streaming_chunk(safe_filename, part_number, chunk_data)
-            print(f"🌊 Added chunk to streaming assembly: {streaming_result}")
+            print(f"[STREAM] Added chunk to streaming assembly: {streaming_result}")
             
             # Check if file completed via streaming assembly
             if streaming_result and streaming_result.get("status") == "completed":
-                print(f"✅ File completed via streaming assembly: {safe_filename}")
+                print(f"[OK] File completed via streaming assembly: {safe_filename}")
                 
                 # Clean up temp chunks since file is completed via streaming
                 try:
@@ -2016,9 +1981,9 @@ async def upload_chunk(
                         chunk_file.unlink()
                         temp_chunks_cleaned += 1
                     if temp_chunks_cleaned > 0:
-                        print(f"🧹 Cleaned up {temp_chunks_cleaned} temp chunk files for {safe_filename}")
+                        print(f"[CLEAN] Cleaned up {temp_chunks_cleaned} temp chunk files for {safe_filename}")
                 except Exception as e:
-                    print(f"⚠️ Warning: Could not clean up temp chunks: {e}")
+                    print(f"[WARN] Warning: Could not clean up temp chunks: {e}")
                 
                 # File is already assembled, no need to save chunk to temp folder
                 return JSONResponse(content={
@@ -2032,7 +1997,7 @@ async def upload_chunk(
                     "protocol": "HTTPS" if is_https else "HTTP"
                 })
         
-        # 🔄 FALLBACK: Save chunk to temp folder (for traditional assembly if streaming fails)
+        # [RETRY] FALLBACK: Save chunk to temp folder (for traditional assembly if streaming fails)
         # This maintains backward compatibility while adding streaming assembly
         
         # Save the chunk with error handling
@@ -2097,7 +2062,7 @@ async def finalize_upload(
 ):
     """Combine all chunks into final file - supports streaming assembly with failsafe fallback"""
     try:
-        # 🔐 Protocol detection  
+        # [AUTH] Protocol detection  
         is_https = request.url.scheme == "https"
         
         # Secure the filename
@@ -2108,7 +2073,7 @@ async def finalize_upload(
                 content={"status": "error", "msg": "Invalid filename"}
             )
         
-        # 🚫 Enforce encryption restrictions
+        #  Enforce encryption restrictions
         if encrypt and not is_https:
             return JSONResponse(
                 status_code=HTTP_400_BAD_REQUEST,
@@ -2118,7 +2083,7 @@ async def finalize_upload(
                 }
             )
 
-        # 🌊 Check if streaming assembly is available and completed
+        # [STREAM] Check if streaming assembly is available and completed
         ensure_streaming_initialized()
         assembler = get_streaming_assembler()
         streaming_completed = False
@@ -2126,11 +2091,11 @@ async def finalize_upload(
         background_processing_done = False
         validation_from_background = None
         
-        # 🚀 ENHANCED: Check streaming assembly status first
+        # [START] ENHANCED: Check streaming assembly status first
         if assembler:
             # Check if file was completed via streaming assembly
             streaming_status = check_streaming_status(safe_filename)
-            print(f"🔍 Streaming assembly status: {streaming_status}")
+            print(f"[SEARCH] Streaming assembly status: {streaming_status}")
             
             if streaming_status and streaming_status.get('status') == 'ready':
                 # File completed via streaming assembly
@@ -2138,34 +2103,34 @@ async def finalize_upload(
                 if file_info and file_info.get('status') == 'ready':
                     streaming_completed = True
                     final_path = Path(file_info['path'])
-                    print(f"✅ File completed via streaming assembly: {safe_filename}")
-                    print(f"   📁 Path: {final_path}")
-                    print(f"   📊 Size: {final_path.stat().st_size:,} bytes")
+                    print(f"[OK] File completed via streaming assembly: {safe_filename}")
+                    print(f"   [DIR] Path: {final_path}")
+                    print(f"   [STATS] Size: {final_path.stat().st_size:,} bytes")
         
         # Second, check if streaming-assembled file already exists (legacy check)
         potential_streaming_file = UPLOAD_FOLDER / safe_filename
         if not streaming_completed and potential_streaming_file.exists():
-            print(f"🌊 Found legacy streaming-assembled file: {safe_filename}")
+            print(f"[STREAM] Found legacy streaming-assembled file: {safe_filename}")
             streaming_completed = True
             final_path = potential_streaming_file
             
-            # 🚀 Check if background processing was completed during streaming
+            # [START] Check if background processing was completed during streaming
             if assembler:
                 status = assembler.check_status(safe_filename)
                 if status and status.get('validation_result'):
                     validation_from_background = status['validation_result']
                     background_processing_done = True
-                    print(f"⚡ Background processing completed during upload - no additional processing needed!")
+                    print(f"[FAST] Background processing completed during upload - no additional processing needed!")
         
-        print(f"🔍 Streaming completed: {streaming_completed}")
-        print(f"🔍 Background processing done: {background_processing_done}")
-        print(f"🔍 Final path: {final_path}")
+        print(f"[SEARCH] Streaming completed: {streaming_completed}")
+        print(f"[SEARCH] Background processing done: {background_processing_done}")
+        print(f"[SEARCH] Final path: {final_path}")
         
-        # 🔄 Failsafe: Use traditional chunk combination if streaming didn't complete
+        # [RETRY] Failsafe: Use traditional chunk combination if streaming didn't complete
         if not streaming_completed:
-            print(f"🔄 Using traditional chunk assembly for {safe_filename}")
+            print(f"[RETRY] Using traditional chunk assembly for {safe_filename}")
             
-            # 🚀 Auto-detect actual chunks (adaptive chunked upload support)
+            # [START] Auto-detect actual chunks (adaptive chunked upload support)
             chunk_files = []
             part_num = 1
             while True:
@@ -2183,7 +2148,7 @@ async def finalize_upload(
                 # Check if streaming file was created
                 potential_file = UPLOAD_FOLDER / safe_filename
                 if potential_file.exists():
-                    print(f"🌊 Found streaming-assembled file: {safe_filename}")
+                    print(f"[STREAM] Found streaming-assembled file: {safe_filename}")
                     streaming_completed = True
                     final_path = potential_file
                 else:
@@ -2203,7 +2168,7 @@ async def finalize_upload(
                 final_filename = safe_filename + ".enc" if encrypt else safe_filename
                 final_path = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, final_filename)
                 
-                # 🚀 Fast chunk combination with proper error handling
+                # [START] Fast chunk combination with proper error handling
                 with open(final_path, "wb") as final_file:
                     for part_num, chunk_path in chunk_files:
                         if not chunk_path.exists():
@@ -2230,7 +2195,7 @@ async def finalize_upload(
                                 # Note: For production use, you'd want to store session_key and session_iv securely
                                 # For now, this is just for demonstration - chunks are temporary
                             except Exception as encrypt_error:
-                                print(f"🚨 AES encryption failed for chunk {part_num}: {encrypt_error}")
+                                print(f"[!] AES encryption failed for chunk {part_num}: {encrypt_error}")
                                 # Clean up and return error
                                 if final_path.exists():
                                     final_path.unlink()
@@ -2277,7 +2242,7 @@ async def finalize_upload(
                     final_path = encrypted_path
                     
                 except Exception as encrypt_error:
-                    print(f"🚨 AES encryption failed for streaming file: {encrypt_error}")
+                    print(f"[!] AES encryption failed for streaming file: {encrypt_error}")
                     if final_path.exists():
                         final_path.unlink()
                     
@@ -2305,15 +2270,15 @@ async def finalize_upload(
                     }
                 )
         
-        # 🛡️ ENHANCED SECURITY: Validate the assembled file (skip if already done in background)
+        # [SHIELD] ENHANCED SECURITY: Validate the assembled file (skip if already done in background)
         try:
             if background_processing_done and validation_from_background:
-                # 🚀 Use validation results from background processing - massive time savings!
-                print(f"⚡ Using background validation results - skipping duplicate processing!")
+                # [START] Use validation results from background processing - massive time savings!
+                print(f"[FAST] Using background validation results - skipping duplicate processing!")
                 security_check = validation_from_background
             elif final_path:
-                # 🐌 Traditional validation (slower)
-                print(f"🔄 Performing security validation (no background processing available)")
+                #  Traditional validation (slower)
+                print(f"[RETRY] Performing security validation (no background processing available)")
                 security_check = FileValidator.validate_uploaded_file(final_path, filename)
             else:
                 # No final_path available
@@ -2333,7 +2298,7 @@ async def finalize_upload(
                     status_code=HTTP_403_FORBIDDEN,
                     content={
                         "status": "security_blocked",
-                        "msg": f"🛡️ Security Check Failed: {errors[0] if errors else 'Unknown error'}",
+                        "msg": f"[SHIELD] Security Check Failed: {errors[0] if errors else 'Unknown error'}",
                         "security_details": {
                             "blocked_reason": errors[0] if errors else 'Unknown security violation',
                             "detected_type": security_check.get('actual_type'),
@@ -2344,7 +2309,7 @@ async def finalize_upload(
                 )
                 
         except Exception as validation_error:
-            print(f"⚠️ Security validation error for {final_path.name if final_path else 'unknown file'}: {validation_error}")
+            print(f"[WARN] Security validation error for {final_path.name if final_path else 'unknown file'}: {validation_error}")
             # If validation fails, delete the file as a precaution
             if final_path and final_path.exists():
                 final_path.unlink()
@@ -2378,9 +2343,9 @@ async def finalize_upload(
                                 chunk_file.unlink()
                                 temp_chunks_cleaned += 1
                             if temp_chunks_cleaned > 0:
-                                print(f"🧹 Cleaned up {temp_chunks_cleaned} temp chunk files for {safe_filename}")
+                                print(f"[CLEAN] Cleaned up {temp_chunks_cleaned} temp chunk files for {safe_filename}")
                         except Exception as cleanup_error:
-                            print(f"⚠️ Warning: Could not clean up temp chunks: {cleanup_error}")
+                            print(f"[WARN] Warning: Could not clean up temp chunks: {cleanup_error}")
                             
             except AttributeError:
                 # Assembler doesn't have these methods, skip cleanup
@@ -2393,7 +2358,7 @@ async def finalize_upload(
         # Handle warnings safely
         warnings = security_check.get('warnings', []) if isinstance(security_check, dict) else []
         if warnings:
-            success_msg += f" ⚠️ Security Notes: {'; '.join(warnings)}"
+            success_msg += f" [WARN] Security Notes: {'; '.join(warnings)}"
         
         return JSONResponse(content={
             "status": "success",
@@ -2425,7 +2390,7 @@ async def finalize_upload(
             content={"status": "error", "msg": f"File assembly failed: {str(e)}"}
         )
 
-# 🚨 EMERGENCY SHUTDOWN ENDPOINT
+# [!] EMERGENCY SHUTDOWN ENDPOINT
 @router.post("/api/shutdown")
 async def emergency_shutdown():
     """
@@ -2435,8 +2400,8 @@ async def emergency_shutdown():
     import asyncio
     from app.main import shutdown_event, connection_manager
     
-    print("🚨 EMERGENCY SHUTDOWN REQUESTED!")
-    print("⚠️ Notifying all connected clients...")
+    print("[!] EMERGENCY SHUTDOWN REQUESTED!")
+    print("[WARN] Notifying all connected clients...")
     
     # Set the shutdown flag immediately
     shutdown_event.set()
@@ -2444,7 +2409,7 @@ async def emergency_shutdown():
     # Send shutdown notifications to all active clients
     async def notify_clients():
         await connection_manager.disconnect_all()
-        print("✅ All clients notified and disconnected")
+        print("[OK] All clients notified and disconnected")
     
     # Schedule client notification in background
     asyncio.create_task(notify_clients())
@@ -2452,7 +2417,7 @@ async def emergency_shutdown():
     # Force server shutdown after brief delay for response
     async def force_shutdown():
         await asyncio.sleep(0.5)  # Allow response to be sent
-        print("🔥 FORCING SERVER SHUTDOWN...")
+        print("[HOT] FORCING SERVER SHUTDOWN...")
         import os
         os._exit(0)  # Force immediate shutdown
     
@@ -2460,44 +2425,9 @@ async def emergency_shutdown():
     
     return JSONResponse({
         "status": "shutdown",
-        "message": "🚨 Server is shutting down immediately. All operations halted.",
-        "warning": "⚠️ All active uploads and downloads have been terminated.",
+        "message": "[!] Server is shutting down immediately. All operations halted.",
+        "warning": "[WARN] All active uploads and downloads have been terminated.",
         "action": "Server will restart automatically if using a process manager."
-    })
-
-# 🔍 SERVER STATUS ENDPOINT
-@router.get("/api/server-status")
-async def server_status():
-    """Check if server is shutting down"""
-    from app.main import shutdown_event, graceful_shutdown_initiated, shutdown_countdown
-    
-    # Check for graceful shutdown state
-    if graceful_shutdown_initiated:
-        return JSONResponse({
-            "status": "shutting_down",
-            "message": f"⚠️ Server shutdown initiated. {shutdown_countdown} seconds remaining.",
-            "shutdown": False,
-            "shutdownWarning": True,
-            "warningMessage": "Server is shutting down gracefully",
-            "countdown": shutdown_countdown
-        })
-    
-    if shutdown_event.is_set():
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "shutdown",
-                "message": "🚨 Server is now inactive. Please restart the server.",
-                "shutdown": True,
-                "timeRemaining": 0
-            }
-        )
-    
-    return JSONResponse({
-        "status": "online",
-        "message": "✅ Server is running normally",
-        "shutdown": False,
-        "resources_ready": True  # If we can respond to this request, resources are ready
     })
 
 @router.get("/api/network-info", name="network_info")
@@ -2589,7 +2519,7 @@ async def generate_offline_qr(text: str, size: int = 200):
                      "TERMUX_VERSION" in os.environ)
         
         if is_android:
-            print("📱 Android/Termux QR generation - using optimized settings")
+            print("[MOBILE] Android/Termux QR generation - using optimized settings")
         
         # Create QR code with Android-optimized settings
         box_size = max(1, size // 25) if not is_android else max(2, size // 20)  # Larger boxes for Android
@@ -2607,7 +2537,7 @@ async def generate_offline_qr(text: str, size: int = 200):
             qr_img = qr.make_image(fill_color="black", back_color="white")
         except Exception as img_error:
             if is_android:
-                print(f"📱 Android QR image creation fallback: {img_error}")
+                print(f"[MOBILE] Android QR image creation fallback: {img_error}")
                 # Try simpler image creation for Android
                 qr_img = qr.make_image()
             else:
@@ -2625,10 +2555,10 @@ async def generate_offline_qr(text: str, size: int = 200):
                 qr_img.save(img_buffer, 'PNG')
                 save_success = True
                 if is_android:
-                    print("📱 Android QR: PNG save successful")
+                    print("[MOBILE] Android QR: PNG save successful")
             except Exception as png_error:
                 if is_android:
-                    print(f"📱 Android QR PNG save failed: {png_error}")
+                    print(f"[MOBILE] Android QR PNG save failed: {png_error}")
         
         # Method 2: Format-less save (Android fallback)
         if not save_success:
@@ -2637,10 +2567,10 @@ async def generate_offline_qr(text: str, size: int = 200):
                 qr_img.save(img_buffer)
                 save_success = True
                 if is_android:
-                    print("📱 Android QR: Fallback save successful")
+                    print("[MOBILE] Android QR: Fallback save successful")
             except Exception as fallback_error:
                 if is_android:
-                    print(f"📱 Android QR fallback save failed: {fallback_error}")
+                    print(f"[MOBILE] Android QR fallback save failed: {fallback_error}")
         
         # Method 3: Text-based QR for Android (ultimate fallback)
         if not save_success and is_android:
@@ -2655,7 +2585,7 @@ async def generate_offline_qr(text: str, size: int = 200):
                     "message": "QR generated as text for Android compatibility"
                 })
             except Exception as text_error:
-                print(f"📱 Android QR text fallback failed: {text_error}")
+                print(f"[MOBILE] Android QR text fallback failed: {text_error}")
         
         if not save_success:
             raise Exception(f"All QR generation methods failed")
@@ -2695,11 +2625,11 @@ def load_clipboard_history():
                 data = json.load(f)
                 clipboard_history = data.get('items', [])
                 clipboard_id_counter = data.get('last_id', 0)
-                print(f"📋 Loaded {len(clipboard_history)} clipboard items from persistent storage")
+                print(f"[INFO] Loaded {len(clipboard_history)} clipboard items from persistent storage")
         else:
-            print("📋 No persistent clipboard history found, starting fresh")
+            print("[INFO] No persistent clipboard history found, starting fresh")
     except Exception as e:
-        print(f"❌ Error loading clipboard history: {e}")
+        print(f"[ERR] Error loading clipboard history: {e}")
         clipboard_history = []
         clipboard_id_counter = 0
 
@@ -2734,7 +2664,7 @@ def save_clipboard_history():
         temp_file.replace(CLIPBOARD_HISTORY_FILE)
         
     except Exception as e:
-        print(f"❌ Error saving clipboard history: {e}")
+        print(f"[ERR] Error saving clipboard history: {e}")
 
 def restore_clipboard_data(items):
     """Restore clipboard data after loading from JSON (decode base64 data)"""
@@ -2747,7 +2677,7 @@ def restore_clipboard_data(items):
                 item['data'] = base64.b64decode(item['data'])
                 del item['data_encoding']  # Remove the encoding marker
             except Exception as e:
-                print(f"❌ Error decoding clipboard item {item.get('id', 'unknown')}: {e}")
+                print(f"[ERR] Error decoding clipboard item {item.get('id', 'unknown')}: {e}")
                 # Remove corrupted item
                 continue
     
@@ -2762,9 +2692,9 @@ def initialize_clipboard_persistence():
         global clipboard_history
         if clipboard_history:
             clipboard_history = restore_clipboard_data(clipboard_history)
-        print(f"📋 Clipboard persistence initialized successfully with {len(clipboard_history)} items")
+        print(f"[INFO] Clipboard persistence initialized successfully with {len(clipboard_history)} items")
     except Exception as e:
-        print(f"❌ Error initializing clipboard persistence: {e}")
+        print(f"[ERR] Error initializing clipboard persistence: {e}")
         clipboard_history.clear()
         global clipboard_id_counter
         clipboard_id_counter = 0
@@ -2772,7 +2702,7 @@ def initialize_clipboard_persistence():
 @router.get("/clipboard", response_class=HTMLResponse, name="clipboard_page")
 async def clipboard_page(request: Request):
     """Full page clipboard route"""
-    # 🏠 Direct clipboard access - no redirects
+    #  Direct clipboard access - no redirects
     files = get_file_list()  # Include files for seamless switching
     
     # Render the same template, but with clipboard as default view
@@ -2821,7 +2751,7 @@ async def add_to_clipboard(
                     content_type = type_name
                     break
             
-            # 🔄 MEMORY FIX: Use Termux-optimized chunk size for clipboard streaming
+            # [RETRY] MEMORY FIX: Use Termux-optimized chunk size for clipboard streaming
             from .universal_optimizer import get_adaptive_chunk_size
             CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
             MAX_SIZE = 10 * 1024 * 1024  # 10MB limit
@@ -3183,7 +3113,7 @@ async def clipboard_write(request: Request):
 async def mdns_info():
     """Get mDNS service information"""
     try:
-        from simple_mdns import mdns_manager
+        from app.simple_mdns import mdns_manager
         info = mdns_manager.get_mdns_info()
         return JSONResponse(content=info)
     except Exception as e:
@@ -3228,7 +3158,7 @@ async def system_logs():
             
         # Add thread manager logs if available
         try:
-            from thread_manager import thread_manager
+            from app.thread_manager import thread_manager
             if hasattr(thread_manager, 'get_logs'):
                 thread_logs = thread_manager.get_logs()
                 logs.extend(thread_logs)
@@ -3337,7 +3267,7 @@ async def favicon():
         # Return 204 instead of 500 to prevent console errors
         return Response(status_code=204)
 
-# 📁 FOLDER UPLOAD/DOWNLOAD ROUTES
+# [DIR] FOLDER UPLOAD/DOWNLOAD ROUTES
 
 @router.post("/upload-folder", name="upload_folder")
 async def upload_folder(
@@ -3354,7 +3284,7 @@ async def upload_folder(
             "msg": "No files uploaded"
         })
 
-    # 🔐 Protocol detection
+    # [AUTH] Protocol detection
     is_https = request.url.scheme == "https"
     
     # Create folder directory
@@ -3384,7 +3314,7 @@ async def upload_folder(
                 uploaded_files.append(str(final_path.relative_to(UPLOAD_FOLDER)))
                 
         except Exception as e:
-            print(f"❌ Failed to upload file {file.filename}: {e}")
+            print(f"[ERR] Failed to upload file {file.filename}: {e}")
             failed_files.append(file.filename)
     
     return JSONResponse(content={
@@ -3453,7 +3383,7 @@ async def list_folders():
         })
         
     except Exception as e:
-        print(f"❌ Error listing folders: {e}")
+        print(f"[ERR] Error listing folders: {e}")
         return JSONResponse(content={
             "status": "error",
             "msg": "Failed to list folders"
@@ -3476,7 +3406,7 @@ async def delete_folder(folder_name: str):
             "msg": f"Folder '{folder_name}' deleted successfully"
         })
     except Exception as e:
-        print(f"❌ Error deleting folder {folder_name}: {e}")
+        print(f"[ERR] Error deleting folder {folder_name}: {e}")
         return JSONResponse(status_code=500, content={
             "status": "error",
             "msg": f"Failed to delete folder: {e}"

@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.requests import ClientDisconnect
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.routes import router
 
 # Import mDNS manager for service discovery
@@ -22,7 +23,7 @@ from app.simple_mdns import mdns_manager
 # Import HTTPS redirect server for dual-protocol support
 # Removed: HTTPS redirect server import (no longer needed)
 
-# 🔇 Suppress noisy ClientDisconnect errors in logs
+#  Suppress noisy ClientDisconnect errors in logs
 class ClientDisconnectFilter(logging.Filter):
     def filter(self, record):
         if hasattr(record, 'exc_info') and record.exc_info:
@@ -59,11 +60,11 @@ logging.getLogger("starlette").addFilter(ClientDisconnectFilter())
 logging.getLogger("fastapi").addFilter(ClientDisconnectFilter())
 logging.getLogger().addFilter(ClientDisconnectFilter())
 
-# 🚨 Global shutdown event for immediate server termination
+# [!] Global shutdown event for immediate server termination
 shutdown_event = asyncio.Event()
 active_connections = set()
 
-# 🎯 Global graceful shutdown state
+# [TARGET] Global graceful shutdown state
 graceful_shutdown_initiated = False
 shutdown_countdown = 0
 
@@ -91,7 +92,7 @@ class ConnectionManager:
 connection_manager = ConnectionManager()
 
 
-# 🎯 Console command monitor for "close" command
+# [TARGET] Console command monitor for "close" command
 from app.clipboard_ws import clipboard_ws_router
 
 def console_command_monitor():
@@ -100,7 +101,7 @@ def console_command_monitor():
         try:
             command = input().strip().lower()
             if command in ['close', 'quit', 'exit', 'shutdown']:
-                print(f"🚨 Console command '{command}' detected - initiating graceful shutdown...")
+                print(f"[!] Console command '{command}' detected - initiating graceful shutdown...")
                 initiate_graceful_shutdown_process()
                 break
         except (EOFError, KeyboardInterrupt):
@@ -110,7 +111,7 @@ def console_command_monitor():
             # Ignore input errors and continue monitoring
             pass
 
-# 🎯 Graceful shutdown process
+# [TARGET] Graceful shutdown process
 def initiate_graceful_shutdown_process():
     """Start graceful shutdown with client notifications"""
     global graceful_shutdown_initiated, shutdown_countdown
@@ -121,16 +122,16 @@ def initiate_graceful_shutdown_process():
     graceful_shutdown_initiated = True
     shutdown_countdown = 5  # 5 second countdown
     
-    print("🚨 Graceful shutdown initiated - notifying all connected clients...")
+    print("[!] Graceful shutdown initiated - notifying all connected clients...")
     
     def countdown_and_shutdown():
         global shutdown_countdown
         for i in range(5, 0, -1):
             shutdown_countdown = i
-            print(f"🕒 Shutdown in {i} seconds...")
-            threading.Event().wait(1)  # Non-blocking sleep
+            print(f"[TIME] Shutdown in {i} seconds...")
+            time.sleep(1)  # sleep 1 second between countdown steps
         
-        print("🚨 Server is now inactive...")
+        print("[!] Server is now inactive...")
         shutdown_event.set()
         
         # Force exit to ensure immediate shutdown
@@ -140,11 +141,11 @@ def initiate_graceful_shutdown_process():
     shutdown_thread = threading.Thread(target=countdown_and_shutdown, daemon=True)
     shutdown_thread.start()
 
-# 🎯 Signal handlers for Ctrl+C and other termination signals
+# [TARGET] Signal handlers for Ctrl+C and other termination signals
 def signal_handler(signum, frame):
     """Handle Ctrl+C and other termination signals"""
     signal_name = signal.Signals(signum).name
-    print(f"\n🚨 {signal_name} signal received - initiating graceful shutdown...")
+    print(f"\n[!] {signal_name} signal received - initiating graceful shutdown...")
     initiate_graceful_shutdown_process()
 
 # Register signal handlers
@@ -159,8 +160,8 @@ print("[INFO] Type 'close' to shutdown, or use Ctrl+C")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle app startup and shutdown"""
-    print("🚀 Server starting up with enhanced shutdown handling...")
-    print("💡 Use Ctrl+C to shutdown gracefully (console commands disabled)")
+    print("[START] Server starting up with enhanced shutdown handling...")
+    print("[TIP] Use Ctrl+C to shutdown gracefully (console commands disabled)")
     
     # Start responsiveness monitor
     from app.responsiveness_manager import responsiveness_monitor
@@ -174,9 +175,9 @@ async def lifespan(app: FastAPI):
     mdns_manager.port = port
     mdns_manager.use_https = use_https  # Configure HTTPS mode
     
-    print(f"🔍 Starting mDNS service discovery ({'HTTPS' if use_https else 'HTTP'} mode)...")
+    print(f"[SEARCH] Starting mDNS service discovery ({'HTTPS' if use_https else 'HTTP'} mode)...")
     
-    # 🔀 HTTPS redirect server DISABLED for flexible access
+    #  HTTPS redirect server DISABLED for flexible access
     # This allows both HTTP and HTTPS access without forced redirects:
     # - Users can access http://lanvan.local for HTTP
     # - Users can access https://lanvan.local for HTTPS  
@@ -188,9 +189,9 @@ async def lifespan(app: FastAPI):
     #         # Determine HTTP redirect port logic...
     #         await start_https_redirect_server(port, http_redirect_port)
     #     except Exception as e:
-    #         print(f"⚠️ HTTPS redirect server failed: {e}")
+    #         print(f"[WARN] HTTPS redirect server failed: {e}")
     
-    print(f"🌐 Flexible access enabled: Both HTTP and HTTPS protocols supported")
+    print(f"[NET] Flexible access enabled: Both HTTP and HTTPS protocols supported")
     
     # Start mDNS in background thread to not block server startup
     def start_mdns_background():
@@ -198,18 +199,18 @@ async def lifespan(app: FastAPI):
             time.sleep(1)  # Give server time to start
             if mdns_manager.start_service():
                 mdns_info = mdns_manager.get_mdns_info()
-                print(f"✅ mDNS service active: {mdns_info['domain']}")
+                print(f"[OK] mDNS service active: {mdns_info['domain']}")
                 print(f"   Access via: {mdns_info['url']}")
                 if mdns_info['conflict_resolved']:
-                    print(f"   🔧 Conflict resolved (attempt #{mdns_info['conflict_count'] + 1})")
+                    print(f"   [CFG] Conflict resolved (attempt #{mdns_info['conflict_count'] + 1})")
                 
                 # Show redirect info for HTTPS mode
                 if use_https and mdns_info['domain'] != "lanvan.local":
-                    print(f"🔀 Redirect available: http://lanvan.local → https://lanvan.local:{port}")
+                    print(f" Redirect available: http://lanvan.local → https://lanvan.local:{port}")
             else:
-                print("⚠️  mDNS service failed to start - using IP access only")
+                print("[WARN]  mDNS service failed to start - using IP access only")
         except Exception as e:
-            print(f"⚠️  mDNS service error: {e} - using IP access only")
+            print(f"[WARN]  mDNS service error: {e} - using IP access only")
     
     # Start mDNS in background thread
     mdns_thread = threading.Thread(target=start_mdns_background, daemon=True)
@@ -225,10 +226,10 @@ async def lifespan(app: FastAPI):
             from app.routes import initialize_clipboard_persistence
             initialize_clipboard_persistence()
         except Exception as e:
-            print(f"⚠️ Clipboard persistence initialization failed: {e}")
+            print(f"[WARN] Clipboard persistence initialization failed: {e}")
         
         resources_ready = True
-        print("✅ Server resources are ready")
+        print("[OK] Server resources are ready")
     
     ready_thread = threading.Thread(target=mark_resources_ready, daemon=True)
     ready_thread.start()
@@ -238,7 +239,7 @@ async def lifespan(app: FastAPI):
     app.state.shutdown_countdown = 0
     
     yield
-    print("🚨 Server shutting down immediately...")
+    print("[!] Server shutting down immediately...")
     
     # Stop responsiveness monitor
     await responsiveness_monitor.stop_monitoring()
@@ -247,28 +248,28 @@ async def lifespan(app: FastAPI):
     try:
         import gc
         gc.collect()  # Simple cleanup without specific function
-        print("🔄 Universal optimizer resources cleaned")
+        print("[RETRY] Universal optimizer resources cleaned")
     except Exception as e:
-        print(f"⚠️ Cleanup warning: {e}")
+        print(f"[WARN] Cleanup warning: {e}")
     
     # HTTPS redirect server removed - no longer needed
     
     # Stop streaming assembly system
-    print("🌊 Stopping streaming assembly system...")
+    print("[STREAM] Stopping streaming assembly system...")
     from app.streaming_assembly import shutdown_streaming_assembly
     shutdown_streaming_assembly()
     
     # Stop mDNS service
-    print("🔴 Stopping mDNS service...")
+    print(" Stopping mDNS service...")
     mdns_manager.stop_service()
     
     # Force close all active connections
     await connection_manager.disconnect_all()
     # Set shutdown event
     shutdown_event.set()
-    print("✅ All connections closed. Server stopped.")
+    print("[OK] All connections closed. Server stopped.")
 
-# ✅ Initialize FastAPI app with lifespan management
+# [OK] Initialize FastAPI app with lifespan management
 app = FastAPI(
     title="Lanvan File Server",
     version="1.0.0",
@@ -277,7 +278,7 @@ app = FastAPI(
     lifespan=lifespan  # Enable graceful shutdown handling
 )
 
-# ✅ CORS Middleware: Enhanced security with local network restriction
+# [OK] CORS Middleware: Enhanced security with local network restriction
 import re
 from typing import List
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -303,7 +304,7 @@ class SecureCORSMiddleware(BaseHTTPMiddleware):
             r'^https?://192\.168\.\d+\.\d+(:\d+)?$',                   # 192.168.0.0/16
             r'^https?://169\.254\.\d+\.\d+(:\d+)?$',                   # 169.254.0.0/16 (link-local)
             r'^https?://[^\.]+\.local(:\d+)?$',                        # .local domains (mDNS)
-            r'^https?://lanvan\.local(:\d+)?$',                        # LANVan mDNS domain
+            r'^https?://lanvan\.local(:\d+)?$',                        # Lanvan mDNS domain
         ]
     
     def is_origin_allowed(self, origin: str) -> bool:
@@ -370,14 +371,12 @@ app.add_middleware(
     max_age=3600,
 )
 
-# ✅ Middleware: Enable GZip compression for responses > 1000 bytes
+# [OK] Middleware: Enable GZip compression for responses > 1000 bytes
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# 🚨 Custom middleware to track connections and handle immediate shutdown
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import JSONResponse
+# [!] Custom middleware to track connections and handle immediate shutdown
 import asyncio
+
 
 class IOSSafariMiddleware(BaseHTTPMiddleware):
     """Middleware to handle iOS Safari specific compatibility issues"""
@@ -422,7 +421,7 @@ class IOSSafariMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             # Log iOS-specific errors for debugging
             if is_ios_safari:
-                print(f"🍎 iOS Safari error: {str(e)} - User-Agent: {user_agent[:100]}...")
+                print(f" iOS Safari error: {str(e)} - User-Agent: {user_agent[:100]}...")
             raise
 
 class ShutdownMiddleware(BaseHTTPMiddleware):
@@ -433,13 +432,12 @@ class ShutdownMiddleware(BaseHTTPMiddleware):
                 status_code=503,
                 content={
                     "error": "Server is shutting down",
-                    "message": "⚠️ Server has been shut down. Please refresh the page or restart the server.",
+                    "message": "[WARN] Server has been shut down. Please refresh the page or restart the server.",
                     "shutdown": True
                 }
             )
         
         # Track this request connection
-        request_id = id(request)
         await connection_manager.add_connection(request)
         
         try:
@@ -452,7 +450,7 @@ class ShutdownMiddleware(BaseHTTPMiddleware):
                     status_code=503,
                     content={
                         "error": "Server shutdown during request",
-                        "message": "⚠️ Server was shut down while processing your request. Please restart the server.",
+                        "message": "[WARN] Server was shut down while processing your request. Please restart the server.",
                         "shutdown": True
                     }
                 )
@@ -465,17 +463,11 @@ app.add_middleware(ShutdownMiddleware)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-# ✅ Register app routes
+# [OK] Register app routes
 app.include_router(router)
 app.include_router(clipboard_ws_router)
 
-# ✅ Exception handlers for smart loading page system
-from fastapi import HTTPException, Request
-from fastapi.responses import RedirectResponse
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
-import time
-
+# [OK] Exception handlers for smart loading page system
 # Track when the server started and if resources are ready
 server_start_time = time.time()
 resources_ready = False
@@ -548,7 +540,7 @@ async def smart_internal_error_handler(request: Request, exc):
     """Handle server errors smartly"""
     # Check if this is a ClientDisconnect wrapped in other exceptions
     if _is_client_disconnect_error(exc):
-        print(f"ℹ️ Client disconnected during request to {request.url.path} (wrapped)")
+        print(f"ℹ Client disconnected during request to {request.url.path} (wrapped)")
         from starlette.responses import PlainTextResponse
         return PlainTextResponse("Client disconnected", status_code=400)
     

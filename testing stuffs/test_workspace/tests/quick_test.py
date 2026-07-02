@@ -7,7 +7,7 @@ import requests
 import time
 
 def quick_processing_test():
-    print("🔍 QUICK BACKGROUND PROCESSING TEST")
+    print("[SEARCH] QUICK BACKGROUND PROCESSING TEST")
     print("=" * 50)
     
     # Create a small test file
@@ -19,7 +19,7 @@ def quick_processing_test():
     chunk_size = 256 * 1024  # 256KB chunks
     total_chunks = len(test_content) // chunk_size + 1
     
-    print(f"📤 Uploading 5MB file in {total_chunks} chunks with delays...")
+    print(f"[OUT] Uploading 5MB file in {total_chunks} chunks with delays...")
     
     upload_start = time.time()
     
@@ -42,10 +42,10 @@ def quick_processing_test():
         time.sleep(0.2)  # Delay to simulate real upload
     
     upload_time = time.time() - upload_start
-    print(f"✅ Upload completed in {upload_time:.1f}s")
+    print(f"[OK] Upload completed in {upload_time:.1f}s")
     
     # Now finalize
-    print("🔄 Finalizing...")
+    print("[RETRY] Finalizing...")
     finalize_start = time.time()
     
     finalize_data = {
@@ -57,14 +57,14 @@ def quick_processing_test():
     response = requests.post("http://127.0.0.1/finalize_upload", data=finalize_data)
     finalize_time = time.time() - finalize_start
     
-    print(f"📊 RESULTS:")
+    print(f"[STATS] RESULTS:")
     print(f"   Upload time: {upload_time:.1f}s")
     print(f"   Finalize time: {finalize_time:.1f}s")
     
     if finalize_time < 1.0:
-        print("   ⚡ GOOD: Finalize is fast - background processing likely working!")
+        print("   [FAST] GOOD: Finalize is fast - background processing likely working!")
     else:
-        print("   🐌 SLOW: Finalize is slow - processing happening after upload")
+        print("    SLOW: Finalize is slow - processing happening after upload")
     
     # Cleanup
     import os

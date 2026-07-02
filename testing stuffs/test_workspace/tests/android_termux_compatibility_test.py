@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-📱 Android/Termux Compatibility Verification for LANVan AES
+[MOBILE] Android/Termux Compatibility Verification for LANVan AES
 
 This script verifies that all AES streaming encryption changes work perfectly
 on Android Termux environment with limited resources and offline operation.
@@ -9,32 +9,32 @@ on Android Termux environment with limited resources and offline operation.
 def test_android_termux_compatibility():
     """Test full Android/Termux compatibility"""
     
-    print("📱 ANDROID/TERMUX COMPATIBILITY TEST")
+    print("[MOBILE] ANDROID/TERMUX COMPATIBILITY TEST")
     print("=" * 50)
     
     # 1. Test import compatibility
-    print("📦 Testing imports...")
+    print("[PKG] Testing imports...")
     try:
         import os, hashlib, gc, tempfile, json, time
-        print("  ✅ Standard library imports - OK")
+        print("  [OK] Standard library imports - OK")
         
         from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
         from cryptography.hazmat.backends import default_backend
-        print("  ✅ Cryptography library - OK")
+        print("  [OK] Cryptography library - OK")
         
         # Test optional psutil
         try:
             import psutil
-            print("  ✅ psutil available")
+            print("  [OK] psutil available")
         except ImportError:
-            print("  ℹ️  psutil not available (graceful fallback)")
+            print("  ℹ  psutil not available (graceful fallback)")
             
     except Exception as e:
-        print(f"  ❌ Import error: {e}")
+        print(f"  [ERR] Import error: {e}")
         return False
     
     # 2. Test AES functions with minimal resources
-    print("\n🔒 Testing AES encryption...")
+    print("\n[LOCK] Testing AES encryption...")
     try:
         from app.aes_utils import encrypt_file_stream, decrypt_file_stream
         
@@ -50,17 +50,17 @@ def test_android_termux_compatibility():
             decrypted_data = decrypt_file_stream(encrypted_data, metadata, user_password="termux123")
             
             if decrypted_data == test_data:
-                print(f"  ✅ {size_name} ({len(test_data):,} bytes) - OK")
+                print(f"  [OK] {size_name} ({len(test_data):,} bytes) - OK")
             else:
-                print(f"  ❌ {size_name} - Data integrity failed")
+                print(f"  [ERR] {size_name} - Data integrity failed")
                 return False
                 
     except Exception as e:
-        print(f"  ❌ AES test failed: {e}")
+        print(f"  [ERR] AES test failed: {e}")
         return False
     
     # 3. Test file streaming
-    print("\n📁 Testing file streaming...")
+    print("\n[DIR] Testing file streaming...")
     try:
         from app.aes_utils import encrypt_file_to_file_streaming
         
@@ -77,7 +77,7 @@ def test_android_termux_compatibility():
         
         # Verify encrypted file exists and has content
         if os.path.exists(test_output) and os.path.getsize(test_output) > 0:
-            print("  ✅ File-to-file streaming - OK")
+            print("  [OK] File-to-file streaming - OK")
             
             # Test decryption
             with open(test_output, 'rb') as f:
@@ -86,12 +86,12 @@ def test_android_termux_compatibility():
             decrypted_data = decrypt_file_stream(encrypted_data, metadata, user_password="termux123")
             
             if decrypted_data == test_content:
-                print("  ✅ File decryption - OK")
+                print("  [OK] File decryption - OK")
             else:
-                print("  ❌ File decryption failed")
+                print("  [ERR] File decryption failed")
                 return False
         else:
-            print("  ❌ File streaming failed")
+            print("  [ERR] File streaming failed")
             return False
             
         # Cleanup
@@ -100,11 +100,11 @@ def test_android_termux_compatibility():
                 os.remove(f)
                 
     except Exception as e:
-        print(f"  ❌ File streaming test failed: {e}")
+        print(f"  [ERR] File streaming test failed: {e}")
         return False
     
     # 4. Test size limits
-    print("\n📏 Testing size limits...")
+    print("\n Testing size limits...")
     try:
         from app.aes_config import AESConfig
         
@@ -114,50 +114,50 @@ def test_android_termux_compatibility():
         for size in huge_sizes:
             result = AESConfig.validate_file_for_aes(size, is_https=False)
             if not result['valid']:
-                print(f"  ❌ Size limit still exists for {size/(1024**3):.0f}GB")
+                print(f"  [ERR] Size limit still exists for {size/(1024**3):.0f}GB")
                 return False
         
-        print("  ✅ No size limits - OK")
+        print("  [OK] No size limits - OK")
         
     except Exception as e:
-        print(f"  ❌ Size limit test failed: {e}")
+        print(f"  [ERR] Size limit test failed: {e}")
         return False
     
     # 5. Test resource efficiency
-    print("\n⚡ Testing resource efficiency...")
+    print("\n[FAST] Testing resource efficiency...")
     try:
         # Test memory monitoring fallback
         from app.aes_utils import get_memory_usage_mb
         
         memory_usage = get_memory_usage_mb()
-        print(f"  ✅ Memory monitoring: {memory_usage:.1f}MB (fallback if psutil unavailable)")
+        print(f"  [OK] Memory monitoring: {memory_usage:.1f}MB (fallback if psutil unavailable)")
         
         # Test garbage collection
         import gc
         gc.collect()
-        print("  ✅ Garbage collection - OK")
+        print("  [OK] Garbage collection - OK")
         
     except Exception as e:
-        print(f"  ❌ Resource efficiency test failed: {e}")
+        print(f"  [ERR] Resource efficiency test failed: {e}")
         return False
     
-    print("\n🎉 ANDROID/TERMUX COMPATIBILITY RESULTS:")
-    print("  ✅ Fully offline operation")
-    print("  ✅ No internet dependencies")
-    print("  ✅ Minimal resource usage")
-    print("  ✅ Standard library + cryptography only")
-    print("  ✅ Graceful psutil fallback")
-    print("  ✅ Zero-memory file streaming")
-    print("  ✅ No file size limits")
-    print("  ✅ Works in resource-constrained environments")
+    print("\n[DONE] ANDROID/TERMUX COMPATIBILITY RESULTS:")
+    print("  [OK] Fully offline operation")
+    print("  [OK] No internet dependencies")
+    print("  [OK] Minimal resource usage")
+    print("  [OK] Standard library + cryptography only")
+    print("  [OK] Graceful psutil fallback")
+    print("  [OK] Zero-memory file streaming")
+    print("  [OK] No file size limits")
+    print("  [OK] Works in resource-constrained environments")
     
     return True
 
 if __name__ == "__main__":
     success = test_android_termux_compatibility()
     if success:
-        print("\n🚀 ALL TESTS PASSED!")
-        print("📱 LANVan AES is fully Android/Termux compatible!")
+        print("\n[START] ALL TESTS PASSED!")
+        print("[MOBILE] LANVan AES is fully Android/Termux compatible!")
     else:
-        print("\n❌ SOME TESTS FAILED!")
-        print("🔧 Further compatibility work needed.")
+        print("\n[ERR] SOME TESTS FAILED!")
+        print("[CFG] Further compatibility work needed.")

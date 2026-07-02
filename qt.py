@@ -1,33 +1,33 @@
 #!/usr/bin/env python3
 """
-LANVAN Quick Test - Comprehensive Project Scanner
+Lanvan Quick Test - Comprehensive Project Scanner
 Fast test using direct server import with enhanced scanning for recent implementations.
 
 Recent Updates Covered:
-- ✅ temp_chunks folder relocated to project root (clean separation)
-- ✅ Enhanced folder upload with seamless drag & drop (no browser dialogs)
-- ✅ Improved streaming assembly system with failsafe mechanisms
-- ✅ Enhanced concurrent upload manager with platform optimization
-- ✅ Updated UI components with better responsiveness
-- ✅ Fixed mDNS system with proper .local domain resolution
-- ✅ Windows file manager with enhanced cleanup diagnostics
-- ✅ Unified platform detection across all modules
-- ✅ Background scan fixes and async task management
-- ✅ Universal optimizer integration and attribute consistency
-- ✅ Toggle text visibility fixes (Dark Mode, AES, Files/Folders toggles)
-- ✅ Theme-aware CSS styling with light/dark mode support
-- ✅ iOS Safari compatibility improvements and middleware
-- ✅ Enhanced error handling and graceful shutdown mechanisms
-- ✅ Progressive loading system for better performance
-- ✅ MEMORY MANAGEMENT FIXES - Chunked streaming for all file operations
-- ✅ Streaming assembly system completely fixed and connected
-- ✅ Memory-efficient upload patterns (8KB chunks vs full file loading)
-- ✅ RACE CONDITION FIXES - Comprehensive atomic operations and file locking
-- ✅ Cross-platform file safety - Windows/Linux/Android compatibility
-- ✅ Concurrent upload safety - Thread-safe management and isolation
-- ✅ Orphaned file cleanup - Automatic .tmp file cleanup on startup
-- ✅ Retry logic system - Exponential backoff for atomic operations
-- ✅ CORS SECURITY - Local network restriction with regex pattern matching
+- [OK] temp_chunks folder relocated to project root (clean separation)
+- [OK] Enhanced folder upload with seamless drag & drop (no browser dialogs)
+- [OK] Improved streaming assembly system with failsafe mechanisms
+- [OK] Enhanced concurrent upload manager with platform optimization
+- [OK] Updated UI components with better responsiveness
+- [OK] Fixed mDNS system with proper .local domain resolution
+- [OK] Windows file manager with enhanced cleanup diagnostics
+- [OK] Unified platform detection across all modules
+- [OK] Background scan fixes and async task management
+- [OK] Universal optimizer integration and attribute consistency
+- [OK] Toggle text visibility fixes (Dark Mode, AES, Files/Folders toggles)
+- [OK] Theme-aware CSS styling with light/dark mode support
+- [OK] iOS Safari compatibility improvements and middleware
+- [OK] Enhanced error handling and graceful shutdown mechanisms
+- [OK] Progressive loading system for better performance
+- [OK] MEMORY MANAGEMENT FIXES - Chunked streaming for all file operations
+- [OK] Streaming assembly system completely fixed and connected
+- [OK] Memory-efficient upload patterns (8KB chunks vs full file loading)
+- [OK] RACE CONDITION FIXES - Comprehensive atomic operations and file locking
+- [OK] Cross-platform file safety - Windows/Linux/Android compatibility
+- [OK] Concurrent upload safety - Thread-safe management and isolation
+- [OK] Orphaned file cleanup - Automatic .tmp file cleanup on startup
+- [OK] Retry logic system - Exponential backoff for atomic operations
+- [OK] CORS SECURITY - Local network restriction with regex pattern matching
 
 Usage:
     python qt.py              # Comprehensive system test (all features except large files)
@@ -87,7 +87,7 @@ def get_safe_port(preferred_port, fallback_port):
         return fallback_port
 
 class QuickTest:
-    """Quick smoke test for LANVAN server using direct imports"""
+    """Quick smoke test for Lanvan server using direct imports"""
     
     def __init__(self, skip_mdns=False):
         self.skip_mdns = skip_mdns
@@ -198,7 +198,7 @@ class QuickTest:
 
     async def test_server_quick(self):
         """Quick server functionality test"""
-        self.log("Starting LANVAN quick test...")
+        self.log("Starting Lanvan quick test...")
         start_time = time.time()
         
         try:
@@ -369,7 +369,7 @@ class QuickTest:
     async def run_large_file_test_only(self):
         """Run comprehensive large file tests (100MB, 500MB, 1GB upload/download)"""
         try:
-            self.log("Starting LANVAN server for large file testing...")
+            self.log("Starting Lanvan server for large file testing...")
             
             # Start HTTP server for testing
             server, url = await self.start_server_fast("http")
@@ -389,11 +389,11 @@ class QuickTest:
                 success = self.components.get('large_file_operations', False)
                 
                 if success:
-                    self.log("\n🎉 Large file performance test completed successfully!", "PASS")
-                    self.log("✅ 100MB, 500MB, and 1GB files tested with detailed performance metrics", "INFO")
+                    self.log("\n[DONE] Large file performance test completed successfully!", "PASS")
+                    self.log("[OK] 100MB, 500MB, and 1GB files tested with detailed performance metrics", "INFO")
                 else:
-                    self.log("\n⚠️ Large file performance test completed with some failures", "WARN")
-                    self.log("❌ Check the performance summary above for details", "INFO")
+                    self.log("\n[WARN] Large file performance test completed with some failures", "WARN")
+                    self.log("[ERR] Check the performance summary above for details", "INFO")
                 
                 return success
                 
@@ -579,7 +579,7 @@ class QuickTest:
                         chunk = secrets.token_bytes(chunk_size)
                     else:
                         # Pattern data for most chunks
-                        pattern = f"LANVan-Test-{size_name}-Chunk-{i:04d}-".encode() * (chunk_size // 60)
+                        pattern = f"Lanvan-Test-{size_name}-Chunk-{i:04d}-".encode() * (chunk_size // 60)
                         chunk = pattern[:chunk_size]
                     test_chunks.append(chunk)
                 
@@ -680,10 +680,10 @@ class QuickTest:
         
         # Set component status
         if overall_success and performance_results:
-            self.log("Large file operations: ✅ All tests passed", "PASS")
+            self.log("Large file operations: [OK] All tests passed", "PASS")
             self.components['large_file_operations'] = True
         else:
-            self.log("Large file operations: ❌ Some tests failed", "FAIL")
+            self.log("Large file operations: [ERR] Some tests failed", "FAIL")
             self.components['large_file_operations'] = False
 
     async def test_clipboard_functionality(self, session, base_url):
@@ -2074,7 +2074,7 @@ class QuickTest:
             # Update component status
             if cors_working:
                 self.components['cors_security'] = True
-                self.log("CORS Security: Implementation validated successfully ✅", "PASS")
+                self.log("CORS Security: Implementation validated successfully [OK]", "PASS")
             else:
                 self.log("CORS Security: Implementation needs review", "WARN")
                 
@@ -2129,67 +2129,67 @@ class QuickTest:
     def print_component_status(self):
         """Print comprehensive component status report"""
         print("\n" + "=" * 55)
-        print("🔍 LANVAN COMPONENT STATUS REPORT")
+        print("[SEARCH] Lanvan COMPONENT STATUS REPORT")
         print("=" * 55)
         
         # Core components (must work for basic functionality)
         core_components = [
-            ('http_server', '🌐 HTTP Server', 'Core web server functionality'),
-            ('file_upload', '📤 File Upload', 'Individual file sharing and transfer'),
-            ('folder_upload', '📁 Folder Upload', 'Folder sharing with structure preservation'),
-            ('qr_generation', '📱 QR Code Generation', 'QR codes for easy sharing'),
-            ('ui_interface', '🖥️  Web Interface', 'User interface elements'),
-            ('temp_chunks_structure', '🗂️  Temp Structure', 'Proper temporary file organization'),
-            ('toggle_text_visibility', '🎨 Toggle Text Fixes', 'Dark/Light mode toggle text visibility')
+            ('http_server', '[NET] HTTP Server', 'Core web server functionality'),
+            ('file_upload', '[OUT] File Upload', 'Individual file sharing and transfer'),
+            ('folder_upload', '[DIR] Folder Upload', 'Folder sharing with structure preservation'),
+            ('qr_generation', '[MOBILE] QR Code Generation', 'QR codes for easy sharing'),
+            ('ui_interface', '  Web Interface', 'User interface elements'),
+            ('temp_chunks_structure', '  Temp Structure', 'Proper temporary file organization'),
+            ('toggle_text_visibility', ' Toggle Text Fixes', 'Dark/Light mode toggle text visibility')
         ]
         
         # Separate test components (run with 'python qt.py t')
         separate_test_components = [
-            ('large_file_operations', '📦 Large File Operations', '50MB file upload/download - use "python qt.py t"')
+            ('large_file_operations', '[PKG] Large File Operations', '50MB file upload/download - use "python qt.py t"')
         ]
         
         # Enhanced components (recent implementations)
         enhanced_components = [
-            ('drag_drop_folders', '🖱️  Drag & Drop Folders', 'Seamless folder drag & drop without dialogs'),
-            ('streaming_assembly', '🌊 Streaming Assembly', 'Real-time file chunk processing'),
-            ('concurrent_uploads', '⚡ Concurrent Uploads', 'Multiple file upload optimization'),
-            ('windows_file_manager', '🪟 Windows File Manager', 'Windows-specific file handling'),
-            ('mdns_resolution', '🔗 mDNS Resolution', '.local domain resolution and hybrid URLs'),
-            ('universal_optimizer', '🔄 Universal Optimizer', 'Cross-platform performance optimization'),
-            ('ios_safari_compatibility', '🍎 iOS Safari Fixes', 'iOS Safari middleware and compatibility')
+            ('drag_drop_folders', '  Drag & Drop Folders', 'Seamless folder drag & drop without dialogs'),
+            ('streaming_assembly', '[STREAM] Streaming Assembly', 'Real-time file chunk processing'),
+            ('concurrent_uploads', '[FAST] Concurrent Uploads', 'Multiple file upload optimization'),
+            ('windows_file_manager', ' Windows File Manager', 'Windows-specific file handling'),
+            ('mdns_resolution', '[LINK] mDNS Resolution', '.local domain resolution and hybrid URLs'),
+            ('universal_optimizer', '[RETRY] Universal Optimizer', 'Cross-platform performance optimization'),
+            ('ios_safari_compatibility', ' iOS Safari Fixes', 'iOS Safari middleware and compatibility')
         ]
         
         # Advanced components (cutting-edge features)
         advanced_components = [
-            ('background_tasks', '⚙️  Background Tasks', 'Async task management and background processing'),
-            ('ui_enhancements', '✨ UI Enhancements', 'Modern frontend improvements and responsiveness'),
-            ('error_handling', '🛡️  Error Handling', 'Comprehensive error recovery and diagnostics'),
-            ('network_optimization', '📡 Network Optimization', 'Connection and transfer optimizations')
+            ('background_tasks', '[CFG]  Background Tasks', 'Async task management and background processing'),
+            ('ui_enhancements', ' UI Enhancements', 'Modern frontend improvements and responsiveness'),
+            ('error_handling', '[SHIELD]  Error Handling', 'Comprehensive error recovery and diagnostics'),
+            ('network_optimization', '[MDNS] Network Optimization', 'Connection and transfer optimizations')
         ]
         
         # Additional components (enhance experience but not critical)
         additional_components = [
-            ('https_server', '🔒 HTTPS Server', 'Secure connections (requires certificates)'),
-            ('clipboard', '📋 Clipboard', 'Copy/paste functionality'),
-            ('mdns', '📡 mDNS Discovery', 'Network auto-discovery'),
-            ('aes_config', '🔐 AES Encryption', 'File encryption configuration'),
-            ('platform_detection', '🔍 Platform Detection', 'OS-specific optimizations'),
-            ('responsiveness_monitor', '📊 Responsiveness Monitor', 'Performance monitoring'),
-            ('thread_manager', '🧵 Thread Manager', 'Background task management'),
-            ('file_processing', '⚙️  File Processing', 'Advanced file operations'),
-            ('graceful_shutdown', '🛑 Graceful Shutdown', 'Enhanced shutdown handling with notifications'),
-            ('progressive_loading', '⚡ Progressive Loading', 'Progressive resource loading system')
+            ('https_server', '[LOCK] HTTPS Server', 'Secure connections (requires certificates)'),
+            ('clipboard', '[INFO] Clipboard', 'Copy/paste functionality'),
+            ('mdns', '[MDNS] mDNS Discovery', 'Network auto-discovery'),
+            ('aes_config', '[AUTH] AES Encryption', 'File encryption configuration'),
+            ('platform_detection', '[SEARCH] Platform Detection', 'OS-specific optimizations'),
+            ('responsiveness_monitor', '[STATS] Responsiveness Monitor', 'Performance monitoring'),
+            ('thread_manager', ' Thread Manager', 'Background task management'),
+            ('file_processing', '[CFG]  File Processing', 'Advanced file operations'),
+            ('graceful_shutdown', ' Graceful Shutdown', 'Enhanced shutdown handling with notifications'),
+            ('progressive_loading', '[FAST] Progressive Loading', 'Progressive resource loading system')
         ]
         
         # Race condition and safety components (NEW - Critical for reliability)
         safety_components = [
-            ('atomic_file_operations', '🎯 Atomic File Operations', 'Temporary file strategy with atomic moves'),
-            ('file_locking_system', '🔒 File Locking System', 'Cross-platform file locking mechanisms'),
-            ('concurrent_upload_safety', '🚀 Concurrent Upload Safety', 'Thread-safe upload management'),
-            ('orphaned_file_cleanup', '🧹 Orphaned File Cleanup', 'Automatic cleanup of temporary files'),
-            ('cross_platform_compatibility', '🌐 Cross-Platform Compatibility', 'Windows/Linux/Android support'),
-            ('retry_logic_system', '🔄 Retry Logic System', 'Exponential backoff and error recovery'),
-            ('cors_security', '🔐 CORS Security', 'Local network restriction with pattern matching')
+            ('atomic_file_operations', '[TARGET] Atomic File Operations', 'Temporary file strategy with atomic moves'),
+            ('file_locking_system', '[LOCK] File Locking System', 'Cross-platform file locking mechanisms'),
+            ('concurrent_upload_safety', '[START] Concurrent Upload Safety', 'Thread-safe upload management'),
+            ('orphaned_file_cleanup', '[CLEAN] Orphaned File Cleanup', 'Automatic cleanup of temporary files'),
+            ('cross_platform_compatibility', '[NET] Cross-Platform Compatibility', 'Windows/Linux/Android support'),
+            ('retry_logic_system', '[RETRY] Retry Logic System', 'Exponential backoff and error recovery'),
+            ('cors_security', '[AUTH] CORS Security', 'Local network restriction with pattern matching')
         ]
         
         # Count working components
@@ -2201,13 +2201,13 @@ class QuickTest:
         additional_working = sum(1 for key, _, _ in additional_components if self.components.get(key, False))
         safety_working = sum(1 for key, _, _ in safety_components if self.components.get(key, False))
         
-        print(f"\n📈 OVERALL STATUS: {working_components}/{total_components} components working")
+        print(f"\n[STATS] OVERALL STATUS: {working_components}/{total_components} components working")
         
         # Calculate reliability score
         core_score = (core_working / len(core_components)) * 100
         total_score = (working_components / total_components) * 100
         
-        print(f"📊 COMPREHENSIVE RELIABILITY SCORE:")
+        print(f"[STATS] COMPREHENSIVE RELIABILITY SCORE:")
         print(f"   • Core Features: {core_score:.0f}% ({core_working}/{len(core_components)})")
         enhanced_score = (enhanced_working / len(enhanced_components)) * 100 if enhanced_components else 0
         print(f"   • Enhanced Features: {enhanced_score:.0f}% ({enhanced_working}/{len(enhanced_components)})")
@@ -2216,64 +2216,64 @@ class QuickTest:
         print(f"   • Overall Score: {total_score:.0f}% ({working_components}/{total_components})")
         
         # Core components status (CRITICAL for operation)
-        print(f"\n🚀 CORE COMPONENTS (Critical for file sharing):")
+        print(f"\n[START] CORE COMPONENTS (Critical for file sharing):")
         for key, name, description in core_components:
-            status = "✅ WORKING" if self.components.get(key, False) else "❌ FAILED"
+            status = "[OK] WORKING" if self.components.get(key, False) else "[ERR] FAILED"
             print(f"   {name}: {status}")
             if not self.components.get(key, False):
-                print(f"      ⚠️  Issue: {description} not functioning")
+                print(f"      [WARN]  Issue: {description} not functioning")
         
         # Separate test components
-        print(f"\n💡 SEPARATE TEST COMPONENTS:")
+        print(f"\n[TIP] SEPARATE TEST COMPONENTS:")
         for key, name, description in separate_test_components:
-            print(f"   {name}: ⚠️  Use 'python qt.py t' to test")
+            print(f"   {name}: [WARN]  Use 'python qt.py t' to test")
         
         # Enhanced components status (recent implementations)
-        print(f"\n⚡ ENHANCED COMPONENTS (Recent improvements):")
+        print(f"\n[FAST] ENHANCED COMPONENTS (Recent improvements):")
         for key, name, description in enhanced_components:
             if key in self.components:
-                status = "✅ WORKING" if self.components[key] else "❌ FAILED"
+                status = "[OK] WORKING" if self.components[key] else "[ERR] FAILED"
                 if not self.components[key]:
                     status += f" - {description}"
             else:
-                status = "⚠️  NOT TESTED"
+                status = "[WARN]  NOT TESTED"
             print(f"   {name}: {status}")
         
         # Advanced components status (cutting-edge features)
-        print(f"\n🚀 ADVANCED COMPONENTS (Cutting-edge features):")
+        print(f"\n[START] ADVANCED COMPONENTS (Cutting-edge features):")
         for key, name, description in advanced_components:
             if key in self.components:
-                status = "✅ WORKING" if self.components[key] else "❌ FAILED"
+                status = "[OK] WORKING" if self.components[key] else "[ERR] FAILED"
                 if not self.components[key]:
                     status += f" - {description}"
             else:
-                status = "⚠️  NOT TESTED"
+                status = "[WARN]  NOT TESTED"
             print(f"   {name}: {status}")
         
         # Additional components status
-        print(f"\n🔧 ADDITIONAL COMPONENTS (Extended features):")
+        print(f"\n[CFG] ADDITIONAL COMPONENTS (Extended features):")
         for key, name, description in additional_components:
             if key in self.components:
-                status = "✅ WORKING" if self.components[key] else "❌ FAILED"
+                status = "[OK] WORKING" if self.components[key] else "[ERR] FAILED"
                 if not self.components[key]:
                     status += f" - {description}"
             else:
-                status = "⚠️  NOT TESTED"
+                status = "[WARN]  NOT TESTED"
             print(f"   {name}: {status}")
         
         # Safety and race condition components status (NEW)
-        print(f"\n🛡️  SAFETY & RACE CONDITION FIXES (Critical for reliability):")
+        print(f"\n[SHIELD]  SAFETY & RACE CONDITION FIXES (Critical for reliability):")
         for key, name, description in safety_components:
             if key in self.components:
-                status = "✅ WORKING" if self.components[key] else "❌ FAILED"
+                status = "[OK] WORKING" if self.components[key] else "[ERR] FAILED"
                 if not self.components[key]:
                     status += f" - {description}"
             else:
-                status = "⚠️  NOT TESTED"
+                status = "[WARN]  NOT TESTED"
             print(f"   {name}: {status}")
         
         # Comprehensive scoring display
-        print(f"\n📊 COMPREHENSIVE PROJECT HEALTH:")
+        print(f"\n[STATS] COMPREHENSIVE PROJECT HEALTH:")
         print(f"   • Core System:      {core_working}/{len(core_components)} ({core_working/len(core_components)*100:.0f}%) - Critical functionality")
         print(f"   • Enhanced Features: {enhanced_working}/{len(enhanced_components)} ({enhanced_working/len(enhanced_components)*100:.0f}%) - User experience improvements")
         print(f"   • Advanced Features: {advanced_working}/{len(advanced_components)} ({advanced_working/len(advanced_components)*100:.0f}%) - Cutting-edge capabilities")
@@ -2284,29 +2284,29 @@ class QuickTest:
         total_components = len(core_components) + len(enhanced_components) + len(advanced_components) + len(additional_components) + len(safety_components)
         overall_score = (total_working / total_components) * 100
         
-        print(f"\n🎯 OVERALL PROJECT STATUS:")
+        print(f"\n[TARGET] OVERALL PROJECT STATUS:")
         print(f"   • Total Score: {total_working}/{total_components} ({overall_score:.1f}%)")
         
         # Development guidance based on comprehensive analysis
         if core_working == len(core_components):
             if overall_score >= 85:
-                print(f"   • Status: 🎉 EXCELLENT - Ready for production deployment!")
-                print(f"   • Action: ✅ All critical systems operational with strong feature set")
+                print(f"   • Status: [DONE] EXCELLENT - Ready for production deployment!")
+                print(f"   • Action: [OK] All critical systems operational with strong feature set")
             elif overall_score >= 70:
-                print(f"   • Status: 🚀 VERY GOOD - Core stable, enhanced features developing")
-                print(f"   • Action: ✅ Safe to deploy, continue enhancing advanced features")
+                print(f"   • Status: [START] VERY GOOD - Core stable, enhanced features developing")
+                print(f"   • Action: [OK] Safe to deploy, continue enhancing advanced features")
             else:
-                print(f"   • Status: ⚡ GOOD - Core stable, room for feature improvement")
-                print(f"   • Action: ✅ Deployable, focus on enhanced/advanced features")
+                print(f"   • Status: [FAST] GOOD - Core stable, room for feature improvement")
+                print(f"   • Action: [OK] Deployable, focus on enhanced/advanced features")
         elif core_working >= len(core_components) * 0.75:
-            print(f"   • Status: ⚠️  MOSTLY READY - Minor core issues detected")
-            print(f"   • Action: 🔧 Fix remaining core issues before deployment")
+            print(f"   • Status: [WARN]  MOSTLY READY - Minor core issues detected")
+            print(f"   • Action: [CFG] Fix remaining core issues before deployment")
         else:
-            print(f"   • Status: 🚨 NOT READY - Critical core system failures")
+            print(f"   • Status: [!] NOT READY - Critical core system failures")
             print(f"   • Action: � Address core component failures immediately")
         
         # Performance and readiness
-        print(f"\n⚡ SYSTEM PERFORMANCE:")
+        print(f"\n[FAST] SYSTEM PERFORMANCE:")
         print(f"   • Test Execution: Fast ({total_components} components in ~1s)")
         print(f"   • Server Response: Optimized")
         print(f"   • Ready for: {'Production deployment' if core_working == len(core_components) else 'Development/Testing'}")
@@ -2319,31 +2319,31 @@ def main():
     if len(sys.argv) == 2 and sys.argv[1] == 't':
         # Special handling for 't' argument
         async def run_large_test():
-            print("🚀 LANVAN Large File Performance Test")
+            print("[START] Lanvan Large File Performance Test")
             print("=" * 50) 
-            print("🔍 Testing file sizes: 100MB, 500MB, 1GB")
-            print("📊 Measuring upload/download speeds and performance")
-            print("⏱️  This may take several minutes depending on system performance")
+            print("[SEARCH] Testing file sizes: 100MB, 500MB, 1GB")
+            print("[STATS] Measuring upload/download speeds and performance")
+            print("⏱  This may take several minutes depending on system performance")
             print("=" * 50)
             test = QuickTest(skip_mdns=False)
             success = await test.run_large_file_test_only()
             if success:
                 print("\n" + "=" * 60)
-                print("✅ Large file performance test completed successfully!")
-                print("🎯 All file sizes (100MB, 500MB, 1GB) tested")
-                print("📈 Performance metrics logged above")
+                print("[OK] Large file performance test completed successfully!")
+                print("[TARGET] All file sizes (100MB, 500MB, 1GB) tested")
+                print("[STATS] Performance metrics logged above")
                 sys.exit(0)
             else:
                 print("\n" + "=" * 60)
-                print("❌ Large file performance test completed with failures")
-                print("⚠️ Check the detailed logs above for specific issues")
-                print("💡 Large files may require more server resources or time")
+                print("[ERR] Large file performance test completed with failures")
+                print("[WARN] Check the detailed logs above for specific issues")
+                print("[TIP] Large files may require more server resources or time")
                 sys.exit(1)
         
         asyncio.run(run_large_test())
         return
 
-    parser = argparse.ArgumentParser(description="LANVAN Comprehensive Project Scanner")
+    parser = argparse.ArgumentParser(description="Lanvan Comprehensive Project Scanner")
     parser.add_argument("--android", action="store_true", 
                        help="Skip mDNS tests (for Android/Termux)")
     parser.add_argument("--deep", action="store_true",
@@ -2354,9 +2354,9 @@ def main():
     args = parser.parse_args()
     
     async def run_main_tests():
-        print("LANVAN Comprehensive System Test")
+        print("Lanvan Comprehensive System Test")
         print("=" * 50)
-        print("🔍 Testing all core and enhanced features:")
+        print("[SEARCH] Testing all core and enhanced features:")
         print("   • Server functionality (HTTP/HTTPS)")
         print("   • File upload/download operations")
         print("   • Enhanced folder upload (drag & drop)")
@@ -2368,8 +2368,8 @@ def main():
         print("   • mDNS service discovery")
         print("   • Cross-platform compatibility")
         if args.deep:
-            print("   🔬 DEEP SCAN MODE - Extended diagnostics enabled")
-        print("💡 Use 'python qt.py t' for large file performance testing")
+            print("    DEEP SCAN MODE - Extended diagnostics enabled")
+        print("[TIP] Use 'python qt.py t' for large file performance testing")
         print("=" * 50)
         
         test = QuickTest(skip_mdns=args.android)
@@ -2380,8 +2380,8 @@ def main():
         
         print("\n" + "=" * 60)
         if success:
-            print("✅ All tests passed! Enhanced LANVAN server is ready!")
-            print("🚀 Recent implementations are working correctly:")
+            print("[OK] All tests passed! Enhanced Lanvan server is ready!")
+            print("[START] Recent implementations are working correctly:")
             print("   • Toggle text visibility fixes validated")
             print("   • iOS Safari compatibility confirmed") 
             print("   • Progressive loading system operational")
@@ -2390,13 +2390,13 @@ def main():
             print("   • Cross-platform file safety validated")
             print("   • CORS security with local network restriction active")
             print("   • All core and enhanced components functional")
-            print("💡 Use 'python qt.py t' to test 50MB file operations")
+            print("[TIP] Use 'python qt.py t' to test 50MB file operations")
             sys.exit(0)
         else:
-            print("❌ Some tests failed. Check the issues above.")
-            print("🔧 Consider fixing failed components before deployment.")
-            print("💡 Recent fixes may need additional testing or adjustment.")
-            print("🛡️  Check race condition and safety components especially.")
+            print("[ERR] Some tests failed. Check the issues above.")
+            print("[CFG] Consider fixing failed components before deployment.")
+            print("[TIP] Recent fixes may need additional testing or adjustment.")
+            print("[SHIELD]  Check race condition and safety components especially.")
             sys.exit(1)
     
     # Run the main tests

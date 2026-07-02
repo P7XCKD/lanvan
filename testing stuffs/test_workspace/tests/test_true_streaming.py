@@ -1,5 +1,5 @@
 """
-🚀 TRUE Streaming Assembly Performance Test
+[START] TRUE Streaming Assembly Performance Test
 Tests the actual performance improvements of real streaming vs sequential processing
 """
 
@@ -13,7 +13,7 @@ BASE_URL = "http://127.0.0.1"
 
 def create_test_file(filename, size_mb):
     """Create a test file with specified size"""
-    print(f"📄 Creating test file: {filename} ({size_mb}MB)")
+    print(f"[FILE] Creating test file: {filename} ({size_mb}MB)")
     content = "A" * (1024 * 1024)  # 1MB of 'A's
     
     with open(filename, 'w') as f:
@@ -21,7 +21,7 @@ def create_test_file(filename, size_mb):
             f.write(content)
     
     actual_size = os.path.getsize(filename)
-    print(f"✅ Created {filename}: {actual_size / (1024*1024):.1f}MB")
+    print(f"[OK] Created {filename}: {actual_size / (1024*1024):.1f}MB")
     return filename
 
 def upload_file_with_delay_chunked(filepath, chunk_size_kb=256, delay_between_chunks=0.1):
@@ -31,11 +31,11 @@ def upload_file_with_delay_chunked(filepath, chunk_size_kb=256, delay_between_ch
     chunk_size = chunk_size_kb * 1024
     total_chunks = (file_size + chunk_size - 1) // chunk_size
     
-    print(f"🚀 Starting delayed chunked upload: {file_path.name}")
-    print(f"   📊 File size: {file_size / (1024*1024):.1f}MB")
-    print(f"   📦 Chunk size: {chunk_size_kb}KB")
-    print(f"   🧩 Total chunks: {total_chunks}")
-    print(f"   ⏱️  Delay between chunks: {delay_between_chunks}s")
+    print(f"[START] Starting delayed chunked upload: {file_path.name}")
+    print(f"   [STATS] File size: {file_size / (1024*1024):.1f}MB")
+    print(f"   [PKG] Chunk size: {chunk_size_kb}KB")
+    print(f"    Total chunks: {total_chunks}")
+    print(f"   ⏱  Delay between chunks: {delay_between_chunks}s")
     
     start_time = time.time()
     file_ready_time = None
@@ -48,7 +48,7 @@ def upload_file_with_delay_chunked(filepath, chunk_size_kb=256, delay_between_ch
                 potential_file = Path("app/uploads") / file_path.name
                 if potential_file.exists() and potential_file.stat().st_size > 0:
                     file_ready_time = time.time()
-                    print(f"🎯 FILE READY at {file_ready_time - start_time:.1f}s into upload!")
+                    print(f"[TARGET] FILE READY at {file_ready_time - start_time:.1f}s into upload!")
                     break
             except:
                 pass
@@ -78,27 +78,27 @@ def upload_file_with_delay_chunked(filepath, chunk_size_kb=256, delay_between_ch
             chunk_time = time.time() - chunk_start
             
             if response.status_code != 200:
-                print(f"❌ Chunk {chunk_num} failed: {response.status_code}")
+                print(f"[ERR] Chunk {chunk_num} failed: {response.status_code}")
                 return False, None, None, None
             
             progress = (chunk_num / total_chunks) * 100
-            print(f"   📤 Chunk {chunk_num}/{total_chunks} uploaded ({progress:.1f}%) in {chunk_time:.2f}s")
+            print(f"   [OUT] Chunk {chunk_num}/{total_chunks} uploaded ({progress:.1f}%) in {chunk_time:.2f}s")
             
             # Check if file became ready during this chunk
             if file_ready_time and chunk_num > 1:
                 chunks_when_ready = chunk_num - 1
-                print(f"   🌊 STREAMING DETECTED: File ready after only {chunks_when_ready}/{total_chunks} chunks!")
+                print(f"   [STREAM] STREAMING DETECTED: File ready after only {chunks_when_ready}/{total_chunks} chunks!")
             
             # Add delay between chunks to simulate network conditions
             if chunk_num < total_chunks:
                 time.sleep(delay_between_chunks)
     
     chunk_upload_time = time.time() - start_time
-    print(f"✅ All chunks uploaded in {chunk_upload_time:.1f}s")
+    print(f"[OK] All chunks uploaded in {chunk_upload_time:.1f}s")
     
     # If file wasn't ready yet, wait for finalization
     if not file_ready_time:
-        print("🔄 File not ready yet, finalizing...")
+        print("[RETRY] File not ready yet, finalizing...")
         finalize_start = time.time()
         
         finalize_data = {
@@ -113,24 +113,24 @@ def upload_file_with_delay_chunked(filepath, chunk_size_kb=256, delay_between_ch
         if response.status_code == 200:
             file_ready_time = time.time()
         else:
-            print(f"❌ Finalization failed: {response.status_code}")
+            print(f"[ERR] Finalization failed: {response.status_code}")
             return False, None, None, None
     
     total_time = time.time() - start_time
     streaming_benefit = chunk_upload_time - (file_ready_time - start_time) if file_ready_time else 0
     
-    print(f"📊 TIMING ANALYSIS:")
-    print(f"   📤 Chunk upload time: {chunk_upload_time:.1f}s")
-    print(f"   🎯 File ready time: {file_ready_time - start_time:.1f}s")
-    print(f"   🚀 Streaming benefit: {streaming_benefit:.1f}s faster")
-    print(f"   📈 Performance improvement: {(streaming_benefit/chunk_upload_time)*100:.1f}%")
+    print(f"[STATS] TIMING ANALYSIS:")
+    print(f"   [OUT] Chunk upload time: {chunk_upload_time:.1f}s")
+    print(f"   [TARGET] File ready time: {file_ready_time - start_time:.1f}s")
+    print(f"   [START] Streaming benefit: {streaming_benefit:.1f}s faster")
+    print(f"   [STATS] Performance improvement: {(streaming_benefit/chunk_upload_time)*100:.1f}%")
     
     return True, file_ready_time - start_time, chunk_upload_time, streaming_benefit
 
 def test_true_streaming():
     """Test TRUE streaming assembly performance"""
     print("\n" + "="*70)
-    print("🚀 TRUE STREAMING ASSEMBLY PERFORMANCE TEST")
+    print("[START] TRUE STREAMING ASSEMBLY PERFORMANCE TEST")
     print("="*70)
     
     test_files = [
@@ -142,7 +142,7 @@ def test_true_streaming():
     
     try:
         for filename, size_mb, delay in test_files:
-            print(f"\n📋 Testing: {filename} (delay: {delay}s between chunks)")
+            print(f"\n[INFO] Testing: {filename} (delay: {delay}s between chunks)")
             
             # Create test file
             test_file = create_test_file(filename, size_mb)
@@ -172,29 +172,29 @@ def test_true_streaming():
             time.sleep(2)  # Brief pause between tests
         
         # Show results
-        print(f"\n📊 TRUE STREAMING RESULTS:")
+        print(f"\n[STATS] TRUE STREAMING RESULTS:")
         print("=" * 50)
         
         if results:
             total_benefit = sum(r['streaming_benefit'] for r in results)
             avg_improvement = sum(r['improvement_percent'] for r in results) / len(results)
             
-            print(f"🌊 Average streaming benefit: {avg_improvement:.1f}% faster")
-            print(f"📈 Total time saved: {total_benefit:.1f}s")
+            print(f"[STREAM] Average streaming benefit: {avg_improvement:.1f}% faster")
+            print(f"[STATS] Total time saved: {total_benefit:.1f}s")
             
             for result in results:
-                print(f"\n📄 {result['file']}:")
-                print(f"   🎯 File ready in: {result['ready_time']:.1f}s")
-                print(f"   📤 Full upload took: {result['upload_time']:.1f}s")
-                print(f"   🚀 Streaming saved: {result['streaming_benefit']:.1f}s ({result['improvement_percent']:.1f}%)")
+                print(f"\n[FILE] {result['file']}:")
+                print(f"   [TARGET] File ready in: {result['ready_time']:.1f}s")
+                print(f"   [OUT] Full upload took: {result['upload_time']:.1f}s")
+                print(f"   [START] Streaming saved: {result['streaming_benefit']:.1f}s ({result['improvement_percent']:.1f}%)")
             
             if avg_improvement > 20:
-                print(f"\n✅ TRUE STREAMING ASSEMBLY IS WORKING!")
-                print(f"🌊 Files become available {avg_improvement:.1f}% faster than traditional method!")
+                print(f"\n[OK] TRUE STREAMING ASSEMBLY IS WORKING!")
+                print(f"[STREAM] Files become available {avg_improvement:.1f}% faster than traditional method!")
             else:
-                print(f"\n⚠️  Streaming benefit is minimal - may need optimization")
+                print(f"\n[WARN]  Streaming benefit is minimal - may need optimization")
         else:
-            print("❌ No successful tests completed")
+            print("[ERR] No successful tests completed")
             
     finally:
         # Clean up any remaining files
@@ -207,7 +207,7 @@ def test_true_streaming():
                     pass
 
 def main():
-    print("🌊 TRUE STREAMING ASSEMBLY PERFORMANCE TEST")
+    print("[STREAM] TRUE STREAMING ASSEMBLY PERFORMANCE TEST")
     print("This test verifies that files become available DURING upload,")
     print("not after all chunks are uploaded (true streaming behavior)")
     print("=" * 70)
@@ -216,12 +216,12 @@ def main():
     try:
         response = requests.get(BASE_URL, timeout=5)
         if response.status_code == 200:
-            print("✅ Server is accessible - starting tests...")
+            print("[OK] Server is accessible - starting tests...")
             test_true_streaming()
         else:
-            print("❌ Server not accessible")
+            print("[ERR] Server not accessible")
     except Exception as e:
-        print(f"❌ Server connection failed: {e}")
+        print(f"[ERR] Server connection failed: {e}")
 
 if __name__ == "__main__":
     main()

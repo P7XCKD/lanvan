@@ -1,5 +1,5 @@
 """
-🔒 HTTP-Safe AES Encryption with Complete Metadata Protection
+[LOCK] HTTP-Safe AES Encryption with Complete Metadata Protection
 
 This module provides AES encryption that is secure over HTTP by protecting
 all metadata, filenames, sizes, and traffic patterns.
@@ -39,7 +39,7 @@ def encrypt_file_http_safe(
     file_size_mb = file_size / 1024 / 1024
     start_memory = get_memory_usage_mb()
     
-    print(f"🔒 [HTTP-Safe AES] Starting - File: {file_size_mb:.1f}MB | Memory: {start_memory:.1f}MB")
+    print(f"[LOCK] [HTTP-Safe AES] Starting - File: {file_size_mb:.1f}MB | Memory: {start_memory:.1f}MB")
     
     # Step 1: Encrypt file with standard AES streaming
     temp_encrypted = tempfile.NamedTemporaryFile(delete=False, suffix='.enc')
@@ -77,9 +77,9 @@ def encrypt_file_http_safe(
         end_memory = get_memory_usage_mb()
         memory_delta = end_memory - start_memory
         
-        print(f"🔒 [HTTP-Safe AES] Complete - Memory: {end_memory:.1f}MB | Delta: {memory_delta:+.1f}MB")
-        print(f"🛡️ [Metadata Protected] Filename: {original_filename} → {safe_params['safe_filename']}")
-        print(f"🛡️ [Size Obfuscated] {file_size:,} → {safe_params['obfuscated_size']:,} bytes")
+        print(f"[LOCK] [HTTP-Safe AES] Complete - Memory: {end_memory:.1f}MB | Delta: {memory_delta:+.1f}MB")
+        print(f"[SHIELD] [Metadata Protected] Filename: {original_filename} → {safe_params['safe_filename']}")
+        print(f"[SHIELD] [Size Obfuscated] {file_size:,} → {safe_params['obfuscated_size']:,} bytes")
         
         return safe_file_path, safe_params
         
@@ -104,7 +104,7 @@ def create_stealth_upload_session(
         dict: Complete stealth session parameters
     """
     
-    print(f"🕵️ [Stealth Session] Preparing {len(files_and_names)} files for HTTP-safe upload")
+    print(f" [Stealth Session] Preparing {len(files_and_names)} files for HTTP-safe upload")
     
     session_files = []
     total_size = 0
@@ -140,8 +140,8 @@ def create_stealth_upload_session(
         }
     }
     
-    print(f"🕵️ [Stealth Session] Ready - {len(session_files)} files + {len(session_params['decoy_requests'])} decoys")
-    print(f"🛡️ [Traffic Obfuscation] Total size: {total_size:,} bytes (includes padding)")
+    print(f" [Stealth Session] Ready - {len(session_files)} files + {len(session_params['decoy_requests'])} decoys")
+    print(f"[SHIELD] [Traffic Obfuscation] Total size: {total_size:,} bytes (includes padding)")
     
     return session_params
 
@@ -176,7 +176,7 @@ def decrypt_http_safe_file(
         metadata = decrypt_metadata(encrypted_meta, encryption_key)
         original_filename = metadata.get('original_filename', 'decrypted_file')
         
-        print(f"🔓 [HTTP-Safe Decrypt] Restoring: {safe_params['safe_filename']} → {original_filename}")
+        print(f"[UNLOCK] [HTTP-Safe Decrypt] Restoring: {safe_params['safe_filename']} → {original_filename}")
         
         # Set output path
         if output_path is None:
@@ -191,19 +191,19 @@ def decrypt_http_safe_file(
         import shutil
         shutil.copy2(encrypted_file_path, output_path)
         
-        print(f"🔓 [HTTP-Safe Decrypt] Complete: {output_path}")
+        print(f"[UNLOCK] [HTTP-Safe Decrypt] Complete: {output_path}")
         
         return output_path
         
     except Exception as e:
-        print(f"❌ [HTTP-Safe Decrypt] Failed: {e}")
+        print(f"[ERR] [HTTP-Safe Decrypt] Failed: {e}")
         raise
 
 # Test function to demonstrate HTTP safety
 def test_http_safety():
     """Test the HTTP safety features"""
     
-    print("🧪 TESTING HTTP-SAFE AES ENCRYPTION")
+    print(" TESTING HTTP-SAFE AES ENCRYPTION")
     print("=" * 60)
     
     # Create test file
@@ -221,29 +221,29 @@ def test_http_safety():
             user_password="corporate_secret_123"
         )
         
-        print(f"\n📊 HTTP Safety Results:")
+        print(f"\n[STATS] HTTP Safety Results:")
         print(f"  Original: Confidential_Financial_Report_2025.pdf")
         print(f"  Obfuscated: {safe_params['safe_filename']}")
         print(f"  Size hidden: {len(test_content):,} → {safe_params['obfuscated_size']:,}")
         print(f"  Session ID: {safe_params['session_token']}")
         
-        print(f"\n🛡️ What attackers see over HTTP:")
+        print(f"\n[SHIELD] What attackers see over HTTP:")
         print(f"  Filename: {safe_params['safe_filename']} (meaningless)")
         print(f"  Size: {safe_params['obfuscated_size']:,} bytes (padded)")
         print(f"  Content: AES-256 encrypted binary (unreadable)")
         print(f"  Metadata: Encrypted and hidden")
         
-        print(f"\n✅ HTTP SAFETY ACHIEVED!")
-        print(f"  🔒 Content protected by AES-256")
-        print(f"  🛡️ Filename obfuscated")
-        print(f"  📊 Size obfuscated with padding")
-        print(f"  🕵️ Metadata encrypted")
-        print(f"  🚫 No sensitive information visible to packet sniffers")
+        print(f"\n[OK] HTTP SAFETY ACHIEVED!")
+        print(f"  [LOCK] Content protected by AES-256")
+        print(f"  [SHIELD] Filename obfuscated")
+        print(f"  [STATS] Size obfuscated with padding")
+        print(f"   Metadata encrypted")
+        print(f"   No sensitive information visible to packet sniffers")
         
         return True
         
     except Exception as e:
-        print(f"❌ Test failed: {e}")
+        print(f"[ERR] Test failed: {e}")
         return False
         
     finally:

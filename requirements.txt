@@ -1,4 +1,4 @@
-# 🚀 LANVan File Transfer Server Dependencies
+# Lanvan File Transfer Server Dependencies
 # Core web framework
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
@@ -27,5 +27,5 @@ aiofiles==23.2.0
 # Clipboard operations
 pyperclip==1.8.2
 
-# WebRTC for P2P implementation
-aiortc==1.9.0
+# Async HTTP client (used by qt.py test suite)
+aiohttp

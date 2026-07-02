@@ -71,7 +71,7 @@ class MDNSServiceManager:
             # Fallback to sync version
             return self._start_service_sync()
         except Exception as e:
-            print(f"❌ Failed to start mDNS service: {e}")
+            print(f"[ERR] Failed to start mDNS service: {e}")
             return False
     
     async def start_service_async(self) -> bool:
@@ -88,11 +88,11 @@ class MDNSServiceManager:
                 # Get hostname and IP
                 hostname = socket.gethostname()
                 lan_ip = self.get_lan_ip()
-                print(f"🔍 mDNS async setup - hostname: {hostname}, IP: {lan_ip}")
+                print(f"[SEARCH] mDNS async setup - hostname: {hostname}, IP: {lan_ip}")
                 
                 # Create service info
                 service_name_full = f"{self.service_name}.{self.service_type}"
-                print(f"🔍 mDNS async service name: {service_name_full}")
+                print(f"[SEARCH] mDNS async service name: {service_name_full}")
                 
                 # Service properties for additional info  
                 properties = {
@@ -113,23 +113,23 @@ class MDNSServiceManager:
                 )
                 
                 # Register the service
-                print(f"🔍 Registering async mDNS service...")
+                print(f"[SEARCH] Registering async mDNS service...")
                 await self.async_zeroconf.async_register_service(self.service_info)
                 self.is_running = True
                 
-                print(f"✅ mDNS async service started: {self.domain}:{self.port}")
+                print(f"[OK] mDNS async service started: {self.domain}:{self.port}")
                 print(f"   Service: {service_name_full}")
                 print(f"   IP: {lan_ip}:{self.port}")
                 
                 return True
                 
         except Exception as e:
-            print(f"❌ Failed to start async mDNS service: {e}")
+            print(f"[ERR] Failed to start async mDNS service: {e}")
             if self.async_zeroconf:
                 try:
                     await self.async_zeroconf.async_close()
                 except Exception as cleanup_error:
-                    print(f"❌ Error during async mDNS cleanup: {cleanup_error}")
+                    print(f"[ERR] Error during async mDNS cleanup: {cleanup_error}")
             return False
     
     def _start_service_sync(self) -> bool:
@@ -148,11 +148,11 @@ class MDNSServiceManager:
                 # Get hostname and IP
                 hostname = socket.gethostname()
                 lan_ip = self.get_lan_ip()
-                print(f"🔍 mDNS sync setup - hostname: {hostname}, IP: {lan_ip}")
+                print(f"[SEARCH] mDNS sync setup - hostname: {hostname}, IP: {lan_ip}")
                 
                 # Create service info
                 service_name_full = f"{self.service_name}.{self.service_type}"
-                print(f"🔍 mDNS sync service name: {service_name_full}")
+                print(f"[SEARCH] mDNS sync service name: {service_name_full}")
                 
                 # Service properties for additional info  
                 properties = {
@@ -180,27 +180,27 @@ class MDNSServiceManager:
                     return self._start_service_sync()  # Recursive retry with new name
                 
                 # Register the service
-                print(f"🔍 Registering sync mDNS service...")
+                print(f"[SEARCH] Registering sync mDNS service...")
                 self.zeroconf.register_service(self.service_info)
                 self.is_running = True
                 
-                print(f"✅ mDNS sync service started: {self.domain}:{self.port}")
+                print(f"[OK] mDNS sync service started: {self.domain}:{self.port}")
                 print(f"   Service: {service_name_full}")
                 print(f"   IP: {lan_ip}:{self.port}")
-                self.logger.info(f"✅ mDNS service started: {self.domain}:{self.port}")
+                self.logger.info(f"[OK] mDNS service started: {self.domain}:{self.port}")
                 self.logger.info(f"   Service: {service_name_full}")
                 self.logger.info(f"   IP: {lan_ip}:{self.port}")
                 
                 return True
                 
         except Exception as e:
-            print(f"❌ Failed to start sync mDNS service: {e}")
+            print(f"[ERR] Failed to start sync mDNS service: {e}")
             self.logger.error(f"Failed to start mDNS service: {e}")
             if self.zeroconf:
                 try:
                     self.zeroconf.close()
                 except Exception as cleanup_error:
-                    print(f"❌ Error during sync mDNS cleanup: {cleanup_error}")
+                    print(f"[ERR] Error during sync mDNS cleanup: {cleanup_error}")
             return False
     
     def _check_service_exists(self, service_name: str) -> bool:
@@ -243,7 +243,7 @@ class MDNSServiceManager:
             self._stop_service_sync()
                 
         except Exception as e:
-            print(f"❌ Error stopping mDNS service: {e}")
+            print(f"[ERR] Error stopping mDNS service: {e}")
             self.logger.error(f"Error stopping mDNS service: {e}")
     
     async def stop_service_async(self):
@@ -255,7 +255,7 @@ class MDNSServiceManager:
                 
                 if self.service_info and self.async_zeroconf:
                     await self.async_zeroconf.async_unregister_service(self.service_info)
-                    print(f"🔴 Async mDNS service stopped: {self.domain}")
+                    print(f" Async mDNS service stopped: {self.domain}")
                 
                 if self.async_zeroconf:
                     await self.async_zeroconf.async_close()
@@ -265,7 +265,7 @@ class MDNSServiceManager:
                 self.async_zeroconf = None
                 
         except Exception as e:
-            print(f"❌ Error stopping async mDNS service: {e}")
+            print(f"[ERR] Error stopping async mDNS service: {e}")
             self.logger.error(f"Error stopping mDNS service: {e}")
     
     def _stop_service_sync(self):
@@ -277,8 +277,8 @@ class MDNSServiceManager:
                 
                 if self.service_info and self.zeroconf:
                     self.zeroconf.unregister_service(self.service_info)
-                    print(f"🔴 Sync mDNS service stopped: {self.domain}")
-                    self.logger.info(f"🔴 mDNS service stopped: {self.domain}")
+                    print(f" Sync mDNS service stopped: {self.domain}")
+                    self.logger.info(f" mDNS service stopped: {self.domain}")
                 
                 if self.zeroconf:
                     self.zeroconf.close()
@@ -288,7 +288,7 @@ class MDNSServiceManager:
                 self.zeroconf = None
                 
         except Exception as e:
-            print(f"❌ Error stopping sync mDNS service: {e}")
+            print(f"[ERR] Error stopping sync mDNS service: {e}")
             self.logger.error(f"Error stopping mDNS service: {e}")
     
     def get_mdns_info(self) -> Dict[str, Any]:

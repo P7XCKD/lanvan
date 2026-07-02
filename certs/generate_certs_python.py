@@ -87,7 +87,7 @@ def generate_certificates_python(ip_address=None, force=False):
             x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
             x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Local"),
             x509.NameAttribute(NameOID.LOCALITY_NAME, "Local"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "LanVan"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Lanvan"),
             x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
         ])
         
@@ -185,13 +185,13 @@ def generate_certificates_python(ip_address=None, force=False):
         return False
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate SSL certificates for LanVan Clipy (Python method)')
+    parser = argparse.ArgumentParser(description='Generate SSL certificates for Lanvan Clipy (Python method)')
     parser.add_argument('--ip', help='IP address to include in certificate')
     parser.add_argument('--force', action='store_true', help='Force regenerate certificates')
     
     args = parser.parse_args()
     
-    print("[INFO] LanVan Clipy - SSL Certificate Generator (Python)")
+    print("[INFO] Lanvan Clipy - SSL Certificate Generator (Python)")
     print("=" * 60)
     
     success = generate_certificates_python(args.ip, args.force)

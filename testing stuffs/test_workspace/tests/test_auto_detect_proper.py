@@ -10,7 +10,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
 
 try:
-    print("🔍 Testing auto-detecting streaming assembly...")
+    print("[SEARCH] Testing auto-detecting streaming assembly...")
     
     # Import the auto-detecting version
     from streaming_assembly import (
@@ -19,7 +19,7 @@ try:
         shutdown_streaming_assembly
     )
     
-    print("✅ Import successful!")
+    print("[OK] Import successful!")
     
     # Test initialization
     from pathlib import Path
@@ -33,19 +33,19 @@ try:
         upload_folder.mkdir(exist_ok=True)
         
         initialize_streaming_assembly(temp_folder, upload_folder)
-        print("✅ Initialization successful!")
+        print("[OK] Initialization successful!")
         
         # Test assembler
         assembler = get_streaming_assembler()
-        print(f"✅ Assembler created: {type(assembler)}")
+        print(f"[OK] Assembler created: {type(assembler)}")
         
         # Test shutdown
         shutdown_streaming_assembly()
-        print("✅ Shutdown successful!")
+        print("[OK] Shutdown successful!")
     
-    print("🎉 All tests passed!")
+    print("[DONE] All tests passed!")
     
 except Exception as e:
-    print(f"❌ Test failed: {e}")
+    print(f"[ERR] Test failed: {e}")
     import traceback
     traceback.print_exc()

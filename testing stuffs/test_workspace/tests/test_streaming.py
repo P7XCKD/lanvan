@@ -23,7 +23,7 @@ def upload_file_chunked(file_path, chunk_size_kb=64):
     file_size = file_path.stat().st_size
     total_chunks = (file_size + chunk_size_kb * 1024 - 1) // (chunk_size_kb * 1024)
     
-    print(f"📂 Uploading {file_path.name} ({file_size:,} bytes) in {total_chunks} chunks")
+    print(f"[DIR] Uploading {file_path.name} ({file_size:,} bytes) in {total_chunks} chunks")
     
     start_time = time.time()
     
@@ -46,16 +46,16 @@ def upload_file_chunked(file_path, chunk_size_kb=64):
             response = requests.post(f"{base_url}/upload_chunk", files=files, data=data)
             
             if response.status_code == 200:
-                print(f"✅ Chunk {chunk_num}/{total_chunks} uploaded")
+                print(f"[OK] Chunk {chunk_num}/{total_chunks} uploaded")
             else:
-                print(f"❌ Chunk {chunk_num} failed: {response.text}")
+                print(f"[ERR] Chunk {chunk_num} failed: {response.text}")
                 return False
             
             # Small delay to test streaming assembly
             time.sleep(0.1)
     
     # Finalize upload
-    print("🔄 Finalizing upload...")
+    print("[RETRY] Finalizing upload...")
     finalize_data = {
         'filename': file_path.name,
         'total_parts': total_chunks,
@@ -71,17 +71,17 @@ def upload_file_chunked(file_path, chunk_size_kb=64):
         streaming_used = result.get('streaming_assembly', False)
         assembly_method = result.get('assembly_method', 'unknown')
         
-        print(f"✅ Upload completed in {upload_time:.1f}s")
-        print(f"🌊 Streaming assembly: {'YES' if streaming_used else 'NO'}")
-        print(f"⚙️ Assembly method: {assembly_method}")
+        print(f"[OK] Upload completed in {upload_time:.1f}s")
+        print(f"[STREAM] Streaming assembly: {'YES' if streaming_used else 'NO'}")
+        print(f"[CFG] Assembly method: {assembly_method}")
         
         return True
     else:
-        print(f"❌ Finalization failed: {response.text}")
+        print(f"[ERR] Finalization failed: {response.text}")
         return False
 
 def main():
-    print("🧪 Testing Streaming Chunk Assembly")
+    print(" Testing Streaming Chunk Assembly")
     print("=" * 50)
     
     # Create test file
@@ -92,15 +92,15 @@ def main():
         success = upload_file_chunked(test_file, chunk_size_kb=64)
         
         if success:
-            print("\n✅ Streaming assembly test completed successfully!")
+            print("\n[OK] Streaming assembly test completed successfully!")
         else:
-            print("\n❌ Test failed")
+            print("\n[ERR] Test failed")
     
     finally:
         # Cleanup
         if test_file.exists():
             test_file.unlink()
-            print(f"🧹 Cleaned up {test_file.name}")
+            print(f"[CLEAN] Cleaned up {test_file.name}")
 
 if __name__ == "__main__":
     main()

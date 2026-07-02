@@ -20,7 +20,7 @@ function generateFileListHash(files) {
 function generateOfflineQR(text, canvas) {
   // Skip computation if uploads are blocked to prevent UI blocking
   if (window._qrBlocked) {
-    console.log('⏸️ QR computation blocked during upload');
+    console.log('⏸ QR computation blocked during upload');
     return false;
   }
   
@@ -174,9 +174,9 @@ function getStatusDisplay(status) {
   const statusMap = {
     'queued': 'Queued',
     'uploading': 'Uploading',
-    'completed': '✅ Complete',
-    'error': '❌ Error', 
-    'cancelled': '⏸️ Cancelled'
+    'completed': ' Complete',
+    'error': ' Error', 
+    'cancelled': '⏸ Cancelled'
   };
   return statusMap[status] || status;
 }
@@ -230,7 +230,7 @@ function getBrowserInfo(userAgent) {
  */
 function updateHttpSecurityWarning() {
   // HTTP-Safe mode is automatic when AES is enabled over HTTP
-  console.log('🛡️ HTTP-Safe mode: automatic when AES enabled over HTTP');
+  console.log(' HTTP-Safe mode: automatic when AES enabled over HTTP');
 }
 
 /**
@@ -241,16 +241,16 @@ function updateHttpSecurityWarning() {
 function getClipboardItemIcon(item) {
   if (item.type === 'file') {
     switch (item.content_type) {
-      case 'image': return '🖼️';
-      case 'text': return '📄';
-      case 'document': return '📋';
-      default: return '📁';
+      case 'image': return '';
+      case 'text': return '';
+      case 'document': return '';
+      default: return '';
     }
   } else {
     switch (item.content_type) {
-      case 'image_base64': return '🖼️';
-      case 'url': return '🔗';
-      default: return '📝';
+      case 'image_base64': return '';
+      case 'url': return '';
+      default: return '';
     }
   }
 }
@@ -369,7 +369,7 @@ function startProgressUpdateSafetyNet() {
       if (timeSinceUpdate > 800) {
         // Only log if critically stuck for more than 30 seconds to reduce spam
         if (timeSinceUpdate > 30000) {
-          console.warn(`⚠️ Upload critically stuck for ${uploadItem.fileName} (${(timeSinceUpdate/1000).toFixed(1)}s), forcing update`);
+          console.warn(` Upload critically stuck for ${uploadItem.fileName} (${(timeSinceUpdate/1000).toFixed(1)}s), forcing update`);
         }
         updateUploadItem(uploadItem, true); // Force update flag
       }
@@ -383,7 +383,7 @@ function startProgressUpdateSafetyNet() {
     if (anyUploads.length === 0) {
       clearInterval(progressUpdateInterval);
       progressUpdateInterval = null;
-      console.log('🔄 Safety net stopped - no active uploads');
+      console.log(' Safety net stopped - no active uploads');
     }
   }, 300); // Check every 300ms for ultra-responsive feel
 }
@@ -399,7 +399,7 @@ function shouldProcessFileSelection(files) {
 
   // Check if this is a duplicate selection within debounce period
   if (now - lastFileSelectionTime < FILE_SELECTION_DEBOUNCE && fileHash === lastFileSelectionHash) {
-    console.log('🔄 Duplicate file selection ignored (debounced)');
+    console.log(' Duplicate file selection ignored (debounced)');
     return false;
   }
 
@@ -461,8 +461,8 @@ function showUploadManager() {
     manager.style.display = 'block';
     isUploadManagerVisible = true;
 
-    // 🔔 Show helpful toast when upload manager first appears
-    showToast('📤 Upload Manager opened - Track your file uploads here!', 3000);
+    //  Show helpful toast when upload manager first appears
+    showToast(' Upload Manager opened - Track your file uploads here!', 3000);
   }
 }
 
@@ -505,11 +505,11 @@ function populateDeviceLogsModal() {
     if (deviceUploadLogs.length === 0) {
       logsContent.innerHTML = `
         <div style="text-align: center; color: var(--text-color); opacity: 0.6; padding: 2rem;">
-          <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
+          <div style="font-size: 3rem; margin-bottom: 1rem;"></div>
           <div style="font-size: 1.1rem; color: var(--text-color) !important;">No device logs for this session yet</div>
           <div style="font-size: 0.9rem; margin-top: 0.5rem; color: var(--text-color) !important; opacity: 0.7;">Upload some files to see activity logs here</div>
           <div style="font-size: 0.85rem; margin-top: 1rem; color: var(--text-color) !important; opacity: 0.7;">
-            📱 Logs are device-specific and clear when you close the browser
+             Logs are device-specific and clear when you close the browser
           </div>
         </div>
       `;
@@ -527,9 +527,9 @@ function populateDeviceLogsModal() {
 
       logsStats.innerHTML = `
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
-          <div><strong>📊 Total Entries:</strong> ${totalFiles}</div>
-          <div><strong>💾 Total Data:</strong> ${totalSizeBytes.toFixed(1)} MB</div>
-          <div><strong>📱 Device Session:</strong> ${getCurrentDeviceId().substring(0, 8)}...</div>
+          <div><strong> Total Entries:</strong> ${totalFiles}</div>
+          <div><strong> Total Data:</strong> ${totalSizeBytes.toFixed(1)} MB</div>
+          <div><strong> Device Session:</strong> ${getCurrentDeviceId().substring(0, 8)}...</div>
           <div><strong>⏰ Session Started:</strong> ${sessionStartTime || 'Unknown'}</div>
         </div>
       `;
@@ -559,7 +559,7 @@ function updateNetworkSpeed(speedMBps) {
   if (totalUploadsProcessed % LANVAN_CONFIG.CONCURRENT.ADAPTATION_INTERVAL === 0) {
     const newOptimal = getOptimalConcurrency();
     if (newOptimal !== currentMaxConcurrent) {
-      console.log(`📊 Adaptive concurrency: ${currentMaxConcurrent} → ${newOptimal} (avg speed: ${(networkSpeedSamples.reduce((a, b) => a + b, 0) / networkSpeedSamples.length).toFixed(1)} MB/s)`);
+      console.log(` Adaptive concurrency: ${currentMaxConcurrent} → ${newOptimal} (avg speed: ${(networkSpeedSamples.reduce((a, b) => a + b, 0) / networkSpeedSamples.length).toFixed(1)} MB/s)`);
       currentMaxConcurrent = newOptimal;
       lastConcurrencyAdjustment = Date.now();
 
@@ -597,7 +597,7 @@ function createUploadItem(file, uploadId) {
     isAESEnabled: isAESEnabled, // Store AES encryption state
     uploadedChunks: 0, // For resume functionality
     totalChunks: 0, // For chunked uploads
-    // 📊 Statistics tracking
+    //  Statistics tracking
     resumeCount: 0
   };
 }
@@ -615,7 +615,7 @@ function closeSettingsOnOutsideClick(event) {
 
 // Function to get the current device ID
 function getCurrentDeviceId() {
-  let deviceId = sessionStorage.getItem('lanvan_device_id');
+  let deviceId = sessionStorage.getItem('Lanvan_device_id');
   if (!deviceId) {
     // Try to get actual device information
     const deviceInfo = getDeviceInfo();
@@ -624,9 +624,9 @@ function getCurrentDeviceId() {
 
     // Create readable device ID with actual device name if available
     deviceId = `${deviceInfo.name}_${timestamp}_${randomId}`;
-    sessionStorage.setItem('lanvan_device_id', deviceId);
+    sessionStorage.setItem('Lanvan_device_id', deviceId);
 
-    console.log(`📱 New device session created: ${deviceInfo.displayName}`);
+    console.log(` New device session created: ${deviceInfo.displayName}`);
   }
   return deviceId;
 }
@@ -708,9 +708,9 @@ function saveToDeviceUploadHistory(stats) {
     // Session will auto-clear when browser closes
 
     sessionStorage.setItem(sessionKey, JSON.stringify(deviceHistory));
-    console.log(`📱 Saved to device history (${deviceId}):`, stats.type, stats.size, stats.time);
+    console.log(` Saved to device history (${deviceId}):`, stats.type, stats.size, stats.time);
   } catch (e) {
-    console.log('⚠️ Failed to save to device upload history:', e);
+    console.log(' Failed to save to device upload history:', e);
   }
 }
 
@@ -791,7 +791,7 @@ function displayDeviceLogsWithPagination(logs, contentElement, paginationElement
   renderPagination();
 }
 
-// 🔧 Conditional Logging System - Production Performance Optimization
+//  Conditional Logging System - Production Performance Optimization
 // Note: DEBUG_MODE is defined in the main HTML file to avoid duplicate declarations
 // Using window.DEBUG_MODE if available, otherwise defaulting to false
 const DEBUG_MODE = window.DEBUG_MODE !== undefined ? window.DEBUG_MODE : false;
@@ -807,22 +807,22 @@ const currentLogLevel = DEBUG_MODE ? DEBUG_LEVELS.DEBUG : DEBUG_LEVELS.ERROR;
 // Use global log object if available, otherwise create fallback
 const log = window.log || {
   error: (msg, ...args) => {
-    if (currentLogLevel >= DEBUG_LEVELS.ERROR) console.error('❌', msg, ...args);
+    if (currentLogLevel >= DEBUG_LEVELS.ERROR) console.error('', msg, ...args);
   },
   warn: (msg, ...args) => {
-    if (currentLogLevel >= DEBUG_LEVELS.WARN) console.warn('⚠️', msg, ...args);
+    if (currentLogLevel >= DEBUG_LEVELS.WARN) console.warn('', msg, ...args);
   },
   info: (msg, ...args) => {
-    if (currentLogLevel >= DEBUG_LEVELS.INFO) console.info('ℹ️', msg, ...args);
+    if (currentLogLevel >= DEBUG_LEVELS.INFO) console.info('ℹ', msg, ...args);
   },
   debug: (msg, ...args) => {
-    if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('🔍', msg, ...args);
+    if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('', msg, ...args);
   },
   upload: (msg, ...args) => {
-    if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('📤', msg, ...args);
+    if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('', msg, ...args);
   },
   network: (msg, ...args) => {
-    if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('🌐', msg, ...args);
+    if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('', msg, ...args);
   }
 };
 

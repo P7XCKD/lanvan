@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🧪 Background Task Manager Validation Test
+ Background Task Manager Validation Test
 
 Tests the new task manager for:
 1. Performance impact (should be near-zero)
@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent / "app"))
 
 async def test_task_manager_direct():
     """Test task manager functionality directly"""
-    print("🧪 Testing TaskManager directly...")
+    print(" Testing TaskManager directly...")
     
     from app.task_manager import LightweightTaskManager
     
@@ -65,15 +65,15 @@ async def test_task_manager_direct():
     submit_time = time.time() - start_time
     
     assert submit_time < 0.1, f"Task submission too slow: {submit_time:.3f}s"
-    print(f"   ✅ 100 task submissions in {submit_time:.3f}s")
+    print(f"   [OK] 100 task submissions in {submit_time:.3f}s")
     
     # Cleanup
     await tm.shutdown()
-    print("   ✅ Direct task manager tests passed")
+    print("   [OK] Direct task manager tests passed")
 
 async def test_file_scanning_integration():
     """Test integration with file scanning functionality"""
-    print("🧪 Testing file scanning integration...")
+    print(" Testing file scanning integration...")
     
     try:
         from app.routes import scan_file
@@ -97,21 +97,21 @@ async def test_file_scanning_integration():
         # Check stats updated
         new_stats = get_task_stats()
         if new_stats['total_submitted'] > initial_submitted:
-            print("   ✅ File scanning creates background tasks correctly")
+            print("   [OK] File scanning creates background tasks correctly")
         else:
-            print("   ⚠️ File scanning may not be using task manager (or limit reached)")
+            print("   [WARN] File scanning may not be using task manager (or limit reached)")
         
         # Cleanup
         test_file.unlink(missing_ok=True)
         
     except ImportError as e:
-        print(f"   ⚠️ Could not test file scanning integration: {e}")
+        print(f"   [WARN] Could not test file scanning integration: {e}")
     except Exception as e:
-        print(f"   ❌ File scanning integration test failed: {e}")
+        print(f"   [ERR] File scanning integration test failed: {e}")
 
 def test_api_endpoint():
     """Test the task stats API endpoint"""
-    print("🧪 Testing task stats API endpoint...")
+    print(" Testing task stats API endpoint...")
     
     try:
         # Try to connect to running server
@@ -129,20 +129,20 @@ def test_api_endpoint():
             for field in required_fields:
                 assert field in stats, f"Missing required field: {field}"
             
-            print(f"   ✅ API endpoint working - {stats['active_tasks']} active tasks")
-            print(f"   📊 Stats: {stats['total_submitted']} submitted, {stats['total_completed']} completed")
+            print(f"   [OK] API endpoint working - {stats['active_tasks']} active tasks")
+            print(f"   [STATS] Stats: {stats['total_submitted']} submitted, {stats['total_completed']} completed")
             
         else:
-            print(f"   ⚠️ API endpoint returned status {response.status_code}")
+            print(f"   [WARN] API endpoint returned status {response.status_code}")
             
     except requests.exceptions.ConnectionError:
-        print("   ⚠️ Server not running - skipping API test")
+        print("   [WARN] Server not running - skipping API test")
     except Exception as e:
-        print(f"   ❌ API endpoint test failed: {e}")
+        print(f"   [ERR] API endpoint test failed: {e}")
 
 async def test_memory_usage():
     """Test memory usage and leak prevention"""
-    print("🧪 Testing memory usage...")
+    print(" Testing memory usage...")
     
     process = psutil.Process()
     initial_memory = process.memory_info().rss / 1024 / 1024  # MB
@@ -178,20 +178,20 @@ async def test_memory_usage():
         final_memory = process.memory_info().rss / 1024 / 1024  # MB
         memory_increase = final_memory - initial_memory
         
-        print(f"   📊 Memory usage: {initial_memory:.1f}MB → {final_memory:.1f}MB (+{memory_increase:.1f}MB)")
-        print(f"   📊 Task stats: {stats['total_submitted']} submitted, {stats['total_completed']} completed")
+        print(f"   [STATS] Memory usage: {initial_memory:.1f}MB → {final_memory:.1f}MB (+{memory_increase:.1f}MB)")
+        print(f"   [STATS] Task stats: {stats['total_submitted']} submitted, {stats['total_completed']} completed")
         
         # Memory increase should be minimal (< 5MB for this test)
         if memory_increase < 5:
-            print("   ✅ Memory usage acceptable")
+            print("   [OK] Memory usage acceptable")
         else:
-            print(f"   ⚠️ Memory usage higher than expected: +{memory_increase:.1f}MB")
+            print(f"   [WARN] Memory usage higher than expected: +{memory_increase:.1f}MB")
     except Exception as e:
-        print(f"   ❌ Memory test failed: {e}")
+        print(f"   [ERR] Memory test failed: {e}")
 
 async def test_performance_comparison():
     """Compare performance with and without task manager"""
-    print("🧪 Testing performance comparison...")
+    print(" Testing performance comparison...")
     
     async def raw_asyncio_test():
         """Test raw asyncio.create_task performance"""
@@ -235,19 +235,19 @@ async def test_performance_comparison():
     
     overhead = ((managed_time - raw_time) / raw_time) * 100 if raw_time > 0 else 0
     
-    print(f"   📊 Raw asyncio: {raw_time:.3f}s")
-    print(f"   📊 Task manager: {managed_time:.3f}s")
-    print(f"   📊 Overhead: {overhead:.1f}%")
+    print(f"   [STATS] Raw asyncio: {raw_time:.3f}s")
+    print(f"   [STATS] Task manager: {managed_time:.3f}s")
+    print(f"   [STATS] Overhead: {overhead:.1f}%")
     
     # Overhead should be minimal (< 50%)
     if overhead < 50:
-        print("   ✅ Performance overhead acceptable")
+        print("   [OK] Performance overhead acceptable")
     else:
-        print(f"   ⚠️ Performance overhead high: {overhead:.1f}%")
+        print(f"   [WARN] Performance overhead high: {overhead:.1f}%")
 
 async def main():
     """Run all tests"""
-    print("🚀 Background Task Manager Validation Tests")
+    print("[START] Background Task Manager Validation Tests")
     print("=" * 50)
     
     try:
@@ -266,10 +266,10 @@ async def main():
         await test_performance_comparison()
         print()
         
-        print("✅ All tests completed!")
+        print("[OK] All tests completed!")
         
     except Exception as e:
-        print(f"❌ Test suite failed: {e}")
+        print(f"[ERR] Test suite failed: {e}")
         import traceback
         traceback.print_exc()
 

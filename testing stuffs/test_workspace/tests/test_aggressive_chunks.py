@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 """
-🚀 Test the new AGGRESSIVE adaptive chunk sizing system
+[START] Test the new AGGRESSIVE adaptive chunk sizing system
 """
 
 from app.android_optimizer import universal_optimizer, get_available_memory_mb, get_cpu_usage
 
 def test_aggressive_chunks():
-    print("🚀 AGGRESSIVE Adaptive Chunk Sizing Test")
+    print("[START] AGGRESSIVE Adaptive Chunk Sizing Test")
     print("=" * 50)
     
     # Current system info
     available_mb = get_available_memory_mb()
     cpu_usage = get_cpu_usage()
     
-    print(f"💾 Available Memory: {available_mb}MB")
-    print(f"🖥️ CPU Usage: {cpu_usage:.1f}%")
-    print(f"🖥️ Platform: {universal_optimizer.platform_type}")
-    print(f"📱 Is Android: {universal_optimizer.is_android}")
-    print(f"💾 Is Low Memory: {universal_optimizer.is_low_memory}")
+    print(f"[SAVE] Available Memory: {available_mb}MB")
+    print(f" CPU Usage: {cpu_usage:.1f}%")
+    print(f" Platform: {universal_optimizer.platform_type}")
+    print(f"[MOBILE] Is Android: {universal_optimizer.is_android}")
+    print(f"[SAVE] Is Low Memory: {universal_optimizer.is_low_memory}")
     print()
     
     # Test different file sizes
@@ -31,7 +31,7 @@ def test_aggressive_chunks():
         ("Ultra File", 50 * 1024 * 1024 * 1024),  # 50GB
     ]
     
-    print("📊 Adaptive Chunk Size Results:")
+    print("[STATS] Adaptive Chunk Size Results:")
     print("-" * 60)
     
     for name, file_size in test_files:
@@ -42,7 +42,7 @@ def test_aggressive_chunks():
         print(f"{name:12} ({file_size//1024//1024:>5}MB) → {chunk_mb:>6.1f}MB chunks ({improvement:>4.1f}x faster)")
     
     print()
-    print("🎯 Performance Analysis:")
+    print("[TARGET] Performance Analysis:")
     print("-" * 30)
     
     # Calculate performance improvements
@@ -52,11 +52,11 @@ def test_aggressive_chunks():
     test_1gb = universal_optimizer.get_adaptive_chunk_size(1024 * 1024 * 1024)
     test_5gb = universal_optimizer.get_adaptive_chunk_size(5 * 1024 * 1024 * 1024)
     
-    print(f"📈 1GB file chunks: {test_1gb//1024//1024}MB (was 2MB) = {test_1gb//(2*1024*1024)}x improvement!")
-    print(f"📈 5GB file chunks: {test_5gb//1024//1024}MB (was 512KB) = {test_5gb//old_512kb}x improvement!")
+    print(f"[STATS] 1GB file chunks: {test_1gb//1024//1024}MB (was 2MB) = {test_1gb//(2*1024*1024)}x improvement!")
+    print(f"[STATS] 5GB file chunks: {test_5gb//1024//1024}MB (was 512KB) = {test_5gb//old_512kb}x improvement!")
     
     print()
-    print("🚀 System will now use MAXIMUM performance chunks based on your capabilities!")
+    print("[START] System will now use MAXIMUM performance chunks based on your capabilities!")
 
 if __name__ == "__main__":
     test_aggressive_chunks()

@@ -1,4 +1,4 @@
-# 🍎 iOS Safari Connection Guide for LANVan
+# 🍎 iOS Safari Connection Guide for Lanvan
 
 ## Quick Start for iOS Devices
 
@@ -162,7 +162,7 @@ Look for iOS-specific messages in the server console:
 ## 🎯 Success Indicators
 
 You'll know it's working when:
-- ✅ Page loads completely with LANVan interface
+- ✅ Page loads completely with Lanvan interface
 - ✅ You can see the file upload area
 - ✅ Upload progress works smoothly  
 - ✅ Real-time features (clipboard sync) work

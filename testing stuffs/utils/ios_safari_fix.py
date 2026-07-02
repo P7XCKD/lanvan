@@ -44,13 +44,13 @@ def print_qr_code(url):
         f.seek(0)
         qr_text = f.read()
         
-        print(f"\n📱 QR Code for {url}:")
+        print(f"\n[MOBILE] QR Code for {url}:")
         print(qr_text)
         
     except ImportError:
-        print("📱 Install qrcode library for QR codes: pip install qrcode")
+        print("[MOBILE] Install qrcode library for QR codes: pip install qrcode")
     except Exception as e:
-        print(f"📱 QR Code generation failed: {e}")
+        print(f"[MOBILE] QR Code generation failed: {e}")
 
 def start_server(port, use_https=False):
     """Start a server on specified port"""
@@ -61,35 +61,35 @@ def start_server(port, use_https=False):
     cmd.extend(["--port", str(port)])
     
     try:
-        print(f"🚀 Starting {protocol.upper()} server on port {port}...")
+        print(f"[START] Starting {protocol.upper()} server on port {port}...")
         # Get the project root directory (parent of utils)
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         process = subprocess.Popen(cmd, cwd=project_root)
         time.sleep(2)  # Give server time to start
         return process
     except Exception as e:
-        print(f"❌ Failed to start {protocol} server: {e}")
+        print(f"[ERR] Failed to start {protocol} server: {e}")
         return None
 
 def main():
-    print("🍎 iOS Safari Connection Helper")
+    print(" iOS Safari Connection Helper")
     print("=" * 50)
     
     ip = get_local_ip()
-    print(f"📡 Local IP: {ip}")
+    print(f"[MDNS] Local IP: {ip}")
     
-    print("\n🔧 Regenerating iOS-compatible certificates...")
+    print("\n[CFG] Regenerating iOS-compatible certificates...")
     try:
         # Get the project root directory (parent of utils)
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         subprocess.run([sys.executable, "certs/generate_certs_python.py", "--ip", ip, "--force"], 
                       check=True, cwd=project_root)
-        print("✅ iOS-compatible certificates generated!")
+        print("[OK] iOS-compatible certificates generated!")
     except Exception as e:
-        print(f"⚠️ Certificate generation warning: {e}")
+        print(f"[WARN] Certificate generation warning: {e}")
     
     # Start both HTTP and HTTPS servers
-    print("\n🚀 Starting dual servers for maximum iOS compatibility...")
+    print("\n[START] Starting dual servers for maximum iOS compatibility...")
     
     http_process = None
     https_process = None
@@ -104,12 +104,12 @@ def main():
         time.sleep(3)  # Give servers time to fully start
         
         print("\n" + "="*60)
-        print("📱 iOS SAFARI CONNECTION OPTIONS")
+        print("[MOBILE] iOS SAFARI CONNECTION OPTIONS")
         print("="*60)
         
         # Option 1: HTTP (most reliable for iOS)
         http_url = f"http://{ip}:5000"
-        print(f"\n🟢 OPTION 1 (RECOMMENDED): HTTP")
+        print(f"\n OPTION 1 (RECOMMENDED): HTTP")
         print(f"   URL: {http_url}")
         print(f"   Status: Most reliable for iOS Safari")
         print(f"   Security: Basic (local network only)")
@@ -117,7 +117,7 @@ def main():
         
         # Option 2: HTTPS with IP
         https_ip_url = f"https://{ip}:5001"
-        print(f"\n🟡 OPTION 2: HTTPS with IP")
+        print(f"\n OPTION 2: HTTPS with IP")
         print(f"   URL: {https_ip_url}")
         print(f"   Status: May show security warning")
         print(f"   Action: Tap 'Advanced' → 'Continue to {ip}'")
@@ -125,36 +125,36 @@ def main():
         
         # Option 3: HTTPS with mDNS
         mdns_url = "https://lanvan.local:5001"
-        print(f"\n🔴 OPTION 3: HTTPS with mDNS")
+        print(f"\n OPTION 3: HTTPS with mDNS")
         print(f"   URL: {mdns_url}")
         print(f"   Status: May not resolve on iOS")
         print(f"   Fallback: Use Options 1 or 2")
         
         print(f"\n" + "="*60)
-        print("📋 TROUBLESHOOTING TIPS FOR iOS SAFARI:")
+        print("[INFO] TROUBLESHOOTING TIPS FOR iOS SAFARI:")
         print("="*60)
-        print("1. 🟢 Try HTTP first (Option 1) - most reliable")
-        print("2. 🟡 For HTTPS, accept security warnings")
-        print("3. 🔄 If page won't load, try refreshing")
-        print("4. 📱 Ensure iPhone is on same WiFi network")
-        print("5. 🔧 Try turning WiFi off/on if mDNS fails")
-        print("6. 🌐 Use IP addresses instead of .local domains")
-        print("7. 📚 Visit http://10.110.4.169:5000/ios-help for detailed help")
-        print("8. 🧹 Clear Safari cache: Settings → Safari → Clear History")
-        print("9. 🔄 Try other browsers (Chrome, Firefox) if Safari fails")
-        print("10. 📡 Check if you're on a guest network (may block connections)")
+        print("1.  Try HTTP first (Option 1) - most reliable")
+        print("2.  For HTTPS, accept security warnings")
+        print("3. [RETRY] If page won't load, try refreshing")
+        print("4. [MOBILE] Ensure iPhone is on same WiFi network")
+        print("5. [CFG] Try turning WiFi off/on if mDNS fails")
+        print("6. [NET] Use IP addresses instead of .local domains")
+        print("7.  Visit http://10.110.4.169:5000/ios-help for detailed help")
+        print("8. [CLEAN] Clear Safari cache: Settings → Safari → Clear History")
+        print("9. [RETRY] Try other browsers (Chrome, Firefox) if Safari fails")
+        print("10. [MDNS] Check if you're on a guest network (may block connections)")
         
-        print(f"\n⏳ Servers running... Press Ctrl+C to stop")
+        print(f"\n[WAIT] Servers running... Press Ctrl+C to stop")
         
         # Keep running until interrupted
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            print("\n🛑 Stopping servers...")
+            print("\n Stopping servers...")
             
     except KeyboardInterrupt:
-        print("\n🛑 Stopping servers...")
+        print("\n Stopping servers...")
         
     finally:
         # Clean up processes
@@ -169,7 +169,7 @@ def main():
                     except:
                         pass
         
-        print("✅ All servers stopped.")
+        print("[OK] All servers stopped.")
 
 if __name__ == "__main__":
     main()

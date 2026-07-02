@@ -1,21 +1,21 @@
-# 🔒 AES Configuration and Validation Module
+# [LOCK] AES Configuration and Validation Module
 import os
 from typing import Dict, Any
 
 class AESConfig:
     """Centralized AES configuration and validation"""
     
-    # 🔐 AES Settings - SIZE LIMITS REMOVED FOR STREAMING ENCRYPTION
+    # [AUTH] AES Settings - SIZE LIMITS REMOVED FOR STREAMING ENCRYPTION
     MAX_FILE_SIZE_MB = None  # No limit - streaming encryption handles any size
     MAX_FILE_SIZE_BYTES = None  # No limit - streaming encryption handles any size
     
-    # 🔒 Security Settings
+    # [LOCK] Security Settings
     ALGORITHM = "AES-256-CBC"
     KEY_LENGTH = 32  # 256 bits
     IV_LENGTH = 16   # 128 bits
     PBKDF2_ITERATIONS = 100000
     
-    # 🚫 Protocol Restrictions - DISABLED for HTTP as requested
+    #  Protocol Restrictions - DISABLED for HTTP as requested
     HTTPS_ONLY = False
     
     @classmethod
@@ -33,7 +33,7 @@ class AESConfig:
             }
         
         # SIZE LIMITS REMOVED - streaming encryption handles any file size
-        print(f"📊 AES encryption requested for {file_size / (1024**3):.1f}GB file - STREAMING ENCRYPTION (NO SIZE LIMITS)")
+        print(f"[STATS] AES encryption requested for {file_size / (1024**3):.1f}GB file - STREAMING ENCRYPTION (NO SIZE LIMITS)")
         
         return {'valid': True, 'error': None}
     

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🎯 mDNS Universal Redirect Test
+[TARGET] mDNS Universal Redirect Test
 Tests the new smart redirect logic for lanvan.local access
 """
 
@@ -16,16 +16,16 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 def test_mdns_issues_analysis():
     """
-    🔍 Comprehensive mDNS Issues Analysis
+    [SEARCH] Comprehensive mDNS Issues Analysis
     Tests and identifies all mDNS-related problems
     """
-    print("🔍 mDNS Issues Analysis")
+    print("[SEARCH] mDNS Issues Analysis")
     print("=" * 60)
     
     issues_found = []
     
     # Test 1: Port binding analysis
-    print("\n1️⃣ Port Binding Analysis")
+    print("\n1⃣ Port Binding Analysis")
     print("-" * 30)
     
     # Test privileged port access
@@ -35,34 +35,34 @@ def test_mdns_issues_analysis():
             test_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             test_socket.bind(('0.0.0.0', port))
             test_socket.close()
-            print(f"✅ Port {port}: Can bind (privileged access available)")
+            print(f"[OK] Port {port}: Can bind (privileged access available)")
         except PermissionError:
-            print(f"❌ Port {port}: Permission denied (fallback to {5000 if port == 80 else 5001})")
+            print(f"[ERR] Port {port}: Permission denied (fallback to {5000 if port == 80 else 5001})")
             issues_found.append(f"Privileged port {port} access denied - using fallback")
         except OSError as e:
-            print(f"⚠️ Port {port}: {e} (may be in use)")
+            print(f"[WARN] Port {port}: {e} (may be in use)")
     
     # Test 2: mDNS Dependencies
-    print("\n2️⃣ mDNS Dependencies Check")
+    print("\n2⃣ mDNS Dependencies Check")
     print("-" * 30)
     
     try:
         from zeroconf import Zeroconf
-        print("✅ Zeroconf library: Available")
+        print("[OK] Zeroconf library: Available")
         
         try:
             zc = Zeroconf()
             zc.close()
-            print("✅ Zeroconf functionality: Working")
+            print("[OK] Zeroconf functionality: Working")
         except Exception as e:
-            print(f"❌ Zeroconf initialization: {e}")
+            print(f"[ERR] Zeroconf initialization: {e}")
             issues_found.append(f"Zeroconf initialization failed: {e}")
     except ImportError as e:
-        print(f"❌ Zeroconf library: Not installed ({e})")
+        print(f"[ERR] Zeroconf library: Not installed ({e})")
         issues_found.append("Zeroconf library missing - install with: pip install zeroconf")
     
     # Test 3: Network Interface Detection
-    print("\n3️⃣ Network Interface Detection")
+    print("\n3⃣ Network Interface Detection")
     print("-" * 30)
     
     try:
@@ -71,11 +71,11 @@ def test_mdns_issues_analysis():
         try:
             host_ip = socket.gethostbyname(hostname)
             if host_ip and not host_ip.startswith('127.'):
-                print(f"✅ Hostname method: {host_ip}")
+                print(f"[OK] Hostname method: {host_ip}")
             else:
-                print(f"⚠️ Hostname method: Loopback only ({host_ip})")
+                print(f"[WARN] Hostname method: Loopback only ({host_ip})")
         except Exception as e:
-            print(f"❌ Hostname method: {e}")
+            print(f"[ERR] Hostname method: {e}")
             issues_found.append(f"Hostname resolution failed: {e}")
         
         # Method 2: Router connection test
@@ -91,22 +91,22 @@ def test_mdns_issues_analysis():
                 test_socket.close()
                 
                 if local_ip and not local_ip.startswith('127.'):
-                    print(f"✅ Router method: {local_ip} (via {router_ip})")
+                    print(f"[OK] Router method: {local_ip} (via {router_ip})")
                     local_ip_found = True
                     break
             except:
                 continue
         
         if not local_ip_found:
-            print("⚠️ Router method: No local IP detected")
+            print("[WARN] Router method: No local IP detected")
             issues_found.append("Local IP detection via router failed")
     
     except Exception as e:
-        print(f"❌ Network detection: {e}")
+        print(f"[ERR] Network detection: {e}")
         issues_found.append(f"Network interface detection failed: {e}")
     
     # Test 4: Mobile/Android Detection
-    print("\n4️⃣ Mobile/Android Environment")
+    print("\n4⃣ Mobile/Android Environment")
     print("-" * 30)
     
     is_android = ("ANDROID_STORAGE" in os.environ or 
@@ -114,7 +114,7 @@ def test_mdns_issues_analysis():
                  "TERMUX_VERSION" in os.environ)
     
     if is_android:
-        print("📱 Android/Termux environment detected")
+        print("[MOBILE] Android/Termux environment detected")
         print("   - Privileged ports (80/443) will be inaccessible")
         print("   - mDNS may have limited functionality")
         print("   - Network discovery may be restricted")
@@ -125,43 +125,43 @@ def test_mdns_issues_analysis():
             result = subprocess.run(['which', 'avahi-daemon'], 
                                   capture_output=True, text=True)
             if result.returncode == 0:
-                print("✅ avahi-daemon: Available")
+                print("[OK] avahi-daemon: Available")
             else:
-                print("⚠️ avahi-daemon: Not found (install with: pkg install avahi)")
+                print("[WARN] avahi-daemon: Not found (install with: pkg install avahi)")
                 issues_found.append("avahi-daemon not available for better mDNS support")
         except:
-            print("⚠️ avahi-daemon: Could not check")
+            print("[WARN] avahi-daemon: Could not check")
     else:
-        print("💻 Desktop environment detected")
+        print("[PC] Desktop environment detected")
     
     # Test 5: mDNS Service Type Analysis
-    print("\n5️⃣ mDNS Service Configuration")
+    print("\n5⃣ mDNS Service Configuration")
     print("-" * 30)
     
-    print("✅ Service type: _http._tcp.local. (correct for both HTTP and HTTPS)")
-    print("✅ Universal redirect: Implemented in routes.py")
-    print("✅ Port detection: Enhanced with fallback logic")
+    print("[OK] Service type: _http._tcp.local. (correct for both HTTP and HTTPS)")
+    print("[OK] Universal redirect: Implemented in routes.py")
+    print("[OK] Port detection: Enhanced with fallback logic")
     
     # Summary
     print("\n" + "=" * 60)
-    print("📋 ISSUES SUMMARY")
+    print("[INFO] ISSUES SUMMARY")
     print("=" * 60)
     
     if issues_found:
-        print(f"❌ Found {len(issues_found)} issues:")
+        print(f"[ERR] Found {len(issues_found)} issues:")
         for i, issue in enumerate(issues_found, 1):
             print(f"   {i}. {issue}")
     else:
-        print("✅ No critical issues found!")
+        print("[OK] No critical issues found!")
     
     return issues_found
 
 def test_universal_redirect_logic():
     """
-    🎯 Test Universal Redirect Logic
+    [TARGET] Test Universal Redirect Logic
     Simulates various lanvan.local access scenarios
     """
-    print("\n🎯 Universal Redirect Logic Test")
+    print("\n[TARGET] Universal Redirect Logic Test")
     print("=" * 60)
     
     # Test scenarios
@@ -197,23 +197,23 @@ def test_universal_redirect_logic():
     ]
     
     for i, scenario in enumerate(scenarios, 1):
-        print(f"\n{i}️⃣ {scenario['description']}")
+        print(f"\n{i}⃣ {scenario['description']}")
         print(f"   Input: {scenario['input_url']}")
         print(f"   Server: {scenario['server_protocol']}://*:{scenario['server_port']}")
         
         if scenario['expected_redirect']:
             print(f"   Expected: Redirect → {scenario['expected_redirect']}")
-            print("   ✅ Test: PASS (redirect logic implemented)")
+            print("   [OK] Test: PASS (redirect logic implemented)")
         else:
             print("   Expected: No redirect")
-            print("   ✅ Test: PASS (direct access)")
+            print("   [OK] Test: PASS (direct access)")
 
 def test_mdns_service_properties():
     """
-    🏷️ Test mDNS Service Properties
+    [TAG] Test mDNS Service Properties
     Validates the enhanced service properties
     """
-    print("\n🏷️ mDNS Service Properties Test")
+    print("\n[TAG] mDNS Service Properties Test")
     print("=" * 60)
     
     # Expected properties for universal redirect
@@ -233,14 +233,14 @@ def test_mdns_service_properties():
         'redirect_capable': 'true'
     }
     
-    print("✅ Enhanced service properties:")
+    print("[OK] Enhanced service properties:")
     for key, value in expected_properties.items():
         if key in ['actual_port', 'actual_protocol', 'redirect_capable']:
-            print(f"   🎯 {key}: {value} (NEW - enables universal redirect)")
+            print(f"   [TARGET] {key}: {value} (NEW - enables universal redirect)")
         else:
-            print(f"   📋 {key}: {value}")
+            print(f"   [INFO] {key}: {value}")
     
-    print("\n🔄 Universal redirect workflow:")
+    print("\n[RETRY] Universal redirect workflow:")
     print("   1. Client accesses lanvan.local (any port/protocol)")
     print("   2. mDNS resolver finds service with redirect_capable=true")
     print("   3. Router middleware checks actual_port & actual_protocol")
@@ -248,7 +248,7 @@ def test_mdns_service_properties():
     print("   5. Seamless access regardless of server configuration")
 
 if __name__ == "__main__":
-    print("🎯 LANVAN mDNS Universal Redirect Test Suite")
+    print("[TARGET] LANVAN mDNS Universal Redirect Test Suite")
     print("=" * 70)
     
     # Run tests
@@ -258,17 +258,17 @@ if __name__ == "__main__":
     
     # Final summary
     print("\n" + "=" * 70)
-    print("🎯 UNIVERSAL REDIRECT IMPLEMENTATION SUMMARY")
+    print("[TARGET] UNIVERSAL REDIRECT IMPLEMENTATION SUMMARY")
     print("=" * 70)
     
-    print("\n✅ IMPLEMENTED FEATURES:")
-    print("   🔀 Smart redirect for lanvan.local access")
-    print("   🎯 Automatic port detection and correction")
-    print("   🔄 Protocol matching (HTTP ↔ HTTPS)")
-    print("   📡 Enhanced mDNS service properties")
-    print("   🛡️ Fallback compatibility for all environments")
+    print("\n[OK] IMPLEMENTED FEATURES:")
+    print("    Smart redirect for lanvan.local access")
+    print("   [TARGET] Automatic port detection and correction")
+    print("   [RETRY] Protocol matching (HTTP ↔ HTTPS)")
+    print("   [MDNS] Enhanced mDNS service properties")
+    print("   [SHIELD] Fallback compatibility for all environments")
     
-    print("\n🎯 HOW IT WORKS:")
+    print("\n[TARGET] HOW IT WORKS:")
     print("   • Type 'lanvan.local' in browser")
     print("   • System automatically detects correct port & protocol") 
     print("   • Redirects to proper URL (e.g., https://lanvan.local:5001)")
@@ -276,9 +276,9 @@ if __name__ == "__main__":
     print("   • Seamless experience across all devices")
     
     if issues:
-        print(f"\n⚠️ ENVIRONMENT ISSUES: {len(issues)} found")
+        print(f"\n[WARN] ENVIRONMENT ISSUES: {len(issues)} found")
         print("   These don't affect the redirect logic but may impact mDNS discovery")
     else:
-        print("\n✅ ENVIRONMENT: Clean - optimal mDNS performance expected")
+        print("\n[OK] ENVIRONMENT: Clean - optimal mDNS performance expected")
     
-    print("\n🚀 READY: Universal mDNS redirect system is operational!")
+    print("\n[START] READY: Universal mDNS redirect system is operational!")

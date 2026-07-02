@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🧪 Test Concurrent Upload Start Speed
+ Test Concurrent Upload Start Speed
 Test to verify that concurrent uploads start immediately without validation delays.
 """
 
@@ -29,7 +29,7 @@ def create_mock_upload_file(filename: str, size_mb: int = 1):
 
 async def test_validation_speed():
     """Test how fast validation completes for multiple files"""
-    print("🧪 Testing Validation Speed...")
+    print(" Testing Validation Speed...")
     
     # Create test files of different sizes
     test_files = [
@@ -40,10 +40,10 @@ async def test_validation_speed():
         create_mock_upload_file("huge_file.txt", 100),       # 100MB
     ]
     
-    print(f"📁 Created {len(test_files)} test files")
+    print(f"[DIR] Created {len(test_files)} test files")
     
     # Test fast validation
-    print("🚀 Testing fast validation...")
+    print("[START] Testing fast validation...")
     start_time = time.time()
     
     is_valid, errors, validated_files, warnings = await validate_upload_files_enhanced_fast(
@@ -52,21 +52,21 @@ async def test_validation_speed():
     
     fast_validation_time = time.time() - start_time
     
-    print(f"⏱️ Fast validation completed in: {fast_validation_time:.3f} seconds")
-    print(f"✅ Valid: {is_valid}")
-    print(f"📊 Files validated: {len(validated_files)}")
-    print(f"❌ Errors: {len(errors)}")
+    print(f"⏱ Fast validation completed in: {fast_validation_time:.3f} seconds")
+    print(f"[OK] Valid: {is_valid}")
+    print(f"[STATS] Files validated: {len(validated_files)}")
+    print(f"[ERR] Errors: {len(errors)}")
     
     if fast_validation_time > 0.1:  # Should be under 100ms
-        print("⚠️ WARNING: Validation taking too long for immediate upload start!")
+        print("[WARN] WARNING: Validation taking too long for immediate upload start!")
         return False
     else:
-        print("🎉 SUCCESS: Validation fast enough for immediate concurrent upload!")
+        print("[DONE] SUCCESS: Validation fast enough for immediate concurrent upload!")
         return True
 
 async def test_concurrent_validation():
     """Test that validation of multiple files happens concurrently"""
-    print("\n🧪 Testing Concurrent Validation...")
+    print("\n Testing Concurrent Validation...")
     
     # Create many small files to test concurrency
     test_files = [
@@ -74,7 +74,7 @@ async def test_concurrent_validation():
         for i in range(20)  # 20 files
     ]
     
-    print(f"📁 Created {len(test_files)} files for concurrent validation")
+    print(f"[DIR] Created {len(test_files)} files for concurrent validation")
     
     start_time = time.time()
     
@@ -84,34 +84,34 @@ async def test_concurrent_validation():
     
     validation_time = time.time() - start_time
     
-    print(f"⏱️ Concurrent validation of {len(test_files)} files: {validation_time:.3f} seconds")
-    print(f"📊 Average per file: {validation_time/len(test_files)*1000:.1f}ms")
+    print(f"⏱ Concurrent validation of {len(test_files)} files: {validation_time:.3f} seconds")
+    print(f"[STATS] Average per file: {validation_time/len(test_files)*1000:.1f}ms")
     
     # Should validate 20 files almost as fast as 1 file due to concurrency
     if validation_time < 0.5:  # Under 500ms for 20 files
-        print("🎉 SUCCESS: True concurrent validation achieved!")
+        print("[DONE] SUCCESS: True concurrent validation achieved!")
         return True
     else:
-        print("⚠️ WARNING: Validation not truly concurrent - too slow!")
+        print("[WARN] WARNING: Validation not truly concurrent - too slow!")
         return False
 
 async def main():
-    print("🚀 Concurrent Upload Start Speed Test")
+    print("[START] Concurrent Upload Start Speed Test")
     print("=" * 50)
     
     test1_passed = await test_validation_speed()
     test2_passed = await test_concurrent_validation()
     
     print("\n" + "=" * 50)
-    print("📊 FINAL RESULTS:")
-    print(f"   Fast Validation Test: {'✅ PASS' if test1_passed else '❌ FAIL'}")
-    print(f"   Concurrent Validation Test: {'✅ PASS' if test2_passed else '❌ FAIL'}")
+    print("[STATS] FINAL RESULTS:")
+    print(f"   Fast Validation Test: {'[OK] PASS' if test1_passed else '[ERR] FAIL'}")
+    print(f"   Concurrent Validation Test: {'[OK] PASS' if test2_passed else '[ERR] FAIL'}")
     
     if test1_passed and test2_passed:
-        print("🎉 ALL TESTS PASSED - Concurrent uploads will start immediately!")
+        print("[DONE] ALL TESTS PASSED - Concurrent uploads will start immediately!")
         return True
     else:
-        print("❌ Some tests failed - Validation still causing delays")
+        print("[ERR] Some tests failed - Validation still causing delays")
         return False
 
 if __name__ == "__main__":

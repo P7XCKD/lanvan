@@ -1,5 +1,5 @@
 """
-🔒 Safe SSL Certificate Validator for LANVan
+[LOCK] Safe SSL Certificate Validator for Lanvan
 
 This module provides certificate validation and security warnings
 without breaking existing HTTPS functionality.
@@ -41,7 +41,7 @@ class CertValidationResult:
 
 class SafeCertificateValidator:
     """
-    🛡️ Safe Certificate Validator
+    [SHIELD] Safe Certificate Validator
     
     Validates certificates without breaking HTTPS functionality.
     Provides warnings and recommendations for security improvements.
@@ -50,7 +50,7 @@ class SafeCertificateValidator:
     @staticmethod
     def validate_certificate_safe(cert_path: Path, key_path: Path) -> CertValidationResult:
         """
-        🔍 Safely validate certificate without breaking functionality
+        [SEARCH] Safely validate certificate without breaking functionality
         
         This method uses built-in Python libraries only and gracefully
         handles missing dependencies.
@@ -207,7 +207,7 @@ class SafeCertificateValidator:
                     security_info['recommendations'].append("Private network access is relatively secure")
                 else:
                     security_info['network_type'] = 'public_network'
-                    security_info['recommendations'].append("⚠️ Public network detected - use trusted certificates")
+                    security_info['recommendations'].append("[WARN] Public network detected - use trusted certificates")
         
         except Exception:
             security_info['recommendations'].append("Could not determine network security level")
@@ -216,43 +216,43 @@ class SafeCertificateValidator:
 
 def display_certificate_warnings(cert_result: CertValidationResult, network_info: Dict = None):
     """
-    🚨 Display certificate security warnings in a user-friendly way
+    [!] Display certificate security warnings in a user-friendly way
     """
     if not cert_result.valid:
-        print("🚨 SSL Certificate Issues Detected:")
+        print("[!] SSL Certificate Issues Detected:")
         for error in cert_result.errors:
-            print(f"   ❌ {error}")
+            print(f"   [ERR] {error}")
         return
     
     # Show warnings
     if cert_result.warnings:
-        print("⚠️  SSL Certificate Warnings:")
+        print("[WARN]  SSL Certificate Warnings:")
         for warning in cert_result.warnings:
-            print(f"   ⚠️  {warning}")
+            print(f"   [WARN]  {warning}")
     
     # Show recommendations
     if cert_result.recommendations:
-        print("💡 Security Recommendations:")
+        print("[TIP] Security Recommendations:")
         for rec in cert_result.recommendations:
-            print(f"   💡 {rec}")
+            print(f"   [TIP] {rec}")
     
     # Network context
     if network_info:
-        print(f"🌐 Network Context: {network_info.get('network_type', 'unknown')}")
+        print(f"[NET] Network Context: {network_info.get('network_type', 'unknown')}")
         for rec in network_info.get('recommendations', []):
-            print(f"   🛡️  {rec}")
+            print(f"   [SHIELD]  {rec}")
     
     # Production warnings for self-signed certificates
     if cert_result.is_self_signed:
-        print("\n🔒 Self-Signed Certificate Information:")
-        print("   ✅ Secure for development and local networks")
-        print("   ✅ Prevents eavesdropping on local traffic")
-        print("   ⚠️  Will show browser warnings (this is normal)")
-        print("   📋 For production: Use Let's Encrypt or commercial CA certificates")
+        print("\n[LOCK] Self-Signed Certificate Information:")
+        print("   [OK] Secure for development and local networks")
+        print("   [OK] Prevents eavesdropping on local traffic")
+        print("   [WARN]  Will show browser warnings (this is normal)")
+        print("   [INFO] For production: Use Let's Encrypt or commercial CA certificates")
 
 def validate_and_warn_certificates(cert_dir: Path, local_ip: str = "127.0.0.1") -> CertValidationResult:
     """
-    🛡️ Main certificate validation function
+    [SHIELD] Main certificate validation function
     
     Validates certificates and displays appropriate warnings without
     breaking HTTPS functionality.

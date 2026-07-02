@@ -1,5 +1,5 @@
 """
-🚀 Concurrent Upload Manager for LANVan
+[START] Concurrent Upload Manager for Lanvan
 Handles multiple file uploads simultaneously with adaptive optimization for ALL platforms.
 
 Key Features:
@@ -73,7 +73,7 @@ except ImportError:
 
 class ConcurrentUploadManager:
     """
-    🎯 Manages multiple file uploads concurrently with adaptive optimization
+    [TARGET] Manages multiple file uploads concurrently with adaptive optimization
     """
     
     def __init__(self, max_concurrent_uploads: int = 3):
@@ -89,7 +89,7 @@ class ConcurrentUploadManager:
         encrypt: bool = False
     ) -> List[Dict[str, Any]]:
         """
-        🚀 Upload multiple files concurrently with adaptive optimization
+        [START] Upload multiple files concurrently with adaptive optimization
         """
         print(f"[INFO] Starting concurrent upload of {len(files)} files (max {self.max_concurrent_uploads} parallel)")
         
@@ -118,7 +118,7 @@ class ConcurrentUploadManager:
             else:
                 processed_results.append(result)
         
-        print(f"✅ Concurrent upload completed: {len([r for r in processed_results if r.get('success')])} success, {len([r for r in processed_results if not r.get('success')])} failed")
+        print(f"[OK] Concurrent upload completed: {len([r for r in processed_results if r.get('success')])} success, {len([r for r in processed_results if not r.get('success')])} failed")
         return processed_results
     
     async def _upload_single_file_async(
@@ -129,7 +129,7 @@ class ConcurrentUploadManager:
         upload_id: str = "upload"
     ) -> Dict[str, Any]:
         """
-        🎯 Upload a single file asynchronously with adaptive optimization
+        [TARGET] Upload a single file asynchronously with adaptive optimization
         """
         start_time = time.time()
         
@@ -144,7 +144,7 @@ class ConcurrentUploadManager:
             }
         
         try:
-            # 📊 Get file size for optimization - FIXED: Use async operations
+            # [STATS] Get file size for optimization - FIXED: Use async operations
             try:
                 import asyncio
                 await asyncio.to_thread(upload_file.file.seek, 0, 2)
@@ -168,7 +168,7 @@ class ConcurrentUploadManager:
                     # Reset file pointer by recreating the upload file object
                     upload_file.file = io.BytesIO(b''.join(temp_chunks))
             
-            # 🎯 Get adaptive chunk size for this file
+            # [TARGET] Get adaptive chunk size for this file
             chunk_size = universal_optimizer.get_adaptive_chunk_size(file_size)
             
             print(f"[INFO] [{upload_id}] Starting upload: {upload_file.filename} ({file_size:,} bytes, {chunk_size//1024}KB chunks)")
@@ -181,14 +181,14 @@ class ConcurrentUploadManager:
                     'chunk_size': chunk_size
                 })
             
-            # 🚀 Apply universal optimizations
+            # [START] Apply universal optimizations
             if file_size > 50 * 1024 * 1024:  # Files > 50MB
                 universal_optimizer.optimize_for_upload(file_size)
             
-            # 📝 Process file with streaming - Enhanced with NEW async function option
-            print(f"🔍 [{upload_id}] Starting upload...")
+            # [INFO] Process file with streaming - Enhanced with NEW async function option
+            print(f"[SEARCH] [{upload_id}] Starting upload...")
             
-            # 🚀 NEW: Option to use optimized async function from routes.py
+            # [START] NEW: Option to use optimized async function from routes.py
             USE_NEW_ASYNC_FUNCTION = False  # Temporarily disabled - need to fix return format
             
             if USE_NEW_ASYNC_FUNCTION:
@@ -198,7 +198,7 @@ class ConcurrentUploadManager:
                         from .routes import save_upload_file_async
                     except ImportError:
                         from routes import save_upload_file_async
-                    print(f"🚀 [{upload_id}] Using optimized async upload...")
+                    print(f"[START] [{upload_id}] Using optimized async upload...")
                     
                     # Call the new async function
                     await save_upload_file_async(upload_file, destination, encrypt)
@@ -222,7 +222,7 @@ class ConcurrentUploadManager:
                     }
                     
                 except Exception as e:
-                    print(f"⚠️ [{upload_id}] New function failed, using original: {e}")
+                    print(f"[WARN] [{upload_id}] New function failed, using original: {e}")
                     # Fall back to original method
                     result = await self._stream_upload_async(
                         upload_file, destination, encrypt, chunk_size, upload_id
@@ -243,7 +243,7 @@ class ConcurrentUploadManager:
                         'elapsed_time': elapsed
                     })
             
-            print(f"✅ [{upload_id}] Upload completed: {upload_file.filename} in {elapsed:.1f}s")
+            print(f"[OK] [{upload_id}] Upload completed: {upload_file.filename} in {elapsed:.1f}s")
             
             # Schedule cleanup AFTER successful completion
             import asyncio
@@ -261,7 +261,7 @@ class ConcurrentUploadManager:
                         'error_type': type(e).__name__
                     })
             
-            print(f"❌ [{upload_id}] Upload failed: {upload_file.filename} - {type(e).__name__}: {str(e)}")
+            print(f"[ERR] [{upload_id}] Upload failed: {upload_file.filename} - {type(e).__name__}: {str(e)}")
             
             # Return detailed error info instead of raising
             result = {
@@ -292,12 +292,12 @@ class ConcurrentUploadManager:
         upload_id: str
     ) -> Dict[str, Any]:
         """
-        🌊 Stream upload with adaptive chunk processing - TRUE non-blocking I/O
-        🔒 RACE CONDITION FIX: Upload to .tmp file first, then atomically move to final name
+        [STREAM] Stream upload with adaptive chunk processing - TRUE non-blocking I/O
+        [LOCK] RACE CONDITION FIX: Upload to .tmp file first, then atomically move to final name
         """
         destination.parent.mkdir(parents=True, exist_ok=True)
         
-        # 🚀 TEMPORARY FILE STRATEGY: Upload to .tmp extension first
+        # [START] TEMPORARY FILE STRATEGY: Upload to .tmp extension first
         temp_destination = destination.with_suffix(destination.suffix + '.tmp')
         
         print(f"[INFO] [{upload_id}] Uploading to temporary file: {temp_destination.name}")
@@ -312,7 +312,7 @@ class ConcurrentUploadManager:
         hash_calculator = hashlib.sha256()
         
         try:
-            # 🚀 Use async file I/O to prevent blocking the event loop
+            # [START] Use async file I/O to prevent blocking the event loop
             import aiofiles
             
             async with aiofiles.open(temp_destination, 'wb') as dest_file:
@@ -320,16 +320,16 @@ class ConcurrentUploadManager:
                 last_yield = time.time()
                 
                 while True:
-                    # 🔧 Read chunk with more frequent yielding for large files
+                    # [CFG] Read chunk with more frequent yielding for large files
                     chunk = await upload_file.read(chunk_size)
                     
                     if not chunk:
-                        print(f"✅ [{upload_id}] Upload completed: {total_written:,} bytes")
+                        print(f"[OK] [{upload_id}] Upload completed: {total_written:,} bytes")
                         break
                     
                     chunk_count += 1
                     
-                    # 🔐 Process chunk with encryption if requested
+                    # [AUTH] Process chunk with encryption if requested
                     if encrypt:
                         # Import encryption function
                         try:
@@ -337,15 +337,15 @@ class ConcurrentUploadManager:
                                 from .aes_utils import encrypt_file_stream
                             except ImportError:
                                 from aes_utils import encrypt_file_stream
-                            print(f"🔐 [{upload_id}] Encrypting chunk {chunk_count} ({len(chunk):,} bytes)")
+                            print(f"[AUTH] [{upload_id}] Encrypting chunk {chunk_count} ({len(chunk):,} bytes)")
                             # For now, encrypt each chunk individually (can be optimized later)
                             encrypted_chunk, _ = encrypt_file_stream(chunk)
                             chunk = encrypted_chunk
                         except Exception as e:
-                            print(f"❌ [{upload_id}] Encryption failed for chunk {chunk_count}: {e}")
+                            print(f"[ERR] [{upload_id}] Encryption failed for chunk {chunk_count}: {e}")
                             # Continue without encryption as fallback
                     
-                    # 🚀 Write chunk asynchronously to prevent blocking
+                    # [START] Write chunk asynchronously to prevent blocking
                     await dest_file.write(chunk)
                     
                     total_written += len(chunk)
@@ -353,9 +353,9 @@ class ConcurrentUploadManager:
                     
                     # Progress logging for large files - MINIMAL SPAM
                     if chunk_count % 200 == 0:  # Much less frequent logging
-                        print(f"📊 [{upload_id}] {total_written//1024//1024}MB")
+                        print(f"[STATS] [{upload_id}] {total_written//1024//1024}MB")
                     
-                    # 🧹 Adaptive memory management
+                    # [CLEAN] Adaptive memory management
                     if universal_optimizer.should_run_gc(total_written, chunk_size):
                         gc.collect()
                     
@@ -369,7 +369,7 @@ class ConcurrentUploadManager:
                                 'bytes_processed': total_written
                             })
                     
-                    # 🎯 ULTRA-RESPONSIVE: Yield control MUCH more frequently for large files
+                    # [TARGET] ULTRA-RESPONSIVE: Yield control MUCH more frequently for large files
                     current_time = time.time()
                     
                     # Adaptive yielding based on file size and chunk size
@@ -395,7 +395,7 @@ class ConcurrentUploadManager:
         
         except ImportError:
             # Fallback to synchronous I/O if aiofiles not available
-            print(f"⚠️ [{upload_id}] aiofiles not available, using synchronous I/O")
+            print(f"[WARN] [{upload_id}] aiofiles not available, using synchronous I/O")
             return await self._stream_upload_sync_fallback(
                 upload_file, destination, encrypt, chunk_size, upload_id, 
                 total_written, hash_calculator
@@ -405,10 +405,10 @@ class ConcurrentUploadManager:
             if temp_destination.exists():
                 temp_destination.unlink()
             # Enhanced error logging for debugging
-            print(f"❌ [{upload_id}] Stream upload error: {type(e).__name__}: {str(e)}")
+            print(f"[ERR] [{upload_id}] Stream upload error: {type(e).__name__}: {str(e)}")
             raise e
         
-        # 🎯 ENHANCED ATOMIC MOVE: Cross-platform atomic operations with retry logic
+        # [TARGET] ENHANCED ATOMIC MOVE: Cross-platform atomic operations with retry logic
         await self._perform_atomic_move(
             temp_destination, destination, upload_id
         )
@@ -432,13 +432,13 @@ class ConcurrentUploadManager:
         hash_calculator = None
     ) -> Dict[str, Any]:
         """
-        🔄 Fallback synchronous upload with temporary file strategy and frequent yielding
-        🔒 RACE CONDITION FIX: Upload to .tmp file first, then atomically move to final name
+        [RETRY] Fallback synchronous upload with temporary file strategy and frequent yielding
+        [LOCK] RACE CONDITION FIX: Upload to .tmp file first, then atomically move to final name
         """
         if hash_calculator is None:
             hash_calculator = hashlib.sha256()
         
-        # 🚀 TEMPORARY FILE STRATEGY: Upload to .tmp extension first  
+        # [START] TEMPORARY FILE STRATEGY: Upload to .tmp extension first  
         temp_destination = destination.with_suffix(destination.suffix + '.tmp')
         print(f"[INFO] [{upload_id}] Sync fallback - uploading to temporary file: {temp_destination.name}")
             
@@ -451,7 +451,7 @@ class ConcurrentUploadManager:
                     chunk = await upload_file.read(chunk_size)
                     
                     if not chunk:
-                        print(f"🏁 [{upload_id}] Finished reading after {chunk_count} chunks, {total_written:,} bytes")
+                        print(f" [{upload_id}] Finished reading after {chunk_count} chunks, {total_written:,} bytes")
                         break
                     
                     chunk_count += 1
@@ -464,7 +464,7 @@ class ConcurrentUploadManager:
                     
                     # Progress logging
                     if chunk_count % 32 == 0:
-                        print(f"📊 [{upload_id}] Progress: {chunk_count} chunks, {total_written//1024//1024}MB written")
+                        print(f"[STATS] [{upload_id}] Progress: {chunk_count} chunks, {total_written//1024//1024}MB written")
                     
                     # Memory management
                     if universal_optimizer.should_run_gc(total_written, chunk_size):
@@ -480,7 +480,7 @@ class ConcurrentUploadManager:
                                 'bytes_processed': total_written
                             })
                     
-                    # 🎯 FREQUENT yielding to prevent blocking
+                    # [TARGET] FREQUENT yielding to prevent blocking
                     current_time = time.time()
                     if current_time - last_yield > 0.05:  # Yield every 50ms
                         await asyncio.sleep(0.005)  # 5ms sleep
@@ -490,10 +490,10 @@ class ConcurrentUploadManager:
             # Clean up partial temp file
             if temp_destination.exists():
                 temp_destination.unlink()
-            print(f"❌ [{upload_id}] Sync fallback upload error: {type(e).__name__}: {str(e)}")
+            print(f"[ERR] [{upload_id}] Sync fallback upload error: {type(e).__name__}: {str(e)}")
             raise e
         
-        # 🎯 ENHANCED ATOMIC MOVE: Use the same cross-platform atomic operations
+        # [TARGET] ENHANCED ATOMIC MOVE: Use the same cross-platform atomic operations
         await self._perform_atomic_move(
             temp_destination, destination, upload_id
         )
@@ -545,8 +545,8 @@ class ConcurrentUploadManager:
         upload_id: str
     ) -> None:
         """
-        🎯 Enhanced atomic move with cross-platform support and retry logic
-        🔒 RACE CONDITION FIX: Implements platform-specific atomic operations
+        [TARGET] Enhanced atomic move with cross-platform support and retry logic
+        [LOCK] RACE CONDITION FIX: Implements platform-specific atomic operations
         """
         import os
         import shutil
@@ -581,12 +581,12 @@ class ConcurrentUploadManager:
                     # Use rename for atomic operation on Unix-like systems
                     temp_destination.rename(destination)
                 
-                print(f"✅ [{upload_id}] File atomically moved to final destination: {destination.name}")
+                print(f"[OK] [{upload_id}] File atomically moved to final destination: {destination.name}")
                 return  # Success - exit the retry loop
                 
             except Exception as e:
                 if attempt < max_retries - 1:
-                    print(f"⚠️ [{upload_id}] Move attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}")
+                    print(f"[WARN] [{upload_id}] Move attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}")
                     await asyncio.sleep(retry_delay)
                     retry_delay *= 1.5  # Exponential backoff
                 else:
@@ -594,12 +594,12 @@ class ConcurrentUploadManager:
                     if temp_destination.exists():
                         try:
                             temp_destination.unlink()
-                            print(f"🧹 [{upload_id}] Cleaned up temp file after failed move")
+                            print(f"[CLEAN] [{upload_id}] Cleaned up temp file after failed move")
                         except:
                             pass
                     
                     error_msg = f"Failed to finalize upload after {max_retries} attempts on {platform_name}: {e}"
-                    print(f"❌ [{upload_id}] {error_msg}")
+                    print(f"[ERR] [{upload_id}] {error_msg}")
                     raise Exception(error_msg)
 
 
@@ -613,7 +613,7 @@ async def save_upload_file_async(
     encrypt: bool = False
 ) -> Dict[str, Any]:
     """
-    🚀 Async version of save_upload_file_sync with universal optimization
+    [START] Async version of save_upload_file_sync with universal optimization
     """
     return await concurrent_upload_manager._upload_single_file_async(
         upload_file, destination, encrypt, upload_id=f"single_{time.time()}"
@@ -626,7 +626,7 @@ async def upload_multiple_files_concurrent(
     encrypt: bool = False
 ) -> List[Dict[str, Any]]:
     """
-    🎯 Upload multiple files concurrently with adaptive optimization
+    [TARGET] Upload multiple files concurrently with adaptive optimization
     """
     return await concurrent_upload_manager.upload_files_concurrently(
         files, destinations, encrypt

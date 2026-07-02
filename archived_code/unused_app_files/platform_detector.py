@@ -1,5 +1,5 @@
 """
-🚀 LANVAN Cached Platform Detection System
+[START] LANVAN Cached Platform Detection System
 Eliminates redundant platform detection calls for improved performance.
 
 Provides cached platform information that's determined once at startup
@@ -46,7 +46,7 @@ class PlatformInfo:
 
 class CachedPlatformDetector:
     """
-    🎯 Cached Platform Detection System
+    [TARGET] Cached Platform Detection System
     
     Features:
     - One-time platform detection at startup
@@ -199,7 +199,7 @@ class CachedPlatformDetector:
             with self._lock:
                 # Double-check locking pattern
                 if self._info is None:
-                    print("🔍 Performing one-time platform detection...")
+                    print("[SEARCH] Performing one-time platform detection...")
                     self._info = self._detect_platform_once()
                     self._log_detection_results()
         
@@ -211,7 +211,7 @@ class CachedPlatformDetector:
             return
             
         info = self._info
-        print(f"✅ Platform detected: {info.platform_type.value}")
+        print(f"[OK] Platform detected: {info.platform_type.value}")
         print(f"   System: {info.system_name} | Python: {info.python_version}")
         print(f"   CPUs: {info.cpu_count} | Mobile: {info.is_mobile} | Termux: {info.is_termux}")
         print(f"   Recommended chunk size: {info.recommended_chunk_size // 1024}KB")
@@ -219,11 +219,11 @@ class CachedPlatformDetector:
         print(f"   Detection time: {info.detection_time:.3f}s")
         
         if info.is_termux:
-            print("🤖 Termux optimizations enabled")
+            print("[BOT] Termux optimizations enabled")
         elif info.is_mobile:
-            print("📱 Mobile optimizations enabled")
+            print("[MOBILE] Mobile optimizations enabled")
         else:
-            print("🖥️  Desktop optimizations enabled")
+            print("  Desktop optimizations enabled")
     
     # Convenience methods that replace the old functions
     def is_termux_environment(self) -> bool:

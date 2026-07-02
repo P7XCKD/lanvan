@@ -11,7 +11,7 @@ from pathlib import Path
 
 def clean_python_cache():
     """Remove Python cache files and directories"""
-    print("🧹 Cleaning Python cache files...")
+    print("[CLEAN] Cleaning Python cache files...")
     
     # Remove __pycache__ directories
     for pycache_dir in Path('.').rglob('__pycache__'):
@@ -26,7 +26,7 @@ def clean_python_cache():
 
 def clean_upload_temp():
     """Clean temporary upload files"""
-    print("📁 Cleaning temporary upload files...")
+    print("[DIR] Cleaning temporary upload files...")
     
     temp_dirs = [
         'temp_chunks',  # Moved to project root
@@ -46,7 +46,7 @@ def clean_upload_temp():
 
 def clean_logs():
     """Clean log files"""
-    print("📋 Cleaning log files...")
+    print("[INFO] Cleaning log files...")
     
     log_patterns = ['*.log', 'logs/*.log', 'debug.log', 'error.log']
     
@@ -57,7 +57,7 @@ def clean_logs():
 
 def clean_certificates():
     """Clean generated certificates (keep templates)"""
-    print("🔒 Cleaning generated certificates...")
+    print("[LOCK] Cleaning generated certificates...")
     
     cert_dir = Path('certs')
     if cert_dir.exists():
@@ -70,7 +70,7 @@ def clean_certificates():
 
 def clean_workspace_files():
     """Clean IDE and workspace files"""
-    print("🛠️  Cleaning workspace and IDE files...")
+    print("  Cleaning workspace and IDE files...")
     
     patterns = ['*.code-workspace', '.vscode/settings.json']
     
@@ -81,7 +81,7 @@ def clean_workspace_files():
 
 def main():
     """Run cleanup operations"""
-    print("🚀 LANVAN Cleanup Utility")
+    print("[START] LANVAN Cleanup Utility")
     print("=" * 30)
     
     try:
@@ -91,14 +91,14 @@ def main():
         clean_workspace_files()
         
         # Ask before cleaning certificates
-        response = input("\n🔒 Clean generated certificates? (y/N): ").strip().lower()
+        response = input("\n[LOCK] Clean generated certificates? (y/N): ").strip().lower()
         if response in ['y', 'yes']:
             clean_certificates()
         
-        print("\n✅ Cleanup completed successfully!")
+        print("\n[OK] Cleanup completed successfully!")
         
     except Exception as e:
-        print(f"\n❌ Error during cleanup: {e}")
+        print(f"\n[ERR] Error during cleanup: {e}")
         return 1
     
     return 0

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🤖 Termux Optimization Verification Test
+[BOT] Termux Optimization Verification Test
 Tests that Termux chunk sizes are used consistently and memory limits are enforced
 """
 import asyncio
@@ -26,7 +26,7 @@ class MockUploadFile:
 
 async def test_termux_chunk_sizes():
     """Test that Termux chunk sizes are consistently used"""
-    print("🧪 Testing Termux chunk size consistency...")
+    print(" Testing Termux chunk size consistency...")
     
     # Mock Termux environment
     original_env = os.environ.copy()
@@ -53,7 +53,7 @@ async def test_termux_chunk_sizes():
             # Get chunk size from Termux compatibility
             termux_chunk = get_termux_chunk_size(file_size)
             
-            print(f"📊 {description}:")
+            print(f"[STATS] {description}:")
             print(f"   - Universal optimizer: {universal_chunk:,} bytes ({universal_chunk//1024}KB)")
             print(f"   - Termux compatibility: {termux_chunk:,} bytes ({termux_chunk//1024}KB)")
             
@@ -66,7 +66,7 @@ async def test_termux_chunk_sizes():
                 # Universal should match or be smaller than Termux for efficiency
                 assert universal_chunk <= termux_chunk, f"Universal should use Termux-optimized sizes for {description}"
             
-        print("✅ Termux chunk size consistency test passed!")
+        print("[OK] Termux chunk size consistency test passed!")
         
     finally:
         # Restore original environment
@@ -75,7 +75,7 @@ async def test_termux_chunk_sizes():
 
 async def test_memory_monitoring():
     """Test that memory monitoring is working"""
-    print("\n🧪 Testing Termux memory monitoring...")
+    print("\n Testing Termux memory monitoring...")
     
     # Mock Termux environment
     original_env = os.environ.copy()
@@ -90,24 +90,24 @@ async def test_memory_monitoring():
         
         # Test memory status
         status = get_termux_memory_status()
-        print(f"📊 Memory status: {status['status']}")
+        print(f"[STATS] Memory status: {status['status']}")
         print(f"   - Available memory: {status['available_mb']}MB")
         print(f"   - Is Termux: {status['is_termux']}")
         print(f"   - Monitoring active: {status['monitoring_active']}")
         
         # Test memory limit enforcement
         can_proceed = enforce_termux_memory_limit("test_operation")
-        print(f"📊 Memory limit check: {'PASSED' if can_proceed else 'BLOCKED'}")
+        print(f"[STATS] Memory limit check: {'PASSED' if can_proceed else 'BLOCKED'}")
         
         # Test adaptive chunk sizing
         for file_size in [1024*1024, 10*1024*1024, 100*1024*1024]:
             chunk_size = get_memory_adaptive_chunk_size(file_size)
-            print(f"📊 File {file_size//1024//1024}MB -> Chunk {chunk_size//1024}KB")
+            print(f"[STATS] File {file_size//1024//1024}MB -> Chunk {chunk_size//1024}KB")
             
-        print("✅ Memory monitoring test passed!")
+        print("[OK] Memory monitoring test passed!")
         
     except ImportError as e:
-        print(f"⚠️ Memory monitoring not available: {e}")
+        print(f"[WARN] Memory monitoring not available: {e}")
         
     finally:
         # Restore original environment
@@ -116,7 +116,7 @@ async def test_memory_monitoring():
 
 async def test_background_processing():
     """Test background processing doesn't crash"""
-    print("\n🧪 Testing background processing stability...")
+    print("\n Testing background processing stability...")
     
     # Mock Termux environment
     original_env = os.environ.copy()
@@ -134,10 +134,10 @@ async def test_background_processing():
         # Stop background processing
         universal_optimizer.stop_background_keepalive()
         
-        print("✅ Background processing stability test passed!")
+        print("[OK] Background processing stability test passed!")
         
     except Exception as e:
-        print(f"⚠️ Background processing issue: {e}")
+        print(f"[WARN] Background processing issue: {e}")
         
     finally:
         # Restore original environment
@@ -146,7 +146,7 @@ async def test_background_processing():
 
 async def test_upload_with_memory_limits():
     """Test file upload with Termux memory limits"""
-    print("\n🧪 Testing upload with memory enforcement...")
+    print("\n Testing upload with memory enforcement...")
     
     # Mock Termux environment
     original_env = os.environ.copy()
@@ -165,7 +165,7 @@ async def test_upload_with_memory_limits():
         from app.android_optimizer import universal_optimizer
         CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(len(test_content))
         
-        print(f"📊 Using Termux-optimized chunk size: {CHUNK_SIZE//1024}KB")
+        print(f"[STATS] Using Termux-optimized chunk size: {CHUNK_SIZE//1024}KB")
         
         while True:
             chunk = await mock_file.read(CHUNK_SIZE)
@@ -179,14 +179,14 @@ async def test_upload_with_memory_limits():
                 try:
                     from app.termux_memory_monitor import enforce_termux_memory_limit
                     if not enforce_termux_memory_limit("upload_test"):
-                        print("🤖 Upload would be paused due to memory pressure")
+                        print("[BOT] Upload would be paused due to memory pressure")
                         break
                 except ImportError:
                     pass
         
         # Verify results
         assert len(received_content) == len(test_content), f"Size mismatch: {len(received_content)} != {len(test_content)}"
-        print(f"✅ Upload with memory limits test passed!")
+        print(f"[OK] Upload with memory limits test passed!")
         print(f"   - File size: {len(test_content):,} bytes")
         print(f"   - Chunk size: {CHUNK_SIZE:,} bytes")
         print(f"   - Total chunks: {chunk_count}")
@@ -199,7 +199,7 @@ async def test_upload_with_memory_limits():
 
 async def main():
     """Run all Termux optimization tests"""
-    print("🤖 Termux Optimization Verification Tests")
+    print("[BOT] Termux Optimization Verification Tests")
     print("=" * 50)
     
     await test_termux_chunk_sizes()
@@ -208,13 +208,13 @@ async def main():
     await test_upload_with_memory_limits()
     
     print("\n" + "=" * 50)
-    print("🎉 All Termux optimization tests completed!")
-    print("📊 Termux improvements implemented:")
-    print("   ✅ Consistent use of Termux-optimized chunk sizes")
-    print("   ✅ Memory monitoring and enforcement")
-    print("   ✅ Background processing stability")
-    print("   ✅ Memory-adaptive upload handling")
-    print("\n💾 Resource usage optimizations:")
+    print("[DONE] All Termux optimization tests completed!")
+    print("[STATS] Termux improvements implemented:")
+    print("   [OK] Consistent use of Termux-optimized chunk sizes")
+    print("   [OK] Memory monitoring and enforcement")
+    print("   [OK] Background processing stability")
+    print("   [OK] Memory-adaptive upload handling")
+    print("\n[SAVE] Resource usage optimizations:")
     print("   - Dynamic chunk sizing based on memory status")
     print("   - Memory pressure detection and response")
     print("   - Background process memory awareness")

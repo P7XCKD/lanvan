@@ -1,6 +1,6 @@
 """
-🎯 Simple Platform Detection and Utilities
-Provides clean, simple platform detection functions for LANVan
+[TARGET] Simple Platform Detection and Utilities
+Provides clean, simple platform detection functions for Lanvan
 """
 
 import os
@@ -10,7 +10,7 @@ import platform as py_platform
 
 def detect_platform() -> str:
     """
-    🔍 Detect the current platform
+    [SEARCH] Detect the current platform
     Returns: 'windows', 'linux', 'darwin', 'android', 'termux', or 'unknown'
     """
     system = py_platform.system().lower()
@@ -32,7 +32,7 @@ def detect_platform() -> str:
 
 def is_android() -> bool:
     """
-    🤖 Detect Android environment (broader than just Termux)
+    [BOT] Detect Android environment (broader than just Termux)
     """
     return any([
         is_termux(),
@@ -46,7 +46,7 @@ def is_android() -> bool:
 
 def is_termux() -> bool:
     """
-    🔍 Detect Termux environment specifically
+    [SEARCH] Detect Termux environment specifically
     """
     return any([
         "TERMUX_VERSION" in os.environ,
@@ -75,7 +75,7 @@ def is_macos() -> bool:
 
 def get_platform_info() -> dict:
     """
-    📊 Get comprehensive platform information
+    [STATS] Get comprehensive platform information
     """
     return {
         'platform': detect_platform(),

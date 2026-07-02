@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SSL Certificate Generator for LanVan Clipy
+SSL Certificate Generator for Lanvan Clipy
 ==========================================
 
 This script generates self-signed SSL certificates for HTTPS functionality.
@@ -72,7 +72,7 @@ prompt = no
 C = US
 ST = Local
 L = Local
-O = LanVan
+O = Lanvan
 CN = localhost
 
 [v3_req]
@@ -183,13 +183,13 @@ def verify_certificates():
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate SSL certificates for LanVan Clipy')
+    parser = argparse.ArgumentParser(description='Generate SSL certificates for Lanvan Clipy')
     parser.add_argument('--ip', help='IP address to include in certificate')
     parser.add_argument('--force', action='store_true', help='Force regenerate certificates')
     
     args = parser.parse_args()
     
-    print("[INFO] LanVan Clipy - SSL Certificate Generator")
+    print("[INFO] Lanvan Clipy - SSL Certificate Generator")
     print("=" * 50)
     
     success = generate_certificates(args.ip, args.force)

@@ -10,7 +10,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
 
 try:
-    print("🔍 Testing auto-detecting streaming assembly...")
+    print("[SEARCH] Testing auto-detecting streaming assembly...")
     
     # Import the auto-detecting version
     from streaming_assembly import (
@@ -21,18 +21,18 @@ try:
         shutdown_streaming_assembly
     )
     
-    print("✅ Import successful!")
+    print("[OK] Import successful!")
     
     # Test basic functionality
     result = register_streaming_file("test123", 5, "test.txt", 1024)
-    print(f"📝 Register result: {result}")
+    print(f"[INFO] Register result: {result}")
     
     status = check_streaming_status("test123")
-    print(f"📊 Status result: {status}")
+    print(f"[STATS] Status result: {status}")
     
-    print("✅ All tests passed!")
+    print("[OK] All tests passed!")
     
 except Exception as e:
-    print(f"❌ Test failed: {e}")
+    print(f"[ERR] Test failed: {e}")
     import traceback
     traceback.print_exc()

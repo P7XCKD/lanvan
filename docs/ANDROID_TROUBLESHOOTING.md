@@ -155,7 +155,7 @@ pkg install python python-pip
 # Install build dependencies
 pkg install clang make cmake libjpeg-turbo-dev
 
-# Install LANVAN dependencies
+# Install Lanvan dependencies
 pip install -r requirements-android.txt
 
 # Set up storage

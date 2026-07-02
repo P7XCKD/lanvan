@@ -1,8 +1,8 @@
-# 📱 LANVAN Termux Setup Guide (No Pillow)
-*Complete Android Termux installation for LANVAN file server*
+# 📱 Lanvan Termux Setup Guide (No Pillow)
+*Complete Android Termux installation for Lanvan file server*
 
 ## 🎯 Overview
-This guide sets up LANVAN on Android Termux **without Pillow dependencies** for optimal performance and compatibility. The system uses browser-native image handling instead of server-side processing.
+This guide sets up Lanvan on Android Termux **without Pillow dependencies** for optimal performance and compatibility. The system uses browser-native image handling instead of server-side processing.
 
 ## 📋 Prerequisites
 - Android device with Termux installed
@@ -34,7 +34,7 @@ pkg install -y lsof procps curl wget
 # Additional package repositories
 pkg install -y root-repo x11-repo
 
-# Media libraries (for future compatibility - not required for LANVAN)
+# Media libraries (for future compatibility - not required for Lanvan)
 pkg install -y libjpeg-turbo libpng freetype
 ```
 
@@ -45,9 +45,9 @@ python -m ensurepip --upgrade
 pip install --upgrade pip setuptools wheel
 ```
 
-### 5. **LANVAN Dependencies** *(No Pillow!)*
+### 5. **Lanvan Dependencies** *(No Pillow!)*
 ```bash
-# Core LANVAN packages (optimized for Termux)
+# Core Lanvan packages (optimized for Termux)
 pip install --no-build-isolation --no-cache-dir \
     fastapi \
     uvicorn \
@@ -68,9 +68,9 @@ pip install --no-build-isolation --no-cache-dir \
     brotli
 ```
 
-## 📁 **LANVAN Installation**
+## 📁 **Lanvan Installation**
 ```bash
-# Clone LANVAN repository
+# Clone Lanvan repository
 git clone https://github.com/P7XCKD/lanvan.git
 cd lanvan
 
@@ -81,9 +81,9 @@ pip install -r requirements.txt
 chmod +x run.py
 ```
 
-## 🏃 **Running LANVAN**
+## 🏃 **Running Lanvan**
 ```bash
-# Start LANVAN server
+# Start Lanvan server
 python run.py
 
 # Or with specific configuration
@@ -113,7 +113,7 @@ hostname -I
 pkg install -y termux-api
 termux-wake-lock
 
-# Run LANVAN in background
+# Run Lanvan in background
 nohup python run.py &
 ```
 
@@ -179,7 +179,7 @@ free -h
 ## 📊 **Performance Tips**
 
 ### **Memory Optimization:**
-- LANVAN uses **~50MB RAM** without Pillow (vs ~150MB with Pillow)
+- Lanvan uses **~50MB RAM** without Pillow (vs ~150MB with Pillow)
 - Image previews handled by browser (zero server memory)
 - Streaming uploads for large files
 
@@ -202,7 +202,7 @@ du -sh ~/
 
 ## 🔄 **Updates & Maintenance**
 
-### **Update LANVAN:**
+### **Update Lanvan:**
 ```bash
 cd ~/lanvan
 git pull origin main
@@ -239,11 +239,11 @@ pip install --upgrade pip
 After installation, verify everything works:
 
 ```bash
-# Test LANVAN startup
+# Test Lanvan startup
 python run.py
 
 # Should see:
-# ✅ LANVAN File Server starting...
+# ✅ Lanvan File Server starting...
 # ✅ Clipboard functionality enabled
 # ✅ Image previews working (no Pillow)
 # ✅ Server running on http://0.0.0.0:8000
@@ -253,7 +253,7 @@ python run.py
 
 ## 🎉 **Conclusion**
 
-This setup provides a **lightweight, efficient LANVAN installation** on Android Termux without the complexity and resource overhead of Pillow. You get all the functionality you need with better performance and easier maintenance.
+This setup provides a **lightweight, efficient Lanvan installation** on Android Termux without the complexity and resource overhead of Pillow. You get all the functionality you need with better performance and easier maintenance.
 
 **Key Benefits:**
 - ⚡ **Faster installation** (no image library compilation)

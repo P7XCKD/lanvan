@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🎉 AES Memory Explosion Fix - FINAL VALIDATION
+[DONE] AES Memory Explosion Fix - FINAL VALIDATION
 
 This script validates that the AES memory explosion issue has been completely resolved.
 Tests all new streaming encryption methods with progressively larger files.
@@ -23,7 +23,7 @@ def get_memory_mb():
 def test_comprehensive_aes_fix():
     """Comprehensive test of all AES memory fixes"""
     
-    print("🎉 AES MEMORY EXPLOSION FIX - COMPREHENSIVE VALIDATION")
+    print("[DONE] AES MEMORY EXPLOSION FIX - COMPREHENSIVE VALIDATION")
     print("=" * 70)
     
     test_sizes = [10, 50, 100, 200]  # MB
@@ -31,7 +31,7 @@ def test_comprehensive_aes_fix():
     
     for size_mb in test_sizes:
         print(f"\n{'=' * 70}")
-        print(f"🧪 TESTING {size_mb}MB FILE")
+        print(f" TESTING {size_mb}MB FILE")
         print(f"{'=' * 70}")
         
         # Create test file
@@ -39,17 +39,17 @@ def test_comprehensive_aes_fix():
         test_output = f'comprehensive_output_{size_mb}mb.enc'
         
         try:
-            print(f"📝 Creating {size_mb}MB test file...")
+            print(f"[INFO] Creating {size_mb}MB test file...")
             chunk = b'A' * (1024 * 1024)  # 1MB chunk
             with open(test_file, 'wb') as f:
                 for i in range(size_mb):
                     f.write(chunk)
             
             file_size = os.path.getsize(test_file)
-            print(f"✅ Test file created: {file_size:,} bytes")
+            print(f"[OK] Test file created: {file_size:,} bytes")
             
             # Test 1: Zero-Memory File-to-File Streaming
-            print(f"\n🚀 TEST 1: Zero-Memory File-to-File Streaming")
+            print(f"\n[START] TEST 1: Zero-Memory File-to-File Streaming")
             start_memory = get_memory_mb()
             start_time = time.time()
             
@@ -59,15 +59,15 @@ def test_comprehensive_aes_fix():
             encrypt_memory = get_memory_mb()
             memory_delta = encrypt_memory - start_memory
             
-            print(f"   ✅ Encryption: {encrypt_time:.2f}s ({size_mb/encrypt_time:.1f}MB/s)")
-            print(f"   💾 Memory Delta: {memory_delta:.1f}MB ({memory_delta/size_mb:.2f}x file size)")
+            print(f"   [OK] Encryption: {encrypt_time:.2f}s ({size_mb/encrypt_time:.1f}MB/s)")
+            print(f"   [SAVE] Memory Delta: {memory_delta:.1f}MB ({memory_delta/size_mb:.2f}x file size)")
             
             # Verify encrypted file
             encrypted_size = os.path.getsize(test_output)
-            print(f"   📊 Encrypted Size: {encrypted_size:,} bytes")
+            print(f"   [STATS] Encrypted Size: {encrypted_size:,} bytes")
             
             # Test decryption
-            print(f"   🔓 Testing decryption...")
+            print(f"   [UNLOCK] Testing decryption...")
             with open(test_output, 'rb') as f:
                 encrypted_data = f.read()
             
@@ -76,8 +76,8 @@ def test_comprehensive_aes_fix():
             decrypt_time = time.time() - decrypt_start
             final_memory = get_memory_mb()
             
-            print(f"   ✅ Decryption: {decrypt_time:.2f}s ({size_mb/decrypt_time:.1f}MB/s)")
-            print(f"   💾 Final Memory: {final_memory:.1f}MB")
+            print(f"   [OK] Decryption: {decrypt_time:.2f}s ({size_mb/decrypt_time:.1f}MB/s)")
+            print(f"   [SAVE] Final Memory: {final_memory:.1f}MB")
             
             # Verify integrity
             with open(test_file, 'rb') as f:
@@ -102,17 +102,17 @@ def test_comprehensive_aes_fix():
             }
             results.append(result)
             
-            print(f"   📋 RESULT: {'✅ PASS' if integrity_ok and memory_delta < size_mb else '❌ FAIL'}")
+            print(f"   [INFO] RESULT: {'[OK] PASS' if integrity_ok and memory_delta < size_mb else '[ERR] FAIL'}")
             
             if memory_delta < size_mb * 0.1:
-                print(f"   🏆 MEMORY EFFICIENCY: EXCELLENT ({memory_delta/size_mb:.3f}x)")
+                print(f"   [WIN] MEMORY EFFICIENCY: EXCELLENT ({memory_delta/size_mb:.3f}x)")
             elif memory_delta < size_mb * 0.5:
-                print(f"   ✅ MEMORY EFFICIENCY: GOOD ({memory_delta/size_mb:.3f}x)")
+                print(f"   [OK] MEMORY EFFICIENCY: GOOD ({memory_delta/size_mb:.3f}x)")
             else:
-                print(f"   ⚠️ MEMORY EFFICIENCY: POOR ({memory_delta/size_mb:.3f}x)")
+                print(f"   [WARN] MEMORY EFFICIENCY: POOR ({memory_delta/size_mb:.3f}x)")
                 
         except Exception as e:
-            print(f"   ❌ ERROR: {e}")
+            print(f"   [ERR] ERROR: {e}")
             import traceback
             traceback.print_exc()
             
@@ -124,7 +124,7 @@ def test_comprehensive_aes_fix():
     
     # Final Summary
     print(f"\n{'=' * 70}")
-    print("📊 COMPREHENSIVE TEST RESULTS SUMMARY")
+    print("[STATS] COMPREHENSIVE TEST RESULTS SUMMARY")
     print(f"{'=' * 70}")
     
     print(f"{'Size (MB)':<10} {'Encrypt (s)':<12} {'Decrypt (s)':<12} {'Memory Δ':<10} {'Ratio':<8} {'Status':<8}")
@@ -132,7 +132,7 @@ def test_comprehensive_aes_fix():
     
     all_passed = True
     for r in results:
-        status = "✅ PASS" if r['integrity'] and r['memory_ratio'] < 1.0 else "❌ FAIL"
+        status = "[OK] PASS" if r['integrity'] and r['memory_ratio'] < 1.0 else "[ERR] FAIL"
         if "FAIL" in status:
             all_passed = False
             
@@ -141,13 +141,13 @@ def test_comprehensive_aes_fix():
     
     print(f"\n{'=' * 70}")
     if all_passed:
-        print("🎉 ALL TESTS PASSED! AES MEMORY EXPLOSION COMPLETELY FIXED!")
-        print("✅ Zero-memory streaming encryption is working perfectly")
-        print("✅ Memory usage stays constant regardless of file size")
-        print("✅ Encryption/decryption speeds are excellent")
-        print("✅ Data integrity is maintained")
+        print("[DONE] ALL TESTS PASSED! AES MEMORY EXPLOSION COMPLETELY FIXED!")
+        print("[OK] Zero-memory streaming encryption is working perfectly")
+        print("[OK] Memory usage stays constant regardless of file size")
+        print("[OK] Encryption/decryption speeds are excellent")
+        print("[OK] Data integrity is maintained")
     else:
-        print("❌ SOME TESTS FAILED - Further optimization needed")
+        print("[ERR] SOME TESTS FAILED - Further optimization needed")
     
     print(f"{'=' * 70}")
     

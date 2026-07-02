@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🚀 Termux Compatibility Layer for LANVan
+[START] Termux Compatibility Layer for Lanvan
 Ensures all adaptive systems work seamlessly on Android/Termux while preserving full functionality on other platforms.
 """
 
@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional, Callable, Union
 
 def is_termux_environment() -> bool:
     """
-    🔍 Reliable Termux environment detection
+    [SEARCH] Reliable Termux environment detection
     """
     # Check for Termux-specific environment variables and paths
     is_termux = any([
@@ -27,7 +27,7 @@ def is_termux_environment() -> bool:
     
     # Only log once per session
     if is_termux and not hasattr(is_termux_environment, '_logged'):
-        print("🤖 Termux environment detected - using safe compatibility mode")
+        print("[BOT] Termux environment detected - using safe compatibility mode")
         is_termux_environment._logged = True
     
     return is_termux
@@ -35,7 +35,7 @@ def is_termux_environment() -> bool:
 
 def is_android_environment() -> bool:
     """
-    🤖 Detect Android environment (broader than just Termux)
+    [BOT] Detect Android environment (broader than just Termux)
     """
     return any([
         is_termux_environment(),
@@ -54,7 +54,7 @@ def safe_psutil_call(
     error_types: tuple = (PermissionError, OSError, FileNotFoundError)
 ) -> Any:
     """
-    🛡️ Safe wrapper for psutil calls with Termux-specific fallbacks
+    [SHIELD] Safe wrapper for psutil calls with Termux-specific fallbacks
     
     Args:
         func: The psutil function to call
@@ -93,7 +93,7 @@ def safe_psutil_call(
 
 def get_termux_system_info() -> Dict[str, Any]:
     """
-    📱 Get system information using Termux-safe methods
+    [MOBILE] Get system information using Termux-safe methods
     """
     info = {
         'platform': 'android-termux',
@@ -140,7 +140,7 @@ def get_termux_system_info() -> Dict[str, Any]:
 
 def get_safe_cpu_usage() -> float:
     """
-    🏃 Get CPU usage with Termux-safe fallback
+     Get CPU usage with Termux-safe fallback
     """
     def cpu_func():
         import psutil
@@ -155,7 +155,7 @@ def get_safe_cpu_usage() -> float:
 
 def get_safe_memory_info() -> Dict[str, Any]:
     """
-    🧠 Get memory information with Termux-safe fallbacks
+    [MEM] Get memory information with Termux-safe fallbacks
     """
     def memory_func():
         import psutil
@@ -182,13 +182,13 @@ def get_safe_memory_info() -> Dict[str, Any]:
 
 def optimize_for_termux():
     """
-    📱 Apply Termux-specific optimizations
+    [MOBILE] Apply Termux-specific optimizations
     """
     if not is_termux_environment():
         return False
     
     try:
-        print("🤖 Applying Termux optimizations...")
+        print("[BOT] Applying Termux optimizations...")
         
         # Set environment variables for better performance
         os.environ['PYTHONUNBUFFERED'] = '1'
@@ -199,7 +199,7 @@ def optimize_for_termux():
         try:
             with open(keepalive_file, 'w') as f:
                 f.write(str(time.time()))
-            print(f"✅ Termux keepalive created: {keepalive_file}")
+            print(f"[OK] Termux keepalive created: {keepalive_file}")
         except:
             pass  # Non-critical
         
@@ -209,13 +209,13 @@ def optimize_for_termux():
         return True
         
     except Exception as e:
-        print(f"⚠️ Termux optimization warning: {e}")
+        print(f"[WARN] Termux optimization warning: {e}")
         return False
 
 
 def get_termux_chunk_size(file_size: int) -> int:
     """
-    📦 Get Termux-optimized chunk size
+    [PKG] Get Termux-optimized chunk size
     """
     # Conservative chunk sizes for mobile environment
     if file_size < 10 * 1024 * 1024:  # < 10MB
@@ -230,12 +230,12 @@ def get_termux_chunk_size(file_size: int) -> int:
 
 def should_use_lightweight_mode() -> bool:
     """
-    🪶 Determine if we should use lightweight mode
+     Determine if we should use lightweight mode
     """
     return is_termux_environment() or is_android_environment()
 
 
 # Initialize Termux optimizations if we're in Termux
 if is_termux_environment():
-    print("🤖 Termux environment detected - initializing compatibility layer")
+    print("[BOT] Termux environment detected - initializing compatibility layer")
     optimize_for_termux()

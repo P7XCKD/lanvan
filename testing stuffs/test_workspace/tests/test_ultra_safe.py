@@ -4,9 +4,9 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
 
 try:
-    print("🔍 Testing ultra-safe streaming assembly...")
+    print("[SEARCH] Testing ultra-safe streaming assembly...")
     from streaming_assembly import initialize_streaming_assembly, get_streaming_assembler, shutdown_streaming_assembly
-    print("✅ Import successful!")
+    print("[OK] Import successful!")
     
     # Test with temp paths
     from pathlib import Path
@@ -20,12 +20,12 @@ try:
         
         initialize_streaming_assembly(temp_folder, upload_folder)
         assembler = get_streaming_assembler()
-        print(f"✅ Assembler: {type(assembler)}")
+        print(f"[OK] Assembler: {type(assembler)}")
         
         shutdown_streaming_assembly()
-        print("✅ All tests passed!")
+        print("[OK] All tests passed!")
         
 except Exception as e:
-    print(f"❌ Test failed: {e}")
+    print(f"[ERR] Test failed: {e}")
     import traceback
     traceback.print_exc()

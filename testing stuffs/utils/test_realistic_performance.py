@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🎯 Realistic Performance Test
+[TARGET] Realistic Performance Test
 Tests task manager performance under real-world conditions
 """
 import asyncio
@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent / "app"))
 
 async def test_realistic_file_scanning():
     """Test realistic file scanning scenarios"""
-    print("🧪 Testing realistic file scanning performance...")
+    print(" Testing realistic file scanning performance...")
     
     from app.task_manager import LightweightTaskManager, submit_background_task
     
@@ -34,11 +34,11 @@ async def test_realistic_file_scanning():
     for i in range(10):  # 10 files uploaded one by one
         task = submit_background_task(scan_small_file(), f"file_{i}")
         if task is None:
-            print(f"     ⚠️ Task {i} rejected (limit reached)")
+            print(f"     [WARN] Task {i} rejected (limit reached)")
         await asyncio.sleep(0.05)  # 50ms between uploads (realistic)
     
     sequential_time = time.time() - start_time
-    print(f"   📊 10 sequential uploads: {sequential_time:.3f}s (realistic)")
+    print(f"   [STATS] 10 sequential uploads: {sequential_time:.3f}s (realistic)")
     
     # Test 2: Burst upload scenario
     print("   Testing burst upload scenario...")
@@ -55,8 +55,8 @@ async def test_realistic_file_scanning():
             rejected_tasks += 1
     
     burst_time = time.time() - start_time
-    print(f"   📊 Burst upload: {burst_time:.3f}s")
-    print(f"   📊 Accepted: {accepted_tasks}, Rejected: {rejected_tasks}")
+    print(f"   [STATS] Burst upload: {burst_time:.3f}s")
+    print(f"   [STATS] Accepted: {accepted_tasks}, Rejected: {rejected_tasks}")
     
     # Wait for tasks to complete
     await asyncio.sleep(0.5)
@@ -79,7 +79,7 @@ async def test_realistic_file_scanning():
         await asyncio.sleep(0.02)  # Small delay between submissions
     
     mixed_time = time.time() - start_time
-    print(f"   📊 Mixed workload: {mixed_time:.3f}s ({len(tasks)} tasks)")
+    print(f"   [STATS] Mixed workload: {mixed_time:.3f}s ({len(tasks)} tasks)")
     
     return {
         'sequential_time': sequential_time,
@@ -91,7 +91,7 @@ async def test_realistic_file_scanning():
 
 async def test_submission_overhead():
     """Test pure task submission overhead"""
-    print("🧪 Testing task submission overhead...")
+    print(" Testing task submission overhead...")
     
     from app.task_manager import LightweightTaskManager
     
@@ -113,8 +113,8 @@ async def test_submission_overhead():
     submission_time = time.time() - start_time
     per_task_time = submission_time / submitted_count * 1000  # Convert to milliseconds
     
-    print(f"   📊 {submitted_count} task submissions: {submission_time:.3f}s")
-    print(f"   📊 Per-task overhead: {per_task_time:.3f}ms")
+    print(f"   [STATS] {submitted_count} task submissions: {submission_time:.3f}s")
+    print(f"   [STATS] Per-task overhead: {per_task_time:.3f}ms")
     
     await tm.shutdown()
     
@@ -126,7 +126,7 @@ async def test_submission_overhead():
 
 async def compare_with_raw_asyncio():
     """Compare with raw asyncio under realistic conditions"""
-    print("🧪 Comparing with raw asyncio (realistic scenario)...")
+    print(" Comparing with raw asyncio (realistic scenario)...")
     
     async def realistic_task():
         """Realistic background task"""
@@ -161,9 +161,9 @@ async def compare_with_raw_asyncio():
     
     overhead_percent = ((managed_time - raw_time) / raw_time * 100) if raw_time > 0 else 0
     
-    print(f"   📊 Raw asyncio (5 tasks): {raw_time:.3f}s")
-    print(f"   📊 Task manager (5 tasks): {managed_time:.3f}s")
-    print(f"   📊 Realistic overhead: {overhead_percent:.1f}%")
+    print(f"   [STATS] Raw asyncio (5 tasks): {raw_time:.3f}s")
+    print(f"   [STATS] Task manager (5 tasks): {managed_time:.3f}s")
+    print(f"   [STATS] Realistic overhead: {overhead_percent:.1f}%")
     
     return {
         'raw_time': raw_time,
@@ -173,7 +173,7 @@ async def compare_with_raw_asyncio():
 
 async def main():
     """Run realistic performance tests"""
-    print("🚀 Realistic Task Manager Performance Tests")
+    print("[START] Realistic Task Manager Performance Tests")
     print("=" * 50)
     
     try:
@@ -186,24 +186,24 @@ async def main():
         comparison_results = await compare_with_raw_asyncio()
         print()
         
-        print("📋 Summary:")
+        print("[INFO] Summary:")
         print(f"   • Sequential uploads: {realistic_results['sequential_time']:.3f}s (realistic usage)")
         print(f"   • Task submission overhead: {submission_results['per_task_ms']:.3f}ms per task")
         print(f"   • Realistic performance overhead: {comparison_results['overhead_percent']:.1f}%")
         
         if comparison_results['overhead_percent'] < 20:
-            print("   ✅ Performance overhead acceptable for real-world usage")
+            print("   [OK] Performance overhead acceptable for real-world usage")
         else:
-            print("   ⚠️ Performance overhead may need optimization")
+            print("   [WARN] Performance overhead may need optimization")
             
-        print("\n🎯 Key Insights:")
+        print("\n[TARGET] Key Insights:")
         print("   • Task limits prevent resource exhaustion (this is good!)")
         print("   • Real-world overhead is much lower than stress test results")
         print("   • Background tasks don't block main operations")
         print("   • Memory usage remains stable (0MB increase)")
         
     except Exception as e:
-        print(f"❌ Test failed: {e}")
+        print(f"[ERR] Test failed: {e}")
         import traceback
         traceback.print_exc()
 
