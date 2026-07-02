@@ -1,6 +1,6 @@
 # Lanvan Routers Developer Documentation & API Reference
 
-Welcome to the `app/routers` module! This document serves as a senior-level API Reference and developer guide for engineers onboarding or contributing to Lanvan's routing and endpoint architecture.
+Welcome to the `app/routers` module! This document serves as a API Reference and developer guide for engineers onboarding or contributing to Lanvan's routing and endpoint architecture.
 
 ---
 
