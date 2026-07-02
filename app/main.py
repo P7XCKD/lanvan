@@ -140,21 +140,8 @@ def initiate_graceful_shutdown_process():
     shutdown_thread = threading.Thread(target=countdown_and_shutdown, daemon=True)
     shutdown_thread.start()
 
-# [TARGET] Signal handlers for Ctrl+C and other termination signals
-def signal_handler(signum, frame):
-    """Handle Ctrl+C and other termination signals"""
-    signal_name = signal.Signals(signum).name
-    print(f"\n[!] {signal_name} signal received - initiating graceful shutdown...")
-    initiate_graceful_shutdown_process()
-
-# Register signal handlers
-signal.signal(signal.SIGINT, signal_handler)   # Ctrl+C
-signal.signal(signal.SIGTERM, signal_handler)  # Termination signal
-
-# Start console command monitor in background thread
-console_thread = threading.Thread(target=console_command_monitor, daemon=True)
-console_thread.start()
-print("[INFO] Type 'close' to shutdown, or use Ctrl+C")
+# NOTE: stdin command monitor ('close'/'quit') is handled in run.py, not here,
+# because with a single-process uvicorn (reload=False) stdin belongs to run.py.
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
