@@ -844,7 +844,7 @@ async def validate_upload_files_enhanced_fast(files: List[UploadFile], encrypt: 
 
 async def validate_upload_files_enhanced_async(files: List[UploadFile], encrypt: bool = False, is_https: bool = False) -> Tuple[bool, List[str], List[Dict], List[str]]:
     """
-    � ASYNC ENHANCED SECURITY: Non-blocking comprehensive validation with content analysis.
+     ASYNC ENHANCED SECURITY: Non-blocking comprehensive validation with content analysis.
     
     This async function:
     1. Validates filenames and extensions

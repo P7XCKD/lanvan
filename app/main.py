@@ -8,11 +8,10 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.gzip import GZipMiddleware
 from starlette.requests import ClientDisconnect
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.routes import router
@@ -371,8 +370,6 @@ app.add_middleware(
     max_age=3600,
 )
 
-# [OK] Middleware: Enable GZip compression for responses > 1000 bytes
-app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # [!] Custom middleware to track connections and handle immediate shutdown
 import asyncio

@@ -196,7 +196,7 @@ async def home(request: Request):
         current_port = request.url.port or (80 if request.url.scheme == "http" else 443)
         current_scheme = request.url.scheme
         
-        # � iOS Safari Special Handling - Prefer HTTP for better compatibility
+        #  iOS Safari Special Handling - Prefer HTTP for better compatibility
         if ios_info['is_mobile_safari'] and current_scheme == "https":
             # For iOS Safari, redirect HTTPS to HTTP for better reliability
             http_port = 5000  # Our HTTP fallback port
@@ -558,10 +558,10 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
     except ImportError:
         pass  # Graceful fallback if memory monitor not available
     
-    # � FILE LOCKING: Initialize file lock manager for safe concurrent uploads
+    #  FILE LOCKING: Initialize file lock manager for safe concurrent uploads
     lock_manager = get_file_lock_manager(UPLOAD_FOLDER)
     
-    # �[START] TEMPORARY FILE STRATEGY: Upload to .tmp extension first
+    # [START] TEMPORARY FILE STRATEGY: Upload to .tmp extension first
     temp_destination = destination.with_suffix(destination.suffix + '.tmp')
     print(f"[RETRY] Uploading to temporary file: {temp_destination.name}")
     
@@ -580,7 +580,7 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
     file_size = await asyncio.to_thread(upload_file.file.tell)  # Tell position - ASYNC  
     await asyncio.to_thread(upload_file.file.seek, 0)  # Reset to beginning - ASYNC
     
-    # � Apply optimizations for large files on ALL platforms
+    #  Apply optimizations for large files on ALL platforms
     if file_size > 50 * 1024 * 1024:  # Files > 50MB
         print(f"[RETRY] Large file detected ({file_size//1024//1024}MB) - enabling streaming optimizations")
         
@@ -1118,7 +1118,7 @@ async def upload_files(
                     counter += 1
                 
                 # [RETRY] MEMORY FIX: Use Termux-optimized chunk size for streaming
-                from .universal_optimizer import get_adaptive_chunk_size
+                from .universal_optimizer import get_adaptive_chunk_size, universal_optimizer
                 CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
                 
                 with open(file_path, 'wb') as f:
@@ -1162,7 +1162,7 @@ async def upload_auto_file(
     # [AUTH] Protocol detection
     is_https = request.url.scheme == "https"
     
-    # � ULTRA-FAST VALIDATION: Start uploads immediately with lightweight validation
+    # � ULRA-FAST VALIDATION: Start uploads immediately with lightweight validation
     is_valid, error_messages, validated_files, security_warnings = await validate_upload_files_enhanced_fast(files, encrypt, is_https)
     if not is_valid:
         # [!] LOG VALIDATION FAILURES for debugging
@@ -1257,7 +1257,7 @@ async def upload_auto_file(
             return {"error": f"File {i+1}: Preparation failed - {str(e)}"}
     
     # [START] PREPARE ALL FILES CONCURRENTLY
-    print(f"� Starting concurrent preparation of {len(files)} files...")
+    print(f" Starting concurrent preparation of {len(files)} files...")
     preparation_tasks = [prepare_file_for_upload(i, file) for i, file in enumerate(files)]
     preparation_results = await asyncio.gather(*preparation_tasks, return_exceptions=True)
     

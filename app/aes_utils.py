@@ -724,7 +724,7 @@ def decrypt_file_stream(encrypted_data: bytes, metadata: Dict[str, str], user_pa
     # Remove padding from the final result
     return unpad(decrypted_padded_data)
 
-# � Secure session-based encryption functions for temporary use
+#  Secure session-based encryption functions for temporary use
 def encrypt_session_data(data: bytes, session_key: Optional[bytes] = None) -> Tuple[bytes, bytes, bytes]:
     """
     Encrypt data with session-based keys (for temporary/in-memory use only).

@@ -2303,7 +2303,7 @@ class QuickTest:
             print(f"   • Action: [CFG] Fix remaining core issues before deployment")
         else:
             print(f"   • Status: [!] NOT READY - Critical core system failures")
-            print(f"   • Action: � Address core component failures immediately")
+            print(f"   • Action:  Address core component failures immediately")
         
         # Performance and readiness
         print(f"\n[FAST] SYSTEM PERFORMANCE:")
