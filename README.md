@@ -36,7 +36,7 @@ A fast, private file-sharing server that runs on your local network. No internet
 **1. Clone the repository**
 
 ```bash
-git clone https://github.com/yourusP7XCKDername/lanvan.git
+git clone https://github.com/P7XCKD/lanvan.git
 cd lanvan
 ```
 
