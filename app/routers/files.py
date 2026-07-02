@@ -1,3 +1,9 @@
+"""
+Lanvan Files Router
+Handles core file operations: listing files, chunk-based concurrent uploads,
+real-time file assembly, ZIP compression for folder downloads, and cross-platform
+file path normalization.
+"""
 
 import os
 import io
@@ -17,13 +23,7 @@ from pathlib import Path
 from mimetypes import guess_type
 from zipfile import ZipFile
 
-try:
-    import qrcode
-    QR_AVAILABLE = True
-except ImportError:
-    QR_AVAILABLE = False
-
-from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form, HTTPException, WebSocket
+from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 
@@ -35,23 +35,16 @@ from starlette.status import (
 )
 
 # Import common app utilities
-from app.aes_utils import encrypt_session_data, decrypt_session_data, encrypt_file_http_safe, decrypt_http_safe_file, decrypt_file_stream
-from app.aes_utils import AESConfig
+from app.aes_utils import encrypt_file_http_safe, decrypt_http_safe_file, decrypt_file_stream
 from app.metadata_protection import generate_secure_filename, obfuscate_file_size, generate_decoy_requests
 from app.validation import (
-    validate_upload_files, 
-    validate_upload_files_enhanced,
     validate_upload_files_enhanced_async,
     validate_upload_files_enhanced_fast,
     secure_filename,
-    is_allowed_file,
-    FileValidator,
-    AdvancedFileValidator
+    is_allowed_file
 )
-from app.simple_mdns import mdns_manager
-from app.file_locking import get_file_lock_manager, cleanup_stale_locks
-from app.termux_compat import get_platform_info, detect_platform, is_android, is_termux
-from app.clipboard_ws import clipboard_ws_manager
+from app.file_locking import get_file_lock_manager
+from app.termux_compat import is_android, is_termux
 from app.concurrent_upload_manager import concurrent_upload_manager, ConcurrentUploadManager
 from app.windows_file_manager import WindowsFileManager
 from app.streaming_assembly import get_streaming_assembler, add_streaming_chunk, check_streaming_status, get_assembled_file
