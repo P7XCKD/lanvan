@@ -1,4 +1,4 @@
-# Android/Termux Specific Requirements for LANVAN
+# Android/Termux Specific Requirements for Lanvan
 # Core dependencies with Android/Termux compatibility
 
 # Essential packages

@@ -1,5 +1,5 @@
 """
-🚀 Lightweight Background Task Manager
+[START] Lightweight Background Task Manager
 Prevents task accumulation without performance impact
 
 Design Principles:
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class LightweightTaskManager:
     """
-    🎯 Ultra-lightweight task manager that prevents accumulation
+    [TARGET] Ultra-lightweight task manager that prevents accumulation
     without any performance impact on normal operations
     """
     
@@ -40,7 +40,7 @@ class LightweightTaskManager:
     
     def submit_task(self, coro, name: Optional[str] = None) -> Optional[asyncio.Task]:
         """
-        🚀 Submit async task with automatic cleanup
+        [START] Submit async task with automatic cleanup
         Returns None if task limit exceeded (graceful degradation)
         """
         try:
@@ -74,7 +74,7 @@ class LightweightTaskManager:
     
     def submit_sync_task(self, func: Callable, *args, **kwargs) -> Optional[asyncio.Future]:
         """
-        🔄 Submit synchronous function to thread pool
+        [RETRY] Submit synchronous function to thread pool
         Returns None if task limit exceeded
         """
         try:
@@ -103,7 +103,7 @@ class LightweightTaskManager:
             return None
     
     def _task_done_callback(self, task: asyncio.Task):
-        """🧹 Lightweight task completion callback"""
+        """[CLEAN] Lightweight task completion callback"""
         self._task_count = max(0, self._task_count - 1)
         self._total_completed += 1
         
@@ -112,13 +112,13 @@ class LightweightTaskManager:
             logger.error(f"Task {task.get_name()} failed: {task.exception()}")
     
     def _sync_task_done(self):
-        """🧹 Sync task completion callback"""
+        """[CLEAN] Sync task completion callback"""
         self._task_count = max(0, self._task_count - 1)
         self._total_completed += 1
     
     def _maybe_cleanup(self):
         """
-        🧹 Opportunistic cleanup - only runs if enough time has passed
+        [CLEAN] Opportunistic cleanup - only runs if enough time has passed
         No blocking operations, no performance impact
         """
         now = time.time()
@@ -128,7 +128,7 @@ class LightweightTaskManager:
     
     def _cleanup_completed_tasks(self):
         """
-        🗑️ Remove completed tasks from tracking
+        [DEL] Remove completed tasks from tracking
         Uses weak references so this is very lightweight
         """
         try:
@@ -143,7 +143,7 @@ class LightweightTaskManager:
             logger.debug(f"Cleanup error (non-critical): {e}")
     
     def get_stats(self) -> Dict[str, Any]:
-        """📊 Get performance statistics"""
+        """[STATS] Get performance statistics"""
         return {
             "active_tasks": self._task_count,
             "total_submitted": self._total_submitted,
@@ -156,7 +156,7 @@ class LightweightTaskManager:
         }
     
     async def shutdown(self):
-        """🛑 Graceful shutdown with timeout"""
+        """ Graceful shutdown with timeout"""
         try:
             logger.info(f"Shutting down TaskManager - {self._task_count} active tasks")
             
@@ -178,12 +178,12 @@ class LightweightTaskManager:
         except Exception as e:
             logger.error(f"Error during TaskManager shutdown: {e}")
 
-# 🌟 Global task manager instance
+#  Global task manager instance
 task_manager = LightweightTaskManager()
 
 def submit_background_task(coro, name: Optional[str] = None) -> Optional[asyncio.Task]:
     """
-    🚀 Global function for submitting background tasks
+    [START] Global function for submitting background tasks
     
     Usage:
         submit_background_task(scan_file_async(path), "file_scan")
@@ -192,7 +192,7 @@ def submit_background_task(coro, name: Optional[str] = None) -> Optional[asyncio
 
 def submit_sync_background_task(func: Callable, *args, **kwargs) -> Optional[asyncio.Future]:
     """
-    🔄 Global function for submitting sync tasks to thread pool
+    [RETRY] Global function for submitting sync tasks to thread pool
     
     Usage:
         submit_sync_background_task(heavy_computation, arg1, arg2)
@@ -200,9 +200,9 @@ def submit_sync_background_task(func: Callable, *args, **kwargs) -> Optional[asy
     return task_manager.submit_sync_task(func, *args, **kwargs)
 
 def get_task_stats() -> Dict[str, Any]:
-    """📊 Get background task statistics"""
+    """[STATS] Get background task statistics"""
     return task_manager.get_stats()
 
 async def shutdown_task_manager():
-    """🛑 Shutdown task manager"""
+    """ Shutdown task manager"""
     await task_manager.shutdown()

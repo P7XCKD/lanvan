@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🧪 Test True Concurrent Upload Start
+ Test True Concurrent Upload Start
 Test to verify that files start uploading immediately without waiting for preparation of other files.
 """
 
@@ -39,7 +39,7 @@ def create_test_upload_file(filename: str, size_mb: int = 1):
 
 async def test_concurrent_upload_timing():
     """Test that uploads start immediately without waiting for file preparation"""
-    print("🧪 Testing Concurrent Upload Timing...")
+    print(" Testing Concurrent Upload Timing...")
     
     # Create test files with different sizes
     test_files = [
@@ -49,7 +49,7 @@ async def test_concurrent_upload_timing():
         create_test_upload_file("large.txt", 10),       # 10MB
     ]
     
-    print(f"📁 Created {len(test_files)} test files")
+    print(f"[DIR] Created {len(test_files)} test files")
     
     # Mock dependencies
     request = MockRequest(scheme="https")
@@ -69,24 +69,24 @@ async def test_concurrent_upload_timing():
         
         total_time = time.time() - start_time
         
-        print(f"⏱️ Total upload time: {total_time:.3f} seconds")
-        print(f"📊 Average per file: {total_time/len(test_files):.3f} seconds")
+        print(f"⏱ Total upload time: {total_time:.3f} seconds")
+        print(f"[STATS] Average per file: {total_time/len(test_files):.3f} seconds")
         
         # Check if response indicates success
         if hasattr(response, 'status_code') and response.status_code == 200:
-            print("✅ Upload completed successfully")
+            print("[OK] Upload completed successfully")
             return True
         else:
-            print(f"❌ Upload failed with response: {response}")
+            print(f"[ERR] Upload failed with response: {response}")
             return False
             
     except Exception as e:
-        print(f"❌ Upload failed with exception: {e}")
+        print(f"[ERR] Upload failed with exception: {e}")
         return False
 
 async def test_upload_order_independence():
     """Test that file upload order doesn't matter for start time"""
-    print("\n🧪 Testing Upload Order Independence...")
+    print("\n Testing Upload Order Independence...")
     
     # Test 1: Small files first
     small_first_files = [
@@ -114,9 +114,9 @@ async def test_upload_order_independence():
             encrypt=False
         )
         small_first_time = time.time() - start_time
-        print(f"⏱️ Small files first: {small_first_time:.3f} seconds")
+        print(f"⏱ Small files first: {small_first_time:.3f} seconds")
     except Exception as e:
-        print(f"❌ Small first test failed: {e}")
+        print(f"[ERR] Small first test failed: {e}")
         return False
     
     # Test large files first
@@ -129,38 +129,38 @@ async def test_upload_order_independence():
             encrypt=False
         )
         large_first_time = time.time() - start_time
-        print(f"⏱️ Large files first: {large_first_time:.3f} seconds")
+        print(f"⏱ Large files first: {large_first_time:.3f} seconds")
     except Exception as e:
-        print(f"❌ Large first test failed: {e}")
+        print(f"[ERR] Large first test failed: {e}")
         return False
     
     # Times should be similar (within 50% of each other)
     time_ratio = max(small_first_time, large_first_time) / min(small_first_time, large_first_time)
     
     if time_ratio < 1.5:  # Within 50% of each other
-        print(f"✅ Upload order independence confirmed (ratio: {time_ratio:.2f})")
+        print(f"[OK] Upload order independence confirmed (ratio: {time_ratio:.2f})")
         return True
     else:
-        print(f"❌ Upload order still affects timing (ratio: {time_ratio:.2f})")
+        print(f"[ERR] Upload order still affects timing (ratio: {time_ratio:.2f})")
         return False
 
 async def main():
-    print("🚀 True Concurrent Upload Test Suite")
+    print("[START] True Concurrent Upload Test Suite")
     print("=" * 60)
     
     test1_passed = await test_concurrent_upload_timing()
     test2_passed = await test_upload_order_independence()
     
     print("\n" + "=" * 60)
-    print("📊 FINAL RESULTS:")
-    print(f"   Concurrent Upload Timing: {'✅ PASS' if test1_passed else '❌ FAIL'}")
-    print(f"   Upload Order Independence: {'✅ PASS' if test2_passed else '❌ FAIL'}")
+    print("[STATS] FINAL RESULTS:")
+    print(f"   Concurrent Upload Timing: {'[OK] PASS' if test1_passed else '[ERR] FAIL'}")
+    print(f"   Upload Order Independence: {'[OK] PASS' if test2_passed else '[ERR] FAIL'}")
     
     if test1_passed and test2_passed:
-        print("🎉 ALL TESTS PASSED - True concurrent uploads achieved!")
+        print("[DONE] ALL TESTS PASSED - True concurrent uploads achieved!")
         return True
     else:
-        print("❌ Some tests failed - Sequential processing still present")
+        print("[ERR] Some tests failed - Sequential processing still present")
         return False
 
 if __name__ == "__main__":

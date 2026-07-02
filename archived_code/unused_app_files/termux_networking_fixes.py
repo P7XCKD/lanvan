@@ -55,7 +55,7 @@ def is_port_available(port: int) -> bool:
 
 def setup_termux_networking():
     """Setup networking optimizations for Termux"""
-    print("🔧 Setting up Termux networking optimizations...")
+    print("[CFG] Setting up Termux networking optimizations...")
     
     try:
         # Install required packages if not present
@@ -67,26 +67,26 @@ def setup_termux_networking():
         
         for pkg_name, check_cmd in packages_to_check:
             if not check_command_exists(check_cmd):
-                print(f"📦 Installing {pkg_name}...")
+                print(f"[PKG] Installing {pkg_name}...")
                 subprocess.run(["pkg", "install", "-y", pkg_name], 
                              capture_output=True, check=False)
         
         # Enable wake lock to prevent killing
         try:
             subprocess.run(["termux-wake-lock"], check=False, capture_output=True)
-            print("🔋 Wake lock enabled to prevent service termination")
+            print(" Wake lock enabled to prevent service termination")
         except:
-            print("⚠️ Wake lock not available (install termux-api)")
+            print("[WARN] Wake lock not available (install termux-api)")
         
         # Set networking environment variables
         os.environ['ANDROID_NETWORKING_MODE'] = 'true'
         os.environ['DISABLE_PRIVILEGED_PORTS'] = 'true'
         
-        print("✅ Termux networking setup complete")
+        print("[OK] Termux networking setup complete")
         return True
         
     except Exception as e:
-        print(f"⚠️ Termux setup warning: {e}")
+        print(f"[WARN] Termux setup warning: {e}")
         return False
 
 def check_command_exists(command: str) -> bool:
@@ -113,27 +113,27 @@ class TermuxMDNSManager:
         if self.is_running:
             return True
             
-        print("🔍 Starting Termux-optimized mDNS service...")
+        print("[SEARCH] Starting Termux-optimized mDNS service...")
         
         try:
             # First try standard zeroconf
             success = self._start_zeroconf_mdns()
             if success:
-                print("✅ Standard mDNS service started")
+                print("[OK] Standard mDNS service started")
                 return True
                 
             # Fallback to manual announcement
-            print("🔄 Falling back to manual mDNS announcements...")
+            print("[RETRY] Falling back to manual mDNS announcements...")
             success = self._start_manual_mdns()
             if success:
-                print("✅ Manual mDNS announcements started")
+                print("[OK] Manual mDNS announcements started")
                 return True
                 
-            print("❌ mDNS service failed to start")
+            print("[ERR] mDNS service failed to start")
             return False
             
         except Exception as e:
-            print(f"❌ mDNS startup error: {e}")
+            print(f"[ERR] mDNS startup error: {e}")
             return False
     
     def _start_zeroconf_mdns(self) -> bool:
@@ -174,7 +174,7 @@ class TermuxMDNSManager:
             return True
             
         except Exception as e:
-            print(f"⚠️ Standard mDNS failed: {e}")
+            print(f"[WARN] Standard mDNS failed: {e}")
             return False
     
     def _start_manual_mdns(self) -> bool:
@@ -188,7 +188,7 @@ class TermuxMDNSManager:
             self.is_running = True
             return True
         except Exception as e:
-            print(f"⚠️ Manual mDNS failed: {e}")
+            print(f"[WARN] Manual mDNS failed: {e}")
             return False
     
     def _manual_announce_loop(self):
@@ -212,13 +212,13 @@ class TermuxMDNSManager:
                     sock.sendto(message.encode(), ('224.0.0.251', 5353))
                     
                 except Exception as e:
-                    print(f"⚠️ Broadcast failed: {e}")
+                    print(f"[WARN] Broadcast failed: {e}")
                 
                 # Wait before next announcement
                 self._stop_event.wait(30)  # Announce every 30 seconds
                 
         except Exception as e:
-            print(f"⚠️ Manual announce error: {e}")
+            print(f"[WARN] Manual announce error: {e}")
         finally:
             if sock:
                 sock.close()
@@ -242,7 +242,7 @@ class TermuxMDNSManager:
             self._thread.join(timeout=5)
         
         self.is_running = False
-        print("🔍 mDNS service stopped")
+        print("[SEARCH] mDNS service stopped")
 
 def get_network_interfaces():
     """Get available network interfaces for mDNS"""
@@ -269,25 +269,25 @@ def get_network_interfaces():
 def print_termux_networking_info(http_port: int, https_port: int, ip: str):
     """Print Termux-specific networking information"""
     print("\n" + "="*60)
-    print("📱 TERMUX/ANDROID NETWORKING INFO")
+    print("[MOBILE] TERMUX/ANDROID NETWORKING INFO")
     print("="*60)
-    print(f"🌍 Local IP: {ip}")
-    print(f"🔌 HTTP Port: {http_port}")
-    print(f"🔒 HTTPS Port: {https_port}")
+    print(f" Local IP: {ip}")
+    print(f"[CONN] HTTP Port: {http_port}")
+    print(f"[LOCK] HTTPS Port: {https_port}")
     print()
-    print("📋 Access URLs:")
+    print("[INFO] Access URLs:")
     print(f"   Local: http://localhost:{http_port}")
     print(f"   Network: http://{ip}:{http_port}")
     print(f"   Secure: https://{ip}:{https_port}")
     print()
-    print("🔧 Termux-Specific Notes:")
+    print("[CFG] Termux-Specific Notes:")
     print("   • Ports 80/443 require root (not available in Termux)")
     print("   • Using high ports (8000+) for better compatibility")
     print("   • mDNS may be limited due to Android restrictions")
     print("   • Use direct IP access for most reliable connection")
     print("   • Keep terminal open to prevent service termination")
     print()
-    print("💡 Troubleshooting:")
+    print("[TIP] Troubleshooting:")
     print("   • If connection fails, try: termux-wake-lock")
     print("   • Check firewall/router settings for port access")
     print("   • Use 'ip addr' to verify network interface")
@@ -297,17 +297,17 @@ def print_termux_networking_info(http_port: int, https_port: int, ip: str):
 if __name__ == "__main__":
     # Test the fixes
     if is_termux_environment():
-        print("📱 Termux environment detected")
+        print("[MOBILE] Termux environment detected")
         setup_termux_networking()
         http_port, https_port = get_termux_safe_ports()
-        print(f"🔌 Recommended ports: HTTP={http_port}, HTTPS={https_port}")
+        print(f"[CONN] Recommended ports: HTTP={http_port}, HTTPS={https_port}")
         
         # Test mDNS
         mdns = TermuxMDNSManager(http_port)
         success = mdns.start()
-        print(f"🔍 mDNS test: {'✅ Success' if success else '❌ Failed'}")
+        print(f"[SEARCH] mDNS test: {'[OK] Success' if success else '[ERR] Failed'}")
         
         time.sleep(2)
         mdns.stop()
     else:
-        print("💻 Not a Termux environment")
+        print("[PC] Not a Termux environment")

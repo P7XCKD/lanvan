@@ -16,10 +16,10 @@ def test_server():
 def main():
     print("Testing streaming assembly...")
     if test_server():
-        print("✅ Server is running!")
-        print("🌊 Streaming assembly implementation is ready")
+        print("[OK] Server is running!")
+        print("[STREAM] Streaming assembly implementation is ready")
     else:
-        print("❌ Server not accessible")
+        print("[ERR] Server not accessible")
 
 if __name__ == "__main__":
     main()

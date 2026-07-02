@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🚀 Quick Start Script for LANVAN
+[START] Quick Start Script for LANVAN
 Optimized startup with performance monitoring
 """
 
@@ -13,19 +13,19 @@ def print_status(message, start_time=None):
     """Print status with timing information"""
     if start_time:
         elapsed = time.time() - start_time
-        print(f"✅ {message} ({elapsed:.2f}s)")
+        print(f"[OK] {message} ({elapsed:.2f}s)")
     else:
-        print(f"🔄 {message}")
+        print(f"[RETRY] {message}")
 
 def main():
-    print("🚀 LANVAN Quick Start - Optimized Loading")
+    print("[START] LANVAN Quick Start - Optimized Loading")
     print("=" * 50)
     
     overall_start = time.time()
     
     # Check if we're in the right directory
     if not Path("app/main.py").exists():
-        print("❌ Error: Not in LANVAN directory")
+        print("[ERR] Error: Not in LANVAN directory")
         sys.exit(1)
     
     # Step 1: Basic imports (fast)
@@ -42,7 +42,7 @@ def main():
         from app.main import app
         print_status("LANVAN core loaded", step_start)
     except Exception as e:
-        print(f"❌ Failed to load LANVAN core: {e}")
+        print(f"[ERR] Failed to load LANVAN core: {e}")
         sys.exit(1)
     
     # Step 3: Server framework (potentially slow)
@@ -52,7 +52,7 @@ def main():
         import uvicorn
         print_status("Server framework loaded", step_start)
     except Exception as e:
-        print(f"❌ Failed to load server: {e}")
+        print(f"[ERR] Failed to load server: {e}")
         sys.exit(1)
     
     print_status("All modules loaded successfully", overall_start)
@@ -64,7 +64,7 @@ def main():
     parser.add_argument("--dev", action="store_true", help="Development mode")
     args = parser.parse_args()
     
-    print(f"🌐 Starting server on {args.host}:{args.port}")
+    print(f"[NET] Starting server on {args.host}:{args.port}")
     
     # Configure uvicorn for optimal performance
     config = {
@@ -79,9 +79,9 @@ def main():
     try:
         uvicorn.run("app.main:app", **config)
     except KeyboardInterrupt:
-        print("\n🛑 Server stopped by user")
+        print("\n Server stopped by user")
     except Exception as e:
-        print(f"❌ Server error: {e}")
+        print(f"[ERR] Server error: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

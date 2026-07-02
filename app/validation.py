@@ -1,5 +1,5 @@
 """
-🔐 Enhanced security validation module for LANVAN project.
+[AUTH] Enhanced security validation module for Lanvan project.
 Provides advanced file validation, extension manipulation detection, and security checks.
 """
 
@@ -20,7 +20,7 @@ class AdvancedFileValidator:
     MAX_FILENAME_LENGTH = 255
     MAX_PATH_LENGTH = 4096
     
-    # 🚨 DANGEROUS EXTENSIONS - Always blocked regardless of content
+    # [!] DANGEROUS EXTENSIONS - Always blocked regardless of content
     BLOCKED_EXTENSIONS = {
         # Executables (Windows)
         '.exe', '.com', '.scr', '.bat', '.cmd', '.pif', '.msi', '.msp',
@@ -40,7 +40,7 @@ class AdvancedFileValidator:
         '.mdb', '.accdb'
     }
     
-    # 📋 ALLOWED EXTENSIONS - Comprehensive list for normal file sharing
+    # [INFO] ALLOWED EXTENSIONS - Comprehensive list for normal file sharing
     ALLOWED_EXTENSIONS = {
         # Documents (safe)
         '.txt', '.pdf', '.doc', '.docx', '.rtf', '.odt', '.ods', '.odp',
@@ -104,7 +104,7 @@ class AdvancedFileValidator:
         '.srt', '.sub', '.sbv', '.ass', '.ssa', '.vtt', '.smi', '.sami'
     }
     
-    # 🔍 MAGIC BYTES for file type detection (first few bytes of files)
+    # [SEARCH] MAGIC BYTES for file type detection (first few bytes of files)
     FILE_SIGNATURES = {
         # Images
         b'\xFF\xD8\xFF': '.jpg',
@@ -156,7 +156,7 @@ class AdvancedFileValidator:
         b'\xFE\xED\xFA\xCE': '.app',  # macOS binary
     }
     
-    # 🚨 DANGEROUS MAGIC BYTES - Files with these signatures are always blocked
+    # [!] DANGEROUS MAGIC BYTES - Files with these signatures are always blocked
     DANGEROUS_SIGNATURES = {
         b'MZ',  # Windows executables
         b'\x7fELF',  # Linux executables
@@ -199,7 +199,7 @@ class AdvancedFileValidator:
                 return None
                 
         except Exception as e:
-            print(f"⚠️ Error detecting file type: {e}")
+            print(f"[WARN] Error detecting file type: {e}")
             return None
 
     @classmethod
@@ -379,12 +379,12 @@ class FileValidator(AdvancedFileValidator):
         # Extension check
         file_ext = Path(filename).suffix.lower()
         
-        # 🚨 SECURITY: Block dangerous extensions
+        # [!] SECURITY: Block dangerous extensions
         if file_ext in cls.BLOCKED_EXTENSIONS:
             errors.append(f"File type '{file_ext}' is blocked for security reasons (potentially dangerous)")
             return {'valid': False, 'errors': errors, 'security_risk': 'HIGH'}
         
-        # ✅ SECURITY: Allow most extensions but warn about unknown ones
+        # [OK] SECURITY: Allow most extensions but warn about unknown ones
         if file_ext and file_ext not in cls.ALLOWED_EXTENSIONS:
             warnings.append(f"File type '{file_ext}' is uncommon - will be scanned for security")
         
@@ -405,7 +405,7 @@ class FileValidator(AdvancedFileValidator):
         if '\0' in filename:
             errors.append("Filename contains null bytes")
         
-        # 🔍 SECURITY: Check for double extensions (e.g., file.txt.exe)
+        # [SEARCH] SECURITY: Check for double extensions (e.g., file.txt.exe)
         if cls._has_suspicious_double_extension(filename):
             errors.append("Filename has suspicious double extension pattern")
         
@@ -435,7 +435,7 @@ class FileValidator(AdvancedFileValidator):
     @classmethod
     def validate_uploaded_file(cls, file_path: Path, original_filename: str) -> Dict[str, Any]:
         """
-        🔐 ENHANCED SECURITY: Comprehensive file validation with content analysis.
+        [AUTH] ENHANCED SECURITY: Comprehensive file validation with content analysis.
         
         This is the main security function that:
         1. Validates filename
@@ -460,7 +460,7 @@ class FileValidator(AdvancedFileValidator):
                 'stage': 'filename_validation'
             }
         
-        # Step 2: 🚨 ADVANCED: Extension manipulation detection
+        # Step 2: [!] ADVANCED: Extension manipulation detection
         try:
             extension_check = cls.validate_file_extension_integrity(file_path, original_filename)
             
@@ -639,7 +639,7 @@ class FileValidator(AdvancedFileValidator):
         if file_ext in mime_mappings:
             expected_types = mime_mappings[file_ext]
             if mime_type not in expected_types:
-                print(f"⚠️ MIME type mismatch: {file_ext} file has MIME type {mime_type}")
+                print(f"[WARN] MIME type mismatch: {file_ext} file has MIME type {mime_type}")
                 # Don't reject, but log for monitoring
         
         # Block executable MIME types
@@ -709,7 +709,7 @@ class UploadValidator:
         # if total_size > max_total_size:
         #     errors.append(f"Total upload size ({total_size / (1024**3):.1f}GB) exceeds limit (50GB)")
         
-        print(f"📊 Total upload size: {total_size / (1024**3):.1f}GB - NO LIMITS ENFORCED")
+        print(f"[STATS] Total upload size: {total_size / (1024**3):.1f}GB - NO LIMITS ENFORCED")
         
         return {
             'valid': len(errors) == 0,
@@ -743,7 +743,7 @@ class UploadValidator:
         # if file_size > max_aes_size:
         #     errors.append(f"File too large for AES encryption (max 2GB, got {file_size / (1024**3):.1f}GB)")
         
-        print(f"📊 AES encryption requested for {file_size / (1024**3):.1f}GB file - NO SIZE LIMITS")
+        print(f"[STATS] AES encryption requested for {file_size / (1024**3):.1f}GB file - NO SIZE LIMITS")
         
         return {
             'valid': len(errors) == 0,
@@ -766,7 +766,7 @@ def is_allowed_file(filename: str) -> bool:
 
 async def validate_upload_files_enhanced_fast(files: List[UploadFile], encrypt: bool = False, is_https: bool = False) -> Tuple[bool, List[str], List[Dict], List[str]]:
     """
-    🚀 ULTRA-FAST CONCURRENT VALIDATION: Immediate upload start with lightweight validation.
+    [START] ULTRA-FAST CONCURRENT VALIDATION: Immediate upload start with lightweight validation.
     
     This optimized function:
     1. Validates filenames and extensions concurrently
@@ -785,12 +785,12 @@ async def validate_upload_files_enhanced_fast(files: List[UploadFile], encrypt: 
         if not file.filename:
             return {"error": "File without filename detected"}
         
-        # 🔍 Basic filename validation only
+        # [SEARCH] Basic filename validation only
         filename_validation = FileValidator.validate_filename(file.filename)
         if not filename_validation['valid']:
             return {"error": f"{file.filename}: {filename_validation['error']}"}
         
-        # 🚀 FAST: Get file size without expensive content analysis
+        # [START] FAST: Get file size without expensive content analysis
         try:
             file_size = getattr(file, 'size', 0)
             if file_size == 0:
@@ -817,8 +817,8 @@ async def validate_upload_files_enhanced_fast(files: List[UploadFile], encrypt: 
         except Exception as e:
             return {"error": f"{file.filename}: Failed to get file size - {str(e)}"}
     
-    # 🚀 CONCURRENT VALIDATION: Process all files simultaneously  
-    print(f"🚀 Starting fast concurrent validation of {len(files)} files...")
+    # [START] CONCURRENT VALIDATION: Process all files simultaneously  
+    print(f"[START] Starting fast concurrent validation of {len(files)} files...")
     validation_tasks = [validate_single_file_fast(file) for file in files]
     validation_results = await asyncio.gather(*validation_tasks, return_exceptions=True)
     
@@ -829,15 +829,15 @@ async def validate_upload_files_enhanced_fast(files: List[UploadFile], encrypt: 
     
     for i, result in enumerate(validation_results):
         if isinstance(result, Exception):
-            errors.append(f"🚫 {files[i].filename}: Validation exception - {str(result)}")
+            errors.append(f" {files[i].filename}: Validation exception - {str(result)}")
         elif isinstance(result, dict) and "error" in result:
-            errors.append(f"🚫 {result['error']}")
+            errors.append(f" {result['error']}")
         elif isinstance(result, dict) and "success" in result:
             validated_files.append(result["file_data"])
     
     is_valid = len(errors) == 0
     
-    print(f"✅ Fast validation completed in minimal time: {len(validated_files)} valid, {len(errors)} errors")
+    print(f"[OK] Fast validation completed in minimal time: {len(validated_files)} valid, {len(errors)} errors")
     
     return is_valid, errors, validated_files, security_warnings
 
@@ -870,19 +870,19 @@ async def validate_upload_files_enhanced_async(files: List[UploadFile], encrypt:
         
         for file in files:
             if not file.filename:
-                errors.append("🚫 File without filename detected")
+                errors.append(" File without filename detected")
                 continue
             
-            # 🔍 STEP 1: Basic filename validation
+            # [SEARCH] STEP 1: Basic filename validation
             filename_validation = FileValidator.validate_filename(file.filename)
             if not filename_validation['valid']:
-                errors.append(f"🚫 {file.filename}: {filename_validation['error']}")
+                errors.append(f" {file.filename}: {filename_validation['error']}")
                 continue
             
-            # 🔍 STEP 2: Async file size detection and content analysis
+            # [SEARCH] STEP 2: Async file size detection and content analysis
             temp_file_path = temp_dir / file.filename
             try:
-                # 🚀 ASYNC: Get file size without blocking
+                # [START] ASYNC: Get file size without blocking
                 try:
                     await asyncio.to_thread(file.file.seek, 0, 2)
                     file_size = await asyncio.to_thread(file.file.tell)
@@ -905,9 +905,9 @@ async def validate_upload_files_enhanced_async(files: List[UploadFile], encrypt:
                         # Recreate BytesIO with all chunks
                         file.file = io.BytesIO(b''.join(temp_chunks))
                 
-                # 🚀 OPTIMIZED: Skip content analysis for very large files (>1GB)
+                # [START] OPTIMIZED: Skip content analysis for very large files (>1GB)
                 if file_size > 1 * 1024 * 1024 * 1024:  # Files > 1GB
-                    print(f"📊 Skipping content analysis for large file: {file.filename} ({file_size / (1024**3):.1f}GB)")
+                    print(f"[STATS] Skipping content analysis for large file: {file.filename} ({file_size / (1024**3):.1f}GB)")
                     total_size += file_size
                     
                     # For large files, just do basic filename validation
@@ -921,10 +921,10 @@ async def validate_upload_files_enhanced_async(files: List[UploadFile], encrypt:
                     })
                     continue
                 else:
-                    # 🚀 ASYNC: Normal content analysis for smaller files
+                    # [START] ASYNC: Normal content analysis for smaller files
                     import aiofiles
                     async with aiofiles.open(temp_file_path, 'wb') as temp_file:
-                        # 🔄 MEMORY FIX: Use Termux-optimized chunk size for streaming
+                        # [RETRY] MEMORY FIX: Use Termux-optimized chunk size for streaming
                         from .universal_optimizer import get_adaptive_chunk_size
                         CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
                         while True:
@@ -937,13 +937,13 @@ async def validate_upload_files_enhanced_async(files: List[UploadFile], encrypt:
                     total_size += file_size
                 
             except Exception as e:
-                errors.append(f"🚫 {file.filename}: Failed to process file - {str(e)}")
+                errors.append(f" {file.filename}: Failed to process file - {str(e)}")
                 continue
             
-            # 🔍 STEP 3: ASYNC SECURITY - Content analysis and extension validation
+            # [SEARCH] STEP 3: ASYNC SECURITY - Content analysis and extension validation
             # Skip security analysis for very large files
             if file_size > 1 * 1024 * 1024 * 1024:  # Files > 1GB
-                print(f"⚠️ Skipping security analysis for large file: {file.filename} ({file_size / (1024**3):.1f}GB)")
+                print(f"[WARN] Skipping security analysis for large file: {file.filename} ({file_size / (1024**3):.1f}GB)")
                 continue
                 
             # Use async file operations for security analysis
@@ -955,13 +955,13 @@ async def validate_upload_files_enhanced_async(files: List[UploadFile], encrypt:
                 )
                 
                 if not security_result['valid']:
-                    errors.append(f"🚫 {file.filename}: {security_result['error']}")
+                    errors.append(f" {file.filename}: {security_result['error']}")
                     continue
                 
                 # Add security warnings if any
                 if security_result.get('warnings'):
                     for warning in security_result['warnings']:
-                        security_warnings.append(f"⚠️ {file.filename}: {warning}")
+                        security_warnings.append(f"[WARN] {file.filename}: {warning}")
                 
                 # Store validated file info
                 validated_files.append({
@@ -974,10 +974,10 @@ async def validate_upload_files_enhanced_async(files: List[UploadFile], encrypt:
                 })
                 
             except Exception as e:
-                errors.append(f"🚫 {file.filename}: Security analysis failed - {str(e)}")
+                errors.append(f" {file.filename}: Security analysis failed - {str(e)}")
                 continue
     
-    # 🔍 Final validation
+    # [SEARCH] Final validation
     is_valid = len(errors) == 0
     
     return is_valid, errors, validated_files, security_warnings
@@ -985,9 +985,9 @@ async def validate_upload_files_enhanced_async(files: List[UploadFile], encrypt:
 
 def validate_upload_files_enhanced(files: List[UploadFile], encrypt: bool = False, is_https: bool = False) -> Tuple[bool, List[str], List[Dict], List[str]]:
     """
-    🔄 LEGACY SYNC VERSION: Comprehensive validation with content analysis (BLOCKING).
+    [RETRY] LEGACY SYNC VERSION: Comprehensive validation with content analysis (BLOCKING).
     
-    ⚠️ WARNING: This function uses blocking file operations and should be replaced with 
+    [WARN] WARNING: This function uses blocking file operations and should be replaced with 
     validate_upload_files_enhanced_async() for better performance.
     
     This function:
@@ -1019,22 +1019,22 @@ def validate_upload_files_enhanced(files: List[UploadFile], encrypt: bool = Fals
                 warnings.append("Skipping file with no filename")
                 continue
             
-            # 🔍 STEP 1: Basic filename validation
+            # [SEARCH] STEP 1: Basic filename validation
             filename_result = FileValidator.validate_filename(file.filename)
             if not filename_result['valid']:
-                errors.extend([f"🚫 {file.filename}: {error}" for error in filename_result['errors']])
+                errors.extend([f" {file.filename}: {error}" for error in filename_result['errors']])
                 continue
             
-            # 🔍 STEP 2: Save file temporarily for content analysis
+            # [SEARCH] STEP 2: Save file temporarily for content analysis
             temp_file_path = temp_dir / file.filename
             try:
-                # 🚀 OPTIMIZED: Skip content analysis for very large files (>1GB)
+                # [START] OPTIMIZED: Skip content analysis for very large files (>1GB)
                 file.file.seek(0, 2)  # Seek to end to get size
                 file_size = file.file.tell()
                 file.file.seek(0)  # Reset to beginning
                 
                 if file_size > 1 * 1024 * 1024 * 1024:  # Files > 1GB
-                    print(f"📊 Skipping content analysis for large file: {file.filename} ({file_size / (1024**3):.1f}GB)")
+                    print(f"[STATS] Skipping content analysis for large file: {file.filename} ({file_size / (1024**3):.1f}GB)")
                     # Don't write to temp file for huge files, just validate filename
                     total_size += file_size
                 else:
@@ -1048,13 +1048,13 @@ def validate_upload_files_enhanced(files: List[UploadFile], encrypt: bool = Fals
                     total_size += file_size
                 
             except Exception as e:
-                errors.append(f"🚫 {file.filename}: Failed to process file - {str(e)}")
+                errors.append(f" {file.filename}: Failed to process file - {str(e)}")
                 continue
             
-            # 🔍 STEP 3: ADVANCED SECURITY - Content analysis and extension validation
+            # [SEARCH] STEP 3: ADVANCED SECURITY - Content analysis and extension validation
             # Skip security analysis for very large files to avoid memory issues
             if file_size > 1 * 1024 * 1024 * 1024:  # Files > 1GB
-                print(f"⚠️ Skipping security analysis for large file: {file.filename} ({file_size / (1024**3):.1f}GB)")
+                print(f"[WARN] Skipping security analysis for large file: {file.filename} ({file_size / (1024**3):.1f}GB)")
                 # For large files, just do basic filename validation
                 security_result = {
                     'valid': True,
@@ -1068,29 +1068,29 @@ def validate_upload_files_enhanced(files: List[UploadFile], encrypt: bool = Fals
                 security_result = FileValidator.validate_uploaded_file(temp_file_path, file.filename)
             
             if not security_result['valid']:
-                # 🚨 SECURITY BLOCK: Dangerous file detected
+                # [!] SECURITY BLOCK: Dangerous file detected
                 security_risk = security_result.get('security_risk', 'HIGH')
                 stage = security_result.get('stage', 'unknown')
                 
                 if 'extension_manipulation_detected' in security_result:
-                    errors.append(f"🚫 SECURITY THREAT: {file.filename} - Extension manipulation detected! "
+                    errors.append(f" SECURITY THREAT: {file.filename} - Extension manipulation detected! "
                                 f"File claims to be {security_result['claimed_extension']} but is actually {security_result['actual_type']}")
                 else:
                     error_msg = security_result.get('errors', ['Unknown security issue'])[0]
-                    errors.append(f"🚫 SECURITY BLOCK: {file.filename} - {error_msg}")
+                    errors.append(f" SECURITY BLOCK: {file.filename} - {error_msg}")
                 continue
             
-            # 🚨 STEP 4: Collect security warnings
+            # [!] STEP 4: Collect security warnings
             file_warnings = security_result.get('warnings', [])
             extension_check = security_result.get('extension_check', {})
             
             if extension_check.get('security_risk') == 'MEDIUM':
-                warnings.append(f"⚠️ {file.filename}: {extension_check['reason']}")
+                warnings.append(f"[WARN] {file.filename}: {extension_check['reason']}")
             
             if file_warnings:
-                warnings.extend([f"⚠️ {file.filename}: {warning}" for warning in file_warnings])
+                warnings.extend([f"[WARN] {file.filename}: {warning}" for warning in file_warnings])
             
-            # ✅ STEP 5: File passed security checks
+            # [OK] STEP 5: File passed security checks
             validated_files.append({
                 'filename': file.filename,
                 'sanitized_name': security_result.get('sanitized_name', file.filename),
@@ -1102,7 +1102,7 @@ def validate_upload_files_enhanced(files: List[UploadFile], encrypt: bool = Fals
             })
     
     finally:
-        # 🧹 Cleanup temporary files
+        # [CLEAN] Cleanup temporary files
         try:
             import shutil
             shutil.rmtree(temp_dir)
@@ -1114,7 +1114,7 @@ def validate_upload_files_enhanced(files: List[UploadFile], encrypt: bool = Fals
     # if total_size > max_total_size:
     #     errors.append(f"Total upload size ({total_size / (1024**3):.1f}GB) exceeds limit (50GB)")
     
-    print(f"📊 Enhanced validation: {total_size / (1024**3):.1f}GB total - NO LIMITS ENFORCED")
+    print(f"[STATS] Enhanced validation: {total_size / (1024**3):.1f}GB total - NO LIMITS ENFORCED")
     
     # Additional AES validation if encryption requested - LIMITS REMOVED
     # if encrypt and not errors:

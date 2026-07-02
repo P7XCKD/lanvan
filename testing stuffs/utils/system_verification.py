@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🔍 LANVAN System Verification Script
+[SEARCH] LANVAN System Verification Script
 Tests all components before P2P implementation
 """
 
@@ -16,14 +16,14 @@ if project_root not in sys.path:
 def test_import(module_name, description):
     try:
         importlib.import_module(module_name)
-        print(f"✅ {description}: OK")
+        print(f"[OK] {description}: OK")
         return True
     except Exception as e:
-        print(f"❌ {description}: FAILED - {e}")
+        print(f"[ERR] {description}: FAILED - {e}")
         return False
 
 def main():
-    print("🔍 LANVAN System Verification")
+    print("[SEARCH] LANVAN System Verification")
     print("=" * 50)
     print(f"Python Version: {sys.version}")
     print()
@@ -62,12 +62,12 @@ def main():
     print()
     
     if all(results):
-        print("🎉 SYSTEM STATUS: ALL GREEN!")
-        print("🚀 Ready for P2P Implementation!")
+        print("[DONE] SYSTEM STATUS: ALL GREEN!")
+        print("[START] Ready for P2P Implementation!")
         return True
     else:
-        print("⚠️  SYSTEM STATUS: Issues detected")
-        print("❌ Fix issues before proceeding")
+        print("[WARN]  SYSTEM STATUS: Issues detected")
+        print("[ERR] Fix issues before proceeding")
         return False
 
 if __name__ == "__main__":

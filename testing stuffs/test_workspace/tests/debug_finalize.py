@@ -4,7 +4,7 @@ Debug test to see what happens during finalization
 import requests
 
 def debug_finalize():
-    print("🔍 Testing finalization directly...")
+    print("[SEARCH] Testing finalization directly...")
     
     finalize_data = {
         'filename': 'stream_test_5mb.txt',
@@ -19,11 +19,11 @@ def debug_finalize():
     
     if response.status_code == 200:
         result = response.json()
-        print("✅ Success!")
+        print("[OK] Success!")
         print(f"Streaming assembly: {result.get('streaming_assembly', 'Unknown')}")
         print(f"Assembly method: {result.get('assembly_method', 'Unknown')}")
     else:
-        print("❌ Failed!")
+        print("[ERR] Failed!")
 
 if __name__ == "__main__":
     debug_finalize()

@@ -1,5 +1,5 @@
 """
-LANVAN Thread Management System
+Lanvan Thread Management System
 Centralized thread management to prevent resource leaks and zombie processes.
 """
 
@@ -35,7 +35,7 @@ class ManagedThread:
 
 class ThreadManager:
     """
-    🎯 Centralized Thread Manager
+    [TARGET] Centralized Thread Manager
     
     Features:
     - Automatic thread registration and tracking

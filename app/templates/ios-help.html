@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>iOS Safari Help - LANVan</title>
+  <title>iOS Safari Help - Lanvan</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
   <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -131,23 +131,25 @@
       }
     }
   </style>
+  <script src="/static/js/lucide.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", () => lucide.createIcons());</script>
 </head>
 <body>
   <div class="container">
-    <h1>🍎 iOS Safari Connection Help</h1>
-    <p class="subtitle">Having trouble connecting to LANVan on your iPhone or iPad? Follow these steps:</p>
+    <h1> iOS Safari Connection Help</h1>
+    <p class="subtitle">Having trouble connecting to Lanvan on your iPhone or iPad? Follow these steps:</p>
 
     <div class="step success">
-      <h3>📱 Step 1: Use HTTP (Recommended)</h3>
+      <h3><i data-lucide="smartphone" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Step 1: Use HTTP (Recommended)</h3>
       <p>iOS Safari works best with HTTP on local networks. Try this URL first:</p>
       <div class="url-box" onclick="window.location.href='http://10.110.4.169:5000'">
         http://10.110.4.169:5000
       </div>
-      <a href="http://10.110.4.169:5000" class="button success">🚀 Try HTTP Connection</a>
+      <a href="http://10.110.4.169:5000" class="button success"><i data-lucide="zap" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Try HTTP Connection</a>
     </div>
 
     <div class="step">
-      <h3>🔗 Step 2: Alternative URLs</h3>
+      <h3><i data-lucide="link" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Step 2: Alternative URLs</h3>
       <p>If the primary URL doesn't work, try these alternatives:</p>
       
       <p><strong>mDNS URL (if supported):</strong></p>
@@ -159,11 +161,11 @@
       <div class="url-box" onclick="window.location.href='https://10.110.4.169:5001'">
         https://10.110.4.169:5001
       </div>
-      <p><small>⚠️ For HTTPS, tap "Advanced" → "Continue to site" on security warnings</small></p>
+      <p><small><i data-lucide="alert-triangle" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> For HTTPS, tap "Advanced" → "Continue to site" on security warnings</small></p>
     </div>
 
     <div class="step warning">
-      <h3>📡 Step 3: Check Network Connection</h3>
+      <h3><i data-lucide="radio" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Step 3: Check Network Connection</h3>
       <p>Ensure your iPhone/iPad is connected to the same WiFi network as the server:</p>
       <ul>
         <li>Check WiFi settings - should be connected to same network as server</li>
@@ -173,7 +175,7 @@
     </div>
 
     <div class="step">
-      <h3>🧹 Step 4: Clear Safari Cache</h3>
+      <h3><i data-lucide="trash-2" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Step 4: Clear Safari Cache</h3>
       <p>If the page won't load properly:</p>
       <ol>
         <li>Go to Settings → Safari</li>
@@ -184,18 +186,18 @@
     </div>
 
     <div class="step warning">
-      <h3>🔒 Step 5: Handle Security Warnings</h3>
+      <h3><i data-lucide="lock" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Step 5: Handle Security Warnings</h3>
       <p>If using HTTPS and seeing security warnings:</p>
       <ol>
         <li>Tap "Show Details" or "Advanced"</li>
         <li>Tap "Visit this website" or "Continue to site"</li>
         <li>Confirm you want to continue</li>
       </ol>
-      <p><small>💡 This is normal for self-signed certificates on local networks</small></p>
+      <p><small><i data-lucide="lightbulb" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> This is normal for self-signed certificates on local networks</small></p>
     </div>
 
     <div class="step error">
-      <h3>🆘 Still Not Working?</h3>
+      <h3> Still Not Working?</h3>
       <p>Try these advanced troubleshooting steps:</p>
       <ul>
         <li><strong>Use Chrome or Firefox:</strong> Sometimes other browsers work better</li>
@@ -207,7 +209,7 @@
     </div>
 
     <div class="qr-section">
-      <h3>📱 QR Code Access</h3>
+      <h3><i data-lucide="smartphone" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> QR Code Access</h3>
       <p>Scan this QR code with your iPhone camera:</p>
       <div id="qr-container">
         <!-- QR code will be generated here -->
@@ -217,7 +219,7 @@
 
     <div style="text-align: center; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #ecf0f1;">
       <a href="javascript:history.back()" class="button">← Go Back</a>
-      <a href="/" class="button success">🏠 Home</a>
+      <a href="/" class="button success"> Home</a>
     </div>
   </div>
 
@@ -245,7 +247,7 @@
         const notice = document.createElement('div');
         notice.className = 'step success';
         notice.innerHTML = `
-          <h3>✅ iOS Device Detected</h3>
+          <h3> iOS Device Detected</h3>
           <p>Great! We've detected you're using an iOS device. The instructions above are specifically optimized for your device.</p>
         `;
         container.insertBefore(notice, container.firstChild.nextSibling);

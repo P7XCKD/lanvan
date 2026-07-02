@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🧪 AES Memory Explosion Fix Validation
+ AES Memory Explosion Fix Validation
 
 This script tests the new streaming AES encryption to ensure:
 1. No memory explosion for large files
@@ -15,7 +15,7 @@ from app.aes_utils import encrypt_file_stream, encrypt_file_from_path_streaming,
 
 def create_test_file(filename: str, size_mb: int) -> str:
     """Create a test file of specified size"""
-    print(f"📝 Creating test file: {filename} ({size_mb}MB)")
+    print(f"[INFO] Creating test file: {filename} ({size_mb}MB)")
     
     chunk_size = 1024 * 1024  # 1MB chunks
     data_chunk = b'A' * chunk_size
@@ -26,7 +26,7 @@ def create_test_file(filename: str, size_mb: int) -> str:
             if i % 10 == 0:
                 print(f"  Written: {i}MB")
     
-    print(f"✅ Test file created: {os.path.getsize(filename):,} bytes")
+    print(f"[OK] Test file created: {os.path.getsize(filename):,} bytes")
     return filename
 
 def get_memory_mb():
@@ -43,11 +43,11 @@ def test_streaming_encryption(test_size_mb: int = 50):
         create_test_file(test_file, test_size_mb)
         
         start_memory = get_memory_mb()
-        print(f"\n🔐 Testing AES streaming encryption ({test_size_mb}MB file)")
-        print(f"💾 Starting memory: {start_memory:.1f}MB")
+        print(f"\n[AUTH] Testing AES streaming encryption ({test_size_mb}MB file)")
+        print(f"[SAVE] Starting memory: {start_memory:.1f}MB")
         
         # Test disk streaming (most memory efficient)
-        print(f"\n📀 Testing disk streaming encryption...")
+        print(f"\n Testing disk streaming encryption...")
         start_time = time.time()
         
         encrypted_data, metadata = encrypt_file_from_path_streaming(
@@ -59,12 +59,12 @@ def test_streaming_encryption(test_size_mb: int = 50):
         encrypt_time = time.time() - start_time
         encrypt_memory = get_memory_mb()
         
-        print(f"✅ Encryption completed in {encrypt_time:.1f}s")
-        print(f"💾 Memory after encryption: {encrypt_memory:.1f}MB (+{encrypt_memory-start_memory:.1f}MB)")
-        print(f"📊 Encrypted size: {len(encrypted_data):,} bytes")
+        print(f"[OK] Encryption completed in {encrypt_time:.1f}s")
+        print(f"[SAVE] Memory after encryption: {encrypt_memory:.1f}MB (+{encrypt_memory-start_memory:.1f}MB)")
+        print(f"[STATS] Encrypted size: {len(encrypted_data):,} bytes")
         
         # Test decryption
-        print(f"\n🔓 Testing decryption...")
+        print(f"\n[UNLOCK] Testing decryption...")
         decrypt_start = time.time()
         
         decrypted_data = decrypt_file_stream(encrypted_data, metadata, user_password='test123')
@@ -72,9 +72,9 @@ def test_streaming_encryption(test_size_mb: int = 50):
         decrypt_time = time.time() - decrypt_start
         final_memory = get_memory_mb()
         
-        print(f"✅ Decryption completed in {decrypt_time:.1f}s")
-        print(f"💾 Final memory: {final_memory:.1f}MB")
-        print(f"📊 Decrypted size: {len(decrypted_data):,} bytes")
+        print(f"[OK] Decryption completed in {decrypt_time:.1f}s")
+        print(f"[SAVE] Final memory: {final_memory:.1f}MB")
+        print(f"[STATS] Decrypted size: {len(decrypted_data):,} bytes")
         
         # Verify data integrity (check first and last chunks)
         with open(test_file, 'rb') as f:
@@ -87,25 +87,25 @@ def test_streaming_encryption(test_size_mb: int = 50):
         
         integrity_check = (original_start == decrypted_start and original_end == decrypted_end)
         
-        print(f"\n📋 Results Summary:")
+        print(f"\n[INFO] Results Summary:")
         print(f"  File size: {test_size_mb}MB")
         print(f"  Encryption time: {encrypt_time:.1f}s ({test_size_mb/encrypt_time:.1f}MB/s)")
         print(f"  Decryption time: {decrypt_time:.1f}s ({test_size_mb/decrypt_time:.1f}MB/s)")
         print(f"  Max memory usage: +{max(encrypt_memory, final_memory)-start_memory:.1f}MB")
-        print(f"  Data integrity: {'✅ PASS' if integrity_check else '❌ FAIL'}")
+        print(f"  Data integrity: {'[OK] PASS' if integrity_check else '[ERR] FAIL'}")
         
         memory_ratio = (max(encrypt_memory, final_memory)-start_memory) / test_size_mb
         if memory_ratio < 0.5:
-            print(f"  Memory efficiency: ✅ EXCELLENT ({memory_ratio:.2f}x file size)")
+            print(f"  Memory efficiency: [OK] EXCELLENT ({memory_ratio:.2f}x file size)")
         elif memory_ratio < 1.0:
-            print(f"  Memory efficiency: ✅ GOOD ({memory_ratio:.2f}x file size)")
+            print(f"  Memory efficiency: [OK] GOOD ({memory_ratio:.2f}x file size)")
         else:
-            print(f"  Memory efficiency: ⚠️ POOR ({memory_ratio:.2f}x file size)")
+            print(f"  Memory efficiency: [WARN] POOR ({memory_ratio:.2f}x file size)")
         
         return True
         
     except Exception as e:
-        print(f"❌ Error during test: {e}")
+        print(f"[ERR] Error during test: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -114,10 +114,10 @@ def test_streaming_encryption(test_size_mb: int = 50):
         # Clean up
         if os.path.exists(test_file):
             os.remove(test_file)
-            print(f"🧹 Cleaned up test file")
+            print(f"[CLEAN] Cleaned up test file")
 
 if __name__ == "__main__":
-    print("🧪 AES Memory Explosion Fix - Validation Test")
+    print(" AES Memory Explosion Fix - Validation Test")
     print("=" * 60)
     
     # Test with progressively larger files
@@ -127,9 +127,9 @@ if __name__ == "__main__":
         print(f"\n{'=' * 60}")
         success = test_streaming_encryption(size)
         if not success:
-            print(f"❌ Test failed for {size}MB file")
+            print(f"[ERR] Test failed for {size}MB file")
             break
-        print(f"✅ Test passed for {size}MB file")
+        print(f"[OK] Test passed for {size}MB file")
     
     print(f"\n{'=' * 60}")
-    print("🎉 AES Memory Fix Validation Complete!")
+    print("[DONE] AES Memory Fix Validation Complete!")

@@ -1,5 +1,5 @@
 """
-🌐 Frontend Integration for HTTP-Safe AES
+[NET] Frontend Integration for HTTP-Safe AES
 
 This script shows how to integrate the HTTP-safe AES encryption into the frontend
 to provide complete metadata protection over HTTP.
@@ -7,7 +7,7 @@ to provide complete metadata protection over HTTP.
 
 # JavaScript code to add to the frontend
 FRONTEND_HTTP_SAFE_JS = """
-// 🔒 HTTP-Safe AES Configuration
+// [LOCK] HTTP-Safe AES Configuration
 const HTTP_SAFE_AES = {
   enabled: true,
   obfuscate_filenames: true,
@@ -78,7 +78,7 @@ const HTTP_SAFE_AES = {
   }
 };
 
-// 🔄 Modified upload function with HTTP safety
+// [RETRY] Modified upload function with HTTP safety
 async function uploadFilesWithHTTPSafety(files) {
   const isAESEnabled = document.getElementById('enableEncryption').checked;
   
@@ -87,7 +87,7 @@ async function uploadFilesWithHTTPSafety(files) {
     return uploadFilesNormal(files);
   }
   
-  console.log('🔒 Starting HTTP-Safe AES upload for', files.length, 'files');
+  console.log('[LOCK] Starting HTTP-Safe AES upload for', files.length, 'files');
   
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -96,8 +96,8 @@ async function uploadFilesWithHTTPSafety(files) {
     // Generate HTTP-safe parameters
     const safeParams = HTTP_SAFE_AES.createSafeUploadParams(file, originalName);
     
-    console.log(`🛡️ File ${i+1}: ${originalName} → ${safeParams.safe_filename}`);
-    console.log(`📊 Size obfuscated: ${file.size} → ${safeParams.obfuscated_size}`);
+    console.log(`[SHIELD] File ${i+1}: ${originalName} → ${safeParams.safe_filename}`);
+    console.log(`[STATS] Size obfuscated: ${file.size} → ${safeParams.obfuscated_size}`);
     
     // Send decoy requests first (optional)
     if (HTTP_SAFE_AES.generate_decoy_traffic) {
@@ -109,9 +109,9 @@ async function uploadFilesWithHTTPSafety(files) {
   }
 }
 
-// 🕵️ Send decoy requests to hide traffic patterns
+//  Send decoy requests to hide traffic patterns
 async function sendDecoyRequests(decoyRequests) {
-  console.log('🕵️ Sending', decoyRequests.length, 'decoy requests...');
+  console.log(' Sending', decoyRequests.length, 'decoy requests...');
   
   const promises = decoyRequests.map(async (decoy, index) => {
     // Add random delay
@@ -128,17 +128,17 @@ async function sendDecoyRequests(decoyRequests) {
         body: dummyData
       });
       
-      console.log(`🕵️ Decoy ${index+1} sent (${decoy.size} bytes)`);
+      console.log(` Decoy ${index+1} sent (${decoy.size} bytes)`);
     } catch (error) {
       // Decoy failures are expected and OK
-      console.log(`🕵️ Decoy ${index+1} failed (expected)`);
+      console.log(` Decoy ${index+1} failed (expected)`);
     }
   });
   
   await Promise.all(promises);
 }
 
-// 🔒 Upload single file with security
+// [LOCK] Upload single file with security
 async function uploadSingleFileSecure(file, safeParams) {
   const formData = new FormData();
   
@@ -162,17 +162,17 @@ async function uploadSingleFileSecure(file, safeParams) {
     });
     
     if (response.ok) {
-      console.log(`✅ Secure upload completed: ${safeParams.safe_filename}`);
+      console.log(`[OK] Secure upload completed: ${safeParams.safe_filename}`);
     } else {
-      console.error(`❌ Secure upload failed: ${response.status}`);
+      console.error(`[ERR] Secure upload failed: ${response.status}`);
     }
     
   } catch (error) {
-    console.error(`❌ Secure upload error:`, error);
+    console.error(`[ERR] Secure upload error:`, error);
   }
 }
 
-// 🔧 Integration with existing upload button
+// [CFG] Integration with existing upload button
 document.addEventListener('DOMContentLoaded', function() {
   const uploadButton = document.querySelector('#uploadButton');
   const fileInput = document.querySelector('#fileInput');
@@ -188,7 +188,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 
-// 🛡️ Security status indicator
+// [SHIELD] Security status indicator
 function updateSecurityStatus() {
   const isAESEnabled = document.getElementById('enableEncryption').checked;
   const isHTTPSafe = HTTP_SAFE_AES.enabled;
@@ -197,13 +197,13 @@ function updateSecurityStatus() {
   let statusColor = '';
   
   if (isAESEnabled && isHTTPSafe) {
-    statusText = '🛡️ HTTP-Safe AES (Maximum Security)';
+    statusText = '[SHIELD] HTTP-Safe AES (Maximum Security)';
     statusColor = '#00ff00';
   } else if (isAESEnabled) {
-    statusText = '🔒 Standard AES (Metadata Visible)';
+    statusText = '[LOCK] Standard AES (Metadata Visible)';
     statusColor = '#ffaa00';
   } else {
-    statusText = '📁 Unencrypted (Not Secure)';
+    statusText = '[DIR] Unencrypted (Not Secure)';
     statusColor = '#ff0000';
   }
   
@@ -236,7 +236,7 @@ def generate_frontend_integration():
 
 <!-- Add security status indicator to your UI -->
 <div id="securityStatus" style="font-weight: bold; margin: 10px 0;">
-  📁 Unencrypted (Not Secure)
+  [DIR] Unencrypted (Not Secure)
 </div>
 
 <!-- Optional: Advanced security settings -->
@@ -257,7 +257,7 @@ def generate_frontend_integration():
 """
 
 if __name__ == "__main__":
-    print("🌐 FRONTEND HTTP-SAFE AES INTEGRATION")
+    print("[NET] FRONTEND HTTP-SAFE AES INTEGRATION")
     print("=" * 50)
     print()
     print("Add the following to your HTML template:")

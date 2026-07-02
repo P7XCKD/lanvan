@@ -1,5 +1,5 @@
 """
-🔀 HTTPS Redirect Server
+ HTTPS Redirect Server
 Minimal HTTP server that redirects all requests to HTTPS when server runs in HTTPS mode.
 This enables seamless lanvan.local access regardless of protocol.
 """
@@ -69,29 +69,29 @@ class HTTPSRedirectServer:
             )
             
             self.server = uvicorn.Server(config)
-            print(f"🔀 Starting HTTPS redirect server on port {self.http_port} → {self.https_port}")
+            print(f" Starting HTTPS redirect server on port {self.http_port} → {self.https_port}")
             
             # Start server in background task
             self.server_task = asyncio.create_task(self.server.serve())
             await asyncio.sleep(0.1)  # Give it time to start
             
-            print(f"✅ HTTPS redirect server active: http://lanvan.local → https://lanvan.local:{self.https_port}")
+            print(f"[OK] HTTPS redirect server active: http://lanvan.local → https://lanvan.local:{self.https_port}")
             
         except OSError as e:
             if "Address already in use" in str(e):
-                print(f"⚠️ Port {self.http_port} already in use - redirect server skipped")
+                print(f"[WARN] Port {self.http_port} already in use - redirect server skipped")
                 print(f"   You may need to access HTTPS directly: https://lanvan.local:{self.https_port}")
             else:
-                print(f"⚠️ HTTPS redirect server failed to start: {e}")
+                print(f"[WARN] HTTPS redirect server failed to start: {e}")
             print(f"   Direct HTTPS access will still work")
         except Exception as e:
-            print(f"⚠️ HTTPS redirect server failed to start: {e}")
+            print(f"[WARN] HTTPS redirect server failed to start: {e}")
             print(f"   HTTP access to lanvan.local may not work")
     
     async def stop(self):
         """Stop the redirect server"""
         if self.server_task and not self.server_task.done():
-            print("🔴 Stopping HTTPS redirect server...")
+            print(" Stopping HTTPS redirect server...")
             
             # Cancel the server task
             self.server_task.cancel()
@@ -102,7 +102,7 @@ class HTTPSRedirectServer:
             except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
             
-            print("✅ HTTPS redirect server stopped")
+            print("[OK] HTTPS redirect server stopped")
     
     def is_running(self) -> bool:
         """Check if the redirect server is running"""
@@ -116,14 +116,14 @@ async def start_https_redirect_server(https_port: int, http_port: int = 80):
     global redirect_server
     
     if redirect_server and redirect_server.is_running():
-        print("🔀 HTTPS redirect server already running")
+        print(" HTTPS redirect server already running")
         return
     
     try:
         redirect_server = HTTPSRedirectServer(https_port, http_port)
         await redirect_server.start()
     except Exception as e:
-        print(f"❌ Failed to start HTTPS redirect server: {e}")
+        print(f"[ERR] Failed to start HTTPS redirect server: {e}")
         redirect_server = None
 
 async def stop_https_redirect_server():

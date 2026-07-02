@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>LANVan - Loading...</title>
+  <title>Lanvan - Loading...</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
   <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   
-  <!-- 🚀 INSTANT DARK MODE - NO FLASH! -->
+  <!--  INSTANT DARK MODE - NO FLASH! -->
   <script>
     (function() {
       const savedDarkMode = localStorage.getItem('dark_mode_enabled');
@@ -219,15 +219,17 @@
       box-shadow: 0 4px 12px rgba(107, 182, 255, 0.3);
     }
   </style>
+  <script src="/static/js/lucide.min.js"></script>
+  <script>document.addEventListener("DOMContentLoaded", () => lucide.createIcons());</script>
 </head>
 <body>
   <div class="loading-container">
     <div class="logo-container">
-      <img src="{{ request.url_for('static', path='images/icon.png') }}" alt="LANVan" class="logo"
+      <img src="{{ request.url_for('static', path='images/icon.png') }}" alt="Lanvan" class="logo"
            onerror="this.style.display='none';">
     </div>
     
-    <h1>LANVan</h1>
+    <h1>Lanvan</h1>
     <p class="subtitle">Secure Local File Transfer</p>
     
     <div class="loading-spinner"></div>
@@ -256,7 +258,7 @@
     const statusMessages = [
       'Initializing...',
       'Checking network connectivity...',
-      'Starting LANVan services...',
+      'Starting Lanvan services...',
       'Loading file transfer interface...',
       'Almost ready...'
     ];
@@ -266,8 +268,8 @@
     // Check if we can skip the loading process
     function shouldSkipLoading() {
       try {
-        const lastLoaded = sessionStorage.getItem('lanvan_page_loaded_successfully');
-        const resourcesReady = sessionStorage.getItem('lanvan_resources_ready');
+        const lastLoaded = sessionStorage.getItem('Lanvan_page_loaded_successfully');
+        const resourcesReady = sessionStorage.getItem('Lanvan_resources_ready');
         
         if (lastLoaded && resourcesReady === 'true') {
           const lastLoadTime = parseInt(lastLoaded);
@@ -302,17 +304,17 @@
       const currentProtocol = window.location.protocol;
       const currentHost = window.location.hostname;
       
-      console.log('🍎 iOS device detected - performing connectivity diagnostics...');
+      console.log(' iOS device detected - performing connectivity diagnostics...');
       console.log(`Current URL: ${currentProtocol}//${currentHost}`);
       
       // For iOS Safari, suggest better connection methods
       if (isIOSDevice() && isSafari()) {
-        statusElement.textContent = '🍎 iOS Safari detected - optimizing connection...';
+        statusElement.textContent = ' iOS Safari detected - optimizing connection...';
         
         // If we're on HTTPS, suggest HTTP for better compatibility
         if (currentProtocol === 'https:') {
           const httpUrl = `http://${currentHost.replace('lanvan.local', '10.110.4.169')}:5000${originalPath}`;
-          console.log(`🍎 iOS: Suggesting HTTP alternative: ${httpUrl}`);
+          console.log(` iOS: Suggesting HTTP alternative: ${httpUrl}`);
           
           // Show iOS-specific suggestion
           showIOSSuggestion(httpUrl);
@@ -322,7 +324,7 @@
         // If we're using .local domain, suggest direct IP
         if (currentHost.includes('.local')) {
           const ipUrl = `${currentProtocol}//10.110.4.169:5000${originalPath}`;
-          console.log(`🍎 iOS: Suggesting direct IP: ${ipUrl}`);
+          console.log(` iOS: Suggesting direct IP: ${ipUrl}`);
           
           // Show iOS-specific suggestion
           showIOSSuggestion(ipUrl);
@@ -339,7 +341,7 @@
       const suggestionDiv = document.createElement('div');
       suggestionDiv.innerHTML = `
         <div style="margin-top: 1.5rem; padding: 1rem; background: #e8f4fd; border-radius: 8px; border-left: 4px solid #4a90e2;">
-          <h3 style="margin: 0 0 0.5rem 0; color: #2c3e50; font-size: 1rem;">🍎 iOS Compatibility Mode</h3>
+          <h3 style="margin: 0 0 0.5rem 0; color: #2c3e50; font-size: 1rem;"> iOS Compatibility Mode</h3>
           <p style="margin: 0 0 1rem 0; font-size: 0.9rem; color: #34495e;">
             For better iOS Safari compatibility, try this optimized URL:
           </p>
@@ -349,7 +351,7 @@
           </div>
           <button onclick="window.location.href='${suggestedUrl}'" 
                   style="background: #27ae60; color: white; border: none; padding: 0.6rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; margin-top: 0.5rem;">
-            🚀 Try iOS-Optimized URL
+             Try iOS-Optimized URL
           </button>
         </div>
       `;
@@ -378,7 +380,7 @@
       
       // Try iOS compatibility check first if on iOS
       if (isIOSDevice()) {
-        statusElement.textContent = '🍎 Checking iOS compatibility...';
+        statusElement.textContent = ' Checking iOS compatibility...';
         
         fetch('/ios-check', { 
           cache: 'no-cache',

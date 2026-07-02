@@ -39,22 +39,22 @@ def check_mdns_dependencies() -> tuple[bool, str]:
                 result = subprocess.run(['which', 'avahi-daemon'], 
                                       capture_output=True, text=True)
                 if result.returncode != 0:
-                    return True, "⚠️ mDNS on Android/Termux has limitations. Consider IP access instead."
+                    return True, "[WARN] mDNS on Android/Termux has limitations. Consider IP access instead."
             except:
                 pass
             
             # Additional warning for Android/Termux users
-            print("📱 Android/Termux mDNS Limitations:")
+            print("[MOBILE] Android/Termux mDNS Limitations:")
             print("   • .local domains often don't work due to system restrictions")
             print("   • Use direct IP access instead: [IP]:5000 or [IP]:5001")
             print("   • QR codes will show IP-based URLs for better compatibility")
         
-        return True, "✅ mDNS dependencies available"
+        return True, "[OK] mDNS dependencies available"
     
     except ImportError as e:
-        return False, f"❌ mDNS not available: {e}. Install with: pip install zeroconf"
+        return False, f"[ERR] mDNS not available: {e}. Install with: pip install zeroconf"
     except Exception as e:
-        return False, f"❌ mDNS test failed: {e}"
+        return False, f"[ERR] mDNS test failed: {e}"
 
 def force_cleanup_mdns_resources():
     """Force cleanup of any lingering mDNS resources (useful for Termux restarts)"""
@@ -70,17 +70,17 @@ def force_cleanup_mdns_resources():
                          if t.daemon and 'zeroconf' in str(t).lower()]
         
         if daemon_threads:
-            print(f"🧹 Found {len(daemon_threads)} zeroconf daemon threads (will be cleaned up on exit)")
+            print(f"[CLEAN] Found {len(daemon_threads)} zeroconf daemon threads (will be cleaned up on exit)")
         
-        print("🧹 Forced cleanup of mDNS resources")
+        print("[CLEAN] Forced cleanup of mDNS resources")
         return True
     except Exception as e:
-        print(f"⚠️ Cleanup warning: {e}")
+        print(f"[WARN] Cleanup warning: {e}")
         return False
 
 class SimpleMDNSManager:
     """
-    Simple, robust mDNS service manager for LANVAN
+    Simple, robust mDNS service manager for Lanvan
     """
     
     def __init__(self, port: int = 80, use_https: bool = False):
@@ -89,9 +89,9 @@ class SimpleMDNSManager:
         self.protocol = "https" if use_https else "http"
         self.zeroconf = None
         self.service_info = None
-        self.service_name = "lanvan"
-        self.base_service_name = "lanvan"
-        # 🎯 Universal Service Type: Always use _http._tcp for mDNS compatibility
+        self.service_name = "Lanvan"
+        self.base_service_name = "Lanvan"
+        # [TARGET] Universal Service Type: Always use _http._tcp for mDNS compatibility
         self.service_type = "_http._tcp.local."  
         self.domain = f"{self.service_name}.local"
         self.conflict_count = 0
@@ -102,7 +102,7 @@ class SimpleMDNSManager:
         self._announcement_thread = None
         self._stop_announcements = False
         
-        # 🔀 Universal Port Redirect: Track both HTTP and HTTPS services
+        #  Universal Port Redirect: Track both HTTP and HTTPS services
         self.actual_port = port
         self.actual_protocol = self.protocol
         
@@ -177,8 +177,8 @@ class SimpleMDNSManager:
                 return f"device-{random.randint(100, 999)}"
                 
         except Exception as e:
-            print(f"⚠️ Device identifier generation failed: {e}")
-            return f"lanvan-{hash(str(time.time())) % 1000}"
+            print(f"[WARN] Device identifier generation failed: {e}")
+            return f"Lanvan-{hash(str(time.time())) % 1000}"
 
     def _start_announcement_thread(self):
         """Start background thread for periodic mDNS announcements (instant guest loading)"""
@@ -214,7 +214,7 @@ class SimpleMDNSManager:
                         pass
                         
         except Exception as e:
-            print(f"⚠️ Announcement thread error (non-critical): {e}")
+            print(f"[WARN] Announcement thread error (non-critical): {e}")
 
     def _stop_announcement_thread(self):
         """Stop the announcement thread"""
@@ -251,7 +251,7 @@ class SimpleMDNSManager:
                         pass  # Ignore cancel errors
                         
                 except Exception as browser_error:
-                    print(f"⚠️ Service browser error (non-critical): {browser_error}")
+                    print(f"[WARN] Service browser error (non-critical): {browser_error}")
                     # Continue without collision detection
                 
                 # Check if our desired name conflicts
@@ -261,17 +261,17 @@ class SimpleMDNSManager:
                 if collision_detected:
                     # Generate alternative name with device ID
                     alternative_name = f"{service_name}-{self.device_id}"
-                    print(f"⚠️ Name collision detected! '{service_name}' is already in use")
-                    print(f"🔄 Using alternative name: '{alternative_name}'")
+                    print(f"[WARN] Name collision detected! '{service_name}' is already in use")
+                    print(f"[RETRY] Using alternative name: '{alternative_name}'")
                     return alternative_name, True
                 else:
                     return service_name, False
                     
             except Exception as browse_error:
-                print(f"⚠️ Collision detection failed (possibly offline): {browse_error}")
+                print(f"[WARN] Collision detection failed (possibly offline): {browse_error}")
                 # If collision detection fails, add device identifier as safety measure
                 safe_name = f"{service_name}-{self.device_id}"
-                print(f"🔧 Using safe unique name for offline: '{safe_name}'")
+                print(f"[CFG] Using safe unique name for offline: '{safe_name}'")
                 return safe_name, False
             finally:
                 if zeroconf_browser:
@@ -281,10 +281,10 @@ class SimpleMDNSManager:
                         pass
                 
         except Exception as e:
-            print(f"⚠️ Collision detection system failure: {e}")
+            print(f"[WARN] Collision detection system failure: {e}")
             # If collision detection completely fails, add device identifier as safety measure
             safe_name = f"{service_name}-{self.device_id}"
-            print(f"🔧 Using safe unique name: '{safe_name}'")
+            print(f"[CFG] Using safe unique name: '{safe_name}'")
             return safe_name, False
         self._lock = threading.Lock()
         
@@ -370,17 +370,17 @@ class SimpleMDNSManager:
                          "TERMUX_VERSION" in os.environ)
             
             if is_android:
-                print("📱 Detecting network interface on Android/Termux...")
+                print("[MOBILE] Detecting network interface on Android/Termux...")
                 
                 # Use enhanced Android network detection
                 try:
                     android_ip = self._get_android_network_ip()
                     if android_ip and android_ip != '192.0.0.4':
                         self.lan_ip = android_ip
-                        print(f"📱 Enhanced Android detection found: {android_ip}")
+                        print(f"[MOBILE] Enhanced Android detection found: {android_ip}")
                         return self.lan_ip
                 except Exception as android_error:
-                    print(f"📱 Enhanced Android detection failed: {android_error}")
+                    print(f"[MOBILE] Enhanced Android detection failed: {android_error}")
                 
             # Method 1: Try to get IP without external connection (offline-compatible)
             # Get all network interfaces
@@ -395,7 +395,7 @@ class SimpleMDNSManager:
                     self.lan_ip = host_ip
                     return self.lan_ip
                 elif is_android and host_ip == '192.0.0.4':
-                    print("📱 Detected problematic IP 192.0.0.4, trying alternatives...")
+                    print("[MOBILE] Detected problematic IP 192.0.0.4, trying alternatives...")
             except:
                 pass
             
@@ -420,7 +420,7 @@ class SimpleMDNSManager:
                     if local_ip and not local_ip.startswith('127.'):
                         self.lan_ip = local_ip
                         if is_android:
-                            print(f"📱 Android IP detected: {local_ip}")
+                            print(f"[MOBILE] Android IP detected: {local_ip}")
                         return self.lan_ip
                 except:
                     continue
@@ -442,11 +442,11 @@ class SimpleMDNSManager:
                 pass
             
             # Fallback: Use loopback if no other option
-            print("⚠️ Could not detect LAN IP offline, using localhost")
+            print("[WARN] Could not detect LAN IP offline, using localhost")
             return "127.0.0.1"
             
         except Exception as e:
-            print(f"❌ Failed to get LAN IP offline: {e}")
+            print(f"[ERR] Failed to get LAN IP offline: {e}")
             return "127.0.0.1"
     
     def generate_service_name(self) -> str:
@@ -466,15 +466,15 @@ class SimpleMDNSManager:
         try:
             with self._lock:
                 if self.is_running:
-                    print("ℹ️ mDNS service already running")
+                    print("ℹ mDNS service already running")
                     return True
                 
                 # Check if mDNS is available
                 if not self.mdns_available:
-                    print(f"❌ {self.mdns_status}")
+                    print(f"[ERR] {self.mdns_status}")
                     return False
                 
-                print("🔍 Starting mDNS service (offline-compatible, Termux-optimized)...")
+                print("[SEARCH] Starting mDNS service (offline-compatible, Termux-optimized)...")
                 print(f"   {self.mdns_status}")
                 
                 # Check if we're on Android/Termux for special handling
@@ -495,7 +495,7 @@ class SimpleMDNSManager:
                 # Create zeroconf instance with Android/Termux optimizations
                 try:
                     if is_android:
-                        print("📱 Android/Termux detected - using optimized mDNS settings")
+                        print("[MOBILE] Android/Termux detected - using optimized mDNS settings")
                         # Use more conservative settings for Android
                         time.sleep(0.5)  # Give time for network interfaces to stabilize
                     
@@ -503,18 +503,18 @@ class SimpleMDNSManager:
                     self.zeroconf = Zeroconf()
                     
                 except Exception as zc_error:
-                    print(f"⚠️ Zeroconf initialization warning: {zc_error}")
-                    print("🔧 Attempting alternative zeroconf setup...")
+                    print(f"[WARN] Zeroconf initialization warning: {zc_error}")
+                    print("[CFG] Attempting alternative zeroconf setup...")
                     try:
                         # Brief pause for Android/Termux network stability
                         time.sleep(1.0)
                         # Fallback zeroconf initialization
                         self.zeroconf = Zeroconf()
                     except Exception as zc_fallback_error:
-                        print(f"❌ mDNS service failed to initialize: {zc_fallback_error}")
+                        print(f"[ERR] mDNS service failed to initialize: {zc_fallback_error}")
                         if is_android:
-                            print("💡 On Android/Termux, try: pkg install avahi")
-                            print("💡 Or restart Termux and try again")
+                            print("[TIP] On Android/Termux, try: pkg install avahi")
+                            print("[TIP] Or restart Termux and try again")
                         return False
                 
                 # Generate service details with collision detection
@@ -525,8 +525,8 @@ class SimpleMDNSManager:
                 hostname = socket.gethostname()
                 lan_ip = self.get_lan_ip()
                 
-                print(f"🌐 Detected LAN IP: {lan_ip}")
-                print(f"🏷️ Service name: {self.service_name}")
+                print(f"[NET] Detected LAN IP: {lan_ip}")
+                print(f"[TAG] Service name: {self.service_name}")
                 
                 # Create service name
                 service_name_full = f"{self.service_name}.{self.service_type}"
@@ -534,7 +534,7 @@ class SimpleMDNSManager:
                 # Enhanced properties for guest device compatibility
                 properties = {
                     b'version': b'1.0.0',
-                    b'service': b'lanvan-file-server',
+                    b'service': b'Lanvan-file-server',
                     b'protocol': self.protocol.encode('utf-8'),
                     b'supports_http': b'true' if not self.use_https else b'false',
                     b'supports_https': b'true' if self.use_https else b'false',
@@ -564,16 +564,16 @@ class SimpleMDNSManager:
                         server=f"{self.service_name}.local."
                     )
                 except Exception as si_error:
-                    print(f"❌ Service info creation failed: {si_error}")
+                    print(f"[ERR] Service info creation failed: {si_error}")
                     return False
                 
                 # Register the service
                 try:
                     self.zeroconf.register_service(self.service_info)
                     self.is_running = True
-                    print("✅ mDNS service registered successfully")
+                    print("[OK] mDNS service registered successfully")
                 except Exception as reg_error:
-                    print(f"⚠️ Service registration warning: {reg_error}")
+                    print(f"[WARN] Service registration warning: {reg_error}")
                     # Continue anyway - some systems have registration warnings but still work
                     self.is_running = True
                 
@@ -586,15 +586,15 @@ class SimpleMDNSManager:
                     time.sleep(0.2)  # Longer delay for stability
                     if self.zeroconf and self.service_info:
                         self.zeroconf.register_service(self.service_info)
-                        print("📡 mDNS service announcement sent")
+                        print("[MDNS] mDNS service announcement sent")
                 except Exception as announce_error:
-                    print(f"⚠️ Announcement warning (non-critical): {announce_error}")
+                    print(f"[WARN] Announcement warning (non-critical): {announce_error}")
                     # Non-critical - continue
                 
-                # 🌐 Protocol-Specific Access Information
+                # [NET] Protocol-Specific Access Information
                 protocol_name = "HTTPS" if self.use_https else "HTTP"
-                print(f"✅ mDNS service started: {self.domain}")
-                print(f"🌐 Guest devices can now discover this server!")
+                print(f"[OK] mDNS service started: {self.domain}")
+                print(f"[NET] Guest devices can now discover this server!")
                 
                 # Check if we're on Android/Termux for special messaging
                 is_android = ("ANDROID_STORAGE" in os.environ or 
@@ -602,41 +602,41 @@ class SimpleMDNSManager:
                              "TERMUX_VERSION" in os.environ)
                 
                 if is_android:
-                    print(f"📱 Android/Termux {protocol_name} Server:")
-                    print(f"🚨 mDNS (.local) may not work on Android/Termux!")
-                    print(f"✅ RECOMMENDED - Use Direct IP Access:")
+                    print(f"[MOBILE] Android/Termux {protocol_name} Server:")
+                    print(f"[!] mDNS (.local) may not work on Android/Termux!")
+                    print(f"[OK] RECOMMENDED - Use Direct IP Access:")
                     if self.use_https:
                         https_ip_url = self._format_url(lan_ip)
-                        print(f"   📱 Mobile Access: {https_ip_url}")
-                        print(f"   💻 Desktop Access: {https_ip_url}")
-                        print(f"🔒 HTTPS-only mode")
+                        print(f"   [MOBILE] Mobile Access: {https_ip_url}")
+                        print(f"   [PC] Desktop Access: {https_ip_url}")
+                        print(f"[LOCK] HTTPS-only mode")
                     else:
                         http_ip_url = self._format_url(lan_ip)
-                        print(f"   📱 Mobile Access: {http_ip_url}")
-                        print(f"   💻 Desktop Access: {http_ip_url}")
-                        print(f"🌐 HTTP-only mode")
-                    print(f"⚠️  Avoid using {self.domain} - use IP instead")
+                        print(f"   [MOBILE] Mobile Access: {http_ip_url}")
+                        print(f"   [PC] Desktop Access: {http_ip_url}")
+                        print(f"[NET] HTTP-only mode")
+                    print(f"[WARN]  Avoid using {self.domain} - use IP instead")
                 else:
-                    print(f"🌐 {protocol_name} Server Access:")
+                    print(f"[NET] {protocol_name} Server Access:")
                     if self.use_https:
                         # HTTPS-only mode
                         https_url = self._format_url(self.domain)
                         https_ip_url = self._format_url(lan_ip)
                         print(f"   HTTPS access: {https_url}")
                         print(f"   Direct IP (HTTPS): {https_ip_url}")
-                        print(f"🔒 HTTPS-only mode - HTTP requests will not work")
+                        print(f"[LOCK] HTTPS-only mode - HTTP requests will not work")
                     else:
                         # HTTP-only mode  
                         http_url = self._format_url(self.domain)
                         http_ip_url = self._format_url(lan_ip)
                         print(f"   HTTP access:  {http_url}")
                         print(f"   Direct IP (HTTP):  {http_ip_url}")
-                        print(f"🌐 HTTP-only mode - HTTPS requests will not work")
+                        print(f"[NET] HTTP-only mode - HTTPS requests will not work")
                 
-                print(f"🎯 Single protocol mode - no redirects needed")
+                print(f"[TARGET] Single protocol mode - no redirects needed")
                 
                 if self.conflict_count > 0:
-                    print(f"ℹ️ Collision resolved - using unique name: {self.service_name}")
+                    print(f"ℹ Collision resolved - using unique name: {self.service_name}")
                 
                 # Start background thread for periodic announcements (offline-friendly)
                 self._start_announcement_thread()
@@ -644,8 +644,8 @@ class SimpleMDNSManager:
                 return True
                 
         except Exception as e:
-            print(f"❌ mDNS service failed: {e}")
-            print("🔧 Service will continue with IP-only access")
+            print(f"[ERR] mDNS service failed: {e}")
+            print("[CFG] Service will continue with IP-only access")
             if self.zeroconf:
                 try:
                     self.zeroconf.close()
@@ -661,7 +661,7 @@ class SimpleMDNSManager:
                 if not self.is_running:
                     return
                 
-                print("🔴 Stopping mDNS service...")
+                print(" Stopping mDNS service...")
                 
                 # Stop announcement thread first
                 self._stop_announcement_thread()
@@ -670,18 +670,18 @@ class SimpleMDNSManager:
                 if self.service_info and self.zeroconf:
                     try:
                         self.zeroconf.unregister_service(self.service_info)
-                        print(f"✅ mDNS service unregistered: {self.domain}")
+                        print(f"[OK] mDNS service unregistered: {self.domain}")
                     except Exception as unreg_error:
-                        print(f"⚠️ Unregister warning (non-critical): {unreg_error}")
+                        print(f"[WARN] Unregister warning (non-critical): {unreg_error}")
                 
                 # Close zeroconf with enhanced cleanup for Android/Termux
                 if self.zeroconf:
                     try:
                         # Force close all sockets and cleanup
                         self.zeroconf.close()
-                        print("✅ Zeroconf resources cleaned up")
+                        print("[OK] Zeroconf resources cleaned up")
                     except Exception as close_error:
-                        print(f"⚠️ Zeroconf close warning: {close_error}")
+                        print(f"[WARN] Zeroconf close warning: {close_error}")
                     
                     # Additional cleanup for Android/Termux
                     try:
@@ -697,10 +697,10 @@ class SimpleMDNSManager:
                 self.zeroconf = None
                 self.lan_ip = None  # Reset IP cache for next run
                 
-                print("🔴 mDNS service stopped and cleaned up")
+                print(" mDNS service stopped and cleaned up")
                 
         except Exception as e:
-            print(f"❌ Error stopping mDNS service: {e}")
+            print(f"[ERR] Error stopping mDNS service: {e}")
             # Force reset even if there were errors
             self.is_running = False
             self.service_info = None

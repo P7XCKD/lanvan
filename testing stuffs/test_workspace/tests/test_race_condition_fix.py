@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🧪 Test Race Condition Fix - Temporary File Strategy
+ Test Race Condition Fix - Temporary File Strategy
 Test to verify that files are not visible in file list until upload is complete.
 """
 
@@ -19,7 +19,7 @@ def test_race_condition_fix():
     """
     Test that .tmp files are filtered from file list and only final files appear
     """
-    print("🧪 Testing Race Condition Fix...")
+    print(" Testing Race Condition Fix...")
     
     # Create test temporary file
     test_tmp_file = UPLOAD_FOLDER / "test_upload.txt.tmp"
@@ -32,54 +32,54 @@ def test_race_condition_fix():
         if test_final_file.exists():
             test_final_file.unlink()
         
-        print("✅ Step 1: Clean slate confirmed")
+        print("[OK] Step 1: Clean slate confirmed")
         
         # Get initial file list
         initial_files = get_file_list()
         initial_count = len(initial_files)
-        print(f"📂 Initial file count: {initial_count}")
+        print(f"[DIR] Initial file count: {initial_count}")
         
         # Create a .tmp file (simulating upload in progress)
         with open(test_tmp_file, 'w') as f:
             f.write("This is a temporary file being uploaded...")
         
-        print("📁 Step 2: Created .tmp file")
+        print("[DIR] Step 2: Created .tmp file")
         
         # Check that .tmp file is NOT visible in file list
         temp_files = get_file_list()
         temp_count = len(temp_files)
         
         if temp_count == initial_count:
-            print("✅ Step 3: .tmp file correctly hidden from file list")
+            print("[OK] Step 3: .tmp file correctly hidden from file list")
         else:
-            print("❌ FAIL: .tmp file appeared in file list!")
+            print("[ERR] FAIL: .tmp file appeared in file list!")
             return False
         
         # Simulate atomic move (upload completion)
         test_tmp_file.rename(test_final_file)
-        print("🔄 Step 4: Simulated atomic move (.tmp → final)")
+        print("[RETRY] Step 4: Simulated atomic move (.tmp → final)")
         
         # Check that final file IS visible in file list
         final_files = get_file_list()
         final_count = len(final_files)
         
         if final_count == initial_count + 1:
-            print("✅ Step 5: Final file correctly visible in file list")
+            print("[OK] Step 5: Final file correctly visible in file list")
             
             # Verify the file is in the list
             file_names = [str(f['name']) for f in final_files]
             if 'test_upload.txt' in file_names:
-                print("✅ Step 6: Correct filename found in file list")
+                print("[OK] Step 6: Correct filename found in file list")
                 return True
             else:
-                print("❌ FAIL: Final file not found in file list!")
+                print("[ERR] FAIL: Final file not found in file list!")
                 return False
         else:
-            print("❌ FAIL: Final file count incorrect!")
+            print("[ERR] FAIL: Final file count incorrect!")
             return False
             
     except Exception as e:
-        print(f"❌ Test error: {e}")
+        print(f"[ERR] Test error: {e}")
         return False
     finally:
         # Clean up test files
@@ -87,13 +87,13 @@ def test_race_condition_fix():
             test_tmp_file.unlink()
         if test_final_file.exists():
             test_final_file.unlink()
-        print("🧹 Cleanup completed")
+        print("[CLEAN] Cleanup completed")
 
 def test_concurrent_scenario():
     """
     Test concurrent uploads to ensure no race conditions
     """
-    print("\n🧪 Testing Concurrent Upload Scenario...")
+    print("\n Testing Concurrent Upload Scenario...")
     
     results = []
     
@@ -164,18 +164,18 @@ def test_concurrent_scenario():
     # Analyze results
     successful = sum(1 for r in results if r.get('success', False))
     
-    print(f"📊 Results: {successful}/{len(results)} uploads successful")
+    print(f"[STATS] Results: {successful}/{len(results)} uploads successful")
     
     for result in results:
         if result.get('success'):
-            print(f"✅ Upload {result['file_id']}: Temp hidden, Final visible")
+            print(f"[OK] Upload {result['file_id']}: Temp hidden, Final visible")
         else:
-            print(f"❌ Upload {result['file_id']}: Failed - {result}")
+            print(f"[ERR] Upload {result['file_id']}: Failed - {result}")
     
     return successful == len(results)
 
 if __name__ == "__main__":
-    print("🚀 Race Condition Fix Test Suite")
+    print("[START] Race Condition Fix Test Suite")
     print("=" * 50)
     
     # Ensure upload folder exists
@@ -186,13 +186,13 @@ if __name__ == "__main__":
     test2_passed = test_concurrent_scenario()
     
     print("\n" + "=" * 50)
-    print("📊 FINAL RESULTS:")
-    print(f"   Basic Race Condition Test: {'✅ PASS' if test1_passed else '❌ FAIL'}")
-    print(f"   Concurrent Upload Test: {'✅ PASS' if test2_passed else '❌ FAIL'}")
+    print("[STATS] FINAL RESULTS:")
+    print(f"   Basic Race Condition Test: {'[OK] PASS' if test1_passed else '[ERR] FAIL'}")
+    print(f"   Concurrent Upload Test: {'[OK] PASS' if test2_passed else '[ERR] FAIL'}")
     
     if test1_passed and test2_passed:
-        print("🎉 ALL TESTS PASSED - Race condition fix working correctly!")
+        print("[DONE] ALL TESTS PASSED - Race condition fix working correctly!")
         sys.exit(0)
     else:
-        print("❌ Some tests failed - Race condition fix needs attention")
+        print("[ERR] Some tests failed - Race condition fix needs attention")
         sys.exit(1)

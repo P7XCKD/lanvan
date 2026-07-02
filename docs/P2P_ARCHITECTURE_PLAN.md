@@ -1,8 +1,8 @@
-# 🚀 LANVan P2P Architecture: Complete Implementation Plan
+# 🚀 Lanvan P2P Architecture: Complete Implementation Plan
 
 ## 📋 Executive Summary
 
-This document contains the complete technical specification for transforming LANVan from a centralized server-based file transfer system into a hybrid P2P architecture. The architecture is browser-native, requires no external applications, and provides offline-first functionality with Termux optimization.
+This document contains the complete technical specification for transforming Lanvan from a centralized server-based file transfer system into a hybrid P2P architecture. The architecture is browser-native, requires no external applications, and provides offline-first functionality with Termux optimization.
 
 **Document Version:** 1.0  
 **Created:** August 24, 2025  
@@ -36,7 +36,7 @@ This document contains the complete technical specification for transforming LAN
 ## 🏗️ System Architecture Overview
 
 ```
-🌐 LANVan P2P Hybrid Architecture
+🌐 Lanvan P2P Hybrid Architecture
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Browser Layer                           │
@@ -48,7 +48,7 @@ This document contains the complete technical specification for transforming LAN
 │  📋 Clipboard              📋 Clipboard                         │
 │      ↕                         ↕                               │
 │  ┌───────────────────────────────────────────────────────────┐ │
-│  │             🎯 LANVan Coordination Server               │ │
+│  │             🎯 Lanvan Coordination Server               │ │
 │  │                                                         │ │
 │  │  Core Services:                                         │ │
 │  │  ├── WebRTC Signaling (ICE, SDP exchange)             │ │
@@ -79,7 +79,7 @@ This document contains the complete technical specification for transforming LAN
 
 #### A. Core P2P Engine (`p2p-engine.js`)
 ```javascript
-class LANVanP2PEngine {
+class LanvanP2PEngine {
     components: {
         // Connection Management
         webrtcManager: WebRTCConnectionManager,
@@ -259,8 +259,8 @@ class FallbackManager:
 
 #### Week 1-2: Enhanced WebRTC Infrastructure
 ```javascript
-// Core WebRTC wrapper with LANVan integration
-class LANVanWebRTC {
+// Core WebRTC wrapper with Lanvan integration
+class LanvanWebRTC {
     integration_points: {
         // Existing System Integration
         current_websocket: 'Parallel operation, gradual migration',
@@ -675,7 +675,7 @@ deployment_config:
 
 ```javascript
 // Client-side configuration
-const lanvan_config = {
+const Lanvan_config = {
     p2p: {
         enabled: true,
         discovery_timeout: 5000,
@@ -763,7 +763,7 @@ user_experience_targets:
 ## 🎯 Implementation Readiness Checklist
 
 ### Prerequisites
-- ✅ Current LANVan codebase analysis complete
+- ✅ Current Lanvan codebase analysis complete
 - ✅ WebRTC browser compatibility verified
 - ✅ Server infrastructure requirements defined
 - ✅ Security architecture designed
@@ -1018,7 +1018,7 @@ Mobile Challenges & Solutions:
 ### Implementation Process
 ```
 1. Provide this complete plan as reference
-2. Share current LANVan codebase
+2. Share current Lanvan codebase
 3. Specify which phase to implement
 4. Confirm environment setup
 5. Begin implementation with working code delivery
@@ -1030,4 +1030,4 @@ Result: Production-ready P2P functionality
 
 **Document End**
 
-*This document serves as the complete technical specification for LANVan P2P implementation. All components, phases, and requirements are fully defined and implementation-ready.*
+*This document serves as the complete technical specification for Lanvan P2P implementation. All components, phases, and requirements are fully defined and implementation-ready.*

@@ -1,5 +1,5 @@
 """
-🎯 LANVAN Unified Responsiveness Manager
+[TARGET] Lanvan Unified Responsiveness Manager
 Consolidates multiple overlapping responsiveness systems into a single, efficient solution.
 """
 
@@ -88,7 +88,7 @@ class ResponsivenessConfig:
 
 class UnifiedResponsivenessManager:
     """
-    🎯 Unified Responsiveness Manager
+    [TARGET] Unified Responsiveness Manager
     
     Consolidates:
     - Memory monitoring (from aes_utils.py)
@@ -113,7 +113,7 @@ class UnifiedResponsivenessManager:
         self.lock = threading.Lock()
         self._monitoring_active = False
         
-        print(f"🎯 Unified Responsiveness Manager initialized ({self.config.mode.value} mode)")
+        print(f"[TARGET] Unified Responsiveness Manager initialized ({self.config.mode.value} mode)")
     
     def detect_environment(self) -> ResponsivenessMode:
         """Auto-detect optimal responsiveness mode"""
@@ -155,7 +155,7 @@ class UnifiedResponsivenessManager:
         detected_mode = self.detect_environment()
         if detected_mode != self.config.mode:
             self.config = ResponsivenessConfig.for_mode(detected_mode)
-            print(f"🔧 Auto-optimized for {detected_mode.value} environment")
+            print(f"[CFG] Auto-optimized for {detected_mode.value} environment")
     
     def register_operation(self, operation_id: str, operation_type: str, estimated_size: int = 0):
         """Register a new operation for monitoring"""
@@ -304,13 +304,13 @@ class UnifiedResponsivenessManager:
             timeout=5.0
         )
         
-        print("🔍 Unified responsiveness monitoring started")
+        print("[SEARCH] Unified responsiveness monitoring started")
     
     def stop_monitoring(self):
         """Stop background monitoring"""
         self._monitoring_active = False
         thread_manager.stop_thread("unified_responsiveness_monitor", timeout=3.0)
-        print("🔍 Unified responsiveness monitoring stopped")
+        print("[SEARCH] Unified responsiveness monitoring stopped")
     
     def _adaptive_optimization(self):
         """Perform adaptive optimization based on metrics"""
@@ -413,12 +413,12 @@ class ResponsivenessMonitor:
     async def start_monitoring(self):
         """Start monitoring (compatibility wrapper)"""
         responsiveness_manager.start_monitoring()
-        print("🚀 Responsiveness monitor started")
+        print("[START] Responsiveness monitor started")
     
     async def stop_monitoring(self):
         """Stop monitoring (compatibility wrapper)"""
         responsiveness_manager.stop_monitoring()
-        print("⏸️ Responsiveness monitor stopped")
+        print("⏸ Responsiveness monitor stopped")
     
     def get_recommended_settings(self) -> Dict[str, Any]:
         """Get recommended settings (compatibility wrapper)"""

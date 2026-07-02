@@ -1,5 +1,5 @@
 """
-🤖 Android/Termux Optimizer Module
+[BOT] Android/Termux Optimizer Module
 Provides optimization functions for Android and Termux environments.
 """
 

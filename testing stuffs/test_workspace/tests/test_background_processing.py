@@ -1,5 +1,5 @@
 """
-🚀 TRUE Background Processing Performance Test
+[START] TRUE Background Processing Performance Test
 Tests that security validation and processing happen DURING upload, not after
 """
 
@@ -13,7 +13,7 @@ BASE_URL = "http://127.0.0.1"
 
 def create_test_file(filename, size_mb):
     """Create a test file with specified size"""
-    print(f"📄 Creating test file: {filename} ({size_mb}MB)")
+    print(f"[FILE] Creating test file: {filename} ({size_mb}MB)")
     content = "A" * (1024 * 1024)  # 1MB of 'A's
     
     with open(filename, 'w') as f:
@@ -21,7 +21,7 @@ def create_test_file(filename, size_mb):
             f.write(content)
     
     actual_size = os.path.getsize(filename)
-    print(f"✅ Created {filename}: {actual_size / (1024*1024):.1f}MB")
+    print(f"[OK] Created {filename}: {actual_size / (1024*1024):.1f}MB")
     return filename
 
 def upload_file_with_background_processing_test(filepath, chunk_size_kb=512, delay_between_chunks=0.15):
@@ -31,11 +31,11 @@ def upload_file_with_background_processing_test(filepath, chunk_size_kb=512, del
     chunk_size = chunk_size_kb * 1024
     total_chunks = (file_size + chunk_size - 1) // chunk_size
     
-    print(f"🚀 Testing TRUE background processing: {file_path.name}")
-    print(f"   📊 File size: {file_size / (1024*1024):.1f}MB")
-    print(f"   📦 Chunk size: {chunk_size_kb}KB")
-    print(f"   🧩 Total chunks: {total_chunks}")
-    print(f"   ⏱️  Delay between chunks: {delay_between_chunks}s")
+    print(f"[START] Testing TRUE background processing: {file_path.name}")
+    print(f"   [STATS] File size: {file_size / (1024*1024):.1f}MB")
+    print(f"   [PKG] Chunk size: {chunk_size_kb}KB")
+    print(f"    Total chunks: {total_chunks}")
+    print(f"   ⏱  Delay between chunks: {delay_between_chunks}s")
     
     upload_start_time = time.time()
     finalize_start_time = None
@@ -62,21 +62,21 @@ def upload_file_with_background_processing_test(filepath, chunk_size_kb=512, del
             chunk_time = time.time() - chunk_start
             
             if response.status_code != 200:
-                print(f"❌ Chunk {chunk_num} failed: {response.status_code}")
+                print(f"[ERR] Chunk {chunk_num} failed: {response.status_code}")
                 return False, None, None
             
             progress = (chunk_num / total_chunks) * 100
-            print(f"   📤 Chunk {chunk_num}/{total_chunks} uploaded ({progress:.1f}%) in {chunk_time:.2f}s")
+            print(f"   [OUT] Chunk {chunk_num}/{total_chunks} uploaded ({progress:.1f}%) in {chunk_time:.2f}s")
             
             # Add delay between chunks
             if chunk_num < total_chunks:
                 time.sleep(delay_between_chunks)
     
     total_upload_time = time.time() - upload_start_time
-    print(f"✅ All chunks uploaded in {total_upload_time:.1f}s")
+    print(f"[OK] All chunks uploaded in {total_upload_time:.1f}s")
     
     # Now finalize and measure how long it takes
-    print("🔄 Finalizing upload...")
+    print("[RETRY] Finalizing upload...")
     finalize_start_time = time.time()
     
     finalize_data = {
@@ -92,31 +92,31 @@ def upload_file_with_background_processing_test(filepath, chunk_size_kb=512, del
         response_data = response.json()
         is_streaming = response_data.get('streaming_assembly', False)
         
-        print(f"📊 BACKGROUND PROCESSING ANALYSIS:")
-        print(f"   📤 Upload time: {total_upload_time:.1f}s")
-        print(f"   🔄 Finalize time: {finalize_time:.1f}s")
-        print(f"   🌊 Used streaming: {is_streaming}")
+        print(f"[STATS] BACKGROUND PROCESSING ANALYSIS:")
+        print(f"   [OUT] Upload time: {total_upload_time:.1f}s")
+        print(f"   [RETRY] Finalize time: {finalize_time:.1f}s")
+        print(f"   [STREAM] Used streaming: {is_streaming}")
         
         if is_streaming and finalize_time < 2.0:  # If finalize is very fast
-            print(f"   ⚡ SUCCESS: Background processing detected!")
-            print(f"   ✅ Processing happened DURING upload, not after")
-            print(f"   🚀 Time saved: ~{total_upload_time - finalize_time:.1f}s faster than traditional")
+            print(f"   [FAST] SUCCESS: Background processing detected!")
+            print(f"   [OK] Processing happened DURING upload, not after")
+            print(f"   [START] Time saved: ~{total_upload_time - finalize_time:.1f}s faster than traditional")
             return True, total_upload_time, finalize_time, True
         elif is_streaming:
-            print(f"   ⚠️  Streaming used but finalize time is still high ({finalize_time:.1f}s)")
-            print(f"   🤔 Background processing may not be working optimally")
+            print(f"   [WARN]  Streaming used but finalize time is still high ({finalize_time:.1f}s)")
+            print(f"   [?] Background processing may not be working optimally")
             return True, total_upload_time, finalize_time, False
         else:
-            print(f"   ❌ No streaming detected - using traditional processing")
+            print(f"   [ERR] No streaming detected - using traditional processing")
             return True, total_upload_time, finalize_time, False
     else:
-        print(f"❌ Finalization failed: {response.status_code}")
+        print(f"[ERR] Finalization failed: {response.status_code}")
         return False, None, None, False
 
 def test_background_processing():
     """Test TRUE background processing performance"""
     print("\n" + "="*70)
-    print("🚀 TRUE BACKGROUND PROCESSING PERFORMANCE TEST")
+    print("[START] TRUE BACKGROUND PROCESSING PERFORMANCE TEST")
     print("="*70)
     
     test_files = [
@@ -127,7 +127,7 @@ def test_background_processing():
     
     try:
         for filename, size_mb, delay in test_files:
-            print(f"\n📋 Testing: {filename} (delay: {delay}s between chunks)")
+            print(f"\n[INFO] Testing: {filename} (delay: {delay}s between chunks)")
             
             # Create test file
             test_file = create_test_file(filename, size_mb)
@@ -157,7 +157,7 @@ def test_background_processing():
             time.sleep(2)  # Brief pause between tests
         
         # Show results
-        print(f"\n📊 BACKGROUND PROCESSING RESULTS:")
+        print(f"\n[STATS] BACKGROUND PROCESSING RESULTS:")
         print("=" * 50)
         
         if results:
@@ -165,23 +165,23 @@ def test_background_processing():
             avg_time_saved = sum(r['time_saved'] for r in results) / len(results)
             
             for result in results:
-                print(f"\n📄 {result['file']}:")
-                print(f"   📤 Upload time: {result['upload_time']:.1f}s")
-                print(f"   🔄 Finalize time: {result['finalize_time']:.1f}s")
-                print(f"   ⚡ Time saved: {result['time_saved']:.1f}s")
-                print(f"   🌊 Background processing: {'✅ WORKING' if result['background_working'] else '❌ NOT WORKING'}")
+                print(f"\n[FILE] {result['file']}:")
+                print(f"   [OUT] Upload time: {result['upload_time']:.1f}s")
+                print(f"   [RETRY] Finalize time: {result['finalize_time']:.1f}s")
+                print(f"   [FAST] Time saved: {result['time_saved']:.1f}s")
+                print(f"   [STREAM] Background processing: {'[OK] WORKING' if result['background_working'] else '[ERR] NOT WORKING'}")
             
-            print(f"\n🎯 SUMMARY:")
-            print(f"   ✅ Files with working background processing: {working_count}/{len(results)}")
-            print(f"   ⚡ Average time saved: {avg_time_saved:.1f}s")
+            print(f"\n[TARGET] SUMMARY:")
+            print(f"   [OK] Files with working background processing: {working_count}/{len(results)}")
+            print(f"   [FAST] Average time saved: {avg_time_saved:.1f}s")
             
             if working_count == len(results) and avg_time_saved > 5:
-                print(f"\n🎉 TRUE BACKGROUND PROCESSING IS WORKING!")
-                print(f"🚀 Processing happens DURING upload, not after!")
+                print(f"\n[DONE] TRUE BACKGROUND PROCESSING IS WORKING!")
+                print(f"[START] Processing happens DURING upload, not after!")
             else:
-                print(f"\n⚠️  Background processing needs optimization")
+                print(f"\n[WARN]  Background processing needs optimization")
         else:
-            print("❌ No successful tests completed")
+            print("[ERR] No successful tests completed")
             
     finally:
         # Clean up any remaining files
@@ -194,7 +194,7 @@ def test_background_processing():
                     pass
 
 def main():
-    print("⚡ TRUE BACKGROUND PROCESSING TEST")
+    print("[FAST] TRUE BACKGROUND PROCESSING TEST")
     print("This test verifies that processing happens DURING upload,")
     print("not after upload completes (true background processing)")
     print("=" * 70)
@@ -203,12 +203,12 @@ def main():
     try:
         response = requests.get(BASE_URL, timeout=5)
         if response.status_code == 200:
-            print("✅ Server is accessible - starting tests...")
+            print("[OK] Server is accessible - starting tests...")
             test_background_processing()
         else:
-            print("❌ Server not accessible")
+            print("[ERR] Server not accessible")
     except Exception as e:
-        print(f"❌ Server connection failed: {e}")
+        print(f"[ERR] Server connection failed: {e}")
 
 if __name__ == "__main__":
     main()

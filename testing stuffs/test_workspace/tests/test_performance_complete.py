@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-🎯 PERFORMANCE OPTIMIZATION VERIFICATION TEST
+[TARGET] PERFORMANCE OPTIMIZATION VERIFICATION TEST
 ============================================
 
 Tests that all 7 performance optimization components are working correctly:
 
-✅ Issue 1: Frontend polling frequency (unified_responsiveness.py)
-✅ Issue 2: Redundant responsiveness systems (empty monitor files)  
-✅ Issue 3: Memory management optimizations (strategic gc.collect())
-✅ Issue 4: Thread management centralization (thread_manager)
-✅ Issue 5: Platform detection overhead (platform_detector.py) - NEW
-✅ Issue 6: Inefficient file streaming (optimized_streaming.py) - NEW
-✅ Issue 7: Chunked upload complexity (simplified_chunks.py) - NEW
+[OK] Issue 1: Frontend polling frequency (unified_responsiveness.py)
+[OK] Issue 2: Redundant responsiveness systems (empty monitor files)  
+[OK] Issue 3: Memory management optimizations (strategic gc.collect())
+[OK] Issue 4: Thread management centralization (thread_manager)
+[OK] Issue 5: Platform detection overhead (platform_detector.py) - NEW
+[OK] Issue 6: Inefficient file streaming (optimized_streaming.py) - NEW
+[OK] Issue 7: Chunked upload complexity (simplified_chunks.py) - NEW
 
 This test validates that all components are properly implemented and working.
 """
@@ -23,13 +23,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def test_performance_optimizations():
     """Test all 7 performance optimization components"""
-    print("🚀 TESTING ALL 7 PERFORMANCE OPTIMIZATIONS")
+    print("[START] TESTING ALL 7 PERFORMANCE OPTIMIZATIONS")
     print("=" * 60)
     
     results = {}
     
     # Test 1: Platform Detection (Issue 5/7) - NEW
-    print("\n1️⃣  Testing cached platform detection...")
+    print("\n1⃣  Testing cached platform detection...")
     try:
         # Import directly from the module
         import app.platform_detector as pd_module
@@ -52,20 +52,20 @@ def test_performance_optimizations():
         # Verify caching works (second call should be much faster)
         is_cached = cached_call_time < (first_call_time * 0.1)  # Should be 10x faster
         
-        print(f"   ✅ Platform: {info1.platform_type.value}")
-        print(f"   ✅ CPU count: {info1.cpu_count}")
-        print(f"   ✅ First call: {first_call_time:.4f}s")
-        print(f"   ✅ Cached call: {cached_call_time:.6f}s")
-        print(f"   ✅ Caching working: {is_cached}")
+        print(f"   [OK] Platform: {info1.platform_type.value}")
+        print(f"   [OK] CPU count: {info1.cpu_count}")
+        print(f"   [OK] First call: {first_call_time:.4f}s")
+        print(f"   [OK] Cached call: {cached_call_time:.6f}s")
+        print(f"   [OK] Caching working: {is_cached}")
         
         results['platform_detection'] = True
         
     except Exception as e:
-        print(f"   ❌ Platform detection failed: {e}")
+        print(f"   [ERR] Platform detection failed: {e}")
         results['platform_detection'] = False
     
     # Test 2: Simplified Chunks (Issue 7/7) - NEW
-    print("\n2️⃣  Testing simplified chunk management...")
+    print("\n2⃣  Testing simplified chunk management...")
     try:
         import app.simplified_chunks as sc_module
         
@@ -84,20 +84,20 @@ def test_performance_optimizations():
         # Test frontend config
         frontend_config = chunk_manager.get_frontend_config()
         
-        print(f"   ✅ Upload chunks: {upload_size // (1024*1024)}MB")
-        print(f"   ✅ Download chunks: {download_size // (1024*1024)}MB")
-        print(f"   ✅ Encryption chunks: {encryption_size // (1024*1024)}MB")
-        print(f"   ✅ Frontend config: {frontend_config['profile']}")
-        print(f"   ✅ Adaptation disabled: {frontend_config['adaptation_disabled']}")
+        print(f"   [OK] Upload chunks: {upload_size // (1024*1024)}MB")
+        print(f"   [OK] Download chunks: {download_size // (1024*1024)}MB")
+        print(f"   [OK] Encryption chunks: {encryption_size // (1024*1024)}MB")
+        print(f"   [OK] Frontend config: {frontend_config['profile']}")
+        print(f"   [OK] Adaptation disabled: {frontend_config['adaptation_disabled']}")
         
         results['simplified_chunks'] = True
         
     except Exception as e:
-        print(f"   ❌ Simplified chunks failed: {e}")
+        print(f"   [ERR] Simplified chunks failed: {e}")
         results['simplified_chunks'] = False
     
     # Test 3: Optimized Streaming (Issue 6/7) - NEW
-    print("\n3️⃣  Testing optimized streaming...")
+    print("\n3⃣  Testing optimized streaming...")
     try:
         import app.optimized_streaming as os_module
         
@@ -112,52 +112,52 @@ def test_performance_optimizations():
         platform_info = streaming_handler.platform_info
         buffer_size = streaming_handler.default_buffer_size
         
-        print(f"   ✅ Platform: {platform_info.platform_type.value}")
-        print(f"   ✅ Buffer size: {buffer_size // (1024*1024)}MB")
-        print(f"   ✅ Max memory buffer: {streaming_handler.max_memory_buffer // (1024*1024)}MB")
-        print(f"   ✅ Mobile optimizations: {platform_info.is_mobile}")
+        print(f"   [OK] Platform: {platform_info.platform_type.value}")
+        print(f"   [OK] Buffer size: {buffer_size // (1024*1024)}MB")
+        print(f"   [OK] Max memory buffer: {streaming_handler.max_memory_buffer // (1024*1024)}MB")
+        print(f"   [OK] Mobile optimizations: {platform_info.is_mobile}")
         
         results['optimized_streaming'] = True
         
     except Exception as e:
-        print(f"   ❌ Optimized streaming failed: {e}")
+        print(f"   [ERR] Optimized streaming failed: {e}")
         results['optimized_streaming'] = False
     
     # Test 4: Unified Responsiveness (Issue 1/7) - EXISTING
-    print("\n4️⃣  Testing unified responsiveness...")
+    print("\n4⃣  Testing unified responsiveness...")
     try:
         from app.unified_responsiveness import responsiveness_manager, ResponsivenessConfig
         
         config = ResponsivenessConfig()
-        print(f"   ✅ Config created successfully")
-        print(f"   ✅ Mode: {config.mode.value if hasattr(config, 'mode') else 'default'}")
-        print(f"   ✅ Manager available: {responsiveness_manager is not None}")
+        print(f"   [OK] Config created successfully")
+        print(f"   [OK] Mode: {config.mode.value if hasattr(config, 'mode') else 'default'}")
+        print(f"   [OK] Manager available: {responsiveness_manager is not None}")
         
         results['unified_responsiveness'] = True
         
     except Exception as e:
-        print(f"   ❌ Unified responsiveness failed: {e}")
+        print(f"   [ERR] Unified responsiveness failed: {e}")
         results['unified_responsiveness'] = False
     
     # Test 5: Concurrent Upload Manager (Issue 4/7) - EXISTING
-    print("\n5️⃣  Testing concurrent upload manager...")
+    print("\n5⃣  Testing concurrent upload manager...")
     try:
         from app.concurrent_upload_manager import concurrent_upload_manager
         
         # Test that the manager exists and has basic functionality
-        print(f"   ✅ Manager available: {concurrent_upload_manager is not None}")
-        print(f"   ✅ Max concurrent: {getattr(concurrent_upload_manager, 'max_concurrent_uploads', 'Unknown')}")
-        print(f"   ✅ Active uploads: {len(getattr(concurrent_upload_manager, 'active_uploads', []))}")
-        print(f"   ✅ Thread management: enabled")
+        print(f"   [OK] Manager available: {concurrent_upload_manager is not None}")
+        print(f"   [OK] Max concurrent: {getattr(concurrent_upload_manager, 'max_concurrent_uploads', 'Unknown')}")
+        print(f"   [OK] Active uploads: {len(getattr(concurrent_upload_manager, 'active_uploads', []))}")
+        print(f"   [OK] Thread management: enabled")
         
         results['concurrent_uploads'] = True
         
     except Exception as e:
-        print(f"   ❌ Concurrent upload manager failed: {e}")
+        print(f"   [ERR] Concurrent upload manager failed: {e}")
         results['concurrent_uploads'] = False
     
     # Test 6: Memory Management (Issue 3/7) - EXISTING
-    print("\n6️⃣  Testing memory management optimizations...")
+    print("\n6⃣  Testing memory management optimizations...")
     try:
         import gc
         
@@ -166,19 +166,19 @@ def test_performance_optimizations():
         gc.collect()
         after_gc_objects = len(gc.get_objects())
         
-        print(f"   ✅ GC available: True")
-        print(f"   ✅ Objects before GC: {initial_objects}")
-        print(f"   ✅ Objects after GC: {after_gc_objects}")
-        print(f"   ✅ Memory freed: {initial_objects - after_gc_objects} objects")
+        print(f"   [OK] GC available: True")
+        print(f"   [OK] Objects before GC: {initial_objects}")
+        print(f"   [OK] Objects after GC: {after_gc_objects}")
+        print(f"   [OK] Memory freed: {initial_objects - after_gc_objects} objects")
         
         results['memory_management'] = True
         
     except Exception as e:
-        print(f"   ❌ Memory management failed: {e}")
+        print(f"   [ERR] Memory management failed: {e}")
         results['memory_management'] = False
     
     # Test 7: Redundant Responsiveness Eliminated (Issue 2/7) - EXISTING
-    print("\n7️⃣  Testing redundant responsiveness elimination...")
+    print("\n7⃣  Testing redundant responsiveness elimination...")
     try:
         # Check that old responsiveness files are empty or don't exist
         empty_files = [
@@ -199,35 +199,35 @@ def test_performance_optimizations():
                     # If we can't read the file, assume it's empty/irrelevant
                     pass
         
-        print(f"   ✅ Redundant files eliminated: {all_empty}")
-        print(f"   ✅ Unified system in place: True")
+        print(f"   [OK] Redundant files eliminated: {all_empty}")
+        print(f"   [OK] Unified system in place: True")
         
         results['redundant_elimination'] = True
         
     except Exception as e:
-        print(f"   ❌ Redundant elimination check failed: {e}")
+        print(f"   [ERR] Redundant elimination check failed: {e}")
         results['redundant_elimination'] = False
     
     # Final Results Summary
     print("\n" + "=" * 60)
-    print("🎯 PERFORMANCE OPTIMIZATION SUMMARY")
+    print("[TARGET] PERFORMANCE OPTIMIZATION SUMMARY")
     print("=" * 60)
     
     total_issues = len(results)
     resolved_issues = sum(1 for success in results.values() if success)
     
     for i, (component, success) in enumerate(results.items(), 1):
-        status = "✅ RESOLVED" if success else "❌ FAILED"
+        status = "[OK] RESOLVED" if success else "[ERR] FAILED"
         print(f"{i}. {component.replace('_', ' ').title()}: {status}")
     
     completion_rate = f"{resolved_issues}/{total_issues}"
-    print(f"\n🚀 OPTIMIZATION COMPLETION: {completion_rate} ({resolved_issues/total_issues*100:.1f}%)")
+    print(f"\n[START] OPTIMIZATION COMPLETION: {completion_rate} ({resolved_issues/total_issues*100:.1f}%)")
     
     if resolved_issues == total_issues:
-        print("🎉 ALL 7 PERFORMANCE ISSUES SUCCESSFULLY RESOLVED! 🎉")
+        print("[DONE] ALL 7 PERFORMANCE ISSUES SUCCESSFULLY RESOLVED! [DONE]")
         return True
     else:
-        print(f"⚠️  {total_issues - resolved_issues} issues still need attention")
+        print(f"[WARN]  {total_issues - resolved_issues} issues still need attention")
         return False
 
 if __name__ == "__main__":

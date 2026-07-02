@@ -10,7 +10,7 @@ clipboard_ws_router = APIRouter()
 
 class ClipboardConnectionManager:
     """
-    🔒 Memory-Safe WebSocket Connection Manager
+    [LOCK] Memory-Safe WebSocket Connection Manager
     
     Features:
     - Connection ID tracking to prevent memory leaks

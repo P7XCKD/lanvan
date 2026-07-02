@@ -1,5 +1,27 @@
 /* Main Styles - Extracted from index.html */
 
+/* Lucide icon global sizing - ensures icons align with text everywhere */
+[data-lucide],
+i[data-lucide] {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  stroke-width: 2;
+  flex-shrink: 0;
+}
+/* Slightly larger in headings */
+h1 [data-lucide], h2 [data-lucide], h3 [data-lucide], h4 [data-lucide] {
+  width: 1.1em;
+  height: 1.1em;
+}
+/* Icon inside buttons - add small right gap */
+button [data-lucide],
+.btn [data-lucide],
+.download-btn [data-lucide] {
+  margin-right: 0.25em;
+}
+
 /* iOS Safari safe area and touch improvements */
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
@@ -688,7 +710,7 @@ progress {
   background-color: #357bd8;
 }
 
-/* 📤 Upload Manager Styles */
+/*  Upload Manager Styles */
 .upload-queue {
   max-height: 400px;
   overflow-y: auto;
@@ -860,7 +882,7 @@ progress {
   transform: none !important;
 }
 
-/* 🔔 Toast notification base styles */
+/*  Toast notification base styles */
 .toast-container {
   position: fixed;
   bottom: 20px;
@@ -874,12 +896,12 @@ progress {
   pointer-events: auto;
 }
 
-/* 🔄 Smooth section switching transitions */
+/*  Smooth section switching transitions */
 #fileTransferSection, #fileListSection, #clipboardSection {
   transition: opacity 0.2s ease-in-out;
 }
 
-/* 🎯 Smooth tick indicator transitions */
+/*  Smooth tick indicator transitions */
 #fileTickMain, #clipboardTickMain, #fileTickClipboard, #clipboardTickClipboard {
   transition: opacity 0.15s ease-in-out;
 }
@@ -1068,7 +1090,7 @@ progress {
     border-radius: 8px;
   }
   
-  /* 📱 Toast responsive styles for mobile */
+  /*  Toast responsive styles for mobile */
   #toast {
     bottom: 20px !important;
     left: 10px !important;
@@ -1086,7 +1108,7 @@ progress {
     box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
   }
   
-  /* 📊 Upload History mobile responsive styles */
+  /*  Upload History mobile responsive styles */
   #uploadHistorySection {
     margin-top: 1rem !important;
   }
@@ -1246,7 +1268,7 @@ progress {
   }
 }
 
-/* 📱 Enhanced Mobile Responsiveness */
+/*  Enhanced Mobile Responsiveness */
 @media (max-width: 480px) {
   /* Extra small mobile devices */
   body {
@@ -1376,7 +1398,7 @@ progress {
   }
 }
 
-/* 📱 Landscape phone orientation */
+/*  Landscape phone orientation */
 @media (max-width: 900px) and (orientation: landscape) {
   header {
     padding: 0.8rem;
@@ -1400,7 +1422,7 @@ progress {
   }
 }
 
-/* 📱 Dark mode mobile fixes */
+/*  Dark mode mobile fixes */
 @media (max-width: 600px) {
   html[data-theme="dark"] {
     /* Ensure good contrast on mobile */
@@ -1429,7 +1451,7 @@ progress {
   }
 }
 
-/* 📱 Tablet breakpoint for toast and upload manager */
+/*  Tablet breakpoint for toast and upload manager */
 @media (max-width: 900px) and (min-width: 601px) {
   body {
     padding: 0.8rem;

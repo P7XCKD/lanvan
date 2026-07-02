@@ -1,5 +1,5 @@
 """
-🚀 Consolidated Streaming Assembly with Failsafe
+[START] Consolidated Streaming Assembly with Failsafe
 Clean implementation without duplicate functions
 """
 
@@ -19,11 +19,11 @@ try:
     if (os.environ.get('TERMUX_VERSION') or 
         os.path.exists('/data/data/com.termux')):
         
-        print("🚨 Termux detected - using ultra-minimal safe mode")
+        print("[!] Termux detected - using ultra-minimal safe mode")
         _TERMUX_MODE = True
 
 except Exception as e:
-    print(f"🚨 Critical import error - using emergency fallback: {e}")
+    print(f"[!] Critical import error - using emergency fallback: {e}")
     _TERMUX_MODE = True
 
 @dataclass
@@ -47,7 +47,7 @@ class StreamingChunkAssembler:
         self.streaming_files: Dict[str, StreamingFile] = {}
         self.monitoring = False
         self.monitor_thread = None
-        print(f"🌊 Streaming assembly initialized ({'Termux mode' if _TERMUX_MODE else 'Full mode'})")
+        print(f"[STREAM] Streaming assembly initialized ({'Termux mode' if _TERMUX_MODE else 'Full mode'})")
 
     def register_file(self, file_id: str, expected_parts: int, filename: str, total_size: int):
         """Register a file for streaming assembly"""
@@ -57,7 +57,7 @@ class StreamingChunkAssembler:
             total_size=total_size
         )
         self.streaming_files[file_id] = streaming_file
-        print(f"🌊 Registered file for streaming: {filename} ({expected_parts} parts, {total_size:,} bytes)")
+        print(f"[STREAM] Registered file for streaming: {filename} ({expected_parts} parts, {total_size:,} bytes)")
         return {"status": "registered", "file_id": file_id}
 
     def add_chunk(self, file_id: str, chunk_number: int, chunk_data: bytes):
@@ -72,7 +72,7 @@ class StreamingChunkAssembler:
         streaming_file.received_parts.add(chunk_number)
         streaming_file.assembled_size += len(chunk_data)
         
-        print(f"🔧 Added chunk {chunk_number}/{streaming_file.expected_parts} for {streaming_file.filename} ({len(chunk_data):,} bytes)")
+        print(f"[CFG] Added chunk {chunk_number}/{streaming_file.expected_parts} for {streaming_file.filename} ({len(chunk_data):,} bytes)")
         
         # Try real-time assembly if we have consecutive chunks
         self._try_real_time_assembly(file_id)
@@ -124,14 +124,14 @@ class StreamingChunkAssembler:
                         chunk_data = streaming_file.chunk_data.pop(chunk_num)
                         f.write(chunk_data)
                 
-                print(f"🌊 Real-time assembled chunks {consecutive_chunks[0]}-{consecutive_chunks[-1]} for {streaming_file.filename}")
+                print(f"[STREAM] Real-time assembled chunks {consecutive_chunks[0]}-{consecutive_chunks[-1]} for {streaming_file.filename}")
                 
                 # Mark as processing started
                 streaming_file.processing_started = True
                 
             except Exception as e:
                 streaming_file.error = f"Assembly error: {str(e)}"
-                print(f"❌ Real-time assembly failed for {streaming_file.filename}: {e}")
+                print(f"[ERR] Real-time assembly failed for {streaming_file.filename}: {e}")
 
     def _finalize_assembly(self, file_id: str):
         """Finalize the assembly of a complete file"""
@@ -165,8 +165,8 @@ class StreamingChunkAssembler:
             actual_size = streaming_file.final_path.stat().st_size
             duration = time.time() - streaming_file.start_time
             
-            print(f"✅ Streaming assembly completed: {streaming_file.filename}")
-            print(f"   📊 Size: {actual_size:,} bytes in {duration:.1f}s")
+            print(f"[OK] Streaming assembly completed: {streaming_file.filename}")
+            print(f"   [STATS] Size: {actual_size:,} bytes in {duration:.1f}s")
             
             return {
                 "status": "completed", 
@@ -178,7 +178,7 @@ class StreamingChunkAssembler:
         except Exception as e:
             streaming_file.error = f"Finalization error: {str(e)}"
             streaming_file.completed = False
-            print(f"❌ Assembly finalization failed for {streaming_file.filename}: {e}")
+            print(f"[ERR] Assembly finalization failed for {streaming_file.filename}: {e}")
             return {"status": "error", "msg": str(e)}
 
     def assemble_file(self, file_id: str):
@@ -219,9 +219,9 @@ class StreamingChunkAssembler:
                 pattern = f"{streaming_file.filename}.part*"
                 for chunk_file in self.temp_folder.glob(pattern):
                     chunk_file.unlink()
-                    print(f"🧹 Cleaned up chunk: {chunk_file.name}")
+                    print(f"[CLEAN] Cleaned up chunk: {chunk_file.name}")
             except Exception as e:
-                print(f"⚠️ Cleanup warning for {file_id}: {e}")
+                print(f"[WARN] Cleanup warning for {file_id}: {e}")
 
     def get_memory_usage(self):
         """Get current memory usage of streaming assembly"""
@@ -275,7 +275,7 @@ class StreamingChunkAssembler:
             self.cleanup_chunks(file_id)
             # Remove from tracking
             del self.streaming_files[file_id]
-            print(f"🧹 Cleaned up streaming file: {file_id}")
+            print(f"[CLEAN] Cleaned up streaming file: {file_id}")
 
 # Convenience functions for external use
 def register_streaming_file(file_id: str, expected_parts: int, filename: str, total_size: int):
@@ -320,7 +320,7 @@ def initialize_streaming_assembly(temp_folder: Union[Path, str], upload_folder: 
     """Initialize the global streaming assembler"""
     global _global_assembler
     _global_assembler = StreamingChunkAssembler(Path(temp_folder), Path(upload_folder))
-    print("✅ Streaming assembly initialized")
+    print("[OK] Streaming assembly initialized")
 
 def get_streaming_assembler(temp_folder: Optional[Union[Path, str]] = None, upload_folder: Optional[Union[Path, str]] = None):
     """Get the global streaming assembler instance"""
@@ -343,4 +343,4 @@ def shutdown_streaming_assembly():
         for file_id in list(_global_assembler.streaming_files.keys()):
             _global_assembler.cleanup(file_id)
         _global_assembler = None
-    print("✅ Streaming assembly shutdown")
+    print("[OK] Streaming assembly shutdown")

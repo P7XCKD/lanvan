@@ -1,5 +1,5 @@
 """
-🏃‍♂️ LANVAN Performance Optimizations
+ LANVAN Performance Optimizations
 Configuration to reduce startup time and improve responsiveness
 """
 
@@ -53,15 +53,15 @@ def get_optimized_uvicorn_config(host="127.0.0.1", port=8080, dev=False):
 def get_performance_tips():
     """Get performance improvement tips"""
     return [
-        "💡 Use fast_boot.py for quicker startup",
-        "💡 Close unnecessary applications to free RAM", 
-        "💡 Use --dev flag only during development",
-        "💡 Use localhost (127.0.0.1) for faster local access",
-        "💡 Disable antivirus real-time scanning for project folder",
-        "💡 Use SSD storage for better file I/O performance",
+        "[TIP] Use fast_boot.py for quicker startup",
+        "[TIP] Close unnecessary applications to free RAM", 
+        "[TIP] Use --dev flag only during development",
+        "[TIP] Use localhost (127.0.0.1) for faster local access",
+        "[TIP] Disable antivirus real-time scanning for project folder",
+        "[TIP] Use SSD storage for better file I/O performance",
     ]
 
 if __name__ == "__main__":
-    print("🏃‍♂️ LANVAN Performance Tips:")
+    print(" LANVAN Performance Tips:")
     for tip in get_performance_tips():
         print(tip)

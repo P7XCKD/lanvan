@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 def test_cors_headers(base_url, test_origins):
     """Test CORS headers for various origins"""
-    print(f"\n🔐 Testing CORS Security for {base_url}")
+    print(f"\n[AUTH] Testing CORS Security for {base_url}")
     print("=" * 60)
     
     results = {
@@ -36,17 +36,17 @@ def test_cors_headers(base_url, test_origins):
             
             if cors_origin == origin:
                 results['allowed'].append((origin_desc, origin))
-                print(f"✅ {origin_desc}: ALLOWED ({origin})")
+                print(f"[OK] {origin_desc}: ALLOWED ({origin})")
             elif response.status_code == 403:
                 results['rejected'].append((origin_desc, origin))
-                print(f"🚫 {origin_desc}: REJECTED ({origin}) - Security working")
+                print(f" {origin_desc}: REJECTED ({origin}) - Security working")
             else:
                 results['rejected'].append((origin_desc, origin))
-                print(f"🚫 {origin_desc}: REJECTED ({origin}) - No CORS header")
+                print(f" {origin_desc}: REJECTED ({origin}) - No CORS header")
                 
         except Exception as e:
             results['errors'].append((origin_desc, origin, str(e)))
-            print(f"❌ {origin_desc}: ERROR ({origin}) - {e}")
+            print(f"[ERR] {origin_desc}: ERROR ({origin}) - {e}")
     
     return results
 
@@ -78,64 +78,64 @@ def main():
         "Public Network": "http://203.0.113.1:3000",
     }
     
-    print("🔍 CORS Security Validation Test")
+    print("[SEARCH] CORS Security Validation Test")
     print("Testing secure CORS implementation against security audit requirements")
     
     try:
         # First check if server is running
         response = requests.get(base_url, timeout=5)
         if response.status_code != 200:
-            print(f"❌ Server not responding properly at {base_url}")
+            print(f"[ERR] Server not responding properly at {base_url}")
             return
             
-        print(f"✅ Server is running at {base_url}")
+        print(f"[OK] Server is running at {base_url}")
         
         # Test CORS configuration
         results = test_cors_headers(base_url, test_origins)
         
         # Summary
-        print(f"\n📊 CORS Security Test Results:")
-        print(f"✅ Allowed Origins: {len(results['allowed'])}")
-        print(f"🚫 Rejected Origins: {len(results['rejected'])}")
-        print(f"❌ Errors: {len(results['errors'])}")
+        print(f"\n[STATS] CORS Security Test Results:")
+        print(f"[OK] Allowed Origins: {len(results['allowed'])}")
+        print(f" Rejected Origins: {len(results['rejected'])}")
+        print(f"[ERR] Errors: {len(results['errors'])}")
         
         # Verify security expectations
         allowed_count = len(results['allowed'])
         rejected_count = len(results['rejected'])
         
         if allowed_count >= 7 and rejected_count >= 4:  # Expect ~7 local origins allowed, ~4+ external rejected
-            print(f"\n🎉 CORS Security: EXCELLENT")
-            print(f"   Local network access: ✅ Working ({allowed_count} origins)")
-            print(f"   External protection: ✅ Working ({rejected_count} origins blocked)")
-            print(f"   Security audit requirement: ✅ SATISFIED")
+            print(f"\n[DONE] CORS Security: EXCELLENT")
+            print(f"   Local network access: [OK] Working ({allowed_count} origins)")
+            print(f"   External protection: [OK] Working ({rejected_count} origins blocked)")
+            print(f"   Security audit requirement: [OK] SATISFIED")
         else:
-            print(f"\n⚠️  CORS Security: NEEDS REVIEW")
+            print(f"\n[WARN]  CORS Security: NEEDS REVIEW")
             print(f"   Expected: ~7 local allowed, ~4 external rejected")
             print(f"   Actual: {allowed_count} allowed, {rejected_count} rejected")
             
         # Show allowed origins for verification
         if results['allowed']:
-            print(f"\n✅ Allowed Origins (Local Network):")
+            print(f"\n[OK] Allowed Origins (Local Network):")
             for desc, origin in results['allowed']:
                 print(f"   • {desc}: {origin}")
                 
         # Show rejected origins for verification  
         if results['rejected']:
-            print(f"\n🚫 Rejected Origins (Security Protection):")
+            print(f"\n Rejected Origins (Security Protection):")
             for desc, origin in results['rejected']:
                 print(f"   • {desc}: {origin}")
                 
         if results['errors']:
-            print(f"\n❌ Connection Errors:")
+            print(f"\n[ERR] Connection Errors:")
             for desc, origin, error in results['errors']:
                 print(f"   • {desc} ({origin}): {error}")
                 
     except requests.exceptions.ConnectionError:
-        print(f"❌ Cannot connect to server at {base_url}")
-        print("💡 Please start the LANVan server first with: python run.py")
+        print(f"[ERR] Cannot connect to server at {base_url}")
+        print("[TIP] Please start the LANVan server first with: python run.py")
         sys.exit(1)
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        print(f"[ERR] Unexpected error: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

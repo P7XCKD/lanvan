@@ -67,26 +67,26 @@ def analyze_template_fast(file_path):
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        print(f"🚀 Ultimate Scanner v3 - Fast Analysis: {file_path}")
+        print(f"[START] Ultimate Scanner v3 - Fast Analysis: {file_path}")
         print("=" * 60)
         
         # Quick stats
         total_lines = content.count('\n') + 1
         total_chars = len(content)
         
-        print(f"📊 TEMPLATE STATS:")
+        print(f"[STATS] TEMPLATE STATS:")
         print(f"   Lines: {total_lines:,}")
         print(f"   Size: {total_chars:,} chars")
         print()
         
         # Extract functions quickly
-        print("🔍 Extracting functions...")
+        print("[SEARCH] Extracting functions...")
         functions = extract_functions_fast(content)
         
         safe_functions = [f for f in functions if f['safe']]
         unsafe_functions = [f for f in functions if not f['safe']]
         
-        print(f"📋 FUNCTION ANALYSIS:")
+        print(f"[INFO] FUNCTION ANALYSIS:")
         print(f"   Total Functions: {len(functions)}")
         print(f"   Safe to Extract: {len(safe_functions)}")
         print(f"   Unsafe: {len(unsafe_functions)}")
@@ -96,19 +96,19 @@ def analyze_template_fast(file_path):
             total_safe_lines = sum(f['lines'] for f in safe_functions)
             potential_reduction = (total_safe_lines / total_lines) * 100
             
-            print(f"🎯 EXTRACTION POTENTIAL:")
+            print(f"[TARGET] EXTRACTION POTENTIAL:")
             print(f"   Extractable Lines: {total_safe_lines:,}")
             print(f"   Potential Reduction: {potential_reduction:.1f}%")
             print()
             
-            print(f"✅ TOP SAFE FUNCTIONS (Ready for extraction):")
+            print(f"[OK] TOP SAFE FUNCTIONS (Ready for extraction):")
             print("-" * 50)
             
             # Sort by size and show top candidates
             safe_functions.sort(key=lambda x: x['lines'], reverse=True)
             for i, func in enumerate(safe_functions[:10], 1):
-                dom_icon = "🌐" if func['has_dom'] else "📝"
-                global_icon = "🔗" if func['has_globals'] else "⚡"
+                dom_icon = "[NET]" if func['has_dom'] else "[INFO]"
+                global_icon = "[LINK]" if func['has_globals'] else "[FAST]"
                 
                 print(f"{i:2d}. {dom_icon}{global_icon} {func['name']}")
                 print(f"     Size: {func['lines']} lines ({func['size']} chars)")
@@ -117,12 +117,12 @@ def analyze_template_fast(file_path):
                 print()
         
         if unsafe_functions:
-            print(f"⚠️  UNSAFE FUNCTIONS (Not recommended):")
+            print(f"[WARN]  UNSAFE FUNCTIONS (Not recommended):")
             print("-" * 40)
             for func in unsafe_functions[:5]:
                 print(f"   • {func['name']} - {func['issues'][0] if func['issues'] else 'Unknown issue'}")
         
-        print(f"🎯 NEXT STEPS:")
+        print(f"[TARGET] NEXT STEPS:")
         if safe_functions:
             best = safe_functions[0]
             print(f"   1. Extract '{best['name']}' function ({best['lines']} lines)")
@@ -134,7 +134,7 @@ def analyze_template_fast(file_path):
         return functions
         
     except Exception as e:
-        print(f"❌ Error analyzing file: {e}")
+        print(f"[ERR] Error analyzing file: {e}")
         return None
 
 if __name__ == "__main__":

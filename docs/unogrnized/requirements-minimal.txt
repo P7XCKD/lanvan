@@ -1,4 +1,4 @@
-# Minimal LANVan Dependencies - Core Functionality Only
+# Minimal Lanvan Dependencies - Core Functionality Only
 fastapi
 uvicorn[standard]
 jinja2

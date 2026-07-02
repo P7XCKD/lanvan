@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🚀 LANVan Responsiveness Monitor
+[START] LANVan Responsiveness Monitor
 Ensures the server remains ultra-responsive even during heavy file processing
 """
 
@@ -31,7 +31,7 @@ except ImportError:
 
 class ResponsivenessMonitor:
     """
-    🎯 Monitors server responsiveness and automatically adjusts processing to prevent blocking
+    [TARGET] Monitors server responsiveness and automatically adjusts processing to prevent blocking
     """
     
     def __init__(self):
@@ -59,7 +59,7 @@ class ResponsivenessMonitor:
         if not self.monitoring:
             self.monitoring = True
             self.monitor_task = asyncio.create_task(self._monitor_loop())
-            print("🚀 Responsiveness monitor started")
+            print("[START] Responsiveness monitor started")
     
     async def stop_monitoring(self):
         """Stop the responsiveness monitoring task"""
@@ -70,7 +70,7 @@ class ResponsivenessMonitor:
                 await self.monitor_task
             except asyncio.CancelledError:
                 pass
-        print("⏸️ Responsiveness monitor stopped")
+        print("⏸ Responsiveness monitor stopped")
     
     async def _monitor_loop(self):
         """Main monitoring loop that runs continuously"""
@@ -103,7 +103,7 @@ class ResponsivenessMonitor:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"⚠️ Responsiveness monitor error: {e}")
+                print(f"[WARN] Responsiveness monitor error: {e}")
                 await asyncio.sleep(1.0)
     
     async def _update_system_metrics(self):
@@ -128,7 +128,7 @@ class ResponsivenessMonitor:
                 self.log_counter += 1
                 
                 if self.log_counter % 20 == 0:  # Every 20th update
-                    print(f"📊 System: CPU {cpu_percent:.1f}%, Memory {memory_info['percent']:.1f}%")
+                    print(f"[STATS] System: CPU {cpu_percent:.1f}%, Memory {memory_info['percent']:.1f}%")
             else:
                 # Full monitoring for desktop/server environments
                 cpu_percent = get_safe_cpu_usage()
@@ -142,7 +142,7 @@ class ResponsivenessMonitor:
                     })
                 
         except Exception as e:
-            print(f"⚠️ Failed to update system metrics: {e}")
+            print(f"[WARN] Failed to update system metrics: {e}")
             # Set safe fallback values
             with self.lock:
                 self.responsiveness_metrics.update({
@@ -170,9 +170,9 @@ class ResponsivenessMonitor:
                 self.responsiveness_metrics['lag_detected'] = lag_detected
                 
                 if lag_detected:
-                    print("🚨 Server lag detected - activating emergency responsiveness mode")
+                    print("[!] Server lag detected - activating emergency responsiveness mode")
                 else:
-                    print("✅ Server responsiveness restored - returning to normal mode")
+                    print("[OK] Server responsiveness restored - returning to normal mode")
     
     async def _adjust_performance_caps(self):
         """Automatically adjust performance caps based on system load"""
@@ -226,13 +226,13 @@ responsiveness_monitor = ResponsivenessMonitor()
 
 async def ensure_responsiveness():
     """
-    🎯 Ensure server responsiveness - call this frequently during heavy operations
+    [TARGET] Ensure server responsiveness - call this frequently during heavy operations
     """
     await responsiveness_monitor.emergency_yield()
 
 
 def get_adaptive_settings() -> Dict[str, Any]:
     """
-    📊 Get current adaptive performance settings
+    [STATS] Get current adaptive performance settings
     """
     return responsiveness_monitor.get_recommended_settings()
