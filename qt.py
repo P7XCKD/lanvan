@@ -1092,7 +1092,7 @@ class QuickTest:
             except Exception as e:
                 try:
                     # Try simple platform
-                    from app.simple_platform import detect_platform, is_android, is_termux
+                    from app.termux_compat import detect_platform, is_android, is_termux
                     platform = detect_platform()
                     android = is_android()
                     termux = is_termux()

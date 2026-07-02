@@ -9,47 +9,25 @@ from mimetypes import guess_type
 from zipfile import ZipFile
 import base64
 
-# Android/Termux QR code support with fallbacks
+# Android/Termux QR code support with fallbacks (no dynamic pip installs)
 try:
     import qrcode
     QR_AVAILABLE = True
 except ImportError:
-    print("[WARN] QR code library not available - installing for Android/Termux...")
     QR_AVAILABLE = False
-    try:
-        import subprocess
-        import sys
-        # Try to install qrcode for Android/Termux
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "qrcode[pil]"])
-        import qrcode
-        QR_AVAILABLE = True
-        print("[OK] QR code library installed successfully")
-    except Exception as install_error:
-        print(f"[ERR] Could not install QR code library: {install_error}")
-        print("[MOBILE] Android/Termux: QR codes will use text fallback")
+    print("[WARN] QR code library (qrcode) is not installed. QR codes will use text fallback.")
 
 # WebSocket support with Android/Termux fallback
 try:
     from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form, HTTPException, WebSocket
     WEBSOCKET_AVAILABLE = True
 except ImportError:
-    print("[WARN] WebSocket support not available - installing for Android/Termux...")
     WEBSOCKET_AVAILABLE = False
-    try:
-        import subprocess
-        import sys
-        # Try to install WebSocket support for Android/Termux
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "uvicorn[standard]"])
-        from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form, HTTPException, WebSocket
-        WEBSOCKET_AVAILABLE = True
-        print("[OK] WebSocket support installed successfully")
-    except Exception as ws_error:
-        print(f"[ERR] Could not install WebSocket support: {ws_error}")
-        print("[MOBILE] Android/Termux: Real-time features will use polling fallback")
-        from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form, HTTPException
-        # Create dummy WebSocket class to prevent import errors
-        class WebSocket:
-            pass
+    print("[WARN] WebSocket support is not available. Real-time features will use polling fallback.")
+    from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form, HTTPException
+    # Create dummy WebSocket class to prevent import errors
+    class WebSocket:
+        pass
 from fastapi.responses import (
     HTMLResponse, RedirectResponse, StreamingResponse,
     JSONResponse, Response
@@ -58,9 +36,8 @@ from fastapi.templating import Jinja2Templates
 from app.clipboard_ws import clipboard_ws_manager
 from starlette.status import HTTP_302_FOUND, HTTP_400_BAD_REQUEST, HTTP_403_FORBIDDEN, HTTP_500_INTERNAL_SERVER_ERROR
 
-from app.aes_utils import encrypt_session_data, decrypt_session_data
+from app.aes_utils import encrypt_session_data, decrypt_session_data, encrypt_file_http_safe, decrypt_http_safe_file
 from app.aes_utils import AESConfig
-from app.http_safe_aes import encrypt_file_http_safe, decrypt_http_safe_file
 from app.metadata_protection import generate_secure_filename, obfuscate_file_size, generate_decoy_requests
 from app.validation import (
     validate_upload_files, 
@@ -1007,7 +984,7 @@ async def api_files():
 async def platform_status():
     """API endpoint to get universal platform optimization status"""
     try:
-        from .simple_platform import get_platform_info
+        from .termux_compat import get_platform_info
         
         info = get_platform_info()
         
@@ -1315,7 +1292,7 @@ async def upload_auto_file(
             # Handle encryption if needed (encrypt in place)
             if encrypt:
                 try:
-                    from .http_safe_aes import encrypt_file_http_safe
+                    from .aes_utils import encrypt_file_http_safe
                     encrypted_path, metadata = encrypt_file_http_safe(str(destination), info['original_name'])
                     print(f"[AUTH] File {i+1} encrypted successfully")
                     # Update destination to the encrypted file
