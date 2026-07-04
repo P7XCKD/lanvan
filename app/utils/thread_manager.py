@@ -296,19 +296,4 @@ class ThreadManager:
 # Global thread manager instance
 thread_manager = ThreadManager()
 
-# Convenience functions
-def create_managed_thread(target: Callable, name: str, **kwargs) -> threading.Event:
-    """Create a managed thread (convenience function)"""
-    return thread_manager.create_thread(target, name, **kwargs)
 
-def stop_managed_thread(name: str, timeout: Optional[float] = None) -> bool:
-    """Stop a managed thread (convenience function)"""
-    return thread_manager.stop_thread(name, timeout)
-
-def shutdown_all_threads(timeout: float = 30.0) -> bool:
-    """Shutdown all managed threads (convenience function)"""
-    return thread_manager.shutdown_all(timeout)
-
-def get_thread_health() -> Dict[str, Any]:
-    """Get thread system health status (convenience function)"""
-    return thread_manager.health_check()
