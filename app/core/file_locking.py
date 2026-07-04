@@ -123,7 +123,7 @@ class CrossPlatformFileLock:
             if self.lock_handle:
                 try:
                     await asyncio.to_thread(self.lock_handle.close)
-                except:
+                except Exception:
                     pass
                 self.lock_handle = None
             return False
@@ -170,7 +170,7 @@ class CrossPlatformFileLock:
             if self.lock_handle:
                 try:
                     await asyncio.to_thread(self.lock_handle.close)
-                except:
+                except Exception:
                     pass
                 self.lock_handle = None
             return False
@@ -188,7 +188,7 @@ class CrossPlatformFileLock:
                         logger.debug(f"[CLEAN] Removed stale lock file: {self.lock_file}")
                     else:
                         return False  # Valid lock exists
-                except:
+                except Exception:
                     pass
             
             # Try to create lock file atomically
@@ -211,7 +211,7 @@ class CrossPlatformFileLock:
             if self.lock_handle:
                 try:
                     await asyncio.to_thread(self.lock_handle.close)
-                except:
+                except Exception:
                     pass
                 self.lock_handle = None
             return False

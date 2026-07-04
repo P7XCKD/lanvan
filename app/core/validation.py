@@ -707,7 +707,7 @@ async def validate_upload_files_enhanced_fast(files: List[UploadFile], encrypt: 
                     await asyncio.to_thread(file.file.seek, 0, 2)
                     file_size = await asyncio.to_thread(file.file.tell)
                     await asyncio.to_thread(file.file.seek, 0)
-                except:
+                except Exception:
                     file_size = 0  # Will be detected during upload
             
             return {
