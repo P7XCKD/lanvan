@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import gc
+import platform as py_platform
 from typing import Any, Dict, Optional, Callable, Union
 
 
@@ -239,3 +240,66 @@ def should_use_lightweight_mode() -> bool:
 if is_termux_environment():
     print("[BOT] Termux environment detected - initializing compatibility layer")
     optimize_for_termux()
+
+
+def is_termux() -> bool:
+    """Delegate to is_termux_environment"""
+    return is_termux_environment()
+
+
+def is_android() -> bool:
+    """Delegate to is_android_environment"""
+    return is_android_environment()
+
+
+def is_windows() -> bool:
+    """Check if running on Windows"""
+    return py_platform.system().lower() == 'windows'
+
+
+def is_linux() -> bool:
+    """Check if running on Linux (excluding Android)"""
+    return py_platform.system().lower() == 'linux' and not is_android()
+
+
+def is_macos() -> bool:
+    """Check if running on macOS"""
+    return py_platform.system().lower() == 'darwin'
+
+
+def detect_platform() -> str:
+    """
+    Detect the current platform
+    Returns: 'windows', 'linux', 'darwin', 'android', 'termux', or 'unknown'
+    """
+    system = py_platform.system().lower()
+    if is_termux():
+        return 'termux'
+    elif is_android():
+        return 'android'
+    elif system == 'windows':
+        return 'windows'
+    elif system == 'linux':
+        return 'linux'
+    elif system == 'darwin':
+        return 'darwin'
+    else:
+        return 'unknown'
+
+
+def get_platform_info() -> dict:
+    """
+    Get comprehensive platform information
+    """
+    return {
+        'platform': detect_platform(),
+        'system': py_platform.system(),
+        'machine': py_platform.machine(),
+        'processor': py_platform.processor(),
+        'python_version': py_platform.python_version(),
+        'is_android': is_android(),
+        'is_termux': is_termux(),
+        'is_windows': is_windows(),
+        'is_linux': is_linux(),
+        'is_macos': is_macos()
+    }

@@ -14,7 +14,10 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import ClientDisconnect
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from app.routes import router
+from app.routers.pages import router as pages_router
+from app.routers.files import router as files_router
+from app.routers.clipboard import router as clipboard_router
+from app.routers.system import router as system_router
 
 # Import mDNS manager for service discovery
 from app.simple_mdns import mdns_manager
@@ -209,7 +212,7 @@ async def lifespan(app: FastAPI):
         
         # Initialize clipboard persistence after everything is ready
         try:
-            from app.routes import initialize_clipboard_persistence
+            from app.routers.clipboard import initialize_clipboard_persistence
             initialize_clipboard_persistence()
         except Exception as e:
             print(f"[WARN] Clipboard persistence initialization failed: {e}")
@@ -448,7 +451,10 @@ app.add_middleware(ShutdownMiddleware)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # [OK] Register app routes
-app.include_router(router)
+app.include_router(pages_router)
+app.include_router(files_router)
+app.include_router(clipboard_router)
+app.include_router(system_router)
 app.include_router(clipboard_ws_router)
 
 # [OK] Exception handlers for smart loading page system
