@@ -1,3 +1,15 @@
+"""
+[CORE] Lanvan FastAPI Application Entry Point
+Initializes the FastAPI application, registers middleware (CORS, network filters),
+binds WebSocket sub-routers, and handles server lifespan events (mDNS, thread lifecycle).
+
+Key Features:
+- Lifespan context manager controlling resource initialization and prioritized shutdowns
+- Secure CORSMiddleware with local network restriction filtering
+- Global client disconnect log silencer filters
+- Custom error pages redirection and loading phase states
+"""
+
 import os
 import signal
 import asyncio
@@ -495,7 +507,7 @@ def are_resources_ready():
         if os.path.exists(template_dir) and os.path.exists(static_dir):
             resources_ready = True
             return True
-    except:
+    except Exception:
         pass
     
     return False
