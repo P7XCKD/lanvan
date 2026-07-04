@@ -12,7 +12,7 @@ from pathlib import Path
 # Add the parent directory to the path to import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.validation import validate_upload_files_enhanced_fast
+from app.core.validation import validate_upload_files_enhanced_fast
 from fastapi import UploadFile
 import io
 

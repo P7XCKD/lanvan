@@ -16,9 +16,9 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from starlette.status import HTTP_400_BAD_REQUEST
 
-from app.clipboard_ws import clipboard_ws_manager
+from app.ws_manager import clipboard_ws_manager
 from app.routers.files import generate_simple_file_preview
-from app.universal_optimizer import get_adaptive_chunk_size
+from app.utils.universal_optimizer import get_adaptive_chunk_size
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")

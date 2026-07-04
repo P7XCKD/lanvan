@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import Enum
 import logging
 
-from app.thread_manager import thread_manager, ThreadPriority
+from app.utils.thread_manager import thread_manager, ThreadPriority
 
 class ResponsivenessMode(Enum):
     """Responsiveness optimization modes"""

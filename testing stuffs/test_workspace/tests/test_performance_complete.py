@@ -142,7 +142,7 @@ def test_performance_optimizations():
     # Test 5: Concurrent Upload Manager (Issue 4/7) - EXISTING
     print("\n5⃣  Testing concurrent upload manager...")
     try:
-        from app.concurrent_upload_manager import concurrent_upload_manager
+        from app.core.concurrent_upload_manager import concurrent_upload_manager
         
         # Test that the manager exists and has basic functionality
         print(f"   [OK] Manager available: {concurrent_upload_manager is not None}")

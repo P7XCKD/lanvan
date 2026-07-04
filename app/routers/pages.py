@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 
-from app.simple_mdns import mdns_manager
+from app.utils.simple_mdns import mdns_manager
 from app.routers.files import detect_ios_device, get_file_list, UPLOAD_FOLDER
 
 # Initialize router and Jinja2 templates engine

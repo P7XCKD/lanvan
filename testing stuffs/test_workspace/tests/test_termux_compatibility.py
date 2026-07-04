@@ -15,11 +15,11 @@ def test_termux_compatibility():
     
     try:
         print("\n1⃣  Testing basic import...")
-        import app.streaming_assembly
+        import app.core.streaming_assembly
         print("[OK] Basic streaming assembly import successful")
         
         print("\n2⃣  Testing specific functions...")
-        from app.streaming_assembly import (
+        from app.core.streaming_assembly import (
             StreamingChunkAssembler,
             initialize_streaming_assembly, 
             get_streaming_assembler,

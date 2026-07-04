@@ -20,7 +20,7 @@ from app.routers.clipboard import router as clipboard_router
 from app.routers.system import router as system_router
 
 # Import mDNS manager for service discovery
-from app.simple_mdns import mdns_manager
+from app.utils.simple_mdns import mdns_manager
 
 # Import HTTPS redirect server for dual-protocol support
 # Removed: HTTPS redirect server import (no longer needed)
@@ -95,7 +95,7 @@ connection_manager = ConnectionManager()
 
 
 # [TARGET] Console command monitor for "close" command
-from app.clipboard_ws import clipboard_ws_router
+from app.ws_manager import clipboard_ws_router, upload_status_ws_router
 
 def console_command_monitor():
     """Monitor console for 'close' command"""
@@ -153,7 +153,7 @@ async def lifespan(app: FastAPI):
     print("[TIP] Use Ctrl+C to shutdown gracefully (console commands disabled)")
     
     # Start responsiveness monitor
-    from app.responsiveness_manager import responsiveness_monitor
+    from app.utils.responsiveness_manager import responsiveness_monitor
     await responsiveness_monitor.start_monitoring()
     
     # Start mDNS service
@@ -245,7 +245,7 @@ async def lifespan(app: FastAPI):
     
     # Stop streaming assembly system
     print("[STREAM] Stopping streaming assembly system...")
-    from app.streaming_assembly import shutdown_streaming_assembly
+    from app.core.streaming_assembly import shutdown_streaming_assembly
     shutdown_streaming_assembly()
     
     # Stop mDNS service
@@ -456,6 +456,7 @@ app.include_router(files_router)
 app.include_router(clipboard_router)
 app.include_router(system_router)
 app.include_router(clipboard_ws_router)
+app.include_router(upload_status_ws_router)
 
 # [OK] Exception handlers for smart loading page system
 # Track when the server started and if resources are ready

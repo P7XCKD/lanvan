@@ -35,19 +35,19 @@ from starlette.status import (
 )
 
 # Import common app utilities
-from app.aes_utils import encrypt_file_http_safe, decrypt_http_safe_file, decrypt_file_stream
-from app.metadata_protection import generate_secure_filename, obfuscate_file_size, generate_decoy_requests
-from app.validation import (
+from app.core.aes_utils import encrypt_file_http_safe, decrypt_http_safe_file, decrypt_file_stream
+from app.core.metadata_protection import generate_secure_filename, obfuscate_file_size, generate_decoy_requests
+from app.core.validation import (
     validate_upload_files_enhanced_async,
     validate_upload_files_enhanced_fast,
     secure_filename,
     is_allowed_file
 )
-from app.file_locking import get_file_lock_manager
-from app.termux_compat import is_android, is_termux
-from app.concurrent_upload_manager import concurrent_upload_manager, ConcurrentUploadManager
-from app.windows_file_manager import WindowsFileManager
-from app.streaming_assembly import get_streaming_assembler, add_streaming_chunk, check_streaming_status, get_assembled_file
+from app.core.file_locking import get_file_lock_manager
+from app.utils.termux_compat import is_android, is_termux
+from app.core.concurrent_upload_manager import concurrent_upload_manager, ConcurrentUploadManager
+from app.core.windows_file_manager import WindowsFileManager
+from app.core.streaming_assembly import get_streaming_assembler, add_streaming_chunk, check_streaming_status, get_assembled_file
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -213,11 +213,11 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
     import os
     import hashlib
     import gc
-    from app.universal_optimizer import optimize_for_upload, get_adaptive_chunk_size, should_run_gc, universal_optimizer
+    from app.utils.universal_optimizer import optimize_for_upload, get_adaptive_chunk_size, should_run_gc, universal_optimizer
     
     # [BOT] TERMUX MEMORY CHECK: Enforce memory limits before starting upload
     try:
-        from app.termux_memory_monitor import enforce_termux_memory_limit
+        from app.utils.termux_memory_monitor import enforce_termux_memory_limit
         if not enforce_termux_memory_limit(f"upload_{upload_file.filename}"):
             raise Exception("Upload blocked due to memory constraints")
     except ImportError:
@@ -288,7 +288,7 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                 data = await asyncio.to_thread(upload_file.file.read)
                 
                 # Import streaming encryption functions
-                from app.aes_utils import encrypt_file_stream
+                from app.core.aes_utils import encrypt_file_stream
                 
                 # Add file integrity validation for encrypted files
                 original_hash = hashlib.sha256(data).hexdigest()
@@ -494,7 +494,7 @@ def scan_file(path: Path):
         try:
             loop = asyncio.get_running_loop()
             # Use task manager for automatic cleanup and resource management
-            from app.task_manager import submit_background_task
+            from app.utils.task_manager import submit_background_task
             task = submit_background_task(scan_file_async(path), f"scan_file:{path.name}")
             if task is None:
                 # Task manager rejected task (likely due to limits) - graceful degradation
@@ -521,7 +521,7 @@ async def encrypt_http_safe(
         temp_input_path = UPLOAD_FOLDER / f"temp_input_{int(time.time())}_{file.filename}"
         
         # [RETRY] MEMORY FIX: Use Termux-optimized chunk size for streaming
-        from app.universal_optimizer import universal_optimizer, get_adaptive_chunk_size
+        from app.utils.universal_optimizer import universal_optimizer, get_adaptive_chunk_size
         CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
         
         with open(temp_input_path, 'wb') as f:
@@ -677,7 +677,7 @@ async def upload_files(
     try:
         # Use concurrent upload manager for multiple files
         try:
-            from app.concurrent_upload_manager import ConcurrentUploadManager
+            from app.core.concurrent_upload_manager import ConcurrentUploadManager
         except ImportError:
             from concurrent_upload_manager import ConcurrentUploadManager
         upload_manager = ConcurrentUploadManager()
@@ -752,7 +752,7 @@ async def upload_files(
                     counter += 1
                 
                 # [RETRY] MEMORY FIX: Use Termux-optimized chunk size for streaming
-                from app.universal_optimizer import get_adaptive_chunk_size, universal_optimizer
+                from app.utils.universal_optimizer import get_adaptive_chunk_size, universal_optimizer
                 CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
                 
                 with open(file_path, 'wb') as f:
@@ -836,7 +836,7 @@ async def upload_auto_file(
             })
 
     # [START] CONCURRENT PROCESSING: Upload all files simultaneously with adaptive optimization
-    from app.concurrent_upload_manager import upload_multiple_files_concurrent
+    from app.core.concurrent_upload_manager import upload_multiple_files_concurrent
     
     uploaded = []
     
@@ -932,7 +932,7 @@ async def upload_auto_file(
             print(f"[OUT] Processing file {i+1}/{len(valid_files)}: {info['original_name']}")
             
             # [RETRY] MEMORY FIX: Use Termux-optimized chunk size for direct streaming
-            from app.universal_optimizer import get_adaptive_chunk_size
+            from app.utils.universal_optimizer import get_adaptive_chunk_size
             CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
             
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -949,7 +949,7 @@ async def upload_auto_file(
             # Handle encryption if needed (encrypt in place)
             if encrypt:
                 try:
-                    from app.aes_utils import encrypt_file_http_safe
+                    from app.core.aes_utils import encrypt_file_http_safe
                     encrypted_path, metadata = encrypt_file_http_safe(str(destination), info['original_name'])
                     print(f"[AUTH] File {i+1} encrypted successfully")
                     # Update destination to the encrypted file
@@ -1100,7 +1100,7 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                         
                         # Use appropriate decryption method based on metadata
                         if metadata and metadata.get('encryption_method') == 'streaming':
-                            from app.aes_utils import decrypt_file_stream
+                            from app.core.aes_utils import decrypt_file_stream
                             decrypted_data = decrypt_file_stream(encrypted_data, metadata, chunk_size=1024 * 1024)
                             print(f"[LOCK] Used streaming decryption for {path.name}")
                         else:
@@ -1330,7 +1330,7 @@ async def download_all_files():
 @router.post("/clear", name="clear_files")
 async def clear_files():
     """Clear all uploaded files and temporary chunks with enhanced Windows compatibility"""
-    from app.windows_file_manager import WindowsFileManager
+    from app.core.windows_file_manager import WindowsFileManager
     
     try:
         print("[CLEAN] Starting enhanced file cleanup with Windows diagnostics...")
@@ -1436,7 +1436,7 @@ async def delete_file(filename: str):
 @router.get("/api/upload/status", name="upload_status")
 async def get_upload_status():
     """Get current upload status for all concurrent uploads"""
-    from app.concurrent_upload_manager import concurrent_upload_manager
+    from app.core.concurrent_upload_manager import concurrent_upload_manager
     
     status = concurrent_upload_manager.get_system_status()
     detailed_status = concurrent_upload_manager.get_upload_status()

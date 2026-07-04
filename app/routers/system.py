@@ -22,9 +22,9 @@ except ImportError:
 from fastapi import APIRouter, Request, Query, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse, Response
 
-from app.aes_utils import AESConfig
-from app.simple_mdns import mdns_manager
-from app.termux_compat import get_platform_info, detect_platform, is_android, is_termux
+from app.core.aes_utils import AESConfig
+from app.utils.simple_mdns import mdns_manager
+from app.utils.termux_compat import get_platform_info, detect_platform, is_android, is_termux
 from app.routers.files import detect_ios_device
 
 router = APIRouter()
@@ -220,7 +220,7 @@ async def server_status(request: Request):
 async def platform_status():
     """API endpoint to get universal platform optimization status"""
     try:
-        from app.termux_compat import get_platform_info
+        from app.utils.termux_compat import get_platform_info
         
         info = get_platform_info()
         
@@ -238,7 +238,7 @@ async def platform_status():
 @router.get("/api/upload/chunk-size/{file_size}", name="get_optimal_chunk_size")
 async def get_optimal_chunk_size(file_size: int):
     """Get optimal chunk size for a file upload based on system capabilities"""
-    from app.universal_optimizer import get_adaptive_chunk_size
+    from app.utils.universal_optimizer import get_adaptive_chunk_size
     
     try:
         # Get adaptive chunk size
@@ -487,7 +487,7 @@ async def generate_offline_qr(text: str, size: int = 200):
 async def mdns_info():
     """Get mDNS service information"""
     try:
-        from app.simple_mdns import mdns_manager
+        from app.utils.simple_mdns import mdns_manager
         info = mdns_manager.get_mdns_info()
         return JSONResponse(content=info)
     except Exception as e:
@@ -500,7 +500,7 @@ async def mdns_info():
 async def aes_config():
     """Get AES encryption configuration"""
     try:
-        from app.aes_utils import AES_CONFIG
+        from app.core.aes_utils import AES_CONFIG
         return JSONResponse(content={
             "status": "success",
             "aes_enabled": AES_CONFIG.get("ENABLED", False),
@@ -523,7 +523,7 @@ async def system_logs():
         
         # Add responsiveness monitor logs if available
         try:
-            from app.responsiveness_manager import responsiveness_monitor
+            from app.utils.responsiveness_manager import responsiveness_monitor
             if hasattr(responsiveness_monitor, 'get_recent_logs'):
                 monitor_logs = responsiveness_monitor.get_recent_logs()
                 logs.extend(monitor_logs)
@@ -532,7 +532,7 @@ async def system_logs():
             
         # Add thread manager logs if available
         try:
-            from app.thread_manager import thread_manager
+            from app.utils.thread_manager import thread_manager
             if hasattr(thread_manager, 'get_logs'):
                 thread_logs = thread_manager.get_logs()
                 logs.extend(thread_logs)
@@ -564,7 +564,7 @@ async def system_logs():
 async def task_stats():
     """Get background task statistics"""
     try:
-        from app.task_manager import get_task_stats
+        from app.utils.task_manager import get_task_stats
         stats = get_task_stats()
         
         return JSONResponse(content={
@@ -582,7 +582,7 @@ async def task_stats():
 async def certificate_status():
     """Get SSL certificate validation status"""
     try:
-        from app.certificate_validator import SafeCertificateValidator
+        from app.utils.certificate_validator import SafeCertificateValidator
         from pathlib import Path
         import os
         
