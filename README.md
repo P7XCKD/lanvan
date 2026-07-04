@@ -13,7 +13,7 @@ A fast, private file-sharing server that runs on your local network. No internet
 - **Mobile friendly** — works in any browser on phones, tablets, and PCs
 - **Clipboard sync** — share copied text between devices in real time
 - **QR codes** — scan to connect instantly on mobile
-- **mDNS discovery** — access via `http://Lanvan.local` on supported devices
+- **mDNS discovery** — access via `http://lanvan.local` on supported devices
 - **Cross-platform** — Windows, Linux, macOS, Android (Termux)
 - **No size limits** — only limited by your storage space
 
