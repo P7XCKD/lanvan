@@ -713,6 +713,43 @@ class QuickTest:
                                 self.log("Clipboard write: Failed", "WARN")
                         else:
                             self.log(f"Clipboard write: HTTP {write_response.status}", "WARN")
+                            
+                    # Test advanced clipboard write (Form data and file uploads)
+                    form_data = aiohttp.FormData()
+                    form_data.add_field('data', 'test-advanced-text')
+                    async with session.post(f"{base_url}/api/clipboard/add", data=form_data, timeout=timeout) as add_text_resp:
+                        if add_text_resp.status == 200:
+                            self.log("Clipboard POST add text: OK", "PASS")
+                        else:
+                            self.log(f"Clipboard POST add text: HTTP {add_text_resp.status}", "WARN")
+
+                    # Test mock file upload (with mock PNG bytes)
+                    file_form = aiohttp.FormData()
+                    mock_png = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\rIDATx\x9cc`\x00\x00\x00\x02\x00\x01H\xaf\xa4q\x00\x00\x00\x00IEND\xaeB`\x82'
+                    file_form.add_field('file', mock_png, filename='test-image.png', content_type='image/png')
+                    async with session.post(f"{base_url}/api/clipboard/add", data=file_form, timeout=timeout) as add_file_resp:
+                        if add_file_resp.status == 200:
+                            self.log("Clipboard POST add image file: OK", "PASS")
+                        else:
+                            self.log(f"Clipboard POST add image file: HTTP {add_file_resp.status}", "WARN")
+
+                    # Test list endpoint with data populated (this catches serialization 500 errors!)
+                    async with session.get(f"{base_url}/api/clipboard/list", timeout=timeout) as list_resp:
+                        if list_resp.status == 200:
+                            list_data = await list_resp.json()
+                            if list_data.get("status") == "success" and "items" in list_data:
+                                self.log("Clipboard list retrieval and serialization: OK", "PASS")
+                            else:
+                                self.log("Clipboard list serialization format: Failed", "FAIL")
+                                clipboard_working = False
+                        else:
+                            self.log(f"Clipboard list returned HTTP {list_resp.status} (likely serialization error)", "FAIL")
+                            clipboard_working = False
+
+                    # Clean up: clear clipboard
+                    async with session.delete(f"{base_url}/api/clipboard/clear", timeout=timeout) as clear_resp:
+                        if clear_resp.status == 200:
+                            self.log("Clipboard clear: OK", "PASS")
                 else:
                     self.log(f"Clipboard read: HTTP {response.status}", "WARN")
         except asyncio.TimeoutError:
@@ -1092,7 +1129,7 @@ class QuickTest:
             except Exception as e:
                 try:
                     # Try simple platform
-                    from app.simple_platform import detect_platform, is_android, is_termux
+                    from app.termux_compat import detect_platform, is_android, is_termux
                     platform = detect_platform()
                     android = is_android()
                     termux = is_termux()
