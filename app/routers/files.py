@@ -22,6 +22,7 @@ from typing import List, Optional, Dict, Any, Tuple
 from pathlib import Path
 from mimetypes import guess_type
 from zipfile import ZipFile
+from app.utils.termux_compat import is_android_environment
 
 from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse, Response
@@ -230,9 +231,7 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
     print(f"[RETRY] Uploading to temporary file: {temp_destination.name}")
     
     # [MOBILE] Platform Detection (but optimizations apply to ALL)
-    is_android = ("ANDROID_STORAGE" in os.environ or 
-                 os.path.exists("/data/data/com.termux") or 
-                 "TERMUX_VERSION" in os.environ)
+    is_android = is_android_environment()
     
     is_windows = os.name == 'nt'
     is_linux = os.name == 'posix' and not is_android

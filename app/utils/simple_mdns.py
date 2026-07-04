@@ -8,6 +8,7 @@ import platform
 import os
 from typing import Optional, Dict, Any
 from zeroconf import ServiceInfo, Zeroconf, ServiceBrowser
+from app.utils.termux_compat import is_android_environment
 
 # Zeroconf version compatibility check
 try:
@@ -28,9 +29,7 @@ def check_mdns_dependencies() -> tuple[bool, str]:
         test_zc.close()
         
         # Check for Android/Termux specific requirements
-        is_android = ("ANDROID_STORAGE" in os.environ or 
-                     os.path.exists("/data/data/com.termux") or 
-                     "TERMUX_VERSION" in os.environ)
+        is_android = is_android_environment()
         
         if is_android:
             # Check if avahi is available (recommended for Termux)
@@ -365,9 +364,7 @@ class SimpleMDNSManager:
                     self.lan_ip = None
             
             # Check if we're on Android/Termux for special handling
-            is_android = ("ANDROID_STORAGE" in os.environ or 
-                         os.path.exists("/data/data/com.termux") or 
-                         "TERMUX_VERSION" in os.environ)
+            is_android = is_android_environment()
             
             if is_android:
                 print("[MOBILE] Detecting network interface on Android/Termux...")
@@ -478,9 +475,7 @@ class SimpleMDNSManager:
                 print(f"   {self.mdns_status}")
                 
                 # Check if we're on Android/Termux for special handling
-                is_android = ("ANDROID_STORAGE" in os.environ or 
-                             os.path.exists("/data/data/com.termux") or 
-                             "TERMUX_VERSION" in os.environ)
+                is_android = is_android_environment()
                 
                 # Enhanced cleanup before start (important for Termux restarts)
                 force_cleanup_mdns_resources()
@@ -597,9 +592,7 @@ class SimpleMDNSManager:
                 print(f"[NET] Guest devices can now discover this server!")
                 
                 # Check if we're on Android/Termux for special messaging
-                is_android = ("ANDROID_STORAGE" in os.environ or 
-                             os.path.exists("/data/data/com.termux") or 
-                             "TERMUX_VERSION" in os.environ)
+                is_android = is_android_environment()
                 
                 if is_android:
                     print(f"[MOBILE] Android/Termux {protocol_name} Server:")
@@ -741,9 +734,7 @@ class SimpleMDNSManager:
     def get_hybrid_url(self) -> str:
         """Get the best URL for QR code generation - prioritize IP on Android/Termux"""
         # Check if we're on Android/Termux
-        is_android = ("ANDROID_STORAGE" in os.environ or 
-                     os.path.exists("/data/data/com.termux") or 
-                     "TERMUX_VERSION" in os.environ)
+        is_android = is_android_environment()
         
         if is_android:
             # On Android/Termux, always prefer IP-based URLs since .local often fails
