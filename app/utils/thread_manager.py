@@ -1,6 +1,12 @@
 """
-Lanvan Thread Management System
-Centralized thread management to prevent resource leaks and zombie processes.
+[CFG] Thread Management System for Lanvan
+Centralized thread manager to prevent resource leaks and zombie processes.
+
+Key Features:
+- Prioritized shutdown stages (Critical, High, Normal, Low)
+- Registered threads tracking and cleanup mapping
+- Automatic signals and atexit event hooks registration
+- Orphaned and zombie thread sweep loops
 """
 
 import threading
