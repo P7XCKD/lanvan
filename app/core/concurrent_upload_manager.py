@@ -22,6 +22,7 @@ from pathlib import Path
 from fastapi import UploadFile
 from concurrent.futures import ThreadPoolExecutor
 import threading
+from app.utils.termux_compat import is_android_environment
 
 # Import universal optimizer with fallback
 try:
@@ -150,7 +151,7 @@ class ConcurrentUploadManager:
                 await asyncio.to_thread(upload_file.file.seek, 0, 2)
                 file_size = await asyncio.to_thread(upload_file.file.tell)
                 await asyncio.to_thread(upload_file.file.seek, 0)
-            except:
+            except Exception:
                 # Fallback: try to get size from UploadFile.size if seek fails
                 file_size = getattr(upload_file, 'size', 0)
                 if file_size == 0:
@@ -554,9 +555,7 @@ class ConcurrentUploadManager:
         
         # Platform detection
         is_windows = os.name == 'nt'
-        is_android = ("ANDROID_STORAGE" in os.environ or 
-                     os.path.exists("/data/data/com.termux") or 
-                     "TERMUX_VERSION" in os.environ)
+        is_android = is_android_environment()
         
         platform_name = "Windows" if is_windows else "Android/Termux" if is_android else "Linux/Unix"
         
@@ -595,7 +594,7 @@ class ConcurrentUploadManager:
                         try:
                             temp_destination.unlink()
                             print(f"[CLEAN] [{upload_id}] Cleaned up temp file after failed move")
-                        except:
+                        except Exception:
                             pass
                     
                     error_msg = f"Failed to finalize upload after {max_retries} attempts on {platform_name}: {e}"

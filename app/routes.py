@@ -1,3 +1,9 @@
+"""
+[NET] Router Aggregator Module
+Combines individual page, file, clipboard, and system routers under a single APIRouter.
+Exposes sub-router symbols dynamically to retain full compatibility with test scripts.
+"""
+
 from fastapi import APIRouter
 
 # Import sub-routers

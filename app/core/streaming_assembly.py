@@ -11,13 +11,13 @@ from pathlib import Path
 from typing import Dict, Set, Optional, Union
 from dataclasses import dataclass, field
 
-# First, try to detect Termux and use ultra-minimal version
+from app.utils.termux_compat import is_android_environment
+
 _TERMUX_MODE = False
 
 try:
     # Check for Termux environment
-    if (os.environ.get('TERMUX_VERSION') or 
-        os.path.exists('/data/data/com.termux')):
+    if is_android_environment():
         
         print("[!] Termux detected - using ultra-minimal safe mode")
         _TERMUX_MODE = True

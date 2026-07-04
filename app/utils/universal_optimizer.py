@@ -1,7 +1,12 @@
 """
-Universal Platform Optimizer with Termux Compatibility
-Performance optimizations for large file uploads on ALL platforms (Windows, Linux, Mac, Android)
-Enhanced with Termux memory monitoring and background processing management
+[RETRY] Universal Platform Optimizer with Termux Compatibility
+Applies performance optimizations for large file uploads on Windows, Linux, MacOS, and Android.
+
+Key Features:
+- Platform-adaptive file transfer chunk sizing (from 512KB to 4MB depending on size/memory)
+- Strategic garbage collection sweeps to prevent memory pressure warnings
+- Safe OS system calls mapping with error-resilient fallbacks
+- Background processing limits keepalive tasks helper
 """
 
 import os
@@ -96,9 +101,7 @@ class UniversalOptimizer:
     
     def _detect_platform(self) -> str:
         """Detect the current platform"""
-        if ("ANDROID_STORAGE" in os.environ or 
-            os.path.exists("/data/data/com.termux") or 
-            "TERMUX_VERSION" in os.environ):
+        if is_android_environment():
             return 'android'
         
         system = platform.system().lower()

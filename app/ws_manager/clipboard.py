@@ -1,3 +1,13 @@
+"""
+[INFO] Clipboard WebSocket Manager
+Implements memory-safe WebSocket connections for real-time clipboard sync across devices.
+
+Key Features:
+- Unique connection tracking with metadata registries
+- Periodic background timeout pruning of idle clients
+- Weakref tracking sets to prevent reference cycles and leaks
+"""
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import Dict, List, Optional
 import asyncio
@@ -42,17 +52,23 @@ class ClipboardConnectionManager:
         self._start_cleanup_task()
 
     def _start_cleanup_task(self):
-        """Start background cleanup task"""
+        """
+        Starts the background worker task to clean up expired and stale connections.
+        Ensures a single active background cleanup loop is maintained.
+        """
         if self._cleanup_task is None or self._cleanup_task.done():
             try:
                 loop = asyncio.get_running_loop()
                 self._cleanup_task = loop.create_task(self._background_cleanup())
             except RuntimeError:
-                # No event loop running - cleanup will be manual
+                # No running event loop found (e.g. testing or initialization phase)
                 pass
 
     async def _background_cleanup(self):
-        """Background task to clean up stale connections"""
+        """
+        Background execution loop executing at regular intervals to trigger connection sweeps.
+        Ensures proper resource disposal and gracefully exits upon cancellation.
+        """
         while not self._shutdown_requested:
             try:
                 await asyncio.sleep(self.cleanup_interval)
@@ -61,31 +77,42 @@ class ClipboardConnectionManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                # Log error but don't crash cleanup task
+                # Suppress errors to prevent the background loop from terminating
                 print(f"WebSocket cleanup error: {e}")
         
-        # Final cleanup before shutdown
+        # Run final connection cleanup sweep during server shutdown
         try:
             await self.cleanup_stale_connections()
         except Exception:
             pass
 
     async def connect(self, websocket: WebSocket) -> str:
-        """Connect a new WebSocket with proper tracking"""
-        # Check connection limit
+        """
+        Registers and accepts a new incoming client WebSocket connection.
+        
+        Args:
+            websocket: The incoming FastAPI WebSocket connection instance.
+            
+        Returns:
+            str: A unique hexadecimal token assigned to this connection.
+            
+        Raises:
+            Exception: If the server connection capacity exceeds configured limits.
+        """
+        # Enforce security capacity limits to prevent resource exhaustion / DoS attacks
         if len(self.active_connections) >= self.max_connections:
             await self.cleanup_stale_connections()
             if len(self.active_connections) >= self.max_connections:
                 await websocket.close(code=1013, reason="Server overloaded")
                 raise Exception("Server overloaded - too many connections")
         
-        # Accept connection
+        # Accept the handshake
         await websocket.accept()
         
-        # Generate unique connection ID
+        # Allocate a unique reference token
         connection_id = secrets.token_hex(16)
         
-        # Store connection with metadata
+        # Register the connection mapping and keepalive markers
         self.active_connections[connection_id] = websocket
         self.connection_timeouts[connection_id] = time.time() + self.connection_timeout
         self.connection_metadata[connection_id] = {
@@ -93,17 +120,22 @@ class ClipboardConnectionManager:
             'last_activity': time.time()
         }
         
-        # Add to weak reference set
+        # Append connection to the weak reference tracker
         self.weak_connections.add(websocket)
         
         return connection_id
 
     async def disconnect(self, websocket: Optional[WebSocket] = None, connection_id: Optional[str] = None):
-        """Safely disconnect and clean up resources"""
+        """
+        Gracefully disconnects a connection, locating references by socket object or connection token.
+        
+        Args:
+            websocket: Optional WebSocket instance to close.
+            connection_id: Optional string token representing the socket.
+        """
         if connection_id:
             await self.force_disconnect(connection_id)
         elif websocket:
-            # Find connection ID by websocket
             conn_id = None
             for cid, ws in self.active_connections.items():
                 if ws == websocket:
@@ -114,21 +146,26 @@ class ClipboardConnectionManager:
                 await self.force_disconnect(conn_id)
 
     async def force_disconnect(self, connection_id: str):
-        """Forcefully disconnect and clean up all resources"""
+        """
+        Closes and tears down the specified connection immediately, clearing all registration metadata.
+        
+        Args:
+            connection_id: The connection ID string of the socket.
+        """
         if connection_id in self.active_connections:
             websocket = self.active_connections[connection_id]
             
             try:
-                # Try graceful close first
+                # Attempt graceful websocket close frame
                 await websocket.close()
-            except:
-                # Force close if graceful fails
+            except Exception:
                 try:
+                    # Force socket closure on error
                     await websocket.close(code=1006)
-                except:
-                    pass  # Connection already closed
+                except Exception:
+                    pass  # Socket was already disconnected
             
-            # Clean up all references
+            # Clean up all tracking references
             del self.active_connections[connection_id]
             if connection_id in self.connection_timeouts:
                 del self.connection_timeouts[connection_id]
@@ -136,60 +173,75 @@ class ClipboardConnectionManager:
                 del self.connection_metadata[connection_id]
 
     async def cleanup_stale_connections(self):
-        """Clean up stale/timed-out connections"""
+        """
+        Sweeps the connection registers to disconnect timed-out clients and reclaim memory.
+        Prunes dead weak references left behind by garbage-collected socket objects.
+        """
         current_time = time.time()
         stale_connections = [
             conn_id for conn_id, timeout in self.connection_timeouts.items()
             if current_time > timeout
         ]
         
-        # Also check for weak reference cleanup
+        # Identify orphaned sockets that were collected but not cleared from weak references
         active_ws = set(self.active_connections.values())
         weak_ws = set(self.weak_connections)
         orphaned_ws = weak_ws - active_ws
         
-        # Clean up stale connections
+        # Clean up connections exceeding inactive timeout
         for conn_id in stale_connections:
             await self.force_disconnect(conn_id)
         
-        # Clean up any orphaned connections
+        # Clean up weak reference leftovers
         for ws in orphaned_ws:
             try:
                 await ws.close(code=1001, reason="Connection timeout")
-            except:
+            except Exception:
                 pass
 
     async def update_activity(self, connection_id: str):
-        """Update last activity time for a connection"""
+        """
+        Extends connection life-support timeout based on active transfer signals.
+        
+        Args:
+            connection_id: The connection ID token.
+        """
         if connection_id in self.connection_metadata:
             self.connection_metadata[connection_id]['last_activity'] = time.time()
-            # Extend timeout
             self.connection_timeouts[connection_id] = time.time() + self.connection_timeout
 
     async def broadcast(self, message: str):
-        """Broadcast message to all active connections with cleanup"""
+        """
+        Sends a payload string to all registered WebSockets, pruning dead channels automatically.
+        
+        Args:
+            message: The string data payload to broadcast.
+        """
         if not self.active_connections:
             return
         
-        # Create a copy of connections to avoid modification during iteration
+        # Loop over copy to avoid modification conflicts
         connections_copy = list(self.active_connections.items())
         failed_connections = []
         
         for conn_id, websocket in connections_copy:
             try:
                 await websocket.send_text(message)
-                # Update activity on successful send
                 await self.update_activity(conn_id)
             except Exception:
-                # Mark connection as failed
                 failed_connections.append(conn_id)
         
-        # Clean up failed connections
+        # Purge bad connection handles
         for conn_id in failed_connections:
             await self.force_disconnect(conn_id)
 
     def get_stats(self) -> Dict:
-        """Get connection statistics"""
+        """
+        Retrieves real-time utilization stats for the connection registry.
+        
+        Returns:
+            Dict: Dictionary containing total connections, weak reference counts, and age metrics.
+        """
         current_time = time.time()
         return {
             'total_connections': len(self.active_connections),
@@ -202,8 +254,11 @@ class ClipboardConnectionManager:
         }
 
     async def shutdown(self):
-        """Graceful shutdown - close all connections and cleanup"""
-        # Cancel cleanup task
+        """
+        Cancels the background cleanup loop and forces closure on all active client connections.
+        Registered inside application lifespan shutdown.
+        """
+        # Cancel the task loop
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()
             try:
@@ -211,7 +266,7 @@ class ClipboardConnectionManager:
             except asyncio.CancelledError:
                 pass
         
-        # Close all connections
+        # Close all active sockets
         connection_ids = list(self.active_connections.keys())
         for conn_id in connection_ids:
             await self.force_disconnect(conn_id)
@@ -220,12 +275,15 @@ clipboard_ws_manager = ClipboardConnectionManager()
 
 @clipboard_ws_router.websocket("/ws/clipboard")
 async def clipboard_websocket_endpoint(websocket: WebSocket):
+    """
+    FastAPI WebSocket endpoint for managing live clipboard synchronization across devices.
+    """
     connection_id = None
     try:
         connection_id = await clipboard_ws_manager.connect(websocket)
         while True:
-            data = await websocket.receive_text()
-            # Update activity on message received
+            # Continuously listen for incoming client message payload frames
+            await websocket.receive_text()
             if connection_id:
                 await clipboard_ws_manager.update_activity(connection_id)
     except WebSocketDisconnect:
@@ -234,7 +292,6 @@ async def clipboard_websocket_endpoint(websocket: WebSocket):
         else:
             await clipboard_ws_manager.disconnect(websocket=websocket)
     except Exception:
-        # Clean up on any error
         if connection_id:
             await clipboard_ws_manager.disconnect(connection_id=connection_id)
         else:

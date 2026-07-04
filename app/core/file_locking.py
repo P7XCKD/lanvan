@@ -18,11 +18,11 @@ from pathlib import Path
 from typing import Optional, Union, AsyncIterator
 import logging
 
+from app.utils.termux_compat import is_android_environment
+
 # Platform detection
 IS_WINDOWS = os.name == 'nt'
-IS_ANDROID = ("ANDROID_STORAGE" in os.environ or 
-             os.path.exists("/data/data/com.termux") or 
-             "TERMUX_VERSION" in os.environ)
+IS_ANDROID = is_android_environment()
 PLATFORM_NAME = "Windows" if IS_WINDOWS else "Android/Termux" if IS_ANDROID else "Linux/Unix"
 
 # Configure logging
@@ -123,7 +123,7 @@ class CrossPlatformFileLock:
             if self.lock_handle:
                 try:
                     await asyncio.to_thread(self.lock_handle.close)
-                except:
+                except Exception:
                     pass
                 self.lock_handle = None
             return False
@@ -170,7 +170,7 @@ class CrossPlatformFileLock:
             if self.lock_handle:
                 try:
                     await asyncio.to_thread(self.lock_handle.close)
-                except:
+                except Exception:
                     pass
                 self.lock_handle = None
             return False
@@ -188,7 +188,7 @@ class CrossPlatformFileLock:
                         logger.debug(f"[CLEAN] Removed stale lock file: {self.lock_file}")
                     else:
                         return False  # Valid lock exists
-                except:
+                except Exception:
                     pass
             
             # Try to create lock file atomically
@@ -211,7 +211,7 @@ class CrossPlatformFileLock:
             if self.lock_handle:
                 try:
                     await asyncio.to_thread(self.lock_handle.close)
-                except:
+                except Exception:
                     pass
                 self.lock_handle = None
             return False

@@ -1,3 +1,15 @@
+"""
+[CORE] Lanvan FastAPI Application Entry Point
+Initializes the FastAPI application, registers middleware (CORS, network filters),
+binds WebSocket sub-routers, and handles server lifespan events (mDNS, thread lifecycle).
+
+Key Features:
+- Lifespan context manager controlling resource initialization and prioritized shutdowns
+- Secure CORSMiddleware with local network restriction filtering
+- Global client disconnect log silencer filters
+- Custom error pages redirection and loading phase states
+"""
+
 import os
 import signal
 import asyncio
@@ -248,6 +260,16 @@ async def lifespan(app: FastAPI):
     from app.core.streaming_assembly import shutdown_streaming_assembly
     shutdown_streaming_assembly()
     
+    # Stop WebSocket managers
+    print("[WS] Stopping WebSocket connection managers...")
+    try:
+        from app.ws_manager import clipboard_ws_manager, upload_status_manager
+        await clipboard_ws_manager.shutdown()
+        await upload_status_manager.shutdown()
+        print("[OK] WebSocket managers shutdown successfully")
+    except Exception as ws_err:
+        print(f"[WARN] WebSocket managers shutdown warning: {ws_err}")
+    
     # Stop mDNS service
     print(" Stopping mDNS service...")
     mdns_manager.stop_service()
@@ -485,7 +507,7 @@ def are_resources_ready():
         if os.path.exists(template_dir) and os.path.exists(static_dir):
             resources_ready = True
             return True
-    except:
+    except Exception:
         pass
     
     return False

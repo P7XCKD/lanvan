@@ -1,3 +1,14 @@
+"""
+[NET] mDNS / Zeroconf Local Network Auto-Discovery Service
+Enables zero-configuration host discovery so clients can connect via lanvan.local.
+
+Key Features:
+- Platform-optimized LAN IP auto-detection (Termux / Android / Windows / Linux)
+- Callback signature resolution mapping older vs newer Zeroconf library APIs
+- Automatic port conflicts detection and active resource cleanup
+- Hybrid URL fallback outputting direct IPs if multicast DNS fails
+"""
+
 import socket
 import threading
 import time
@@ -8,6 +19,7 @@ import platform
 import os
 from typing import Optional, Dict, Any
 from zeroconf import ServiceInfo, Zeroconf, ServiceBrowser
+from app.utils.termux_compat import is_android_environment
 
 # Zeroconf version compatibility check
 try:
@@ -15,7 +27,7 @@ try:
     import zeroconf
     ZEROCONF_VERSION = getattr(zeroconf, '__version__', '0.0.0')
     ZEROCONF_NEW_API = tuple(map(int, ZEROCONF_VERSION.split('.')[:2])) >= (0, 132)
-except:
+except Exception:
     ZEROCONF_NEW_API = True  # Assume newer version if can't detect
 
 def check_mdns_dependencies() -> tuple[bool, str]:
@@ -28,9 +40,7 @@ def check_mdns_dependencies() -> tuple[bool, str]:
         test_zc.close()
         
         # Check for Android/Termux specific requirements
-        is_android = ("ANDROID_STORAGE" in os.environ or 
-                     os.path.exists("/data/data/com.termux") or 
-                     "TERMUX_VERSION" in os.environ)
+        is_android = is_android_environment()
         
         if is_android:
             # Check if avahi is available (recommended for Termux)
@@ -40,7 +50,7 @@ def check_mdns_dependencies() -> tuple[bool, str]:
                                       capture_output=True, text=True)
                 if result.returncode != 0:
                     return True, "[WARN] mDNS on Android/Termux has limitations. Consider IP access instead."
-            except:
+            except Exception:
                 pass
             
             # Additional warning for Android/Termux users
@@ -137,7 +147,7 @@ class SimpleMDNSManager:
                 hostname = ''.join(c if c.isalnum() or c == '-' else '' for c in hostname)
                 if hostname and hostname != 'localhost':
                     device_parts.append(hostname[:8])  # Max 8 chars
-            except:
+            except Exception:
                 pass
             
             # Get MAC address (hardware-based, persistent)
@@ -145,7 +155,7 @@ class SimpleMDNSManager:
                 mac = uuid.getnode()
                 mac_hex = format(mac, 'x')[-4:]  # Last 4 hex digits
                 device_parts.append(mac_hex)
-            except:
+            except Exception:
                 pass
             
             # Get platform info for differentiation
@@ -161,7 +171,7 @@ class SimpleMDNSManager:
                     device_parts.append('mac')
                 else:
                     device_parts.append('other')
-            except:
+            except Exception:
                 device_parts.append('unknown')
             
             # Create identifier from available parts
@@ -202,7 +212,7 @@ class SimpleMDNSManager:
                     try:
                         if self.service_info and self.zeroconf:
                             self.zeroconf.register_service(self.service_info)
-                    except:
+                    except Exception:
                         pass  # Ignore re-registration errors
                         
                 # Then announce every 30 seconds (maintenance)
@@ -210,7 +220,7 @@ class SimpleMDNSManager:
                     try:
                         if self.service_info and self.zeroconf:
                             self.zeroconf.register_service(self.service_info)
-                    except:
+                    except Exception:
                         pass
                         
         except Exception as e:
@@ -247,7 +257,7 @@ class SimpleMDNSManager:
                     
                     try:
                         browser.cancel()
-                    except:
+                    except Exception:
                         pass  # Ignore cancel errors
                         
                 except Exception as browser_error:
@@ -277,7 +287,7 @@ class SimpleMDNSManager:
                 if zeroconf_browser:
                     try:
                         zeroconf_browser.close()
-                    except:
+                    except Exception:
                         pass
                 
         except Exception as e:
@@ -360,14 +370,12 @@ class SimpleMDNSManager:
                     test_socket.bind((self.lan_ip, 0))
                     test_socket.close()
                     return self.lan_ip
-                except:
+                except Exception:
                     # IP no longer valid, clear cache
                     self.lan_ip = None
             
             # Check if we're on Android/Termux for special handling
-            is_android = ("ANDROID_STORAGE" in os.environ or 
-                         os.path.exists("/data/data/com.termux") or 
-                         "TERMUX_VERSION" in os.environ)
+            is_android = is_android_environment()
             
             if is_android:
                 print("[MOBILE] Detecting network interface on Android/Termux...")
@@ -396,7 +404,7 @@ class SimpleMDNSManager:
                     return self.lan_ip
                 elif is_android and host_ip == '192.0.0.4':
                     print("[MOBILE] Detected problematic IP 192.0.0.4, trying alternatives...")
-            except:
+            except Exception:
                 pass
             
             # Method 2: Scan network interfaces manually (offline-compatible)
@@ -422,7 +430,7 @@ class SimpleMDNSManager:
                         if is_android:
                             print(f"[MOBILE] Android IP detected: {local_ip}")
                         return self.lan_ip
-                except:
+                except Exception:
                     continue
             
             # Method 4: Use psutil if available (most reliable offline method)
@@ -478,9 +486,7 @@ class SimpleMDNSManager:
                 print(f"   {self.mdns_status}")
                 
                 # Check if we're on Android/Termux for special handling
-                is_android = ("ANDROID_STORAGE" in os.environ or 
-                             os.path.exists("/data/data/com.termux") or 
-                             "TERMUX_VERSION" in os.environ)
+                is_android = is_android_environment()
                 
                 # Enhanced cleanup before start (important for Termux restarts)
                 force_cleanup_mdns_resources()
@@ -488,7 +494,7 @@ class SimpleMDNSManager:
                 if self.zeroconf:
                     try:
                         self.zeroconf.close()
-                    except:
+                    except Exception:
                         pass
                     self.zeroconf = None
                 
@@ -597,9 +603,7 @@ class SimpleMDNSManager:
                 print(f"[NET] Guest devices can now discover this server!")
                 
                 # Check if we're on Android/Termux for special messaging
-                is_android = ("ANDROID_STORAGE" in os.environ or 
-                             os.path.exists("/data/data/com.termux") or 
-                             "TERMUX_VERSION" in os.environ)
+                is_android = is_android_environment()
                 
                 if is_android:
                     print(f"[MOBILE] Android/Termux {protocol_name} Server:")
@@ -649,7 +653,7 @@ class SimpleMDNSManager:
             if self.zeroconf:
                 try:
                     self.zeroconf.close()
-                except:
+                except Exception:
                     pass
                 self.zeroconf = None
             return False
@@ -688,7 +692,7 @@ class SimpleMDNSManager:
                         # Force garbage collection to free network resources
                         import gc
                         gc.collect()
-                    except:
+                    except Exception:
                         pass
                 
                 # Reset all state
@@ -741,9 +745,7 @@ class SimpleMDNSManager:
     def get_hybrid_url(self) -> str:
         """Get the best URL for QR code generation - prioritize IP on Android/Termux"""
         # Check if we're on Android/Termux
-        is_android = ("ANDROID_STORAGE" in os.environ or 
-                     os.path.exists("/data/data/com.termux") or 
-                     "TERMUX_VERSION" in os.environ)
+        is_android = is_android_environment()
         
         if is_android:
             # On Android/Termux, always prefer IP-based URLs since .local often fails

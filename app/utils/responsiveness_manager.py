@@ -12,6 +12,7 @@ from enum import Enum
 import logging
 
 from app.utils.thread_manager import thread_manager, ThreadPriority
+from app.utils.termux_compat import is_android_environment
 
 class ResponsivenessMode(Enum):
     """Responsiveness optimization modes"""
@@ -122,7 +123,7 @@ class UnifiedResponsivenessManager:
             import os
             
             # Check for Termux/Android
-            if 'ANDROID_ROOT' in os.environ or 'TERMUX_VERSION' in os.environ:
+            if is_android_environment():
                 return ResponsivenessMode.MOBILE
             
             # Check for server environment
@@ -366,42 +367,9 @@ class UnifiedResponsivenessManager:
 responsiveness_manager = UnifiedResponsivenessManager()
 
 # Convenience functions
-def optimize_responsiveness_for_environment():
-    """Auto-optimize responsiveness for current environment"""
-    responsiveness_manager.optimize_for_environment()
-
-def create_responsive_operation(operation_id: str, operation_type: str, estimated_size: int = 0):
-    """Create a responsive operation context"""
-    responsiveness_manager.register_operation(operation_id, operation_type, estimated_size)
-    return operation_id
-
-def should_yield_now(operation_id: str, processed_amount: int = 0) -> bool:
-    """Check if operation should yield control now"""
-    return responsiveness_manager.should_yield(operation_id, processed_amount)
-
-def yield_if_needed(operation_id: str, async_context: bool = False):
-    """Yield control if needed for responsiveness"""
-    return responsiveness_manager.yield_control(operation_id, async_context)
-
-async def async_yield_if_needed(operation_id: str):
-    """Async yield control if needed"""
-    await responsiveness_manager.ayield_control(operation_id)
-
 def get_optimal_chunk_size(operation_type: str) -> int:
     """Get optimal chunk size for operation type"""
     return responsiveness_manager.get_optimal_chunk_size(operation_type)
-
-def start_responsiveness_monitoring():
-    """Start unified responsiveness monitoring"""
-    responsiveness_manager.start_monitoring()
-
-def stop_responsiveness_monitoring():
-    """Stop unified responsiveness monitoring"""
-    responsiveness_manager.stop_monitoring()
-
-def get_responsiveness_metrics() -> Dict[str, Any]:
-    """Get current responsiveness metrics"""
-    return responsiveness_manager.get_performance_metrics()
 
 # Legacy compatibility layer for responsiveness_monitor.py
 class ResponsivenessMonitor:
@@ -459,6 +427,4 @@ async def ensure_responsiveness():
     """Ensure server responsiveness (legacy compatibility)"""
     await responsiveness_manager.ayield_control("ensure_responsiveness")
 
-def get_adaptive_settings() -> Dict[str, Any]:
-    """Get adaptive performance settings (legacy compatibility)"""
-    return responsiveness_monitor.get_recommended_settings()
+
