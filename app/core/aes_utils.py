@@ -1,3 +1,15 @@
+"""
+[LOCK] Core Cryptographic & AES Utilities for Lanvan
+Handles zero-memory streaming file encryption, session keys, and secure HTTP parameter bindings.
+
+Key Features:
+- Platform-adaptive zero-memory streaming encryption (disk-to-disk & generator-based)
+- Secure, password-based key derivation using PBKDF2HMAC
+- Encrypted file stream chunking matching Termux memory thresholds
+- Session-based temporary in-memory key management
+- Safe HTTP parameters integration with metadata obfuscation
+"""
+
 import os
 import hashlib
 import gc

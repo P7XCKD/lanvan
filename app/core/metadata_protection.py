@@ -1,8 +1,12 @@
 """
 [LOCK] Metadata Protection for HTTP-Safe AES Encryption
+Implements metadata protection to make AES encryption secure by hiding filenames, sizes, and patterns.
 
-This module implements comprehensive metadata protection to make AES encryption
-secure over HTTP by hiding filenames, sizes, and patterns.
+Key Features:
+- Secure, deterministic filename obfuscation using HMAC/SHA-256
+- Dynamic file size padding to prevent traffic analysis attacks
+- Metadata encryption with Base64 safe transport formatting
+- Decoy traffic pattern simulation helpers
 """
 
 import os
