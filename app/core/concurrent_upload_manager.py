@@ -22,6 +22,7 @@ from pathlib import Path
 from fastapi import UploadFile
 from concurrent.futures import ThreadPoolExecutor
 import threading
+from app.utils.termux_compat import is_android_environment
 
 # Import universal optimizer with fallback
 try:
@@ -554,9 +555,7 @@ class ConcurrentUploadManager:
         
         # Platform detection
         is_windows = os.name == 'nt'
-        is_android = ("ANDROID_STORAGE" in os.environ or 
-                     os.path.exists("/data/data/com.termux") or 
-                     "TERMUX_VERSION" in os.environ)
+        is_android = is_android_environment()
         
         platform_name = "Windows" if is_windows else "Android/Termux" if is_android else "Linux/Unix"
         

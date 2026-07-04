@@ -96,9 +96,7 @@ class UniversalOptimizer:
     
     def _detect_platform(self) -> str:
         """Detect the current platform"""
-        if ("ANDROID_STORAGE" in os.environ or 
-            os.path.exists("/data/data/com.termux") or 
-            "TERMUX_VERSION" in os.environ):
+        if is_android_environment():
             return 'android'
         
         system = platform.system().lower()

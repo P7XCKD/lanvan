@@ -21,6 +21,7 @@ except ImportError:
 
 from fastapi import APIRouter, Request, Query, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse, Response
+from app.utils.termux_compat import is_android_environment
 
 from app.core.aes_utils import AESConfig
 from app.utils.simple_mdns import mdns_manager
@@ -317,9 +318,7 @@ async def get_network_info():
         import os
         
         # Check if we're on Android/Termux
-        is_android = ("ANDROID_STORAGE" in os.environ or 
-                     os.path.exists("/data/data/com.termux") or 
-                     "TERMUX_VERSION" in os.environ)
+        is_android = is_android_environment()
         
         # Use mDNS manager's offline-capable method to get LAN IP
         lan_ip = mdns_manager.get_lan_ip()
@@ -392,10 +391,9 @@ async def get_network_info():
 async def generate_offline_qr(text: str, size: int = 200):
     """Generate QR code locally without internet dependency - Android/Termux optimized"""
     try:
+        
         # Android/Termux detection
-        is_android = ("ANDROID_STORAGE" in os.environ or 
-                     os.path.exists("/data/data/com.termux") or 
-                     "TERMUX_VERSION" in os.environ)
+        is_android = is_android_environment()
         
         if is_android:
             print("[MOBILE] Android/Termux QR generation - using optimized settings")

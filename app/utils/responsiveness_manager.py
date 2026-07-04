@@ -12,6 +12,7 @@ from enum import Enum
 import logging
 
 from app.utils.thread_manager import thread_manager, ThreadPriority
+from app.utils.termux_compat import is_android_environment
 
 class ResponsivenessMode(Enum):
     """Responsiveness optimization modes"""
@@ -122,7 +123,7 @@ class UnifiedResponsivenessManager:
             import os
             
             # Check for Termux/Android
-            if 'ANDROID_ROOT' in os.environ or 'TERMUX_VERSION' in os.environ:
+            if is_android_environment():
                 return ResponsivenessMode.MOBILE
             
             # Check for server environment
