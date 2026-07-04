@@ -1,7 +1,12 @@
 """
-Universal Platform Optimizer with Termux Compatibility
-Performance optimizations for large file uploads on ALL platforms (Windows, Linux, Mac, Android)
-Enhanced with Termux memory monitoring and background processing management
+[RETRY] Universal Platform Optimizer with Termux Compatibility
+Applies performance optimizations for large file uploads on Windows, Linux, MacOS, and Android.
+
+Key Features:
+- Platform-adaptive file transfer chunk sizing (from 512KB to 4MB depending on size/memory)
+- Strategic garbage collection sweeps to prevent memory pressure warnings
+- Safe OS system calls mapping with error-resilient fallbacks
+- Background processing limits keepalive tasks helper
 """
 
 import os

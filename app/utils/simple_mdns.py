@@ -1,3 +1,14 @@
+"""
+[NET] mDNS / Zeroconf Local Network Auto-Discovery Service
+Enables zero-configuration host discovery so clients can connect via lanvan.local.
+
+Key Features:
+- Platform-optimized LAN IP auto-detection (Termux / Android / Windows / Linux)
+- Callback signature resolution mapping older vs newer Zeroconf library APIs
+- Automatic port conflicts detection and active resource cleanup
+- Hybrid URL fallback outputting direct IPs if multicast DNS fails
+"""
+
 import socket
 import threading
 import time
