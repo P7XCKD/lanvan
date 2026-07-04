@@ -167,10 +167,4 @@ async def safe_delete_file(file_path: Path, max_attempts: int = 5) -> tuple[bool
     """Convenience function for safe file deletion"""
     return await WindowsFileManager.safe_delete_file(file_path, max_attempts)
 
-def force_release_handles():
-    """Convenience function for handle release"""
-    WindowsFileManager.force_release_handles()
 
-async def async_force_release_handles():
-    """Convenience function for async handle release"""
-    await WindowsFileManager.async_force_release_handles()
