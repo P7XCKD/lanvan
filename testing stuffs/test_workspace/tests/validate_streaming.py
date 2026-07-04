@@ -17,7 +17,7 @@ def test_streaming_integration():
     try:
         # Test 1: Import streaming assembly module
         print("1⃣  Testing streaming assembly import...")
-        from app.streaming_assembly import (
+        from app.core.streaming_assembly import (
             StreamingChunkAssembler, 
             initialize_streaming_assembly,
             get_streaming_assembler,

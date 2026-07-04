@@ -36,7 +36,7 @@ def test_android_termux_compatibility():
     # 2. Test AES functions with minimal resources
     print("\n[LOCK] Testing AES encryption...")
     try:
-        from app.aes_utils import encrypt_file_stream, decrypt_file_stream
+        from app.core.aes_utils import encrypt_file_stream, decrypt_file_stream
         
         # Test with various data sizes
         test_cases = [
@@ -62,7 +62,7 @@ def test_android_termux_compatibility():
     # 3. Test file streaming
     print("\n[DIR] Testing file streaming...")
     try:
-        from app.aes_utils import encrypt_file_to_file_streaming
+        from app.core.aes_utils import encrypt_file_to_file_streaming
         
         # Create test file
         test_file = "termux_test.tmp"
@@ -127,7 +127,7 @@ def test_android_termux_compatibility():
     print("\n[FAST] Testing resource efficiency...")
     try:
         # Test memory monitoring fallback
-        from app.aes_utils import get_memory_usage_mb
+        from app.core.aes_utils import get_memory_usage_mb
         
         memory_usage = get_memory_usage_mb()
         print(f"  [OK] Memory monitoring: {memory_usage:.1f}MB (fallback if psutil unavailable)")

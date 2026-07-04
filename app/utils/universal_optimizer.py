@@ -15,7 +15,7 @@ import subprocess
 
 # Import Termux compatibility layer
 try:
-    from .termux_compat import (
+    from app.utils.termux_compat import (
         is_termux_environment, 
         is_android_environment,
         should_use_lightweight_mode,
@@ -25,7 +25,7 @@ try:
         get_termux_chunk_size,
         safe_psutil_call
     )
-    from .termux_memory_monitor import (
+    from app.utils.termux_memory_monitor import (
         start_termux_memory_monitoring,
         get_memory_adaptive_chunk_size,
         enforce_termux_memory_limit,

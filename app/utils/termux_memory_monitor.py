@@ -10,7 +10,7 @@ import time
 import threading
 import asyncio
 from typing import Dict, Any, Optional, Callable
-from .termux_compat import (
+from app.utils.termux_compat import (
     is_termux_environment, 
     is_android_environment,
     get_safe_memory_info,

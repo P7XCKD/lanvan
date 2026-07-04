@@ -910,7 +910,7 @@ class QuickTest:
         
         try:
             # Use the ACTUAL mDNS implementation that run.py uses
-            from app.simple_mdns import mdns_manager
+            from app.utils.simple_mdns import mdns_manager
             
             self.log("mDNS: Using real SimpleMDNSManager implementation", "INFO")
             
@@ -925,7 +925,7 @@ class QuickTest:
                 
                 # Check dependencies first
                 try:
-                    from app.simple_mdns import check_mdns_dependencies
+                    from app.utils.simple_mdns import check_mdns_dependencies
                     deps_available, deps_msg = check_mdns_dependencies()
                     self.log(f"mDNS dependencies: {deps_msg}", "INFO")
                     
@@ -1039,7 +1039,7 @@ class QuickTest:
             # Check responsiveness monitor with fallback detection
             responsiveness_working = False
             try:
-                from app.responsiveness_manager import responsiveness_monitor
+                from app.utils.responsiveness_manager import responsiveness_monitor
                 if hasattr(responsiveness_monitor, 'get_stats'):
                     stats = responsiveness_monitor.get_stats()
                     self.log("Responsiveness monitor: Active with stats", "PASS")
@@ -1081,7 +1081,7 @@ class QuickTest:
             except Exception as e:
                 try:
                     # Fallback: check if thread manager module exists
-                    import app.thread_manager
+                    import app.utils.thread_manager
                     self.log("Thread manager: Module available", "PASS")
                     thread_working = True
                 except:
@@ -1106,8 +1106,8 @@ class QuickTest:
             except Exception as e:
                 try:
                     # Fallback: check if AES modules exist
-                    import app.aes_utils
-                    import app.aes_utils
+                    import app.core.aes_utils
+                    import app.core.aes_utils
                     self.log("AES config: Modules available", "PASS")
                     aes_working = True
                 except:
@@ -1129,7 +1129,7 @@ class QuickTest:
             except Exception as e:
                 try:
                     # Try simple platform
-                    from app.termux_compat import detect_platform, is_android, is_termux
+                    from app.utils.termux_compat import detect_platform, is_android, is_termux
                     platform = detect_platform()
                     android = is_android()
                     termux = is_termux()
@@ -1159,8 +1159,8 @@ class QuickTest:
             except Exception as e:
                 try:
                     # Fallback: check individual modules
-                    import app.validation
-                    import app.concurrent_upload_manager
+                    import app.core.validation
+                    import app.core.concurrent_upload_manager
                     self.log("File processing: Core modules available", "PASS")
                     file_processing_working = True
                 except:
@@ -1199,7 +1199,7 @@ class QuickTest:
             # Test 2: Streaming assembly system
             streaming_working = False
             try:
-                from app.streaming_assembly import (
+                from app.core.streaming_assembly import (
                     initialize_streaming_assembly,
                     get_streaming_assembler,
                     shutdown_streaming_assembly
@@ -1263,7 +1263,7 @@ class QuickTest:
             # Test 4: Concurrent upload manager
             concurrent_working = False
             try:
-                from app.concurrent_upload_manager import (
+                from app.core.concurrent_upload_manager import (
                     ConcurrentUploadManager,
                     concurrent_upload_manager,
                     save_upload_file_async
@@ -1314,7 +1314,7 @@ class QuickTest:
                             self.log(f"Memory management: {bad_patterns} memory-loading patterns still exist", "WARN")
                 
                 # Check validation.py for streaming fixes
-                validation_file = project_root / "app" / "validation.py"
+                validation_file = project_root / "app" / "core" / "validation.py"
                 if validation_file.exists():
                     with open(validation_file, 'r', encoding='utf-8') as f:
                         content = f.read()
@@ -1323,7 +1323,7 @@ class QuickTest:
                             self.components['stream_validation'] = True
                 
                 # Check concurrent_upload_manager.py for streaming fixes
-                concurrent_file = project_root / "app" / "concurrent_upload_manager.py"
+                concurrent_file = project_root / "app" / "core" / "concurrent_upload_manager.py"
                 if concurrent_file.exists():
                     with open(concurrent_file, 'r', encoding='utf-8') as f:
                         content = f.read()
@@ -1367,7 +1367,7 @@ class QuickTest:
             if sys_platform.system().lower() == 'windows':
                 windows_working = False
                 try:
-                    from app.windows_file_manager import WindowsFileManager
+                    from app.core.windows_file_manager import WindowsFileManager
                     
                     # Test if enhanced cleanup methods exist
                     if hasattr(WindowsFileManager, 'enhanced_cleanup_with_diagnostics'):
@@ -1431,7 +1431,7 @@ class QuickTest:
             # Test mDNS system specifically
             mdns_working = False
             try:
-                from app.simple_mdns import mdns_manager
+                from app.utils.simple_mdns import mdns_manager
                 
                 # Get detailed mDNS info
                 mdns_info = mdns_manager.get_mdns_info()
@@ -1487,7 +1487,7 @@ class QuickTest:
             # Test universal optimizer integration
             universal_working = False
             try:
-                from app.universal_optimizer import universal_optimizer
+                from app.utils.universal_optimizer import universal_optimizer
                 
                 if universal_optimizer:
                     platform_type = getattr(universal_optimizer, 'platform_type', 'unknown')
@@ -1536,7 +1536,7 @@ class QuickTest:
                 project_root = Path(__file__).parent
                 
                 # Check for mDNS optimizations
-                mdns_file = project_root / "app" / "simple_mdns.py"
+                mdns_file = project_root / "app" / "utils" / "simple_mdns.py"
                 if mdns_file.exists():
                     with open(mdns_file, 'r', encoding='utf-8') as f:
                         content = f.read()
@@ -1579,7 +1579,7 @@ class QuickTest:
             
             # Test mDNS manager functionality
             try:
-                from app.simple_mdns import mdns_manager
+                from app.utils.simple_mdns import mdns_manager
                 
                 # Test hybrid URL generation
                 if hasattr(mdns_manager, 'get_hybrid_url'):
@@ -1779,7 +1779,7 @@ class QuickTest:
             # Test error handling in various modules
             try:
                 # Check Windows file manager error handling
-                from app.windows_file_manager import WindowsFileManager
+                from app.core.windows_file_manager import WindowsFileManager
                 
                 if hasattr(WindowsFileManager, 'safe_delete_file'):
                     self.log("Error handling: Safe file operations available", "PASS")
@@ -1794,7 +1794,7 @@ class QuickTest:
             
             # Test concurrent upload error handling
             try:
-                from app.concurrent_upload_manager import ConcurrentUploadManager
+                from app.core.concurrent_upload_manager import ConcurrentUploadManager
                 
                 # Check if error handling methods exist
                 if hasattr(ConcurrentUploadManager, 'get_system_status'):
@@ -1806,7 +1806,7 @@ class QuickTest:
             
             # Test streaming assembly error handling
             try:
-                from app.streaming_assembly import (
+                from app.core.streaming_assembly import (
                     initialize_streaming_assembly,
                     shutdown_streaming_assembly
                 )
@@ -1863,7 +1863,7 @@ class QuickTest:
             self.log("Testing file locking system...")
             try:
                 # Test new file locking system
-                from app.file_locking import CrossPlatformFileLock, get_file_lock_manager
+                from app.core.file_locking import CrossPlatformFileLock, get_file_lock_manager
                 
                 # Test basic file lock creation
                 test_lock = CrossPlatformFileLock("test.lock", timeout=1.0)
@@ -1886,7 +1886,7 @@ class QuickTest:
             # Test 3: Concurrent Upload Safety
             self.log("Testing concurrent upload safety...")
             try:
-                from app.concurrent_upload_manager import ConcurrentUploadManager
+                from app.core.concurrent_upload_manager import ConcurrentUploadManager
                 
                 manager = ConcurrentUploadManager()
                 if hasattr(manager, '_perform_atomic_move') and hasattr(manager, 'upload_lock'):
@@ -1943,7 +1943,7 @@ class QuickTest:
             # Test 6: Retry Logic System
             self.log("Testing retry logic system...")
             try:
-                from app.concurrent_upload_manager import ConcurrentUploadManager
+                from app.core.concurrent_upload_manager import ConcurrentUploadManager
                 import inspect
                 
                 manager = ConcurrentUploadManager()
@@ -2145,7 +2145,7 @@ class QuickTest:
             # Test memory-efficient validation
             self.log("Testing memory-efficient validation...")
             try:
-                from app.validation import validate_upload_files_enhanced_fast
+                from app.core.validation import validate_upload_files_enhanced_fast
                 import inspect
                 
                 # Check if chunked validation is implemented

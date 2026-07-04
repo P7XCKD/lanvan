@@ -9,7 +9,7 @@ Tests all new streaming encryption methods with progressively larger files.
 import os
 import time
 import psutil
-from app.aes_utils import (
+from app.core.aes_utils import (
     encrypt_file_stream, 
     encrypt_file_to_file_streaming, 
     encrypt_file_generator_streaming,

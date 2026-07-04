@@ -10,7 +10,7 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from app.simple_mdns import SimpleMDNSManager, check_mdns_dependencies, force_cleanup_mdns_resources
+from app.utils.simple_mdns import SimpleMDNSManager, check_mdns_dependencies, force_cleanup_mdns_resources
 import time
 
 def test_mdns_lifecycle():

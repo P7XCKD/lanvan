@@ -16,8 +16,8 @@ async def test_websocket_shutdown_coordination():
     print("=" * 50)
     
     try:
-        from app.clipboard_ws import ClipboardConnectionManager
-        from app.upload_status_ws import UploadStatusConnectionManager
+        from app.ws_manager import ClipboardConnectionManager
+        from app.ws_manager import UploadStatusConnectionManager
         
         # Create managers
         clipboard_mgr = ClipboardConnectionManager()
@@ -74,8 +74,8 @@ async def test_graceful_shutdown_simulation():
     print("=" * 50)
     
     try:
-        from app.clipboard_ws import clipboard_ws_manager
-        from app.upload_status_ws import upload_status_manager
+        from app.ws_manager import clipboard_ws_manager
+        from app.ws_manager import upload_status_manager
         
         print("[OK] Using global WebSocket managers")
         

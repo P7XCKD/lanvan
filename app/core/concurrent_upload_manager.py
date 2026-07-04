@@ -25,7 +25,7 @@ import threading
 
 # Import universal optimizer with fallback
 try:
-    from .universal_optimizer import universal_optimizer
+    from app.utils.universal_optimizer import universal_optimizer
 except ImportError:
     try:
         from universal_optimizer import universal_optimizer
@@ -41,10 +41,10 @@ except ImportError:
 
 # Import responsiveness monitor with fallback
 try:
-    from .responsiveness_manager import responsiveness_monitor, ensure_responsiveness
+    from app.utils.responsiveness_manager import responsiveness_monitor, ensure_responsiveness
 except ImportError:
     try:
-        from app.responsiveness_manager import responsiveness_monitor, ensure_responsiveness  
+        from app.utils.responsiveness_manager import responsiveness_monitor, ensure_responsiveness  
     except ImportError:
         # Fallback responsiveness function
         async def ensure_responsiveness(): 
@@ -52,7 +52,7 @@ except ImportError:
 
 # Import file locking with fallback
 try:
-    from .file_locking import get_file_lock_manager
+    from app.core.file_locking import get_file_lock_manager
 except ImportError:
     try:
         from file_locking import get_file_lock_manager
@@ -155,7 +155,7 @@ class ConcurrentUploadManager:
                 file_size = getattr(upload_file, 'size', 0)
                 if file_size == 0:
                     # Last resort: stream to get size then reset using Termux-optimized chunks
-                    from .universal_optimizer import get_adaptive_chunk_size
+                    from app.utils.universal_optimizer import get_adaptive_chunk_size
                     CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
                     file_size = 0
                     temp_chunks = []
@@ -334,7 +334,7 @@ class ConcurrentUploadManager:
                         # Import encryption function
                         try:
                             try:
-                                from .aes_utils import encrypt_file_stream
+                                from app.core.aes_utils import encrypt_file_stream
                             except ImportError:
                                 from aes_utils import encrypt_file_stream
                             print(f"[AUTH] [{upload_id}] Encrypting chunk {chunk_count} ({len(chunk):,} bytes)")

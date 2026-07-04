@@ -14,7 +14,7 @@ async def test_realistic_file_scanning():
     """Test realistic file scanning scenarios"""
     print(" Testing realistic file scanning performance...")
     
-    from app.task_manager import LightweightTaskManager, submit_background_task
+    from app.utils.task_manager import LightweightTaskManager, submit_background_task
     
     # Simulate realistic file operations
     async def scan_small_file():
@@ -93,7 +93,7 @@ async def test_submission_overhead():
     """Test pure task submission overhead"""
     print(" Testing task submission overhead...")
     
-    from app.task_manager import LightweightTaskManager
+    from app.utils.task_manager import LightweightTaskManager
     
     tm = LightweightTaskManager(max_concurrent_tasks=50)  # Higher limit
     
@@ -145,7 +145,7 @@ async def compare_with_raw_asyncio():
     raw_time = time.time() - start_time
     
     # Test 2: Task manager (5 tasks)
-    from app.task_manager import submit_background_task
+    from app.utils.task_manager import submit_background_task
     
     start_time = time.time()
     managed_tasks = []

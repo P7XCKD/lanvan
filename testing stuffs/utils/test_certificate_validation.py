@@ -20,7 +20,7 @@ def test_certificate_validation():
     print("=" * 50)
     
     try:
-        from app.certificate_validator import (
+        from app.utils.certificate_validator import (
             SafeCertificateValidator, 
             validate_and_warn_certificates,
             quick_certificate_check
@@ -169,7 +169,7 @@ def test_non_breaking_functionality():
     print("=" * 40)
     
     try:
-        from app.certificate_validator import quick_certificate_check
+        from app.utils.certificate_validator import quick_certificate_check
         certs_dir = Path("certs")
         
         # This should always return True/False, never crash

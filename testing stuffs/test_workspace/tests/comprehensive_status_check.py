@@ -53,7 +53,7 @@ def test_mdns_functionality():
     
     # Test 2: Check if mDNS service is running
     try:
-        from app.simple_mdns import mdns_manager
+        from app.utils.simple_mdns import mdns_manager
         print(f"[OK] LANVAN mDNS manager available")
         print(f"   Service name: {mdns_manager.service_name}")
         print(f"   Domain: {mdns_manager.domain}")
@@ -94,7 +94,7 @@ def check_performance_optimizations():
     # 2. Race Condition (check concurrent upload manager)
     print("\n2. Race Condition Protection:")
     try:
-        from app.concurrent_upload_manager import concurrent_upload_manager
+        from app.core.concurrent_upload_manager import concurrent_upload_manager
         print("   [OK] Concurrent upload manager available")
         results['race_condition'] = True
     except Exception as e:
@@ -160,7 +160,7 @@ def check_performance_optimizations():
     # 8. Thread Management
     print("\n8. Thread Management:")
     try:
-        from app.thread_manager import thread_manager
+        from app.utils.thread_manager import thread_manager
         print("   [OK] Thread manager available")
         results['thread_management'] = True
     except Exception as e:

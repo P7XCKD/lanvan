@@ -25,7 +25,7 @@ async def test_task_manager_direct():
     """Test task manager functionality directly"""
     print(" Testing TaskManager directly...")
     
-    from app.task_manager import LightweightTaskManager
+    from app.utils.task_manager import LightweightTaskManager
     
     # Create test task manager
     tm = LightweightTaskManager(max_concurrent_tasks=5, cleanup_interval=10)
@@ -77,7 +77,7 @@ async def test_file_scanning_integration():
     
     try:
         from app.routes import scan_file
-        from app.task_manager import get_task_stats
+        from app.utils.task_manager import get_task_stats
         
         # Create test file
         test_file = Path("temp_chunks/test_scan.txt")
@@ -148,7 +148,7 @@ async def test_memory_usage():
     initial_memory = process.memory_info().rss / 1024 / 1024  # MB
     
     async def memory_test():
-        from app.task_manager import LightweightTaskManager
+        from app.utils.task_manager import LightweightTaskManager
         
         # Create many tasks to check memory usage
         tm = LightweightTaskManager(max_concurrent_tasks=20)
@@ -210,7 +210,7 @@ async def test_performance_comparison():
     
     async def task_manager_test():
         """Test task manager performance"""
-        from app.task_manager import LightweightTaskManager
+        from app.utils.task_manager import LightweightTaskManager
         
         tm = LightweightTaskManager()
         start_time = time.time()

@@ -11,7 +11,7 @@ This script tests the new streaming AES encryption to ensure:
 import os
 import time
 import psutil
-from app.aes_utils import encrypt_file_stream, encrypt_file_from_path_streaming, decrypt_file_stream
+from app.core.aes_utils import encrypt_file_stream, encrypt_file_from_path_streaming, decrypt_file_stream
 
 def create_test_file(filename: str, size_mb: int) -> str:
     """Create a test file of specified size"""

@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
-from .metadata_protection import (
+from app.core.metadata_protection import (
     create_http_safe_upload_params, 
     encrypt_metadata, 
     decrypt_metadata,

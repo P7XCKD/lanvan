@@ -36,7 +36,7 @@ async def test_termux_chunk_sizes():
     try:
         # Import after setting environment
         from app.android_optimizer import universal_optimizer
-        from app.termux_compat import get_termux_chunk_size
+        from app.utils.termux_compat import get_termux_chunk_size
         
         # Test different file sizes
         test_cases = [
@@ -82,7 +82,7 @@ async def test_memory_monitoring():
     os.environ['TERMUX_VERSION'] = '0.118'
     
     try:
-        from app.termux_memory_monitor import (
+        from app.utils.termux_memory_monitor import (
             get_termux_memory_status,
             enforce_termux_memory_limit,
             get_memory_adaptive_chunk_size
@@ -123,7 +123,7 @@ async def test_background_processing():
     os.environ['TERMUX_VERSION'] = '0.118'
     
     try:
-        from app.universal_optimizer import universal_optimizer
+        from app.utils.universal_optimizer import universal_optimizer
         
         # Start background keepalive
         universal_optimizer.start_background_keepalive()
@@ -177,7 +177,7 @@ async def test_upload_with_memory_limits():
             # Simulate memory check every few chunks
             if chunk_count % 10 == 0:
                 try:
-                    from app.termux_memory_monitor import enforce_termux_memory_limit
+                    from app.utils.termux_memory_monitor import enforce_termux_memory_limit
                     if not enforce_termux_memory_limit("upload_test"):
                         print("[BOT] Upload would be paused due to memory pressure")
                         break
