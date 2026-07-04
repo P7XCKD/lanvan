@@ -1,6 +1,12 @@
 """
-Lanvan Thread Management System
-Centralized thread management to prevent resource leaks and zombie processes.
+[CFG] Thread Management System for Lanvan
+Centralized thread manager to prevent resource leaks and zombie processes.
+
+Key Features:
+- Prioritized shutdown stages (Critical, High, Normal, Low)
+- Registered threads tracking and cleanup mapping
+- Automatic signals and atexit event hooks registration
+- Orphaned and zombie thread sweep loops
 """
 
 import threading
@@ -296,19 +302,4 @@ class ThreadManager:
 # Global thread manager instance
 thread_manager = ThreadManager()
 
-# Convenience functions
-def create_managed_thread(target: Callable, name: str, **kwargs) -> threading.Event:
-    """Create a managed thread (convenience function)"""
-    return thread_manager.create_thread(target, name, **kwargs)
 
-def stop_managed_thread(name: str, timeout: Optional[float] = None) -> bool:
-    """Stop a managed thread (convenience function)"""
-    return thread_manager.stop_thread(name, timeout)
-
-def shutdown_all_threads(timeout: float = 30.0) -> bool:
-    """Shutdown all managed threads (convenience function)"""
-    return thread_manager.shutdown_all(timeout)
-
-def get_thread_health() -> Dict[str, Any]:
-    """Get thread system health status (convenience function)"""
-    return thread_manager.health_check()

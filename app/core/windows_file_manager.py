@@ -1,6 +1,12 @@
 """
 [CFG] Windows File Handle Management Utilities
-Helps with file locking issues specific to Windows systems
+Bypasses file locking constraints and optimizes handle release specific to Windows systems.
+
+Key Features:
+- Safe file deletion retry engine for Windows locked file handles
+- Automatic garbage collection triggers during active file locking operations
+- Native Win32 handle inspection and cleanup utilities
+- Robust path validation and error isolation logic
 """
 
 import os
@@ -167,10 +173,4 @@ async def safe_delete_file(file_path: Path, max_attempts: int = 5) -> tuple[bool
     """Convenience function for safe file deletion"""
     return await WindowsFileManager.safe_delete_file(file_path, max_attempts)
 
-def force_release_handles():
-    """Convenience function for handle release"""
-    WindowsFileManager.force_release_handles()
 
-async def async_force_release_handles():
-    """Convenience function for async handle release"""
-    await WindowsFileManager.async_force_release_handles()
