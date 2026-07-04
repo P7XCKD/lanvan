@@ -127,31 +127,6 @@ Handles Windows-specific file locks and unlinking problems.
 
 The following diagram illustrates how a file upload request flows through the core module components:
 
-### 1. ASCII Flow Diagram (Always Visible)
-```
-  [Files Router]          [Validation]         [Lock Manager]        [Assembler]         [Cryptography]
-        |                      |                     |                    |                    |
-        |--- validate() ------>|                     |                    |                    |
-        |                      |-- Check signature --|                    |                    |
-        |<-- returns valid ----|                     |                    |                    |
-        |                                            |                    |                    |
-        |--- acquire_lock() ------------------------>|                    |                    |
-        |                                            |-- Win32/POSIX -----|                    |
-        |<-- lock_acquired --------------------------|                    |                    |
-        |                                                                 |                    |
-        |--- add_chunk(data) -------------------------------------------->|                    |
-        |                                                                 |-- Write to disk ---|
-        |<-- chunk_merged ------------------------------------------------|                    |
-        |                                                                                      |
-        |--- encrypt_file_to_file() ---------------------------------------------------------->|
-        |                                                                                      |-- AES-256-CBC -----|
-        |<-- encryption_done ------------------------------------------------------------------|
-        |                                            |
-        |--- release_lock() ------------------------>|
-        |<-- lock_released --------------------------|
-```
-
-### 2. Mermaid Sequence Diagram
 ```mermaid
 sequenceDiagram
     participant API as Files Router
