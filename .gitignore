@@ -40,14 +40,9 @@ ENV/
 .DS_Store?
 
 # Ignore uploaded files and temporary directories
-app/uploads/
-uploads/
-temp_chunks/
-app/uploads/temp_downloads/
-app/clipboard_data/
+data/
 temp/
 tmp/
-app/.locks/
 
 # Unused static directory (root level only - app/static contains needed files)
 /static/
