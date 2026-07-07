@@ -24,6 +24,6 @@ websockets>=11.0.2
 wsproto>=1.2.0
 
 # Android-specific optimizations
-# These might need special handling on Android
+uvloop>=0.19.0  # Recommended for 2-4x loop speed increase on Termux
 # pyperclip  # May not work on Android
 # aiortc     # P2P features may be limited on mobile

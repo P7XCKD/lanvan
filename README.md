@@ -161,6 +161,21 @@ Certificates are auto-generated on first HTTPS run and stored in `certs/`.
 
 ---
 
+## ⚡ Speed & Performance Optimization
+
+To achieve the absolute maximum file transfer rates over your local network:
+
+1. **Use HTTP Mode (Default):** Run the server without `https` (`python run.py`). This avoids cryptographic CPU overhead on older/low-power devices, boosting speeds by 20% to 50%.
+2. **Install `uvloop` (Linux, macOS, and Termux):**
+   ```bash
+   pip install uvloop
+   ```
+   This replaces Python's default event loop with a C-based loop built for speed, accelerating FastAPI throughput by 2-4x.
+3. **Use a Wired Host Connection:** Connect the host machine via **Ethernet** instead of Wi-Fi. This eliminates wireless packet collisions and frees up bandwidth for receiving clients.
+4. **Use 5 GHz Wi-Fi:** Ensure client devices are connected to the 5 GHz Wi-Fi band of your router rather than 2.4 GHz.
+
+---
+
 ## Project Structure
 
 ```
