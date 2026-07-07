@@ -115,10 +115,20 @@ def initialize_clipboard_persistence():
         clipboard_id_counter = 0
 
 
+def safe_template_response(templates, request, name, context):
+    context = dict(context)
+    if "request" not in context:
+        context["request"] = request
+    try:
+        return templates.TemplateResponse(request, name, context)
+    except (TypeError, ValueError):
+        return templates.TemplateResponse(name, context)
+
+
 @router.get("/clipboard", response_class=HTMLResponse)
 async def clipboard_page(request: Request):
     """Serve clipboard management page."""
-    return templates.TemplateResponse(request=request, name="clipboard.html", context={
+    return safe_template_response(templates, request, "clipboard.html", {
         "clipboard_history": clipboard_history
     })
 
