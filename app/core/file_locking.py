@@ -259,7 +259,7 @@ class FileOperationLock:
     
     def __init__(self, base_path: Union[str, Path]):
         self.base_path = Path(base_path)
-        self.locks_dir = self.base_path.parent / ".locks"
+        self.locks_dir = Path("data/locks")
         self.locks_dir.mkdir(parents=True, exist_ok=True)
     
     @contextlib.asynccontextmanager

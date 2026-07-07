@@ -24,7 +24,7 @@ router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
 # State & Persistence Configurations
-CLIPBOARD_FOLDER = Path("app/clipboard_data")
+CLIPBOARD_FOLDER = Path("data/clipboard")
 CLIPBOARD_HISTORY_FILE = CLIPBOARD_FOLDER / "clipboard_history.json"
 clipboard_history = []
 clipboard_id_counter = 1
