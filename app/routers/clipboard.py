@@ -118,8 +118,7 @@ def initialize_clipboard_persistence():
 @router.get("/clipboard", response_class=HTMLResponse)
 async def clipboard_page(request: Request):
     """Serve clipboard management page."""
-    return templates.TemplateResponse("clipboard.html", {
-        "request": request,
+    return templates.TemplateResponse(request=request, name="clipboard.html", context={
         "clipboard_history": clipboard_history
     })
 
