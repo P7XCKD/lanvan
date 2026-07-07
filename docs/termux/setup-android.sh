@@ -18,47 +18,19 @@ fi
 echo "✅ Termux environment detected"
 echo ""
 
-# Update package list
-echo "📦 Updating Termux packages..."
-pkg update -y
+# Update package list and full upgrade to keep system libraries in sync (fixes curl/openssl mismatches)
+echo "📦 Updating and upgrading Termux packages..."
+pkg update -y && pkg upgrade -y
 
-# Install essential system packages and build tools
-echo "🔧 Installing system dependencies..."
-pkg install -y python python-pip git curl wget clang make cmake
+# Install essential system packages, build tools, and precompiled Python packages
+echo "🔧 Installing system dependencies and precompiled Python packages..."
+pkg install -y python python-pip git curl wget clang make cmake \
+            python-cryptography python-psutil python-fastapi python-uvicorn \
+            python-jinja python-websockets python-qrcode python-zeroconf
 
-# Install pre-compiled cryptography and psutil packages via pkg (avoids hours of compilation!)
-echo "📦 Installing pre-compiled binary packages via pkg..."
-pkg install -y python-cryptography python-psutil
-
-# Upgrade pip
-echo "⬆️ Upgrading pip..."
-python -m pip install --upgrade pip
-
-# Install Python dependencies with Android optimizations
-echo "🐍 Installing Python dependencies..."
-
-# Install core packages first (using plain uvicorn to avoid compilation errors)
-python -m pip install --upgrade fastapi uvicorn jinja2 python-multipart
-
-# Install QR code support (No Pillow to prevent compilation build errors)
-echo "📱 Installing QR code support..."
-python -m pip install --upgrade qrcode
-
-# Install networking packages (excluding psutil since it is installed via pkg)
-echo "🌐 Installing network packages..."
-python -m pip install --upgrade zeroconf aiofiles
-
-# Install WebSocket support
-echo "🔌 Installing WebSocket support..."
-python -m pip install --upgrade websockets wsproto
-
-# Optional: Install performance optimization packages
-echo "🚀 Installing performance packages..."
-python -m pip install --upgrade uvloop brotli
-
-# Optional: Install clipboard support (might not work on all Android versions)
-echo "📋 Attempting to install clipboard support..."
-python -m pip install --upgrade pyperclip || echo "⚠️ Clipboard support failed (this is normal on Android)"
+# Install remaining lightweight and pure-Python packages via pip
+echo "🐍 Installing lightweight Python packages..."
+python -m pip install python-multipart aiofiles wsproto brotli pyperclip || echo "⚠️ Some pip packages failed to install, proceeding..."
 
 # Set up storage permissions
 echo "📁 Setting up storage permissions..."
