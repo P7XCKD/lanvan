@@ -13,10 +13,13 @@ Key Features:
 
 import asyncio
 import os
+import json
 import hashlib
 import gc
 import time
 import io
+import shutil
+import tempfile
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from fastapi import UploadFile
@@ -37,7 +40,7 @@ except ImportError:
             def get_adaptive_chunk_size(self, file_size): return 64 * 1024
             def should_run_gc(self, bytes_written, chunk_size): return bytes_written % (50 * 1024 * 1024) == 0
             def memory_cleanup(self, force=False): pass
-            def optimize_for_upload(self, file_size): return {"warnings": [], "recommendations": []}
+            def optimize_for_large_files(self, operation_type="upload"): return {"warnings": [], "recommendations": []}
         universal_optimizer = BasicOptimizer()
 
 # Import responsiveness monitor with fallback
@@ -94,15 +97,18 @@ class ConcurrentUploadManager:
         """
         print(f"[INFO] Starting concurrent upload of {len(files)} files (max {self.max_concurrent_uploads} parallel)")
         
-        # Create upload tasks
+        semaphore = asyncio.Semaphore(max(1, self.max_concurrent_uploads))
+
+        async def run_upload(file: UploadFile, destination: Path, upload_id: str):
+            async with semaphore:
+                return await self._upload_single_file_async(
+                    file, destination, encrypt, upload_id=upload_id
+                )
+
+        # Create bounded upload tasks
         tasks = []
         for i, (file, destination) in enumerate(zip(files, destinations)):
-            task = asyncio.create_task(
-                self._upload_single_file_async(
-                    file, destination, encrypt, upload_id=f"upload_{i}"
-                )
-            )
-            tasks.append(task)
+            tasks.append(asyncio.create_task(run_upload(file, destination, f"upload_{i}")))
         
         # Execute uploads concurrently with progress tracking
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -184,7 +190,7 @@ class ConcurrentUploadManager:
             
             # [START] Apply universal optimizations
             if file_size > 50 * 1024 * 1024:  # Files > 50MB
-                universal_optimizer.optimize_for_upload(file_size)
+                universal_optimizer.optimize_for_large_files("upload")
             
             # [INFO] Process file with streaming - Enhanced with NEW async function option
             print(f"[SEARCH] [{upload_id}] Starting upload...")
@@ -297,9 +303,17 @@ class ConcurrentUploadManager:
         [LOCK] RACE CONDITION FIX: Upload to .tmp file first, then atomically move to final name
         """
         destination.parent.mkdir(parents=True, exist_ok=True)
-        
-        # [START] TEMPORARY FILE STRATEGY: Upload to .tmp extension first
-        temp_destination = destination.with_suffix(destination.suffix + '.tmp')
+
+        # [START] TEMPORARY FILE STRATEGY: Keep plaintext staging outside the uploads folder when encrypting
+        if encrypt:
+            temp_plaintext_file = tempfile.NamedTemporaryFile(delete=False, suffix='.tmp', prefix=f"{upload_id}_")
+            temp_destination = Path(temp_plaintext_file.name)
+            temp_plaintext_file.close()
+        else:
+            temp_destination = destination.with_suffix(destination.suffix + '.tmp')
+
+        encrypted_temp_destination = None
+        encrypted_metadata_path = None
         
         print(f"[INFO] [{upload_id}] Uploading to temporary file: {temp_destination.name}")
         
@@ -329,22 +343,6 @@ class ConcurrentUploadManager:
                         break
                     
                     chunk_count += 1
-                    
-                    # [AUTH] Process chunk with encryption if requested
-                    if encrypt:
-                        # Import encryption function
-                        try:
-                            try:
-                                from app.core.aes_utils import encrypt_file_stream
-                            except ImportError:
-                                from aes_utils import encrypt_file_stream
-                            print(f"[AUTH] [{upload_id}] Encrypting chunk {chunk_count} ({len(chunk):,} bytes)")
-                            # For now, encrypt each chunk individually (can be optimized later)
-                            encrypted_chunk, _ = encrypt_file_stream(chunk)
-                            chunk = encrypted_chunk
-                        except Exception as e:
-                            print(f"[ERR] [{upload_id}] Encryption failed for chunk {chunk_count}: {e}")
-                            # Continue without encryption as fallback
                     
                     # [START] Write chunk asynchronously to prevent blocking
                     await dest_file.write(chunk)
@@ -409,15 +407,69 @@ class ConcurrentUploadManager:
             print(f"[ERR] [{upload_id}] Stream upload error: {type(e).__name__}: {str(e)}")
             raise e
         
+        # [AUTH] Encrypt the completed temp file on disk if requested
+        final_source = temp_destination
+        if encrypt:
+            try:
+                try:
+                    from app.core.aes_utils import encrypt_file_to_file_streaming
+                except ImportError:
+                    from aes_utils import encrypt_file_to_file_streaming
+
+                encrypted_temp_destination = temp_destination.with_suffix('.enc')
+                metadata = await asyncio.to_thread(
+                    encrypt_file_to_file_streaming,
+                    str(temp_destination),
+                    str(encrypted_temp_destination),
+                    None,
+                    chunk_size
+                )
+
+                metadata_path = encrypted_temp_destination.with_suffix('.enc.meta')
+                metadata_payload = {
+                    'encryption_method': 'streaming',
+                    'algorithm': metadata.get('algorithm', 'AES-256-CBC-Stream-V2'),
+                    'original_size': metadata.get('original_size', str(total_written)),
+                    'encrypted_size': metadata.get('encrypted_size', '0'),
+                    'chunk_size': str(chunk_size)
+                }
+                metadata_path.write_text(json.dumps(metadata_payload), encoding='utf-8')
+                encrypted_metadata_path = metadata_path
+
+                if temp_destination.exists():
+                    temp_destination.unlink()
+                final_source = encrypted_temp_destination
+                print(f"[AUTH] [{upload_id}] Encryption complete ({metadata_payload['algorithm']})")
+            except Exception as e:
+                if encrypted_temp_destination and encrypted_temp_destination.exists():
+                    encrypted_temp_destination.unlink()
+                if temp_destination.exists():
+                    temp_destination.unlink()
+                print(f"[ERR] [{upload_id}] Final encryption failed: {type(e).__name__}: {str(e)}")
+                raise e
+
         # [TARGET] ENHANCED ATOMIC MOVE: Cross-platform atomic operations with retry logic
         await self._perform_atomic_move(
-            temp_destination, destination, upload_id
+            final_source, destination, upload_id
         )
+
+        if encrypt and encrypted_metadata_path:
+            final_metadata_destination = destination.with_suffix('.enc.meta')
+            try:
+                await self._perform_atomic_move(
+                    encrypted_metadata_path,
+                    final_metadata_destination,
+                    upload_id
+                )
+            except Exception:
+                if destination.exists():
+                    destination.unlink()
+                raise
         
         return {
             'success': True,
             'filename': upload_file.filename,
-            'size': total_written,
+            'size': destination.stat().st_size if destination.exists() else total_written,
             'hash': hash_calculator.hexdigest(),
             'destination': str(destination)
         }
@@ -494,15 +546,71 @@ class ConcurrentUploadManager:
             print(f"[ERR] [{upload_id}] Sync fallback upload error: {type(e).__name__}: {str(e)}")
             raise e
         
+        # [AUTH] Encrypt the completed temp file on disk if requested
+        final_source = temp_destination
+        if encrypt:
+            encrypted_temp_destination = None
+            encrypted_metadata_path = None
+            try:
+                try:
+                    from app.core.aes_utils import encrypt_file_to_file_streaming
+                except ImportError:
+                    from aes_utils import encrypt_file_to_file_streaming
+
+                encrypted_temp_destination = temp_destination.with_suffix('.enc')
+                metadata = await asyncio.to_thread(
+                    encrypt_file_to_file_streaming,
+                    str(temp_destination),
+                    str(encrypted_temp_destination),
+                    None,
+                    chunk_size
+                )
+
+                metadata_path = encrypted_temp_destination.with_suffix('.enc.meta')
+                metadata_payload = {
+                    'encryption_method': 'streaming',
+                    'algorithm': metadata.get('algorithm', 'AES-256-CBC-Stream-V2'),
+                    'original_size': metadata.get('original_size', str(total_written)),
+                    'encrypted_size': metadata.get('encrypted_size', '0'),
+                    'chunk_size': str(chunk_size)
+                }
+                metadata_path.write_text(json.dumps(metadata_payload), encoding='utf-8')
+                encrypted_metadata_path = metadata_path
+
+                if temp_destination.exists():
+                    temp_destination.unlink()
+                final_source = encrypted_temp_destination
+                print(f"[AUTH] [{upload_id}] Encryption complete ({metadata_payload['algorithm']})")
+            except Exception as e:
+                if encrypted_temp_destination and encrypted_temp_destination.exists():
+                    encrypted_temp_destination.unlink()
+                if temp_destination.exists():
+                    temp_destination.unlink()
+                print(f"[ERR] [{upload_id}] Final encryption failed: {type(e).__name__}: {str(e)}")
+                raise e
+
         # [TARGET] ENHANCED ATOMIC MOVE: Use the same cross-platform atomic operations
         await self._perform_atomic_move(
-            temp_destination, destination, upload_id
+            final_source, destination, upload_id
         )
+
+        if encrypt and encrypted_metadata_path:
+            final_metadata_destination = destination.with_suffix('.enc.meta')
+            try:
+                await self._perform_atomic_move(
+                    encrypted_metadata_path,
+                    final_metadata_destination,
+                    upload_id
+                )
+            except Exception:
+                if destination.exists():
+                    destination.unlink()
+                raise
         
         return {
             'success': True,
             'filename': upload_file.filename,
-            'size': total_written,
+            'size': destination.stat().st_size if destination.exists() else total_written,
             'hash': hash_calculator.hexdigest(),
             'destination': str(destination)
         }
@@ -571,7 +679,7 @@ class ConcurrentUploadManager:
         
         for attempt in range(max_retries):
             try:
-                print(f"[INFO] [{upload_id}] Moving {temp_destination.name} → {destination.name} (attempt {attempt + 1})")
+                print(f"[INFO] [{upload_id}] Moving {temp_destination.name} -> {destination.name} (attempt {attempt + 1})")
                 
                 if is_windows:
                     # Use shutil.move for better Windows compatibility

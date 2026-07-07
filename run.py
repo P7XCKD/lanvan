@@ -45,26 +45,68 @@ def ensure_venv():
 # Call this first before importing packages that might not be in system python
 ensure_venv()
 
-# Now safe to import venv-specific packages
-try:
-    import psutil
-    import uvicorn
-    import cryptography  # Test for cryptography specifically
-except ImportError as e:
-    print(f"[!] Missing package: {e}")
-    print("[!] Installing required packages from requirements.txt...")
+# Check for Android/Termux environment
+is_android = os.path.exists("/data/data/com.termux") or "ANDROID_ROOT" in os.environ
+
+if is_android:
+    # On Android, verify required binary dependencies are pre-installed via pkg
+    missing_sys_packages = []
     try:
-        result = subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], 
-                              check=True, capture_output=True, text=True)
-        print("[OK] Dependencies installed successfully!")
+        import psutil
+    except ImportError:
+        missing_sys_packages.append("python-psutil")
+    try:
+        import cryptography
+    except ImportError:
+        missing_sys_packages.append("python-cryptography")
+
+    if missing_sys_packages:
+        print("[!] ERROR: Missing required binary dependencies on Android.")
+        print(f"[!] Please install them using the Termux package manager:\n")
+        print(f"    pkg install {' '.join(missing_sys_packages)}\n")
+        sys.exit(1)
+
+    # Install remaining python-only packages individually on Android
+    try:
+        import fastapi
+        import jinja2
+        import uvicorn
+        import aiofiles
+        import zeroconf
+    except ImportError as e:
+        print(f"[!] Missing Python package: {e}")
+        print("[!] Installing required python-only packages on Android...")
+        try:
+            # We install plain uvicorn (without [standard]) to avoid watchfiles/httptools compile errors
+            subprocess.run([sys.executable, "-m", "pip", "install", 
+                            "fastapi", "uvicorn", "jinja2", "python-multipart", 
+                            "aiofiles", "qrcode", "zeroconf"], check=True)
+            print("[OK] Dependencies installed successfully!")
+            import uvicorn
+        except Exception as install_error:
+            print(f"[ERROR] Failed to install packages: {install_error}")
+            sys.exit(1)
+else:
+    # Standard desktop dependency installation flow
+    try:
         import psutil
         import uvicorn
-    except subprocess.CalledProcessError as install_error:
-        print(f"[ERROR] Failed to install from requirements.txt: {install_error}")
-        print("[INSTALL] Trying individual package installation...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "psutil", "uvicorn[standard]", "fastapi", "jinja2", "python-multipart", "werkzeug", "cryptography", "pycryptodome"])
-        import psutil
-        import uvicorn
+        import cryptography
+    except ImportError as e:
+        print(f"[!] Missing package: {e}")
+        print("[!] Installing required packages from requirements.txt...")
+        try:
+            result = subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], 
+                                  check=True, capture_output=True, text=True)
+            print("[OK] Dependencies installed successfully!")
+            import psutil
+            import uvicorn
+        except subprocess.CalledProcessError as install_error:
+            print(f"[ERROR] Failed to install from requirements.txt: {install_error}")
+            print("[INSTALL] Trying individual package installation...")
+            subprocess.run([sys.executable, "-m", "pip", "install", "psutil", "uvicorn[standard]", "fastapi", "jinja2", "python-multipart", "cryptography"])
+            import psutil
+            import uvicorn
 
 # === CONFIGURATION ===
 # SSL Certificate paths (can be overridden by environment variables)
