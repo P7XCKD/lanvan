@@ -26,10 +26,28 @@ bash setup-android.sh
 ```
 
 ### 3. Launch the Server
+
+You can start the server manually:
 ```bash
 cd ~/lanvan
 python run.py
 ```
+
+Or copy the pre-configured script launchers to your home directory for easy booting, clipboard sync, and auto-opening Chrome on LAN URL:
+
+* **For HTTP (Default):**
+  ```bash
+  cp ~/lanvan/docs/termux/start-server.sh ~/start-server.sh
+  chmod +x ~/start-server.sh
+  ~/start-server.sh
+  ```
+
+* **For HTTPS:**
+  ```bash
+  cp ~/lanvan/docs/termux/start-server-https.sh ~/start-server-https.sh
+  chmod +x ~/start-server-https.sh
+  ~/start-server-https.sh
+  ```
 
 ---
 
