@@ -312,7 +312,7 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                 
                 for attempt in range(max_retries):
                     try:
-                        print(f"[RETRY] Moving encrypted {temp_destination.name} → {destination.name} (attempt {attempt + 1})")
+                        print(f"[RETRY] Moving encrypted {temp_destination.name} -> {destination.name} (attempt {attempt + 1})")
                         
                         if is_windows:
                             # Use shutil.move for better Windows compatibility
@@ -397,7 +397,7 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                 
                 for attempt in range(max_retries):
                     try:
-                        print(f"[RETRY] Moving {temp_destination.name} → {destination.name} (attempt {attempt + 1})")
+                        print(f"[RETRY] Moving {temp_destination.name} -> {destination.name} (attempt {attempt + 1})")
                         
                         if is_windows:
                             # Use shutil.move for better Windows compatibility
