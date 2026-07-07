@@ -27,8 +27,8 @@ cd ~/lanvan
 python run.py
 ```
 
-### Quick Launch Scripts
-For convenience, you can copy the preconfigured script launchers to your home directory:
+### Quick Launch Scripts (Recommended)
+For convenience, you can copy the preconfigured script launchers to your home directory. These scripts automatically handle existing port conflicts, copy the LAN URL to your clipboard, and launch the server in Google Chrome on your device:
 
 * **For HTTP (Default):**
   ```bash
@@ -63,7 +63,8 @@ For convenience, you can copy the preconfigured script launchers to your home di
   termux-setup-storage
   ```
 * **Address Already in Use:**
-  If the server fails to bind to port 5000, find and terminate any existing Python server processes:
+  If the server fails to bind to port 5000, another process is using it. (Note: Using the **Quick Launch Scripts** above completely avoids this, as they terminate any lingering server instances automatically). 
+  Otherwise, run:
   ```bash
   pkill -f python
   ```
