@@ -4712,9 +4712,9 @@ Device Session will reset when browser is closed
             let useHostname = hostname;
 
             // Prefer mDNS if available, otherwise use LAN IP
-            if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.hybrid_url) {
-              // Use the full hybrid URL which includes mDNS domain if available
-              preloadQRFromUrl(networkInfo.hybrid_url);
+            if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.mdns.url) {
+              // Use the actual mDNS URL for mDNS QR preloading
+              preloadQRFromUrl(networkInfo.mdns.url);
             } else if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
               useHostname = networkInfo.lan_ip;
               preloadQR(protocol, useHostname, port);
@@ -4742,7 +4742,7 @@ Device Session will reset when browser is closed
           const timeout = setTimeout(() => {
             console.log('QR API is slow/unavailable, will use offline generation');
             window._qrApiUnavailable = true;
-          }, 1000); // 1 second timeout
+          }, 5000); // 5 second timeout
 
           testImg.onload = () => {
             clearTimeout(timeout);
@@ -4776,7 +4776,7 @@ Device Session will reset when browser is closed
           const timeout = setTimeout(() => {
             console.log('QR API is slow/unavailable, will use offline generation');
             window._qrApiUnavailable = true;
-          }, 1000); // 1 second timeout
+          }, 5000); // 5 second timeout
 
           testImg.onload = () => {
             clearTimeout(timeout);
@@ -4826,8 +4826,8 @@ Device Session will reset when browser is closed
             if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.mdns.domain) {
               hostname = networkInfo.mdns.domain;
               useMDNS = true;
-              mdnsUrl = networkInfo.hybrid_url;
-              console.log(' mDNS detected:', networkInfo.mdns.domain, 'URL:', networkInfo.hybrid_url);
+              mdnsUrl = networkInfo.mdns.url || networkInfo.hybrid_url;
+              console.log(' mDNS detected:', networkInfo.mdns.domain, 'URL:', mdnsUrl);
             } else {
               // Use current hostname if mDNS not available
               if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -4945,7 +4945,7 @@ Device Session will reset when browser is closed
                   setTimeout(showOfflineQR, 50);
                 }
               }
-            }, 800); // Further reduced timeout
+            }, 5000); // Friendly fallback for slower Termux environments (5 seconds)
 
             // Second fallback - try external service
             setTimeout(() => {
@@ -4964,10 +4964,10 @@ Device Session will reset when browser is closed
                         setTimeout(showOfflineQR, 50);
                       }
                     }
-                  }, 800);
+                  }, 3000);
                 }
               }
-            }, 2000); // Try external after 2 seconds if local still hasn't loaded
+            }, 8000); // Try external after 8 seconds if local still hasn't loaded
           }
         }, 10);
 

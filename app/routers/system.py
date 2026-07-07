@@ -388,17 +388,20 @@ async def get_network_info():
 
 @router.get("/api/qr-code", name="offline_qr")
 async def generate_offline_qr(text: str, size: int = 200):
-    """Generate QR code locally without internet dependency - Android/Termux optimized"""
+    """Generate QR code locally without internet dependency - Android/Termux optimized.
+    
+    Uses PNG (Pillow) when available, falls back to SVG (zero dependencies) for Termux.
+    SVG output uses only qrcode's built-in xml.etree support — no Pillow/PIL needed.
+    """
     try:
+        if not QR_AVAILABLE:
+            raise Exception("qrcode library not installed")
         
         # Android/Termux detection
-        is_android = is_android_environment()
+        is_android_env = is_android_environment()
         
-        if is_android:
-            print("[MOBILE] Android/Termux QR generation - using optimized settings")
-        
-        # Create QR code with Android-optimized settings
-        box_size = max(1, size // 25) if not is_android else max(2, size // 20)  # Larger boxes for Android
+        # Create QR code
+        box_size = max(2, size // 20) if is_android_env else max(1, size // 25)
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.ERROR_CORRECT_L,
@@ -408,73 +411,68 @@ async def generate_offline_qr(text: str, size: int = 200):
         qr.add_data(text)
         qr.make(fit=True)
 
-        # Create image with Android fallbacks
+        # Method 1: PNG output (requires Pillow/PIL)
         try:
             qr_img = qr.make_image(fill_color="black", back_color="white")
-        except Exception as img_error:
-            if is_android:
-                print(f"[MOBILE] Android QR image creation fallback: {img_error}")
-                # Try simpler image creation for Android
-                qr_img = qr.make_image()
-            else:
-                raise img_error
+            img_buffer = io.BytesIO()
+            qr_img.save(img_buffer, 'PNG')
+            img_buffer.seek(0)
+            if is_android_env:
+                print("[MOBILE] QR: PNG generation successful")
+            return StreamingResponse(
+                io.BytesIO(img_buffer.getvalue()),
+                media_type="image/png",
+                headers={"Cache-Control": "public, max-age=3600"}
+            )
+        except Exception as png_error:
+            if is_android_env:
+                print(f"[MOBILE] QR PNG failed (no Pillow): {png_error}")
         
-        # Convert to bytes with Android-specific handling
-        img_buffer = io.BytesIO()
+        # Method 2: SVG output (NO Pillow needed — works on Termux!)
+        # Uses qrcode's built-in SVG support via Python's xml.etree (stdlib)
+        try:
+            from qrcode.image.svg import SvgPathImage
+            svg_img = qr.make_image(image_factory=SvgPathImage)
+            svg_buffer = io.BytesIO()
+            svg_img.save(svg_buffer)
+            svg_data = svg_buffer.getvalue()
+            # Ensure bytes
+            if isinstance(svg_data, str):
+                svg_data = svg_data.encode('utf-8')
+            if is_android_env:
+                print("[MOBILE] QR: SVG generation successful (no Pillow needed)")
+            return Response(
+                content=svg_data,
+                media_type="image/svg+xml",
+                headers={"Cache-Control": "public, max-age=3600"}
+            )
+        except Exception as svg_error:
+            if is_android_env:
+                print(f"[MOBILE] QR SVG (SvgPathImage) failed: {svg_error}")
         
-        # Enhanced save method with multiple fallbacks
-        save_success = False
+        # Method 3: Basic SVG fallback (different SVG class)
+        try:
+            from qrcode.image.svg import SvgImage
+            svg_img = qr.make_image(image_factory=SvgImage)
+            svg_buffer = io.BytesIO()
+            svg_img.save(svg_buffer)
+            svg_data = svg_buffer.getvalue()
+            if isinstance(svg_data, str):
+                svg_data = svg_data.encode('utf-8')
+            if is_android_env:
+                print("[MOBILE] QR: SVG (SvgImage) generation successful")
+            return Response(
+                content=svg_data,
+                media_type="image/svg+xml",
+                headers={"Cache-Control": "public, max-age=3600"}
+            )
+        except Exception as svg2_error:
+            if is_android_env:
+                print(f"[MOBILE] QR SVG (SvgImage) also failed: {svg2_error}")
         
-        # Method 1: Standard PNG save
-        if not save_success:
-            try:
-                qr_img.save(img_buffer, 'PNG')
-                save_success = True
-                if is_android:
-                    print("[MOBILE] Android QR: PNG save successful")
-            except Exception as png_error:
-                if is_android:
-                    print(f"[MOBILE] Android QR PNG save failed: {png_error}")
+        raise Exception("All QR generation methods failed (PNG + SVG)")
         
-        # Method 2: Format-less save (Android fallback)
-        if not save_success:
-            try:
-                img_buffer = io.BytesIO()  # Reset buffer
-                qr_img.save(img_buffer)
-                save_success = True
-                if is_android:
-                    print("[MOBILE] Android QR: Fallback save successful")
-            except Exception as fallback_error:
-                if is_android:
-                    print(f"[MOBILE] Android QR fallback save failed: {fallback_error}")
-        
-        # Method 3: Text-based QR for Android (ultimate fallback)
-        if not save_success and is_android:
-            try:
-                # Generate ASCII QR code for Android as last resort
-                qr_text = qr.get_matrix()
-                ascii_qr = "\n".join(["".join(["██" if cell else "  " for cell in row]) for row in qr_text])
-                return JSONResponse({
-                    "status": "text_fallback",
-                    "qr_text": ascii_qr,
-                    "url": text,
-                    "message": "QR generated as text for Android compatibility"
-                })
-            except Exception as text_error:
-                print(f"[MOBILE] Android QR text fallback failed: {text_error}")
-        
-        if not save_success:
-            raise Exception(f"All QR generation methods failed")
-        
-        img_buffer.seek(0)
-
-        return StreamingResponse(
-            io.BytesIO(img_buffer.getvalue()),
-            media_type="image/png",
-            headers={"Cache-Control": "public, max-age=3600"}
-        )
     except Exception as e:
-        # Return a simple text-based error response
         return JSONResponse(
             status_code=500,
             content={"error": f"QR generation failed: {str(e)}"}
