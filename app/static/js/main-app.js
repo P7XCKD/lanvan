@@ -4712,9 +4712,9 @@ Device Session will reset when browser is closed
             let useHostname = hostname;
 
             // Prefer mDNS if available, otherwise use LAN IP
-            if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.hybrid_url) {
-              // Use the full hybrid URL which includes mDNS domain if available
-              preloadQRFromUrl(networkInfo.hybrid_url);
+            if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.mdns.url) {
+              // Use the actual mDNS URL for mDNS QR preloading
+              preloadQRFromUrl(networkInfo.mdns.url);
             } else if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
               useHostname = networkInfo.lan_ip;
               preloadQR(protocol, useHostname, port);
@@ -4826,8 +4826,8 @@ Device Session will reset when browser is closed
             if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.mdns.domain) {
               hostname = networkInfo.mdns.domain;
               useMDNS = true;
-              mdnsUrl = networkInfo.hybrid_url;
-              console.log(' mDNS detected:', networkInfo.mdns.domain, 'URL:', networkInfo.hybrid_url);
+              mdnsUrl = networkInfo.mdns.url || networkInfo.hybrid_url;
+              console.log(' mDNS detected:', networkInfo.mdns.domain, 'URL:', mdnsUrl);
             } else {
               // Use current hostname if mDNS not available
               if (hostname === 'localhost' || hostname === '127.0.0.1') {
