@@ -36,18 +36,20 @@ from starlette.status import (
 )
 
 # Import common app utilities
-from app.core.aes_utils import encrypt_file_http_safe, decrypt_http_safe_file, decrypt_file_stream
+from app.core.aes_utils import encrypt_file_http_safe, decrypt_http_safe_file, decrypt_file_stream, encrypt_session_data
 from app.core.metadata_protection import generate_secure_filename, obfuscate_file_size, generate_decoy_requests
 from app.core.validation import (
     validate_upload_files_enhanced_fast,
     secure_filename,
-    is_allowed_file
+    is_allowed_file,
+    FileValidator,
+    AdvancedFileValidator
 )
 from app.core.file_locking import get_file_lock_manager
 from app.utils.termux_compat import is_android, is_termux
 from app.core.concurrent_upload_manager import concurrent_upload_manager, ConcurrentUploadManager
 from app.core.windows_file_manager import WindowsFileManager
-from app.core.streaming_assembly import get_streaming_assembler, add_streaming_chunk, check_streaming_status, get_assembled_file
+from app.core.streaming_assembly import get_streaming_assembler, add_streaming_chunk, check_streaming_status, get_assembled_file, initialize_streaming_assembly
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")

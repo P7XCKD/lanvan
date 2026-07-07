@@ -22,13 +22,13 @@ echo ""
 echo "📦 Updating Termux packages..."
 pkg update -y
 
-# Install essential system packages
+# Install essential system packages and build tools
 echo "🔧 Installing system dependencies..."
-pkg install -y python python-pip git curl wget
+pkg install -y python python-pip git curl wget clang make cmake
 
-# Install build dependencies for Python packages
-echo "🛠️ Installing build dependencies..."
-pkg install -y clang make cmake libjpeg-turbo-dev zlib-dev
+# Install pre-compiled cryptography and psutil packages via pkg (avoids hours of compilation!)
+echo "📦 Installing pre-compiled binary packages via pkg..."
+pkg install -y python-cryptography python-psutil
 
 # Upgrade pip
 echo "⬆️ Upgrading pip..."
@@ -37,20 +37,16 @@ python -m pip install --upgrade pip
 # Install Python dependencies with Android optimizations
 echo "🐍 Installing Python dependencies..."
 
-# Install core packages first
-python -m pip install --upgrade fastapi uvicorn[standard] jinja2 python-multipart
+# Install core packages first (using plain uvicorn to avoid compilation errors)
+python -m pip install --upgrade fastapi uvicorn jinja2 python-multipart
 
 # Install QR code support (No Pillow to prevent compilation build errors)
 echo "📱 Installing QR code support..."
 python -m pip install --upgrade qrcode
 
-# Install networking packages
+# Install networking packages (excluding psutil since it is installed via pkg)
 echo "🌐 Installing network packages..."
-python -m pip install --upgrade zeroconf aiofiles psutil
-
-# Install security packages
-echo "🔐 Installing security packages..."
-python -m pip install --upgrade cryptography
+python -m pip install --upgrade zeroconf aiofiles
 
 # Install WebSocket support
 echo "🔌 Installing WebSocket support..."

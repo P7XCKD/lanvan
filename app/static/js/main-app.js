@@ -2161,6 +2161,8 @@ Device Session will reset when browser is closed
             uploadItem.error = `Chunked upload failed: ${error.message}`;
             updateUploadItem(uploadItem);
             showToast(` Chunked upload failed: ${uploadItem.fileName}`, 5000);
+            endUpload();
+            startNextUpload();
           }
         }
       }
@@ -2258,6 +2260,7 @@ Device Session will reset when browser is closed
 
               updateUploadItem(uploadItem);
               endUpload();
+              startNextUpload();
 
               // Show completion toast with smart refresh detection
               const fileSize = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
@@ -2285,7 +2288,7 @@ Device Session will reset when browser is closed
                 endTimeISO: new Date().toISOString(),
                 protocol: window.location.protocol === 'https:' ? 'HTTPS' : 'HTTP',
                 method: 'Chunked Upload (Resume Capable)',
-                encrypted: isAESEnabled,
+                encrypted: uploadItem.isAESEnabled || false,
                 // Enhanced chunked stats with adaptive optimization info
                 chunksUsed: true,
                 chunkCount: uploadItem.totalChunks,
