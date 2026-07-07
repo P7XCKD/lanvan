@@ -238,12 +238,11 @@ async def platform_status():
 
 @router.get("/api/upload/chunk-size/{file_size}", name="get_optimal_chunk_size")
 async def get_optimal_chunk_size(file_size: int):
-    """Get optimal chunk size for a file upload based on system capabilities"""
-    from app.utils.universal_optimizer import get_adaptive_chunk_size
+    from app.utils.universal_optimizer import universal_optimizer
     
     try:
         # Get adaptive chunk size
-        optimal_chunk_size = get_adaptive_chunk_size(file_size)
+        optimal_chunk_size = universal_optimizer.get_adaptive_chunk_size(file_size)
         
         # Get system info for client optimization
         system_info = universal_optimizer.get_system_info()

@@ -13,8 +13,10 @@ import os
 import gc
 import time
 import asyncio
-import subprocess
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None
 from pathlib import Path
 from typing import List, Optional
 
@@ -104,6 +106,8 @@ class WindowsFileManager:
         [SEARCH] Get list of processes that have the file open (Windows only)
         """
         processes = []
+        if not psutil:
+            return processes
         try:
             for proc in psutil.process_iter(['pid', 'name', 'open_files']):
                 try:

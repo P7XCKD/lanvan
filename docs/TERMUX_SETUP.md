@@ -9,21 +9,35 @@ This guide sets up Lanvan on Android Termux **without Pillow dependencies** for 
 - Stable internet connection
 - At least 2GB free storage space
 
-## 🚀 Quick Installation
+## 🚀 Quick Start (Fast Setup)
 
-### 1. **System Update & Core Tools**
+### 1. Prepare Termux (Install Git & Python)
+Run this to update package lists and install core downloader tools:
 ```bash
-# Update package lists and upgrade system
-pkg update -y && pkg upgrade -y
-
-# Install essential build tools
-pkg install -y python clang make cmake pkg-config git
+pkg update -y && pkg install -y git python
 ```
 
-### 2. **Security & Networking Libraries**
+### 2. Clone and Run Automated Setup
+Clone the repository and execute the optimized, Pillow-free setup script:
 ```bash
-# Core cryptography and compression
-pkg install -y openssl libffi zlib brotli
+git clone https://github.com/P7XCKD/lanvan.git ~/lanvan
+cd ~/lanvan/docs/termux
+bash setup-android.sh
+```
+
+### 3. Launch the Server
+```bash
+cd ~/lanvan
+python run.py
+```
+
+---
+
+## 🔧 Step-by-Step Manual Setup (Optional)
+
+### 1. **Security & Networking Libraries**
+```bash
+pkg install -y openssl libffi zlib brotli python-cryptography python-psutil
 
 # Network and process tools
 pkg install -y lsof procps curl wget
@@ -33,9 +47,6 @@ pkg install -y lsof procps curl wget
 ```bash
 # Additional package repositories
 pkg install -y root-repo x11-repo
-
-# Media libraries (for future compatibility - not required for Lanvan)
-pkg install -y libjpeg-turbo libpng freetype
 ```
 
 ### 4. **Python Environment Setup**
@@ -47,18 +58,16 @@ pip install --upgrade pip setuptools wheel
 
 ### 5. **Lanvan Dependencies** *(No Pillow!)*
 ```bash
-# Core Lanvan packages (optimized for Termux)
+# Core Lanvan packages (optimized for Termux - excluding cryptography/psutil as they are installed via pkg)
 pip install --no-build-isolation --no-cache-dir \
     fastapi \
     uvicorn \
     python-multipart \
     aiofiles \
-    cryptography \
     qrcode \
     requests \
     pycryptodome \
     zeroconf \
-    psutil \
     python-socketio \
     websockets
 
