@@ -29,50 +29,54 @@ function generateOfflineQR(text, canvas) {
     return false;
   }
   
-  // Create a simple grid-based QR code for offline use
+  // This is the FALLBACK when the server /api/qr-code endpoint is unavailable.
+  // Instead of drawing a fake unscannable pattern, show the URL text clearly
+  // so users can type it manually on their device.
   const ctx = canvas.getContext('2d');
   canvas.width = 200;
   canvas.height = 200;
   
-  // Simple pattern generation (basic QR-like appearance)
-  const size = 20;
-  const cellSize = canvas.width / size;
-  
-  // Generate pattern based on text hash
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    hash = ((hash << 5) - hash + text.charCodeAt(i)) & 0xffffffff;
-  }
-  
+  // White background
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   
-  ctx.fillStyle = '#000000';
+  // Border
+  ctx.strokeStyle = '#cccccc';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
   
-  // Create QR-like pattern
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      // Position markers (corners)
-      if ((x < 7 && y < 7) || (x >= size-7 && y < 7) || (x < 7 && y >= size-7)) {
-        if ((x < 6 && y < 6 && (x === 0 || x === 5 || y === 0 || y === 5)) ||
-            (x >= size-6 && y < 6 && (x === size-6 || x === size-1 || y === 0 || y === 5)) ||
-            (x < 6 && y >= size-6 && (x === 0 || x === 5 || y === size-6 || y === size-1))) {
-          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
-        }
-        if ((x >= 2 && x <= 4 && y >= 2 && y <= 4) ||
-            (x >= size-5 && x <= size-3 && y >= 2 && y <= 4) ||
-            (x >= 2 && x <= 4 && y >= size-5 && y <= size-3)) {
-          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
-        }
-      } else {
-        // Data pattern based on hash
-        const pos = y * size + x;
-        if (((hash >> (pos % 32)) & 1) === 1) {
-          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
-        }
-      }
-    }
+  // Icon area
+  ctx.fillStyle = '#666666';
+  ctx.font = '36px Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('📱', 100, 60);
+  
+  // "Scan QR at:" label
+  ctx.fillStyle = '#333333';
+  ctx.font = 'bold 13px Arial, sans-serif';
+  ctx.fillText('Open in browser:', 100, 90);
+  
+  // URL text (word-wrap if needed)
+  ctx.fillStyle = '#0066cc';
+  ctx.font = '12px monospace';
+  const maxWidth = 180;
+  const url = text || 'URL unavailable';
+  
+  // Simple word wrap for the URL
+  if (ctx.measureText(url).width <= maxWidth) {
+    ctx.fillText(url, 100, 115);
+  } else {
+    // Split URL into parts that fit
+    const mid = Math.ceil(url.length / 2);
+    ctx.fillText(url.substring(0, mid), 100, 110);
+    ctx.fillText(url.substring(mid), 100, 128);
   }
+  
+  // Helper text
+  ctx.fillStyle = '#999999';
+  ctx.font = '10px Arial, sans-serif';
+  ctx.fillText('Type this URL on your device', 100, 155);
+  ctx.fillText('QR will appear when server is ready', 100, 170);
   
   return canvas.toDataURL();
 }
