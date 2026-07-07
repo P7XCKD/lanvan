@@ -1732,6 +1732,14 @@ Device Session will reset when browser is closed
 
         startUpload();
 
+        // Route large files to the chunked uploader to avoid oversized multipart posts
+        const isAESEnabled = isEncryptionEnabled && document.getElementById('enableEncryption').checked;
+        if (uploadItem.file.size >= LANVAN_CONFIG.CHUNK_THRESHOLD) {
+          console.log(` Using chunked upload for large file: ${uploadItem.file.name} (${(uploadItem.file.size / 1024 / 1024).toFixed(1)} MB)`);
+          uploadLargeFileChunked(uploadItem);
+          return;
+        }
+
         // Use the existing upload logic but with progress tracking
         uploadSingleFileWithProgress(uploadItem);
       }
@@ -2277,7 +2285,7 @@ Device Session will reset when browser is closed
                 endTimeISO: new Date().toISOString(),
                 protocol: window.location.protocol === 'https:' ? 'HTTPS' : 'HTTP',
                 method: 'Chunked Upload (Resume Capable)',
-                encrypted: false, // Chunked uploads don't support encryption yet
+                encrypted: isAESEnabled,
                 // Enhanced chunked stats with adaptive optimization info
                 chunksUsed: true,
                 chunkCount: uploadItem.totalChunks,
