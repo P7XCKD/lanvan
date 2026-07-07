@@ -1,5 +1,7 @@
-/* Lanvan Styles */
-/* This CSS file was missing and causing 500 errors */
+/* 
+  Lanvan Compatibility Stylesheet
+  Overrides layout settings, mode selection buttons, sliding toggle selectors, and responsive helpers.
+*/
 
 /* Basic reset and body styles */
 * {
@@ -93,8 +95,7 @@ body {
 }
 
 
-/* === RESTORED TOGGLE AND SLIDER STYLES === */
-    /* Upload Mode Sliding Toggle */
+/* Sliding Toggle Component for Mode Selections */
     .upload-mode-slider {
       display: flex;
       align-items: center;
@@ -213,22 +214,6 @@ body {
       background: #ffffff;
     }
 
-    /* Toggle Label Text Fixes */
-    #darkModeLabel,
-    #aesLabel,
-    #filesLabel,
-    #foldersLabel {
-      color: #333 !important;
-      /* Dark text for light mode */
-    }
-
-    [data-theme="dark"] #darkModeLabel,
-    [data-theme="dark"] #aesLabel,
-    [data-theme="dark"] #filesLabel,
-    [data-theme="dark"] #foldersLabel {
-      color: #f0f0f0 !important;
-      /* Light text for dark mode */
-    }
 
     /*  AES Encryption Toggle - Dark Theme Styling */
     .toggle-switch {
