@@ -2208,7 +2208,7 @@ class QuickTest:
                 
                 # Check 1.3: Ensure catch block in uploadLargeFileChunked calls endUpload and startNextUpload
                 large_start = js_content.find('uploadLargeFileChunked')
-                large_end = js_content.find('uploadChunkWithProgress')
+                large_end = js_content.find('function uploadChunkWithProgress')
                 if large_start != -1 and large_end != -1:
                     large_block = js_content[large_start:large_end]
                     catch_index = large_block.rfind('catch')
