@@ -143,6 +143,7 @@ class QuickTest:
             'cross_platform_compatibility': False,  # NEW: Windows/Linux/Android compatibility
             'retry_logic_system': False,        # NEW: Exponential backoff retry logic
             'cors_security': False,             # NEW: CORS security with local network restriction
+            'js_python_integrity': False,       # NEW: JS reference & Python import safety checks
         }
         
     def log(self, message, status="INFO"):
@@ -357,6 +358,9 @@ class QuickTest:
             
             # Test file safety and validation improvements (NEW)
             await self.test_file_safety_validation()
+            
+            # Test JS reference and Python import integrity (NEW)
+            await self.test_javascript_and_queue_integrity()
             
             elapsed = time.time() - start_time
             self.log(f"Comprehensive test completed in {elapsed:.1f}s!", "PASS")
@@ -2162,6 +2166,98 @@ class QuickTest:
             
         except Exception as e:
             self.log(f"File safety testing error: {str(e)}", "FAIL")
+
+    async def test_javascript_and_queue_integrity(self):
+        """Test JavaScript references, queue continuity, and Python route import integrity"""
+        self.log("=== Testing JS/Python Code Integrity & Queue Safety ===")
+        
+        js_integrity_working = True
+        python_integrity_working = True
+        project_root = Path(__file__).parent
+        
+        # Part 1: JS Static Checks
+        js_file = project_root / "app" / "static" / "js" / "main-app.js"
+        if js_file.exists():
+            try:
+                with open(js_file, 'r', encoding='utf-8') as f:
+                    js_content = f.read()
+                
+                # Check 1.1: Ensure no bare 'isAESEnabled' is used in finalizeChunkedUpload where it is undefined
+                import re
+                finalize_index = js_content.find('finalizeChunkedUpload')
+                js_integrity_working = True
+                
+                if finalize_index != -1:
+                    finalize_block = js_content[finalize_index:finalize_index + 4000]
+                    if re.search(r'encrypted:\s*isAESEnabled\b', finalize_block):
+                        self.log("JS Integrity: Found bare 'isAESEnabled' reference in finalizeChunkedUpload!", "WARN")
+                        js_integrity_working = False
+                    else:
+                        self.log("JS Integrity: No undefined/bare 'isAESEnabled' references found", "PASS")
+                else:
+                    self.log("JS Integrity: finalizeChunkedUpload function not found in main-app.js", "WARN")
+                
+                # Check 1.2: Check that finalizeChunkedUpload calls startNextUpload
+                if finalize_index != -1:
+                    finalize_block = js_content[finalize_index:finalize_index + 4000]
+                    if 'startNextUpload' in finalize_block:
+                        self.log("Queue Safety: finalizeChunkedUpload calls startNextUpload on completion", "PASS")
+                    else:
+                        self.log("Queue Safety: finalizeChunkedUpload does NOT call startNextUpload (uploads will lock up!)", "WARN")
+                        js_integrity_working = False
+                
+                # Check 1.3: Ensure catch block in uploadLargeFileChunked calls endUpload and startNextUpload
+                large_start = js_content.find('uploadLargeFileChunked')
+                large_end = js_content.find('uploadChunkWithProgress')
+                if large_start != -1 and large_end != -1:
+                    large_block = js_content[large_start:large_end]
+                    catch_index = large_block.rfind('catch')
+                    if catch_index != -1:
+                        catch_block = large_block[catch_index:]
+                        if 'endUpload' in catch_block and 'startNextUpload' in catch_block:
+                            self.log("Queue Safety: uploadLargeFileChunked catch block calls endUpload and startNextUpload", "PASS")
+                        else:
+                            self.log("Queue Safety: uploadLargeFileChunked catch block misses endUpload or startNextUpload (error lockup!)", "WARN")
+                            js_integrity_working = False
+                    else:
+                        self.log("Queue Safety: catch block in uploadLargeFileChunked not found", "WARN")
+                
+            except Exception as e:
+                self.log(f"JS code integrity test failed: {str(e)}", "WARN")
+                js_integrity_working = False
+        else:
+            self.log("JS Integrity: main-app.js not found", "WARN")
+            js_integrity_working = False
+
+        # Part 2: Python Import & Reference Integrity
+        router_dir = project_root / "app" / "routers"
+        if router_dir.exists():
+            try:
+                for py_file in router_dir.glob("*.py"):
+                    with open(py_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    checks = [
+                        ('initialize_streaming_assembly', 'initialize_streaming_assembly'),
+                        ('encrypt_session_data', 'encrypt_session_data')
+                    ]
+                    for func_name, check_desc in checks:
+                        if func_name in content:
+                            import_pattern = rf'(from\s+[\w\.]+\s+import\s+.*?{func_name}\b|import\s+.*?{func_name}\b)'
+                            if re.search(import_pattern, content):
+                                self.log(f"Python Integrity ({py_file.name}): {check_desc} is correctly imported", "PASS")
+                            else:
+                                self.log(f"Python Integrity ({py_file.name}): {check_desc} is used but NOT imported!", "WARN")
+                                python_integrity_working = False
+                                
+            except Exception as e:
+                self.log(f"Python route import integrity test failed: {str(e)}", "WARN")
+                python_integrity_working = False
+        else:
+            self.log("Python Integrity: app/routers directory not found", "WARN")
+            python_integrity_working = False
+            
+        self.components['js_python_integrity'] = js_integrity_working and python_integrity_working
     
     def print_component_status(self):
         """Print comprehensive component status report"""
@@ -2226,7 +2322,8 @@ class QuickTest:
             ('orphaned_file_cleanup', '[CLEAN] Orphaned File Cleanup', 'Automatic cleanup of temporary files'),
             ('cross_platform_compatibility', '[NET] Cross-Platform Compatibility', 'Windows/Linux/Android support'),
             ('retry_logic_system', '[RETRY] Retry Logic System', 'Exponential backoff and error recovery'),
-            ('cors_security', '[AUTH] CORS Security', 'Local network restriction with pattern matching')
+            ('cors_security', '[AUTH] CORS Security', 'Local network restriction with pattern matching'),
+            ('js_python_integrity', '[SHIELD] JS/Python Code Integrity', 'Checks for reference errors and deadlocks')
         ]
         
         # Count working components

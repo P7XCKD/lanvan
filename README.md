@@ -98,10 +98,9 @@ Open the LAN address in any browser on the same network to start transferring fi
 **2. Open Termux and run the setup script**
 
 ```bash
-pkg update && pkg install git python
-git clone https://github.com/yourusername/lanvan.git ~/lanvan
-cd ~/lanvan/termux
-bash setup-android.sh
+pkg update -y && pkg install -y git python
+git clone https://github.com/P7XCKD/lanvan.git ~/lanvan
+cd ~/lanvan/docs/termux && bash setup-android.sh
 ```
 
 **3. Start the server**
@@ -190,7 +189,7 @@ lanvan/
   ├── certs/                # SSL certificate config and generation scripts
   ├── data/                 # Operational user files & db stores (uploads, clipboards)
   ├── docs/                 # Platform setups and requirements manifests
-  ├── termux/               # Automated setup assets for Android Termux
+  │   └── termux/           # Automated setup assets for Android Termux
   ├── testing/              # Test workspace and unit diagnostic suites
   ├── run.py                # Platform-aware server launcher entry point
   └── qt.py                 # Core component reliability test runner
@@ -203,8 +202,8 @@ For detailed architecture descriptions, refer to the documentation in each folde
   * **[app/templates/](./app/templates/README.md)**: Modular HTML views and skeleton inheritance files.
 * **[certs/](./certs/README.md)**: SSL certificate creation configurations and local key generator scripts.
 * **[docs/](./docs/README.md)**: Platform configuration checklists, troubleshooting, and setup scripts.
+  * **[docs/termux/](./docs/termux/)**: Automated setup assets and scripts for Android Termux.
 * **[testing/](./testing/test_workspace/TEST_README.md)**: Sandboxed test workspace assets and isolated diagnostic tools.
-* **[termux/](./docs/TERMUX_SETUP.md)**: Setup assets and scripts for Android environments.
 * **[run.py](run.py)**: Entry launcher that detects platform targets, sets up venv, and boots uvicorn.
 * **[qt.py](qt.py)**: Standard automated component testing suite.
 

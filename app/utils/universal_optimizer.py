@@ -285,6 +285,27 @@ class UniversalOptimizer:
             'memory_management': 'strategic_gc',  # OPTIMIZED: Strategic instead of frequent
             'performance_profile': 'optimized'
         }
+        
+    def get_system_info(self) -> Dict:
+        """Get system info for client optimization"""
+        from app.utils.termux_compat import get_safe_memory_info, get_safe_cpu_usage
+        mem = get_safe_memory_info()
+        cpu = get_safe_cpu_usage()
+        
+        # Calculate available memory in MB
+        available_mb = mem.get('available_mb', 0.0)
+        if available_mb == 0.0 and 'available_bytes' in mem:
+            available_mb = mem['available_bytes'] / (1024 * 1024)
+            
+        # Determine if low memory (e.g. less than 1GB available)
+        is_low = mem.get('is_low_memory', available_mb < 1024.0)
+        
+        return {
+            "platform": self.platform_type,
+            "available_memory_mb": round(available_mb, 2),
+            "is_low_memory": is_low,
+            "cpu_usage": cpu
+        }
 
 # Legacy Android optimizer functions (merged from android_optimizer.py)
 def optimize_for_upload(file_size: int) -> Dict:
