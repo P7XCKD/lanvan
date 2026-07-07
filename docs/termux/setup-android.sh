@@ -18,47 +18,19 @@ fi
 echo "✅ Termux environment detected"
 echo ""
 
-# Update package list
-echo "📦 Updating Termux packages..."
-pkg update -y
+# Update package list and full upgrade to keep system libraries in sync (fixes curl/openssl mismatches)
+echo "📦 Updating and upgrading Termux packages..."
+pkg update -y && pkg upgrade -y
 
-# Install essential system packages
-echo "🔧 Installing system dependencies..."
-pkg install -y python python-pip git curl wget
+# Install essential system packages, build tools, and precompiled Python packages
+echo "🔧 Installing system dependencies and precompiled Python packages..."
+pkg install -y python python-pip git curl wget clang make cmake \
+            python-cryptography python-psutil python-fastapi python-uvicorn \
+            python-jinja python-websockets python-qrcode python-zeroconf
 
-# Install build dependencies for Python packages
-echo "🛠️ Installing build dependencies..."
-pkg install -y clang make cmake libjpeg-turbo-dev zlib-dev
-
-# Upgrade pip
-echo "⬆️ Upgrading pip..."
-python -m pip install --upgrade pip
-
-# Install Python dependencies with Android optimizations
-echo "🐍 Installing Python dependencies..."
-
-# Install core packages first
-python -m pip install --upgrade fastapi uvicorn[standard] jinja2 python-multipart
-
-# Install QR code support with pillow
-echo "📱 Installing QR code support..."
-python -m pip install --upgrade pillow qrcode[pil]
-
-# Install networking packages
-echo "🌐 Installing network packages..."
-python -m pip install --upgrade zeroconf aiofiles psutil
-
-# Install security packages
-echo "🔐 Installing security packages..."
-python -m pip install --upgrade cryptography
-
-# Install WebSocket support
-echo "🔌 Installing WebSocket support..."
-python -m pip install --upgrade websockets wsproto
-
-# Optional: Install clipboard support (might not work on all Android versions)
-echo "📋 Attempting to install clipboard support..."
-python -m pip install --upgrade pyperclip || echo "⚠️ Clipboard support failed (this is normal on Android)"
+# Install remaining lightweight and pure-Python packages via pip
+echo "🐍 Installing lightweight Python packages..."
+python -m pip install python-multipart aiofiles wsproto brotli pyperclip || echo "⚠️ Some pip packages failed to install, proceeding..."
 
 # Set up storage permissions
 echo "📁 Setting up storage permissions..."

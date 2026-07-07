@@ -1,0 +1,132 @@
+/*
+[STYLE] Clipboard Page Isolated Stylesheet
+Manages layout, buttons, textareas, and history logs specifically for the Clipboard view.
+*/
+
+:root {
+  --clipboard-primary: #6c5ce7;
+  --clipboard-primary-light: #a29bfe;
+  --clipboard-success: #28a745;
+  --clipboard-info: #17a2b8;
+  --clipboard-danger: #dc3545;
+  --clipboard-bg-light: #f8f9fa;
+  --clipboard-border: #e0e0e0;
+}
+
+/* Clipboard Container and Section Layouts */
+.clipboard-section {
+  background: var(--section-bg);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  margin-top: 1.5rem;
+  border: 1px solid var(--border-color);
+}
+
+.clipboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.clipboard-title {
+  margin: 0;
+  color: var(--text-color);
+  font-size: 1.4rem;
+}
+
+/* Clipboard Interactive Inputs */
+.clipboard-input-box {
+  background: var(--clipboard-bg-light);
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border-color);
+}
+
+.clipboard-textarea {
+  width: 100%;
+  height: 120px;
+  padding: 0.75rem;
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  resize: vertical;
+  font-family: monospace;
+  font-size: 0.95rem;
+  background: var(--section-bg);
+  color: var(--text-color);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  transition: border-color 0.2s ease;
+}
+
+.clipboard-textarea:focus {
+  border-color: var(--clipboard-primary);
+  outline: none;
+}
+
+/* Clipboard History Contents */
+.clipboard-history-container {
+  padding: 1.5rem;
+  background: var(--section-bg);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.clipboard-history-content {
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--clipboard-bg-light);
+  padding: 1.25rem;
+  border-radius: 8px;
+  border: 1px solid var(--clipboard-border);
+}
+
+/* Clipboard Button Layouts */
+.clipboard-btn-group {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.clipboard-btn {
+  background: var(--clipboard-primary);
+  color: white;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.clipboard-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.clipboard-btn-success {
+  background: var(--clipboard-success);
+}
+
+.clipboard-btn-info {
+  background: var(--clipboard-info);
+}
+
+.clipboard-btn-danger {
+  background: var(--clipboard-danger);
+}
+
+/* Dark Mode Theme Overrides */
+[data-theme="dark"] {
+  --clipboard-bg-light: #1a202c;
+  --clipboard-border: #4a5568;
+}

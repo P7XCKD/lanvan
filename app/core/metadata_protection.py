@@ -1,8 +1,12 @@
 """
 [LOCK] Metadata Protection for HTTP-Safe AES Encryption
+Implements metadata protection to make AES encryption secure by hiding filenames, sizes, and patterns.
 
-This module implements comprehensive metadata protection to make AES encryption
-secure over HTTP by hiding filenames, sizes, and patterns.
+Key Features:
+- Secure, deterministic filename obfuscation using HMAC/SHA-256
+- Dynamic file size padding to prevent traffic analysis attacks
+- Metadata encryption with Base64 safe transport formatting
+- Decoy traffic pattern simulation helpers
 """
 
 import os
@@ -52,18 +56,7 @@ def obfuscate_file_size(actual_size: int) -> int:
     
     return actual_size + padding_size
 
-def create_dummy_traffic_pattern():
-    """
-    Generate parameters for dummy traffic to hide real upload patterns.
-    
-    Returns:
-        dict: Parameters for generating dummy requests
-    """
-    return {
-        'dummy_requests': secrets.randbelow(3) + 1,  # 1-3 dummy requests
-        'delay_between': secrets.randbelow(500) + 100,  # 100-600ms delays
-        'dummy_sizes': [secrets.randbelow(1024) + 512 for _ in range(3)]  # Random small sizes
-    }
+
 
 def encrypt_metadata(metadata: Dict, encryption_key: bytes) -> str:
     """

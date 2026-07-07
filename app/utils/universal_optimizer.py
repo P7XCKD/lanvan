@@ -1,7 +1,12 @@
 """
-Universal Platform Optimizer with Termux Compatibility
-Performance optimizations for large file uploads on ALL platforms (Windows, Linux, Mac, Android)
-Enhanced with Termux memory monitoring and background processing management
+[RETRY] Universal Platform Optimizer with Termux Compatibility
+Applies performance optimizations for large file uploads on Windows, Linux, MacOS, and Android.
+
+Key Features:
+- Platform-adaptive file transfer chunk sizing (from 512KB to 4MB depending on size/memory)
+- Strategic garbage collection sweeps to prevent memory pressure warnings
+- Safe OS system calls mapping with error-resilient fallbacks
+- Background processing limits keepalive tasks helper
 """
 
 import os
@@ -92,13 +97,11 @@ class UniversalOptimizer:
             elif file_size < 100 * 1024 * 1024:  # < 100MB
                 return 2 * 1024 * 1024  # 2MB for medium files
             else:  # Large files
-                return 4 * 1024 * 1024  # 4MB for large files
+                return 8 * 1024 * 1024  # 8MB for large files (optimized for high-speed local networks)
     
     def _detect_platform(self) -> str:
         """Detect the current platform"""
-        if ("ANDROID_STORAGE" in os.environ or 
-            os.path.exists("/data/data/com.termux") or 
-            "TERMUX_VERSION" in os.environ):
+        if is_android_environment():
             return 'android'
         
         system = platform.system().lower()
@@ -281,6 +284,27 @@ class UniversalOptimizer:
             'optimizations_active': True,
             'memory_management': 'strategic_gc',  # OPTIMIZED: Strategic instead of frequent
             'performance_profile': 'optimized'
+        }
+        
+    def get_system_info(self) -> Dict:
+        """Get system info for client optimization"""
+        from app.utils.termux_compat import get_safe_memory_info, get_safe_cpu_usage
+        mem = get_safe_memory_info()
+        cpu = get_safe_cpu_usage()
+        
+        # Calculate available memory in MB
+        available_mb = mem.get('available_mb', 0.0)
+        if available_mb == 0.0 and 'available_bytes' in mem:
+            available_mb = mem['available_bytes'] / (1024 * 1024)
+            
+        # Determine if low memory (e.g. less than 1GB available)
+        is_low = mem.get('is_low_memory', available_mb < 1024.0)
+        
+        return {
+            "platform": self.platform_type,
+            "available_memory_mb": round(available_mb, 2),
+            "is_low_memory": is_low,
+            "cpu_usage": cpu
         }
 
 # Legacy Android optimizer functions (merged from android_optimizer.py)
