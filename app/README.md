@@ -50,3 +50,5 @@ For detailed descriptions of the components inside each folder, see their respec
 * **[app/core/](./core/README.md)**: Details the streaming chunk assembler (`streaming_assembly.py`), cryptography controllers (`aes_utils.py`), validation rules (`validation.py`), and atomic cross-platform file locking mechanisms.
 * **[app/ws_manager/](./ws_manager/README.md)**: Documents WebSocket management, client subscriptions tracking, weak-reference sets preservation, and progress status broadcasts.
 * **[app/utils/](./utils/README.md)**: Documents platform compatibility engines (`termux_compat.py`), memory limits monitors, thread manager pools, certificate validators, and local mDNS host name resolutions.
+* **[app/static/js/](./static/js/README.md)**: Details the client-side JavaScript architecture (Loader, Utilities, UI controllers, and main orchestrator).
+* **[app/templates/](./templates/README.md)**: Details the Jinja2 HTML layout structure and page modularization rules.

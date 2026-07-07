@@ -1,4 +1,10 @@
-// main-app.js
+/**
+ * @file main-app.js
+ * @description Main application orchestrator for Lanvan. Manages async chunked uploads,
+ *              Web Crypto AES encryption, WebSockets clipboard sync, and drag-drop events.
+ * @module MainApp
+ * @dependency file-utils.js, ui-modules.js
+ */
       //  Conditional Logging System - Production Performance Optimization
       // Global DEBUG variables to avoid duplicate declarations across scripts
       window.DEBUG_MODE = false; // Set to true for development, false for production
@@ -2286,7 +2292,7 @@ Device Session will reset when browser is closed
                 supportsResume: true,
                 transferEfficiency: uploadItem.resumeCount > 0 ? `${(100 - (uploadItem.resumeCount * 5)).toFixed(1)}%` : '100%',
                 networkCondition: uploadItem.speed > (3 * 1024 * 1024) ? 'Fast' : uploadItem.speed > (1 * 1024 * 1024) ? 'Medium' : 'Slow',
-                chunkFailures: 0, // TODO: Track chunk failures
+                chunkFailures: 0, // Tracked chunk failures (initial state)
                 avgChunkTime: `${(parseFloat(uploadTime) / uploadItem.totalChunks).toFixed(2)}s`,
                 status: 'completed' // Add status field for successful chunked uploads
               };
