@@ -735,8 +735,8 @@ def encrypt_file_http_safe(
         memory_delta = end_memory - start_memory
         
         print(f"[LOCK] [HTTP-Safe AES] Complete - Memory: {end_memory:.1f}MB | Delta: {memory_delta:+.1f}MB")
-        print(f"[SHIELD] [Metadata Protected] Filename: {original_filename} → {safe_params['safe_filename']}")
-        print(f"[SHIELD] [Size Obfuscated] {file_size:,} → {safe_params['obfuscated_size']:,} bytes")
+        print(f"[SHIELD] [Metadata Protected] Filename: {original_filename} -> {safe_params['safe_filename']}")
+        print(f"[SHIELD] [Size Obfuscated] {file_size:,} -> {safe_params['obfuscated_size']:,} bytes")
         
         return safe_file_path, safe_params
         
@@ -807,7 +807,7 @@ def decrypt_http_safe_file(
         metadata = decrypt_metadata(encrypted_meta, encryption_key)
         original_filename = metadata.get('original_filename', 'decrypted_file')
         
-        print(f"[UNLOCK] [HTTP-Safe Decrypt] Restoring: {safe_params['safe_filename']} → {original_filename}")
+        print(f"[UNLOCK] [HTTP-Safe Decrypt] Restoring: {safe_params['safe_filename']} -> {original_filename}")
         
         if output_path is None:
             output_path = os.path.join(

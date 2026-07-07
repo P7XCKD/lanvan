@@ -679,7 +679,7 @@ class ConcurrentUploadManager:
         
         for attempt in range(max_retries):
             try:
-                print(f"[INFO] [{upload_id}] Moving {temp_destination.name} → {destination.name} (attempt {attempt + 1})")
+                print(f"[INFO] [{upload_id}] Moving {temp_destination.name} -> {destination.name} (attempt {attempt + 1})")
                 
                 if is_windows:
                     # Use shutil.move for better Windows compatibility
