@@ -1,3 +1,10 @@
+/**
+ * @file ui-modules.js
+ * @description Layout control and UI component layer for Lanvan. Coordinates Toast notifications,
+ *              download progress animation sequences, file grid populating, and settings menus.
+ * @module UIControllers
+ * @dependency main-app.js, file-utils.js
+ */
       window.DOM_CACHE = window.DOM_CACHE || {};
       var DOM_CACHE = window.DOM_CACHE;
 
@@ -476,7 +483,7 @@
         return metadata[filename] || null;
       }
 
-      // Missing progress functions for compatibility
+       // Progress styling utilities for visual feedback
       function setProgressColor(color) {
         try {
           // Use cached DOM element instead of repeated getElementById

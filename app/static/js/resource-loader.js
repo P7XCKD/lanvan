@@ -1,4 +1,9 @@
-// resource-loader.js
+/**
+ * @file resource-loader.js
+ * @description progressive loader module for Lanvan client. Handles asynchronous script 
+ *              fetching, CDN fallbacks (like JSZip), and environment feature detections (Safari/iOS).
+ * @module Loader
+ */
     // iOS Safari Detection and Optimization
     window.isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
     window.isiOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
