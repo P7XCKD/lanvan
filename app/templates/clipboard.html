@@ -18,6 +18,7 @@
         <div>
           <h2>Clipboard System</h2>
         </div>
+        <!-- View Switcher Dropdown (Switches context between file transfer and clipboard) -->
         <div style="display: flex; gap: 0.5rem; align-items: center;">
           <div style="position: relative;">
             <button onclick="showSwitchDropdown(event, 'switchDropdownClipboard')" class="clipboard-btn"
@@ -25,6 +26,7 @@
               title="Switch between File Sharing and Clipboard"><i data-lucide="refresh-cw" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Switch</button>
             <div id="switchDropdownClipboard"
               style="display:none; position:absolute; right:0; top:110%; background:var(--section-bg); border:1px solid var(--border-color); border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); min-width:150px; z-index:10001;">
+              <!-- Option: Switch to File Sharing (Handled by switchToPage() in ui-modules.js) -->
               <div
                 style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem; color: var(--text-color); transition: background-color 0.2s ease;"
                 onclick="switchToPage('file')" onmouseover="this.style.backgroundColor='var(--input-bg)'"
@@ -33,6 +35,7 @@
                   style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; color: var(--text-color);"><span
                     style="font-size: 1.3em;"><i data-lucide="folder" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i></span><span>File Sharing</span></span>
               </div>
+              <!-- Option: Switch to Clipboard (Handled by switchToPage() in ui-modules.js) -->
               <div
                 style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem; color: var(--text-color); transition: background-color 0.2s ease;"
                 onclick="switchToPage('clipboard')" onmouseover="this.style.backgroundColor='var(--input-bg)'"
@@ -46,13 +49,14 @@
         </div>
       </div>
 
-      <!-- Clipboard Input Section -->
+      <!-- Clipboard Input Area (Supports drag/drop paste and standard input submissions) -->
       <div
         style="background: var(--section-bg); padding: 1rem; border-radius: 8px; margin: 1.5rem 0; border: 1px solid var(--border-color);">
         <h4 style="margin: 0 0 1rem 0; color: var(--text-color);">Add to Clipboard</h4>
         <div style="margin-bottom: 1rem;">
           <label style="display: block; margin-bottom: 0.5rem; font-weight: bold; color: var(--text-color);">Paste
             Text/Content:</label>
+          <!-- Text Area Input: Listens to Ctrl+V pastes via handleClipboardPaste() in main-app.js -->
           <textarea id="clipboardTextInput" placeholder="Type or paste text content here..."
             style="width: 100%; height: 100px; padding: 0.5rem; border: 2px dashed var(--border-color); background: var(--input-bg); color: var(--text-color); border-radius: 6px; resize: vertical; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap; word-wrap: break-word;"
             onpaste="handleClipboardPaste(event)"></textarea>
@@ -60,8 +64,10 @@
             directly with Ctrl+V)</small>
         </div>
         <div style="display: flex; gap: 0.5rem;">
+          <!-- Button: Triggers addTextToClipboard() in main-app.js to POST input contents -->
           <button id="addTextToClipboardBtn" onclick="addTextToClipboard()" class="download-btn"
             style="background: #28a745; transition: all 0.2s ease;"><i data-lucide="file-pen" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Add Text</button>
+          <!-- Button: Triggers clearClipboardInput() in main-app.js to clear textarea -->
           <button onclick="clearClipboardInput()" class="download-btn" style="background: var(--settings-bg);"><i data-lucide="trash-2" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Clear
             Input</button>
         </div>
@@ -73,10 +79,13 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
           <h4 style="margin: 0; color: var(--text-color);"><i data-lucide="book-open" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Clipboard History</h4>
           <div class="clipboard-buttons">
+            <!-- Button: Triggers refreshClipboardHistory() in main-app.js to pull latest history list -->
             <button onclick="refreshClipboardHistory()" class="download-btn" style="background: #17a2b8;"><i data-lucide="refresh-cw" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i>
               Refresh</button>
+            <!-- Button: Triggers downloadClipboardHistory() in main-app.js to request plain-text backup of all clips -->
             <button onclick="downloadClipboardHistory()" class="download-btn" style="background: #28a745;"><i data-lucide="file-text" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i>
               Download</button>
+            <!-- Button: Triggers clearAllClipboardHistory() in main-app.js to wipe the current server side history -->
             <button onclick="clearAllClipboardHistory()" class="download-btn" style="background: #dc3545;"><i data-lucide="trash-2" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Clear
               All</button>
           </div>
