@@ -109,8 +109,14 @@ async def favicon():
                 headers={"Cache-Control": "public, max-age=86400"}  # Cache for 1 day
             )
         else:
-            # Return a 204 No Content if favicon doesn't exist
+            # Fallback to static/images/icon.png if favicon.ico is missing
+            png_favicon_path = UPLOAD_FOLDER.parent / "static" / "images" / "icon.png"
+            if png_favicon_path.exists():
+                return FileResponse(
+                    path=str(png_favicon_path),
+                    media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400"}
+                )
             return Response(status_code=204)
     except Exception:
-        # Return 204 instead of 500 to prevent console errors
         return Response(status_code=204)
