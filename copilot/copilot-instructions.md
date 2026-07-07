@@ -56,7 +56,10 @@ Lanvan/
 │   └── static/           # Static assets
 │       ├── css/          # Stylesheets
 │       └── js/           # JavaScript modules
-│           └── file-utils.js # Core frontend utilities
+│           ├── resource-loader.js # Progressive asset loader & device detectors
+│           ├── file-utils.js      # Pure utility helpers (math, sizes, escaping)
+│           ├── ui-modules.js      # UI layout handlers & DOM caching
+│           └── main-app.js        # Core WebSockets, encryption & upload queues
 ├── docs/                 # Documentation
 │   └── TERMUX_SETUP.md   # Android/Termux setup guide
 ├── testing/              # Test infrastructure
@@ -83,13 +86,13 @@ Lanvan/
 1. **No Inline Code**: Never use inline JavaScript or CSS in HTML templates
 2. **External Files Only**: Always create separate `.js` and `.css` files for new functionality
 3. **Check Existing Files First**: Before creating new files, check if functionality can be added to existing files:
-   - **JavaScript**: Use `app/static/js/file-utils.js` for utility functions
+   - **JavaScript**: Use `file-utils.js` for pure math/format utilities, `ui-modules.js` for rendering UI elements, `main-app.js` for uploads/WS, or `resource-loader.js` for assets loader config.
    - **CSS**: Use `app/static/css/style.css` or `app/static/css/main-styles.css`
 4. **Modular Design**: Write reusable, modular code that can be easily maintained
 5. **File Reuse**: Always extend existing files rather than creating duplicates
 
 ### Modular Code Organization
-- **JavaScript Functions**: Add to `file-utils.js` with clear function names
+- **JavaScript Functions**: Place in their respective module (`file-utils.js`, `ui-modules.js`, `main-app.js`, `resource-loader.js`) with clear descriptive comments.
 - **CSS Styles**: Group related styles in logical sections within existing CSS files
 - **HTML Templates**: Keep templates clean with external references only
 - **Configuration**: Use existing config files (`config.py`, `aes_config.py`, etc.)
@@ -165,8 +168,8 @@ python qt.py --android
 - **`app/main.py`**: Application initialization, middleware, CORS
 - **`app/routes.py`**: All API endpoints, file upload/download logic
 - **`app/streaming_assembly.py`**: Core streaming file assembly engine
-- **`app/static/js/file-utils.js`**: Frontend utility functions
-- **`app/templates/index.html`**: Main UI with WebSocket integration
+- **`app/static/js/`**: Client modules (`resource-loader.js`, `file-utils.js`, `ui-modules.js`, `main-app.js`)
+- **`app/templates/index.html`**: Main UI template (inherits from `base.html` and includes modular scripts)
 
 ## ⚠️ Critical Notes & Workarounds
 
@@ -238,7 +241,7 @@ python qt.py --android
 ### ✅ **Always Do These:**
 1. **External References**: `<script src="path/to/file.js"></script>`
 2. **Modular Design**: Small, reusable functions in existing files
-3. **File Reuse**: Extend `file-utils.js` and existing CSS files
+3. **File Reuse**: Extend modular JS files (`file-utils.js`, `ui-modules.js`, `main-app.js`, `resource-loader.js`) and existing CSS files
 4. **Clean Templates**: HTML templates with external references only
 5. **Configuration Management**: Use existing config files for settings
 

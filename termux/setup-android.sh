@@ -40,9 +40,9 @@ echo "🐍 Installing Python dependencies..."
 # Install core packages first
 python -m pip install --upgrade fastapi uvicorn[standard] jinja2 python-multipart
 
-# Install QR code support with pillow
+# Install QR code support (No Pillow to prevent compilation build errors)
 echo "📱 Installing QR code support..."
-python -m pip install --upgrade pillow qrcode[pil]
+python -m pip install --upgrade qrcode
 
 # Install networking packages
 echo "🌐 Installing network packages..."
@@ -55,6 +55,10 @@ python -m pip install --upgrade cryptography
 # Install WebSocket support
 echo "🔌 Installing WebSocket support..."
 python -m pip install --upgrade websockets wsproto
+
+# Optional: Install performance optimization packages
+echo "🚀 Installing performance packages..."
+python -m pip install --upgrade uvloop brotli
 
 # Optional: Install clipboard support (might not work on all Android versions)
 echo "📋 Attempting to install clipboard support..."

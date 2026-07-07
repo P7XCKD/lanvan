@@ -1,8 +1,15 @@
+<!--
+  Lanvan Progressive Loading Splash Screen
+  Served at: /loading
+  Purpose: Displays a loader anim while resources are fetched or generated in the background.
+           Once complete, automatically redirects client to the destination page.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Lanvan - Loading...</title>
+  <link rel="icon" type="image/png" href="{{ request.url_for('static', path='images/icon.png') }}?v=2">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
   <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -226,7 +233,7 @@
   <div class="loading-container">
     <div class="logo-container">
       <img src="{{ request.url_for('static', path='images/icon.png') }}" alt="Lanvan" class="logo"
-           onerror="this.style.display='none';">
+           onerror="if (location.protocol === 'file:') { this.src='../static/images/icon.png'; } else { this.style.display='none'; }">
     </div>
     
     <h1>Lanvan</h1>

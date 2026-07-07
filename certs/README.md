@@ -2,15 +2,17 @@
 
 This directory contains SSL certificates and keys for HTTPS functionality in Lanvan.
 
-## 🔒 Security Notice
+##  Security Notice
 
 **IMPORTANT**: All certificate files (`*.pem`, `*.key`, `*.crt`, `*.cert`) are automatically ignored by Git for security reasons. This prevents accidentally committing private keys to version control.
 
 ## Files in this directory:
 
 - `openssl.conf` - OpenSSL configuration template
-- `generate_certs.py` - Python script to generate certificates
-- `README.md` - This documentation
+- `generate_certs.py` - Python script to generate certificates using OpenSSL CLI subprocesses
+- `generate_certs_python.py` - Pure Python SSL certificate generator using the `cryptography` package (fallback when OpenSSL CLI is not available)
+- `cleanup_certs.py` - Script to remove generated certificates from the directory
+- `test_certificate.py` - Utility to verify generated certificates' structure and properties
 - `cert.pem` - SSL certificate (auto-generated, gitignored)
 - `key.pem` - Private key (auto-generated, gitignored)
 

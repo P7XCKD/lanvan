@@ -1179,8 +1179,8 @@ class QuickTest:
         try:
             # Test 1: temp_chunks folder moved to project root
             project_root = Path(__file__).parent
-            temp_chunks_path = project_root / "temp_chunks"
-            old_temp_chunks_path = project_root / "app" / "uploads" / "temp_chunks"
+            temp_chunks_path = project_root / "data" / "temp_chunks"
+            old_temp_chunks_path = project_root / "temp_chunks"
             
             if temp_chunks_path.exists():
                 self.log("temp_chunks: Correctly moved to project root", "PASS")
@@ -1206,8 +1206,8 @@ class QuickTest:
                 )
                 
                 # Test initialization with new structure
-                test_temp = project_root / "temp_chunks"
-                test_upload = project_root / "app" / "uploads"
+                test_temp = project_root / "data" / "temp_chunks"
+                test_upload = project_root / "data" / "uploads"
                 
                 if test_temp.exists() and test_upload.exists():
                     initialize_streaming_assembly(test_temp, test_upload)
@@ -1812,8 +1812,8 @@ class QuickTest:
                 )
                 
                 # Test graceful initialization and shutdown
-                temp_path = Path(__file__).parent / "temp_chunks"
-                upload_path = Path(__file__).parent / "app" / "uploads"
+                temp_path = Path(__file__).parent / "data" / "temp_chunks"
+                upload_path = Path(__file__).parent / "data" / "uploads"
                 
                 if temp_path.exists() and upload_path.exists():
                     initialize_streaming_assembly(temp_path, upload_path)
@@ -1873,7 +1873,7 @@ class QuickTest:
                 
                 # Test file lock manager
                 from pathlib import Path
-                lock_manager = get_file_lock_manager(Path("app/uploads"))
+                lock_manager = get_file_lock_manager(Path("data/uploads"))
                 if hasattr(lock_manager, 'upload_lock'):
                     self.log("File locking: FileOperationLock manager working", "PASS")
                     file_locking_working = True

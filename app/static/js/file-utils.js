@@ -1,5 +1,10 @@
-/* Single Function Extraction - generateFileListHash */
-/* Ultra-safe: zero external dependencies */
+/**
+ * @file file-utils.js
+ * @description Pure utility helper layer for Lanvan. Provides mathematical size formatting, 
+ *              transfer speed conversion, HTML escaping, and diagnostics (incognito detection).
+ * @module Utilities
+ * @dependency None (Ultra-safe local utility script)
+ */
 
 /**
  * Generate a hash string from a file list for deduplication

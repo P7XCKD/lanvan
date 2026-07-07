@@ -1,4 +1,8 @@
-﻿# Lanvan — LAN File Transfer Server
+<p align="center">
+  <img src="app/static/images/icon.png" alt="Lanvan Logo" width="120" height="120">
+</p>
+
+# Lanvan — LAN File Transfer Server
 
 > Demo video: [Watch on YouTube](https://www.youtube.com/watch?v=1M0Skoy42U4)
 
@@ -157,22 +161,53 @@ Certificates are auto-generated on first HTTPS run and stored in `certs/`.
 
 ---
 
+## ⚡ Speed & Performance Optimization
+
+To achieve the absolute maximum file transfer rates over your local network:
+
+1. **Use HTTP Mode (Default):** Run the server without `https` (`python run.py`). This avoids cryptographic CPU overhead on older/low-power devices, boosting speeds by 20% to 50%.
+2. **Install `uvloop` (Linux, macOS, and Termux):**
+   ```bash
+   pip install uvloop
+   ```
+   This replaces Python's default event loop with a C-based loop built for speed, accelerating FastAPI throughput by 2-4x.
+3. **Use a Wired Host Connection:** Connect the host machine via **Ethernet** instead of Wi-Fi. This eliminates wireless packet collisions and frees up bandwidth for receiving clients.
+4. **Use 5 GHz Wi-Fi:** Ensure client devices are connected to the 5 GHz Wi-Fi band of your router rather than 2.4 GHz.
+
+---
+
 ## Project Structure
 
 ```
 lanvan/
-  app/
-    main.py          # FastAPI app, middleware, shutdown handling
-    routes.py        # All API endpoints (upload, download, clipboard...)
-    templates/       # Jinja2 HTML templates
-    static/          # CSS, JS, Lucide icons
-  termux/
-    setup-android.sh # Android/Termux automated setup script
-  certs/             # SSL certificates (auto-generated, git-ignored)
-  run.py             # Entry point — handles venv, platform detection, uvicorn launch
-  requirements.txt   # Python dependencies
-  qt.py              # Component test suite
+  ├── app/                  # Main FastAPI Application Core
+  │   ├── core/             # Cryptography, validation, streaming merge, and atomic locks
+  │   ├── routers/          # API route controllers (files, pages, clipboard, etc.)
+  │   ├── ws_manager/       # WebSocket states for real-time clipboard & updates
+  │   ├── utils/            # Platform checks, memory limits, and Zeroconf mDNS
+  │   ├── static/           # CSS styles, images, and client JS modules
+  │   └── templates/        # Jinja2 layout components (base.html, index.html)
+  ├── certs/                # SSL certificate config and generation scripts
+  ├── data/                 # Operational user files & db stores (uploads, clipboards)
+  ├── docs/                 # Platform setups and requirements manifests
+  ├── termux/               # Automated setup assets for Android Termux
+  ├── testing/              # Test workspace and unit diagnostic suites
+  ├── run.py                # Platform-aware server launcher entry point
+  └── qt.py                 # Core component reliability test runner
 ```
+
+For detailed architecture descriptions, refer to the documentation in each folder:
+
+* **[app/](./app/README.md)**: Main FastAPI application core, routes, assets, and Jinja2 views.
+  * **[app/static/js/](./app/static/js/README.md)**: Client-side progressive JavaScript architecture.
+  * **[app/templates/](./app/templates/README.md)**: Modular HTML views and skeleton inheritance files.
+* **[certs/](./certs/README.md)**: SSL certificate creation configurations and local key generator scripts.
+* **[docs/](./docs/README.md)**: Platform configuration checklists, troubleshooting, and setup scripts.
+* **[testing/](./testing/test_workspace/TEST_README.md)**: Sandboxed test workspace assets and isolated diagnostic tools.
+* **[termux/](./docs/TERMUX_SETUP.md)**: Setup assets and scripts for Android environments.
+* **[run.py](run.py)**: Entry launcher that detects platform targets, sets up venv, and boots uvicorn.
+* **[qt.py](qt.py)**: Standard automated component testing suite.
+
 
 ---
 

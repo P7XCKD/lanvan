@@ -1,5 +1,7 @@
-/* Lanvan Styles */
-/* This CSS file was missing and causing 500 errors */
+/* 
+  Lanvan Compatibility Stylesheet
+  Overrides layout settings, mode selection buttons, sliding toggle selectors, and responsive helpers.
+*/
 
 /* Basic reset and body styles */
 * {
@@ -77,5 +79,255 @@ body {
     background-color: rgba(66, 153, 225, 0.2);
 }
 
-/* Additional styles can be added here as needed */
-/* Most styles are currently inline in the HTML template */
+/* Toggle Label Text Fixes */
+#darkModeLabel,
+#aesLabel,
+#filesLabel,
+#foldersLabel {
+  color: #333 !important;
+}
+
+[data-theme="dark"] #darkModeLabel,
+[data-theme="dark"] #aesLabel,
+[data-theme="dark"] #filesLabel,
+[data-theme="dark"] #foldersLabel {
+  color: #f0f0f0 !important;
+}
+
+
+/* Sliding Toggle Component for Mode Selections */
+    .upload-mode-slider {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      font-size: 0.9rem;
+      color: var(--text-color);
+    }
+
+    .upload-mode-slider .mode-label {
+      transition: all 0.3s ease;
+      font-weight: 400;
+      opacity: 0.7;
+      user-select: none;
+      color: #ffffff !important;
+    }
+
+    .upload-mode-slider .mode-label.active {
+      font-weight: 600;
+      opacity: 1;
+      color: #ffffff !important;
+    }
+
+    .slider-toggle {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 28px;
+      cursor: pointer;
+    }
+
+    .slider-toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider-track {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #1a202c;
+      border-radius: 28px;
+      transition: all 0.3s ease;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(0, 0, 0, 0.3);
+    }
+
+    .slider-thumb {
+      position: absolute;
+      content: '';
+      height: 22px;
+      width: 22px;
+      left: 3px;
+      bottom: 3px;
+      background: #ffffff;
+      border-radius: 50%;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      border: none;
+    }
+
+    /* Checked state */
+    .slider-toggle input:checked+.slider-track {
+      background: #1a202c;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(0, 0, 0, 0.3);
+    }
+
+    .slider-toggle input:checked+.slider-track .slider-thumb {
+      transform: translateX(32px);
+      background: #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      border: none;
+    }
+
+    /* Hover effects */
+    .slider-toggle:hover .slider-track {
+      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+      transform: scale(1.02);
+    }
+
+    .slider-toggle input:checked:hover+.slider-track {
+      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+      transform: scale(1.02);
+    }
+
+    .slider-toggle:hover .slider-thumb {
+      transform: scale(1.1);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    .slider-toggle input:checked:hover+.slider-track .slider-thumb {
+      transform: translateX(32px) scale(1.1);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Dark mode support */
+    [data-theme="dark"] .slider-track {
+      background: #1a202c;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    [data-theme="dark"] .slider-toggle input:checked+.slider-track {
+      background: #1a202c;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    [data-theme="dark"] .slider-thumb {
+      background: #ffffff;
+    }
+
+    [data-theme="dark"] .slider-toggle input:checked+.slider-track .slider-thumb {
+      background: #ffffff;
+    }
+
+
+    /*  AES Encryption Toggle - Dark Theme Styling */
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+      cursor: pointer;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-switch .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #1a202c !important;
+      border-radius: 24px;
+      transition: all 0.3s ease;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(0, 0, 0, 0.3);
+    }
+
+    .toggle-switch .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: #ffffff;
+      border-radius: 50%;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .toggle-switch input:checked+.slider {
+      background: #1a202c !important;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(0, 0, 0, 0.3);
+    }
+
+    .toggle-switch input:checked+.slider:before {
+      transform: translateX(26px);
+      background: #ffffff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Hover effects for AES toggle */
+    .toggle-switch:hover .slider {
+      box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7);
+      transform: scale(1.02);
+    }
+
+    .toggle-switch:hover .slider:before {
+      transform: scale(1.1);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    .toggle-switch input:checked:hover+.slider:before {
+      transform: translateX(26px) scale(1.1);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Make AES Encryption text white */
+    .toggle-container span {
+      color: #ffffff !important;
+    }
+
+    /* Dark mode consistency */
+    [data-theme="dark"] .toggle-switch .slider {
+      background: #111827 !important;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    [data-theme="dark"] .toggle-switch input:checked+.slider {
+      background: #111827 !important;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Minimal mobile responsiveness */
+
+    /* Mobile basic responsiveness only */
+    @media screen and (max-width: 768px) {
+
+      .title,
+      .main-title,
+      h1 {
+        font-size: 1.5rem !important;
+      }
+
+      .btn,
+      button {
+        min-height: 44px;
+      }
+
+    }
+
+    /* Basic CSS starts here */
+    html,
+    body {
+      overflow-x: hidden;
+      width: 100%;
+    }
+
+    /* Smooth scrolling for mobile */
+    html {
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+    }
