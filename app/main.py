@@ -557,6 +557,12 @@ async def smart_internal_error_handler(request: Request, exc):
         from starlette.responses import PlainTextResponse
         return PlainTextResponse("Client disconnected", status_code=400)
     
+    # Print the traceback so it is visible in the console
+    import traceback
+    print("=== [SERVER ERROR TRACEBACK] ===")
+    traceback.print_exc()
+    print("================================")
+    
     # Only redirect to loading page during startup period
     if not are_resources_ready():
         return RedirectResponse(url="/loading?redirect=/", status_code=302)

@@ -86,11 +86,13 @@ class StreamingChunkAssembler:
 
     def _try_real_time_assembly(self, file_id: str):
         """Attempt real-time assembly of consecutive chunks to save memory"""
+        streaming_file = self.streaming_files[file_id]
         if _TERMUX_MODE:
-            # In Termux mode, be more aggressive about assembly to save memory
-            streaming_file = self.streaming_files[file_id]
-            if len(streaming_file.chunk_data) >= 3:  # Start assembling after 3 chunks
-                self._assemble_available_chunks(file_id)
+            # In Termux mode, flush every chunk immediately to prevent OOM kills
+            self._assemble_available_chunks(file_id)
+        elif len(streaming_file.chunk_data) >= 5:
+            # On PC, buffer a few more chunks for performance
+            self._assemble_available_chunks(file_id)
 
     def _assemble_available_chunks(self, file_id: str):
         """Assemble consecutive chunks and write to disk to free memory"""
