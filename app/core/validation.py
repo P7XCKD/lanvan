@@ -492,7 +492,12 @@ class FileValidator(AdvancedFileValidator):
         try:
             file_size = file_path.stat().st_size
             mime_type = cls.get_mime_type(file_path)
-            file_hash = cls.calculate_file_hash(file_path)
+            
+            # Skip hash for large files (>100MB) to prevent OOM on memory-constrained devices
+            if file_size > 100 * 1024 * 1024:
+                file_hash = 'skipped_large_file'
+            else:
+                file_hash = cls.calculate_file_hash(file_path)
             
             # Step 4: Final safety assessment
             is_safe = cls.is_file_safe(file_path, mime_type)
@@ -575,8 +580,11 @@ class FileValidator(AdvancedFileValidator):
             # MIME type detection with fallback
             mime_type = cls.get_mime_type(file_path)
             
-            # Calculate file hash for integrity
-            file_hash = cls.calculate_file_hash(file_path)
+            # Calculate file hash for integrity (skip for large files to prevent OOM)
+            if file_size > 100 * 1024 * 1024:
+                file_hash = 'skipped_large_file'
+            else:
+                file_hash = cls.calculate_file_hash(file_path)
             
             # Basic security checks
             is_safe = cls.is_file_safe(file_path, mime_type)
