@@ -97,7 +97,7 @@ class UniversalOptimizer:
             elif file_size < 100 * 1024 * 1024:  # < 100MB
                 return 2 * 1024 * 1024  # 2MB for medium files
             else:  # Large files
-                return 4 * 1024 * 1024  # 4MB for large files
+                return 8 * 1024 * 1024  # 8MB for large files (optimized for high-speed local networks)
     
     def _detect_platform(self) -> str:
         """Detect the current platform"""
