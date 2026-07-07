@@ -915,71 +915,23 @@ async def upload_auto_file(
             "msg": "No valid files to process"
         })
     
-    # [START] Execute direct uploads with proper file handling
-    print(f"[START] Starting direct upload of {len(valid_files)} files...")
-    
-    upload_results = []
-    
-    # Process each file directly
-    for i, file in enumerate(valid_files):
-        try:
-            # Get the prepared destination and info
-            destination = destinations[i]
-            info = file_info[i]
-            
-            print(f"[OUT] Processing file {i+1}/{len(valid_files)}: {info['original_name']}")
-            
-            # [RETRY] MEMORY FIX: Use Termux-optimized chunk size for direct streaming
-            from app.utils.universal_optimizer import get_adaptive_chunk_size
-            CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)  # Get platform-optimal chunk size
-            
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            
-            with open(destination, 'wb') as f:
-                while True:
-                    chunk = await file.read(CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-            
-            await file.seek(0)  # Reset file pointer for any subsequent operations
-            
-            # Handle encryption if needed (encrypt in place)
-            if encrypt:
-                try:
-                    from app.core.aes_utils import encrypt_file_http_safe
-                    encrypted_path, metadata = encrypt_file_http_safe(str(destination), info['original_name'])
-                    print(f"[AUTH] File {i+1} encrypted successfully")
-                    # Update destination to the encrypted file
-                    destination = Path(encrypted_path)
-                except Exception as e:
-                    print(f"[ERR] Encryption failed for file {i+1}: {e}")
-                    # Clean up original file if encryption failed
-                    if destination.exists():
-                        destination.unlink()
-                    upload_results.append({
-                        'success': False,
-                        'error': f"Encryption failed: {str(e)}",
-                        'filename': info['original_name']
-                    })
-                    continue
-            
-            # Add to results
-            upload_results.append({
-                'success': True,
-                'destination': str(destination),
-                'filename': info['original_name']
-            })
-            
-            print(f"[OK] File {i+1} uploaded successfully: {destination.name}")
-            
-        except Exception as e:
-            print(f"[ERR] File {i+1} upload failed: {str(e)}")
-            upload_results.append({
-                'success': False,
-                'error': str(e),
-                'filename': file.filename or f"file_{i+1}"
-            })
+    # [START] Execute uploads with bounded concurrency
+    print(f"[START] Starting concurrent direct upload of {len(valid_files)} files...")
+
+    max_parallel_uploads = max(1, min(MAX_CONCURRENT_UPLOADS, len(valid_files)))
+    upload_manager = ConcurrentUploadManager(max_concurrent_uploads=max_parallel_uploads)
+
+    upload_results = await upload_manager.upload_files_concurrently(
+        files=valid_files,
+        destinations=destinations,
+        encrypt=encrypt
+    )
+
+    for i, result in enumerate(upload_results):
+        if result.get('success'):
+            print(f"[OK] File {i+1} uploaded successfully: {result.get('destination', 'unknown')}")
+        else:
+            print(f"[ERR] File {i+1} upload failed: {result.get('error', 'Unknown error')}")
     
     uploaded = []
     

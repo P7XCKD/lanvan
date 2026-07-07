@@ -368,7 +368,7 @@ async def clear_clipboard():
     save_clipboard_history()
     
     # Broadcast clear action to active WebSocket listeners
-    await clipboard_ws_manager.broadcast({"type": "clear"})
+    await clipboard_ws_manager.broadcast(json.dumps({"type": "clear"}))
     return {"status": "success", "message": "Clipboard cleared"}
 
 
@@ -382,10 +382,10 @@ async def remove_clipboard_item(item_id: int):
             save_clipboard_history()
             
             # Broadcast delete action to active WebSocket listeners
-            await clipboard_ws_manager.broadcast({
+            await clipboard_ws_manager.broadcast(json.dumps({
                 "type": "delete",
                 "id": item_id
-            })
+            }))
             return {"status": "success", "message": f"Item {item_id} deleted"}
             
     return JSONResponse(
@@ -403,4 +403,30 @@ async def clipboard_status():
 @router.post("/api/clipboard", name="clipboard_write")
 async def clipboard_write(request: Request):
     """Direct API endpoint for writing text data to clipboard."""
-    return await add_to_clipboard(request)
+    try:
+        content_type = request.headers.get("content-type", "").lower()
+
+        if "application/json" in content_type:
+            payload = await request.json()
+            data = payload.get("data")
+            if not isinstance(data, str):
+                return JSONResponse(
+                    status_code=HTTP_400_BAD_REQUEST,
+                    content={"status": "error", "msg": "JSON clipboard writes must include a text 'data' field"}
+                )
+            return await add_to_clipboard(request, data=data)
+
+        form = await request.form()
+        data = form.get("data")
+        if isinstance(data, str) and data:
+            return await add_to_clipboard(request, data=data)
+
+        return JSONResponse(
+            status_code=HTTP_400_BAD_REQUEST,
+            content={"status": "error", "msg": "No clipboard data provided"}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "msg": f"Clipboard write failed: {str(e)}"}
+        )
