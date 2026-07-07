@@ -40,6 +40,7 @@ ENV/
 .DS_Store?
 
 # Ignore uploaded files and temporary directories
+data/
 app/uploads/
 uploads/
 temp_chunks/
