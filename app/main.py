@@ -1,3 +1,15 @@
+"""
+[CORE] Lanvan FastAPI Application Entry Point
+Initializes the FastAPI application, registers middleware (CORS, network filters),
+binds WebSocket sub-routers, and handles server lifespan events (mDNS, thread lifecycle).
+
+Key Features:
+- Lifespan context manager controlling resource initialization and prioritized shutdowns
+- Secure CORSMiddleware with local network restriction filtering
+- Global client disconnect log silencer filters
+- Custom error pages redirection and loading phase states
+"""
+
 import os
 import signal
 import asyncio
@@ -195,7 +207,7 @@ async def lifespan(app: FastAPI):
                 
                 # Show redirect info for HTTPS mode
                 if use_https and mdns_info['domain'] != "lanvan.local":
-                    print(f" Redirect available: http://lanvan.local → https://lanvan.local:{port}")
+                    print(f" Redirect available: http://lanvan.local -> https://lanvan.local:{port}")
             else:
                 print("[WARN]  mDNS service failed to start - using IP access only")
         except Exception as e:
@@ -247,6 +259,16 @@ async def lifespan(app: FastAPI):
     print("[STREAM] Stopping streaming assembly system...")
     from app.core.streaming_assembly import shutdown_streaming_assembly
     shutdown_streaming_assembly()
+    
+    # Stop WebSocket managers
+    print("[WS] Stopping WebSocket connection managers...")
+    try:
+        from app.ws_manager import clipboard_ws_manager, upload_status_manager
+        await clipboard_ws_manager.shutdown()
+        await upload_status_manager.shutdown()
+        print("[OK] WebSocket managers shutdown successfully")
+    except Exception as ws_err:
+        print(f"[WARN] WebSocket managers shutdown warning: {ws_err}")
     
     # Stop mDNS service
     print(" Stopping mDNS service...")
@@ -485,7 +507,7 @@ def are_resources_ready():
         if os.path.exists(template_dir) and os.path.exists(static_dir):
             resources_ready = True
             return True
-    except:
+    except Exception:
         pass
     
     return False
@@ -534,6 +556,12 @@ async def smart_internal_error_handler(request: Request, exc):
         print(f"ℹ Client disconnected during request to {request.url.path} (wrapped)")
         from starlette.responses import PlainTextResponse
         return PlainTextResponse("Client disconnected", status_code=400)
+    
+    # Print the traceback so it is visible in the console
+    import traceback
+    print("=== [SERVER ERROR TRACEBACK] ===")
+    traceback.print_exc()
+    print("================================")
     
     # Only redirect to loading page during startup period
     if not are_resources_ready():

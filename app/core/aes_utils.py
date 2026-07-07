@@ -1,3 +1,15 @@
+"""
+[LOCK] Core Cryptographic & AES Utilities for Lanvan
+Handles zero-memory streaming file encryption, session keys, and secure HTTP parameter bindings.
+
+Key Features:
+- Platform-adaptive zero-memory streaming encryption (disk-to-disk & generator-based)
+- Secure, password-based key derivation using PBKDF2HMAC
+- Encrypted file stream chunking matching Termux memory thresholds
+- Session-based temporary in-memory key management
+- Safe HTTP parameters integration with metadata obfuscation
+"""
+
 import os
 import hashlib
 import gc
@@ -79,10 +91,6 @@ AES_CONFIG = {
 def get_aes_config():
     """Get AES configuration for API"""
     return AES_CONFIG
-
-# [LOCK] SECURE: Remove hardcoded keys - generate unique keys per session/file
-# AES_KEY = bytes.fromhex("8f9c02a7d6f7cbb1da0499e18b113fe65c7a6d2f538b0a6412ccab5ede6b8839")  # REMOVED - Security vulnerability
-# AES_IV  = bytes.fromhex("f012bc7d298e34af6509cb471d3a8250")  # REMOVED - IV reuse vulnerability
 
 # [MOBILE] Android/Termux compatibility: psutil may not be available
 try:
@@ -234,76 +242,7 @@ def decrypt_bytes(encrypted_data: bytes, key: bytes, iv: bytes) -> bytes:
     decrypted = unpad(decrypted_padded)
     return decrypted
 
-def encrypt_file_with_metadata(data: bytes, filename: Optional[str] = None, user_password: Optional[str] = None) -> Tuple[bytes, Dict[str, Optional[str]]]:
-    """
-    Encrypt file data and return encrypted data with metadata for secure storage.
-    
-    Args:
-        data: File content as bytes
-        filename: Optional filename for metadata
-        user_password: Optional user password for key derivation
-    
-    Returns:
-        tuple: (encrypted_data, metadata_dict)
-    """
-    # Generate unique key and IV for this file
-    if user_password:
-        # Use password-based key derivation
-        key, salt = generate_secure_key(user_password)
-    else:
-        # Generate random key for session-based encryption
-        key, salt = generate_secure_key()
-    
-    iv = generate_secure_iv()
-    
-    encrypted_data, final_key, final_iv = encrypt_bytes(data, key, iv)
-    
-    metadata = {
-        'salt': salt.hex(),
-        'iv': final_iv.hex(),
-        'algorithm': 'AES-256-CBC',
-        'filename_hash': hashlib.sha256(filename.encode('utf-8')).hexdigest() if filename else None,
-        'key_derivation': 'password' if user_password else 'random',
-        'iterations': '100000' if user_password else None
-    }
-    
-    # SECURITY: Key is NOT stored in metadata
-    # For password-based: key can be re-derived from password + salt
-    # For random keys: this is session-based encryption only
-    
-    return encrypted_data, metadata
 
-def decrypt_file_with_metadata(encrypted_data: bytes, metadata: Dict[str, Optional[str]], user_password: Optional[str] = None) -> bytes:
-    """
-    Decrypt file data using stored metadata.
-    
-    Args:
-        encrypted_data: The encrypted file content
-        metadata: Metadata dict containing salt, iv, etc.
-        user_password: Required if file was encrypted with password
-    
-    Returns:
-        bytes: Decrypted file content
-    """
-    iv_hex = metadata.get('iv')
-    salt_hex = metadata.get('salt')
-    key_derivation = metadata.get('key_derivation', 'random')
-    
-    if not iv_hex or not salt_hex:
-        raise ValueError("Missing iv or salt in metadata")
-    
-    iv = bytes.fromhex(iv_hex)
-    salt = bytes.fromhex(salt_hex)
-    
-    if key_derivation == 'password':
-        if not user_password:
-            raise ValueError("Password required for password-encrypted file")
-        # Re-derive key from password and salt
-        key, _ = generate_secure_key(user_password, salt)
-    else:
-        raise ValueError("Cannot decrypt random-key encrypted file without session key storage")
-    
-    return decrypt_bytes(encrypted_data, key, iv)
 
 def encrypt_file_to_file_streaming(input_path: str, output_path: str, user_password: Optional[str] = None, chunk_size: int = 1024 * 1024) -> Dict[str, str]:
     """
@@ -747,19 +686,7 @@ def encrypt_session_data(data: bytes, session_key: Optional[bytes] = None) -> Tu
     """
     return encrypt_bytes(data, session_key)
 
-def decrypt_session_data(encrypted_data: bytes, key: bytes, iv: bytes) -> bytes:
-    """
-    Decrypt session-based encrypted data.
-    
-    Args:
-        encrypted_data: Encrypted data
-        key: Session key (from memory)
-        iv: IV used for encryption
-    
-    Returns:
-        bytes: Decrypted data
-    """
-    return decrypt_bytes(encrypted_data, key, iv)
+
 
 
 def encrypt_file_http_safe(
@@ -808,8 +735,8 @@ def encrypt_file_http_safe(
         memory_delta = end_memory - start_memory
         
         print(f"[LOCK] [HTTP-Safe AES] Complete - Memory: {end_memory:.1f}MB | Delta: {memory_delta:+.1f}MB")
-        print(f"[SHIELD] [Metadata Protected] Filename: {original_filename} → {safe_params['safe_filename']}")
-        print(f"[SHIELD] [Size Obfuscated] {file_size:,} → {safe_params['obfuscated_size']:,} bytes")
+        print(f"[SHIELD] [Metadata Protected] Filename: {original_filename} -> {safe_params['safe_filename']}")
+        print(f"[SHIELD] [Size Obfuscated] {file_size:,} -> {safe_params['obfuscated_size']:,} bytes")
         
         return safe_file_path, safe_params
         
@@ -880,7 +807,7 @@ def decrypt_http_safe_file(
         metadata = decrypt_metadata(encrypted_meta, encryption_key)
         original_filename = metadata.get('original_filename', 'decrypted_file')
         
-        print(f"[UNLOCK] [HTTP-Safe Decrypt] Restoring: {safe_params['safe_filename']} → {original_filename}")
+        print(f"[UNLOCK] [HTTP-Safe Decrypt] Restoring: {safe_params['safe_filename']} -> {original_filename}")
         
         if output_path is None:
             output_path = os.path.join(

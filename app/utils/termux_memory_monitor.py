@@ -216,10 +216,7 @@ def start_termux_memory_monitoring():
     if is_termux_environment() or is_android_environment():
         termux_memory_monitor.start_monitoring()
         
-def stop_termux_memory_monitoring():
-    """Stop Termux memory monitoring"""
-    termux_memory_monitor.stop_monitoring()
-    
+
 def get_termux_memory_status() -> Dict[str, Any]:
     """Get current Termux memory status"""
     return termux_memory_monitor.get_memory_status()

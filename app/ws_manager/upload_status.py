@@ -1,6 +1,11 @@
 """
 [RETRY] Upload Status WebSocket Manager
-Memory-safe WebSocket implementation for real-time upload progress tracking
+Implements memory-safe WebSockets for tracking file upload progress in real time.
+
+Key Features:
+- Per-session upload subscription mapping
+- Broadcast progress updates using JSON serialization
+- Weak references to WebSocket objects for automatic lifecycle protection
 """
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -50,7 +55,10 @@ class UploadStatusConnectionManager:
         self._start_cleanup_task()
 
     def _start_cleanup_task(self):
-        """Start background cleanup task"""
+        """
+        Starts the background worker task to clean up expired and stale connections.
+        Ensures a single active background cleanup loop is maintained.
+        """
         if self._cleanup_task is None or self._cleanup_task.done():
             try:
                 loop = asyncio.get_running_loop()
@@ -59,7 +67,9 @@ class UploadStatusConnectionManager:
                 pass
 
     async def _background_cleanup(self):
-        """Background cleanup for stale connections and completed uploads"""
+        """
+        Background cleanup worker task that executes periodic connection sweeps and expired upload removals.
+        """
         while not self._shutdown_requested:
             try:
                 await asyncio.sleep(self.cleanup_interval)
@@ -71,15 +81,27 @@ class UploadStatusConnectionManager:
             except Exception as e:
                 print(f"Upload WebSocket cleanup error: {e}")
         
-        # Final cleanup before shutdown
+        # Run final connection cleanup sweep during server shutdown
         try:
             await self.cleanup_stale_connections()
         except Exception:
             pass
 
     async def connect(self, websocket: WebSocket, upload_id: Optional[str] = None) -> str:
-        """Connect WebSocket for upload status tracking"""
-        # Check limits
+        """
+        Registers and accepts a new incoming upload tracking client WebSocket.
+        
+        Args:
+            websocket: The incoming FastAPI WebSocket connection instance.
+            upload_id: Optional upload ID to automatically subscribe to on connection.
+            
+        Returns:
+            str: A unique hexadecimal token assigned to this connection.
+            
+        Raises:
+            Exception: If the server connection capacity exceeds configured limits.
+        """
+        # Enforce limits to prevent resource exhaustion
         if len(self.active_connections) >= self.max_connections:
             await self.cleanup_stale_connections()
             if len(self.active_connections) >= self.max_connections:
@@ -88,10 +110,10 @@ class UploadStatusConnectionManager:
         
         await websocket.accept()
         
-        # Generate connection ID
+        # Generate connection token
         connection_id = secrets.token_hex(16)
         
-        # Store connection
+        # Store connection references
         self.active_connections[connection_id] = websocket
         self.connection_timeouts[connection_id] = time.time() + self.connection_timeout
         self.connection_uploads[connection_id] = []
@@ -104,7 +126,13 @@ class UploadStatusConnectionManager:
         return connection_id
 
     async def subscribe_to_upload(self, connection_id: str, upload_id: str):
-        """Subscribe connection to specific upload progress"""
+        """
+        Subscribes a WebSocket connection to progress changes for a given upload session.
+        
+        Args:
+            connection_id: The connection ID token.
+            upload_id: The upload ID string to subscribe to.
+        """
         if connection_id in self.connection_uploads:
             self.connection_uploads[connection_id].append(upload_id)
         
@@ -124,7 +152,13 @@ class UploadStatusConnectionManager:
             }
 
     async def update_upload_progress(self, upload_id: str, progress_data: Dict[str, Any]):
-        """Update upload progress and notify subscribed connections"""
+        """
+        Updates the progress of an upload session and broadcasts it to all subscribed clients.
+        
+        Args:
+            upload_id: The upload ID string.
+            progress_data: Dict containing updated progress parameters.
+        """
         if upload_id in self.upload_sessions:
             # Update session data
             self.upload_sessions[upload_id].update(progress_data)
@@ -143,7 +177,6 @@ class UploadStatusConnectionManager:
                     if conn_id in self.active_connections:
                         try:
                             await self.active_connections[conn_id].send_text(message)
-                            # Update connection activity
                             self.connection_timeouts[conn_id] = time.time() + self.connection_timeout
                         except Exception:
                             failed_connections.append(conn_id)
@@ -153,7 +186,13 @@ class UploadStatusConnectionManager:
                     await self.disconnect(connection_id=conn_id)
 
     async def complete_upload(self, upload_id: str, final_data: Optional[Dict[str, Any]] = None):
-        """Mark upload as completed"""
+        """
+        Marks an upload session as completed and broadcasts final details to clients.
+        
+        Args:
+            upload_id: The upload ID string.
+            final_data: Optional Dict containing final response fields.
+        """
         if upload_id in self.upload_sessions:
             self.upload_sessions[upload_id]['status'] = 'completed'
             self.upload_sessions[upload_id]['completed_at'] = time.time()
@@ -173,15 +212,16 @@ class UploadStatusConnectionManager:
                     if conn_id in self.active_connections:
                         try:
                             await self.active_connections[conn_id].send_text(message)
-                        except:
+                        except Exception:
                             pass
 
     async def disconnect(self, websocket: Optional[WebSocket] = None, connection_id: Optional[str] = None):
-        """Disconnect and cleanup"""
+        """
+        Gracefully disconnects a connection, locating references by socket object or connection token.
+        """
         if connection_id:
             await self._force_disconnect(connection_id)
         elif websocket:
-            # Find connection ID
             conn_id = None
             for cid, ws in self.active_connections.items():
                 if ws == websocket:
@@ -191,14 +231,15 @@ class UploadStatusConnectionManager:
                 await self._force_disconnect(conn_id)
 
     async def _force_disconnect(self, connection_id: str):
-        """Force disconnect with cleanup"""
+        """
+        Closes and tears down the specified connection immediately, clearing all registration metadata.
+        """
         if connection_id in self.active_connections:
             websocket = self.active_connections[connection_id]
             
-            # Close websocket
             try:
                 await websocket.close()
-            except:
+            except Exception:
                 pass
             
             # Clean up connection references
@@ -220,7 +261,9 @@ class UploadStatusConnectionManager:
                 del self.connection_uploads[connection_id]
 
     async def cleanup_stale_connections(self):
-        """Clean up timed-out connections"""
+        """
+        Sweeps the connection registers to disconnect timed-out clients.
+        """
         current_time = time.time()
         stale_connections = [
             conn_id for conn_id, timeout in self.connection_timeouts.items()
@@ -231,7 +274,9 @@ class UploadStatusConnectionManager:
             await self._force_disconnect(conn_id)
 
     async def cleanup_completed_uploads(self):
-        """Clean up old completed upload sessions"""
+        """
+        Cleans up upload sessions that have been completed for longer than 1 hour to release memory.
+        """
         current_time = time.time()
         old_sessions = [
             upload_id for upload_id, session in self.upload_sessions.items()
@@ -240,15 +285,14 @@ class UploadStatusConnectionManager:
         ]
         
         for upload_id in old_sessions:
-            # Clean up session connections first
             if upload_id in self.session_connections:
                 del self.session_connections[upload_id]
-            
-            # Remove session
             del self.upload_sessions[upload_id]
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get manager statistics"""
+        """
+        Retrieves real-time utilization stats for the connection registry.
+        """
         return {
             'active_connections': len(self.active_connections),
             'active_uploads': len([s for s in self.upload_sessions.values() if s.get('status') != 'completed']),
@@ -258,7 +302,9 @@ class UploadStatusConnectionManager:
         }
 
     async def shutdown(self):
-        """Graceful shutdown"""
+        """
+        Cancels the background cleanup loop and forces closure on all active client connections.
+        """
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()
             try:
@@ -266,7 +312,6 @@ class UploadStatusConnectionManager:
             except asyncio.CancelledError:
                 pass
         
-        # Close all connections
         connection_ids = list(self.active_connections.keys())
         for conn_id in connection_ids:
             await self._force_disconnect(conn_id)
@@ -276,7 +321,9 @@ upload_status_manager = UploadStatusConnectionManager()
 
 @upload_status_ws_router.websocket("/ws/upload-status")
 async def upload_status_websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for upload progress tracking"""
+    """
+    FastAPI WebSocket endpoint for managing live upload status updates.
+    """
     connection_id = None
     try:
         connection_id = await upload_status_manager.connect(websocket)
@@ -293,7 +340,7 @@ async def upload_status_websocket_endpoint(websocket: WebSocket):
                         message['upload_id']
                     )
             except (json.JSONDecodeError, KeyError):
-                # Invalid message format - ignore
+                # Ignore invalid formatting
                 pass
             
     except WebSocketDisconnect:
@@ -305,12 +352,14 @@ async def upload_status_websocket_endpoint(websocket: WebSocket):
 
 @upload_status_ws_router.websocket("/ws/upload-status/{upload_id}")
 async def upload_specific_websocket_endpoint(websocket: WebSocket, upload_id: str):
-    """WebSocket endpoint for specific upload tracking"""
+    """
+    FastAPI WebSocket endpoint for managing status tracking for a specific upload ID.
+    """
     connection_id = None
     try:
         connection_id = await upload_status_manager.connect(websocket, upload_id)
         
-        # Send current upload status if exists
+        # Dispatch initial session status details immediately if available
         if upload_id in upload_status_manager.upload_sessions:
             session_data = upload_status_manager.upload_sessions[upload_id]
             initial_message = json.dumps({
@@ -321,7 +370,7 @@ async def upload_specific_websocket_endpoint(websocket: WebSocket, upload_id: st
             await websocket.send_text(initial_message)
         
         while True:
-            # Keep connection alive
+            # Keep the socket connection active
             await websocket.receive_text()
             
     except WebSocketDisconnect:

@@ -108,7 +108,7 @@ def get_termux_system_info() -> Dict[str, Any]:
     try:
         # Try to get CPU count from os (should work on Termux)
         info['cpu_count'] = os.cpu_count() or 4
-    except:
+    except Exception:
         pass
     
     try:
@@ -120,7 +120,7 @@ def get_termux_system_info() -> Dict[str, Any]:
                 if 'android' in version_info:
                     # Android detected, use conservative memory estimate
                     info['available_memory_mb'] = 1536  # Slightly higher for confirmed Android
-    except:
+    except Exception:
         pass
     
     try:
@@ -133,7 +133,7 @@ def get_termux_system_info() -> Dict[str, Any]:
             info_output = result.stdout.lower()
             if 'android' in info_output:
                 info['available_memory_mb'] = 2048  # Higher estimate with termux-info
-    except:
+    except Exception:
         pass
     
     return info
@@ -201,7 +201,7 @@ def optimize_for_termux():
             with open(keepalive_file, 'w') as f:
                 f.write(str(time.time()))
             print(f"[OK] Termux keepalive created: {keepalive_file}")
-        except:
+        except Exception:
             pass  # Non-critical
         
         # Gentle memory cleanup

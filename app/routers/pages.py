@@ -15,6 +15,16 @@ from app.routers.files import detect_ios_device, get_file_list, UPLOAD_FOLDER
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
+def safe_template_response(templates, request, name, context):
+    context = dict(context)
+    if "request" not in context:
+        context["request"] = request
+    try:
+        return templates.TemplateResponse(request, name, context)
+    except (TypeError, ValueError):
+        return templates.TemplateResponse(name, context)
+
+
 @router.get("/", response_class=HTMLResponse, name="home") 
 async def home(request: Request):
     """
@@ -79,20 +89,19 @@ async def home(request: Request):
     if ios_info['is_ios']:
         print(f"iOS device detected: {ios_info['device_type']} - Safari: {ios_info['is_safari']} - Protocol: {protocol} - Host: {host}")
     
-    return templates.TemplateResponse("index.html", template_context)
+    return safe_template_response(templates, request, "index.html", template_context)
 
 
 @router.get("/ios-help", response_class=HTMLResponse)
 async def ios_help_page(request: Request):
     """iOS Safari troubleshooting and help page."""
-    return templates.TemplateResponse("ios-help.html", {"request": request})
+    return safe_template_response(templates, request, "ios-help.html", {})
 
 
 @router.get("/loading", response_class=HTMLResponse, name="loading")
 async def loading_page(request: Request, redirect: str = "/"):
     """Loading page shown while resources are being prepared."""
-    return templates.TemplateResponse("loading.html", {
-        "request": request,
+    return safe_template_response(templates, request, "loading.html", {
         "redirect_url": redirect
     })
 
@@ -109,8 +118,14 @@ async def favicon():
                 headers={"Cache-Control": "public, max-age=86400"}  # Cache for 1 day
             )
         else:
-            # Return a 204 No Content if favicon doesn't exist
+            # Fallback to static/images/icon.png if favicon.ico is missing
+            png_favicon_path = UPLOAD_FOLDER.parent / "static" / "images" / "icon.png"
+            if png_favicon_path.exists():
+                return FileResponse(
+                    path=str(png_favicon_path),
+                    media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400"}
+                )
             return Response(status_code=204)
     except Exception:
-        # Return 204 instead of 500 to prevent console errors
         return Response(status_code=204)
