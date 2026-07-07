@@ -41,6 +41,11 @@ ENV/
 
 # Ignore uploaded files and temporary directories
 data/
+app/uploads/
+uploads/
+temp_chunks/
+app/uploads/temp_downloads/
+app/clipboard_data/
 temp/
 tmp/
 
