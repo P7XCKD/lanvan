@@ -399,7 +399,7 @@ if __name__ == "__main__":
             "uvicorn", "app.main:app",
             "--host", "0.0.0.0",
             "--port", str(port),
-            "--log-level", "warning"  # Suppress INFO logs
+            "--log-level", "info"
         ]
         if use_https:
             cmd += ["--ssl-keyfile", SSL_KEY_PATH, "--ssl-certfile", SSL_CERT_PATH]
@@ -421,8 +421,7 @@ if __name__ == "__main__":
             sys.executable, "-m", "uvicorn", "app.main:app",
             "--host", "0.0.0.0",
             "--port", str(port),
-            "--log-level", "warning",
-            "--no-access-log",
+            "--log-level", "info",
             "--timeout-keep-alive", "5",
             "--timeout-graceful-shutdown", "3",
         ]
