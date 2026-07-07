@@ -79,20 +79,19 @@ async def home(request: Request):
     if ios_info['is_ios']:
         print(f"iOS device detected: {ios_info['device_type']} - Safari: {ios_info['is_safari']} - Protocol: {protocol} - Host: {host}")
     
-    return templates.TemplateResponse("index.html", template_context)
+    return templates.TemplateResponse(request=request, name="index.html", context=template_context)
 
 
 @router.get("/ios-help", response_class=HTMLResponse)
 async def ios_help_page(request: Request):
     """iOS Safari troubleshooting and help page."""
-    return templates.TemplateResponse("ios-help.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="ios-help.html", context={})
 
 
 @router.get("/loading", response_class=HTMLResponse, name="loading")
 async def loading_page(request: Request, redirect: str = "/"):
     """Loading page shown while resources are being prepared."""
-    return templates.TemplateResponse("loading.html", {
-        "request": request,
+    return templates.TemplateResponse(request=request, name="loading.html", context={
         "redirect_url": redirect
     })
 
