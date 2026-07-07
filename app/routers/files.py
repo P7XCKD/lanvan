@@ -54,6 +54,7 @@ from app.core.streaming_assembly import get_streaming_assembler, add_streaming_c
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 UPLOAD_FOLDER = Path("data/uploads")
+UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
 def detect_ios_device(user_agent: str) -> dict:
     """Detect iOS devices and Safari browser"""
@@ -81,6 +82,7 @@ def detect_ios_device(user_agent: str) -> dict:
     }
 
 TEMP_CHUNKS_FOLDER = Path("data/temp_chunks")
+TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
 
 MAX_CONCURRENT_UPLOADS = 5  # Maximum parallel uploads per session
 
