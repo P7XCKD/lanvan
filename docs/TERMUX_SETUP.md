@@ -28,20 +28,16 @@ python run.py
 ```
 
 ### Quick Launch Scripts (Recommended)
-For convenience, you can copy the preconfigured script launchers to your home directory. These scripts automatically handle existing port conflicts, copy the LAN URL to your clipboard, and launch the server in Google Chrome on your device:
+The `setup-android.sh` script automatically copies and configures two launch scripts in your home directory (`~/`). These scripts automatically resolve port conflicts, copy the server LAN URL to your clipboard, and open Chrome on your device:
 
-* **For HTTP (Default):**
+* **Start HTTP Server (Default):**
   ```bash
-  cp ~/lanvan/docs/termux/start-server.sh ~/start-server.sh
-  chmod +x ~/start-server.sh
-  ~/start-server.sh
+  ~/start_server.sh
   ```
 
-* **For HTTPS:**
+* **Start HTTPS Server:**
   ```bash
-  cp ~/lanvan/docs/termux/start-server-https.sh ~/start-server-https.sh
-  chmod +x ~/start-server-https.sh
-  ~/start-server-https.sh
+  ~/start_server1.sh
   ```
 
 ---
