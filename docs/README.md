@@ -8,4 +8,3 @@ This directory contains configuration requirements, platform setup files, and tr
 * **[iOS_SETUP.md](./iOS_SETUP.md)**: Setup instructions for iOS Safari client access, including self-signed certificate installation.
 * **[ANDROID_TROUBLESHOOTING.md](./ANDROID_TROUBLESHOOTING.md)**: Common connection and runtime issues in Android environments.
 * **[termux/](./termux/)**: Automated setup assets and scripts for Android Termux.
-* **[requirements/](./requirements/)**: Raw dependency manifests (`requirements-android.txt`, `requirements-minimal.txt`) for custom container configs.
