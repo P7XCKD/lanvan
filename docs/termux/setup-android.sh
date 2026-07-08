@@ -31,11 +31,13 @@ export ANDROID_API=24
 
 # Update package list and full upgrade to keep system libraries in sync (fixes curl/openssl mismatches)
 echo "📦 Updating and upgrading Termux packages..."
-pkg update -y && pkg upgrade -y
+pkg update -y
+DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
 # Install essential system packages, build tools, and precompiled Python packages
 echo "🔧 Installing system dependencies and precompiled Python packages..."
-pkg install -y python python-pip git curl wget clang make cmake rust \
+DEBIAN_FRONTEND=noninteractive pkg install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
+            python python-pip git curl wget clang make cmake rust \
             python-cryptography python-psutil
 
 # Install remaining lightweight and pure-Python packages via pip
