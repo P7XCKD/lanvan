@@ -8,12 +8,12 @@ A lightweight, high-performance guide to running **Lanvan File Transfer Server**
 
 ### Option A: Fresh Installation (Clones the code)
 ```bash
-pkg update -y && pkg install -y git python && git clone https://github.com/P7XCKD/lanvan.git ~/lanvan && cd ~/lanvan/docs/termux && bash setup-android.sh && cd ~/lanvan && python run.py
+pkg update -y && pkg upgrade -y && pkg install -y git python rust clang cmake make python-pip python-psutil python-cryptography && export ANDROID_API_LEVEL=24 && git clone https://github.com/P7XCKD/lanvan.git ~/lanvan && cd ~/lanvan/docs/termux && bash setup-android.sh && cd ~/lanvan && python run.py
 ```
 
 ### Option B: Existing Installation (If code is already present in `~/lanvan`)
 ```bash
-pkg update -y && pkg install -y python && cd ~/lanvan/docs/termux && bash setup-android.sh && cd ~/lanvan && python run.py
+cd ~/lanvan && pkg install -y rust python-psutil python-cryptography && export ANDROID_API_LEVEL=24 && python run.py
 ```
 
 ---

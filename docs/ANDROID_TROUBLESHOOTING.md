@@ -91,10 +91,11 @@ cd $HOME/storage/shared
 ### 10. Build/Compilation Errors
 
 **Problem**: Python packages fail to install with compilation errors
+
 **Solutions**:
 ```bash
 # Install build tools
-pkg install clang python-dev cmake make
+pkg install clang python-dev cmake make rust
 
 # Install headers for common libraries
 pkg install libjpeg-turbo-dev zlib-dev libffi-dev
@@ -102,6 +103,17 @@ pkg install libjpeg-turbo-dev zlib-dev libffi-dev
 # Use pre-compiled wheels when available
 pip install --only-binary=all package_name
 ```
+
+**Problem**: Rust/Maturin-based packages (like pydantic-core/FastAPI on Python 3.14+) fail with:
+`Failed to determine Android API level. Please set the ANDROID_API_LEVEL environment variable.`
+
+**Solution**:
+Set the API level environment variables:
+```bash
+export ANDROID_API_LEVEL=24
+export ANDROID_API=24
+```
+(The `setup-android.sh` script does this automatically, and `run.py` also configures it at runtime).
 
 ## Android-Specific Optimizations
 
