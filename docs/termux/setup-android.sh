@@ -1,6 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Android/Termux Setup Script for Lanvan File Server
 # Run this script in Termux to set up all dependencies
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "🤖 Lanvan Android/Termux Setup Script"
 echo "======================================"
@@ -70,13 +71,25 @@ if [ ! -d "lanvan" ]; then
     mkdir -p lanvan
 fi
 
+# Copy preconfigured launch scripts to home directory
+echo "🚀 Copying startup scripts to home directory..."
+if [ -f "$SCRIPT_DIR/start-server.sh" ]; then
+    cp "$SCRIPT_DIR/start-server.sh" "$HOME/start_server.sh"
+    chmod +x "$HOME/start_server.sh"
+    echo "   [OK] Copied start_server.sh to ~/"
+fi
+if [ -f "$SCRIPT_DIR/start-server-https.sh" ]; then
+    cp "$SCRIPT_DIR/start-server-https.sh" "$HOME/start_server1.sh"
+    chmod +x "$HOME/start_server1.sh"
+    echo "   [OK] Copied start_server1.sh to ~/"
+fi
+
 echo ""
 echo "✅ Lanvan Android/Termux setup completed!"
 echo ""
 echo "📋 Next steps:"
-echo "1. Copy your Lanvan project files to ~/lanvan/"
-echo "2. cd ~/lanvan"
-echo "3. python run.py"
+echo "1. Run the server using: ~/start_server.sh"
+echo "   (or run ~/start_server1.sh for HTTPS mode)"
 echo ""
 echo "💡 Tips for Android/Termux:"
 echo "• Use direct IP access instead of .local domains"
