@@ -49,6 +49,10 @@ ensure_venv()
 is_android = os.path.exists("/data/data/com.termux") or "ANDROID_ROOT" in os.environ
 
 if is_android:
+    # Ensure Android API level is available for Rust/maturin builds during runtime pip installs
+    os.environ.setdefault("ANDROID_API_LEVEL", "24")
+    os.environ.setdefault("ANDROID_API", "24")
+
     # On Android, verify required binary dependencies are pre-installed via pkg
     missing_sys_packages = []
     try:
@@ -66,23 +70,36 @@ if is_android:
         print(f"    pkg install {' '.join(missing_sys_packages)}\n")
         sys.exit(1)
 
-    # Install remaining python-only packages individually on Android
-    try:
-        import fastapi
-        import jinja2
-        import uvicorn
-        import aiofiles
-        import zeroconf
-    except ImportError as e:
-        print(f"[!] Missing Python package: {e}")
-        print("[!] Installing required python-only packages on Android...")
+    # Check remaining python packages individually
+    pip_dependencies = {
+        "fastapi": "fastapi",
+        "uvicorn": "uvicorn",
+        "jinja2": "jinja2",
+        "multipart": "python-multipart",
+        "aiofiles": "aiofiles",
+        "qrcode": "qrcode",
+        "zeroconf": "zeroconf",
+        "websockets": "websockets",
+        "wsproto": "wsproto",
+        "brotli": "brotli",
+        "pyperclip": "pyperclip",
+        "uvloop": "uvloop"
+    }
+
+    missing_pip_packages = []
+    for module_name, pip_name in pip_dependencies.items():
         try:
-            # We install plain uvicorn (without [standard]) to avoid watchfiles/httptools compile errors
-            subprocess.run([sys.executable, "-m", "pip", "install", 
-                            "fastapi", "uvicorn", "jinja2", "python-multipart", 
-                            "aiofiles", "qrcode", "zeroconf"], check=True)
+            __import__(module_name)
+        except ImportError:
+            missing_pip_packages.append(pip_name)
+
+    if missing_pip_packages:
+        print(f"[!] Missing Python package(s): {', '.join(missing_pip_packages)}")
+        print("[!] Installing missing Python packages on Android...")
+        try:
+            # We install plain uvicorn (without [standard]) to avoid compile issues
+            subprocess.run([sys.executable, "-m", "pip", "install"] + missing_pip_packages, check=True)
             print("[OK] Dependencies installed successfully!")
-            import uvicorn
         except Exception as install_error:
             print(f"[ERROR] Failed to install packages: {install_error}")
             sys.exit(1)
