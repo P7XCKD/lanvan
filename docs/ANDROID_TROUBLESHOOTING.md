@@ -161,14 +161,11 @@ chmod +x setup-android.sh
 # Update packages
 pkg update && pkg upgrade -y
 
-# Install Python and pip
-pkg install python python-pip
+# Install Python, pip, build dependencies, and system modules
+pkg install python python-pip clang make cmake rust python-cryptography python-psutil
 
-# Install build dependencies
-pkg install clang make cmake libjpeg-turbo-dev
-
-# Install Lanvan dependencies
-pip install -r requirements-android.txt
+# Install remaining Python packages via pip
+pip install fastapi uvicorn jinja2 python-multipart aiofiles qrcode zeroconf websockets wsproto brotli pyperclip uvloop
 
 # Set up storage
 termux-setup-storage
@@ -210,7 +207,7 @@ If you're still experiencing issues:
 1. Check the main README.md for general troubleshooting
 2. Look at the server logs for specific error messages
 3. Try running with debug mode: `python run.py --debug`
-4. Use the Android requirements file: `pip install -r requirements-android.txt`
+4. Run the automated script: `bash docs/termux/setup-android.sh`
 
 ## Known Limitations on Android
 
