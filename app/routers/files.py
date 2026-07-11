@@ -589,7 +589,8 @@ async def encrypt_http_safe(
 async def download_temp_file(filename: str):
     """Download temporary encrypted file"""
     try:
-        file_path = UPLOAD_FOLDER / filename
+        safe_name = secure_filename(filename)
+        file_path = UPLOAD_FOLDER / safe_name
         if not file_path.exists():
             return JSONResponse(
                 status_code=404,
