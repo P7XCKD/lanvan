@@ -32,6 +32,7 @@ class StreamingFile:
     expected_parts: int
     received_parts: Set[int] = field(default_factory=set)
     final_path: Optional[Path] = None
+    temp_path: Optional[Path] = None
     processing_started: bool = False
     completed: bool = False
     error: Optional[str] = None
@@ -99,15 +100,17 @@ class StreamingChunkAssembler:
         streaming_file = self.streaming_files[file_id]
         
         if not streaming_file.final_path:
-            streaming_file.final_path = self.upload_folder / streaming_file.filename
-            # Ensure unique filename
+            final_path = self.upload_folder / streaming_file.filename
+            # Ensure unique filename check includes both final path and its temp path
             counter = 1
-            original_path = streaming_file.final_path
-            while streaming_file.final_path.exists():
+            original_path = final_path
+            while final_path.exists() or final_path.with_suffix(final_path.suffix + '.tmp').exists():
                 stem = original_path.stem
                 suffix = original_path.suffix
-                streaming_file.final_path = self.upload_folder / f"{stem}_{counter}{suffix}"
+                final_path = self.upload_folder / f"{stem}_{counter}{suffix}"
                 counter += 1
+            streaming_file.final_path = final_path
+            streaming_file.temp_path = final_path.with_suffix(final_path.suffix + '.tmp')
 
         # Find consecutive chunks starting from 1
         consecutive_chunks = []
@@ -118,10 +121,10 @@ class StreamingChunkAssembler:
                 break
 
         if consecutive_chunks:
-            # Write consecutive chunks to file
-            mode = 'ab' if streaming_file.final_path.exists() else 'wb'
+            # Write consecutive chunks to temp file
+            mode = 'ab' if streaming_file.temp_path.exists() else 'wb'
             try:
-                with open(streaming_file.final_path, mode) as f:
+                with open(streaming_file.temp_path, mode) as f:
                     for chunk_num in consecutive_chunks:
                         chunk_data = streaming_file.chunk_data.pop(chunk_num)
                         f.write(chunk_data)
@@ -141,26 +144,53 @@ class StreamingChunkAssembler:
         
         try:
             if not streaming_file.final_path:
-                streaming_file.final_path = self.upload_folder / streaming_file.filename
-                # Ensure unique filename
+                final_path = self.upload_folder / streaming_file.filename
+                # Ensure unique filename check includes both final path and its temp path
                 counter = 1
-                original_path = streaming_file.final_path
-                while streaming_file.final_path.exists():
+                original_path = final_path
+                while final_path.exists() or final_path.with_suffix(final_path.suffix + '.tmp').exists():
                     stem = original_path.stem
                     suffix = original_path.suffix
-                    streaming_file.final_path = self.upload_folder / f"{stem}_{counter}{suffix}"
+                    final_path = self.upload_folder / f"{stem}_{counter}{suffix}"
                     counter += 1
+                streaming_file.final_path = final_path
+                streaming_file.temp_path = final_path.with_suffix(final_path.suffix + '.tmp')
 
-            # Write any remaining chunks in order
+            # Write any remaining chunks in order to temp file
             if streaming_file.chunk_data:
-                mode = 'ab' if streaming_file.final_path.exists() else 'wb'
-                with open(streaming_file.final_path, mode) as f:
+                mode = 'ab' if streaming_file.temp_path.exists() else 'wb'
+                with open(streaming_file.temp_path, mode) as f:
                     for chunk_num in sorted(streaming_file.chunk_data.keys()):
                         chunk_data = streaming_file.chunk_data[chunk_num]
                         f.write(chunk_data)
 
             # Clear chunk data to free memory
             streaming_file.chunk_data.clear()
+            
+            # Atomic rename from temp_path to final_path
+            import shutil
+            is_windows = os.name == 'nt'
+            max_retries = 3 if is_windows else 1
+            retry_delay = 0.3 if is_windows else 0.1
+            
+            # Make sure we sleep briefly to release file handles if needed
+            if is_windows:
+                time.sleep(0.1)
+                
+            for attempt in range(max_retries):
+                try:
+                    if is_windows:
+                        shutil.move(str(streaming_file.temp_path), str(streaming_file.final_path))
+                    else:
+                        streaming_file.temp_path.rename(streaming_file.final_path)
+                    break
+                except Exception as rename_err:
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        retry_delay *= 1.5
+                    else:
+                        raise rename_err
+
             streaming_file.completed = True
             
             # Verify file size
@@ -273,8 +303,15 @@ class StreamingChunkAssembler:
     def cleanup(self, file_id: str):
         """Clean up a file's streaming data"""
         if file_id in self.streaming_files:
+            streaming_file = self.streaming_files[file_id]
             # Clean up chunks first
             self.cleanup_chunks(file_id)
+            # Clean up partial temp file if it exists and wasn't finished
+            if streaming_file.temp_path and streaming_file.temp_path.exists():
+                try:
+                    streaming_file.temp_path.unlink(missing_ok=True)
+                except Exception as e:
+                    print(f"[WARN] Failed to delete temp file {streaming_file.temp_path.name} in cleanup: {e}")
             # Remove from tracking
             del self.streaming_files[file_id]
             print(f"[CLEAN] Cleaned up streaming file: {file_id}")
