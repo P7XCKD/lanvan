@@ -522,13 +522,15 @@ async def smart_404_handler(request: Request, exc):
         
         # Never redirect loading page to itself
         if original_path == '/loading':
-            raise exc
+            from fastapi.responses import PlainTextResponse
+            return PlainTextResponse("Not Found", status_code=404)
         
         # Don't redirect API calls or static resources
         if (original_path.startswith('/api/') or 
             original_path.startswith('/static/') or
             original_path.startswith('/_')):
-            raise exc
+            from fastapi.responses import PlainTextResponse
+            return PlainTextResponse("Not Found", status_code=404)
         
         # Only redirect to loading page if resources aren't ready
         if not are_resources_ready():
@@ -538,7 +540,8 @@ async def smart_404_handler(request: Request, exc):
             )
     
     # For everything else, let the normal 404 happen
-    raise exc
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse("Not Found", status_code=404)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
