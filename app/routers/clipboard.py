@@ -54,6 +54,10 @@ def save_clipboard_history():
     global clipboard_history, clipboard_id_counter
 
     try:
+        # Enforce history limit to prevent file bloating
+        if len(clipboard_history) > 50:
+            clipboard_history = clipboard_history[:50]
+
         # Prepare data for saving (convert binary data to base64 for JSON serialization)
         save_data = {
             'items': [],

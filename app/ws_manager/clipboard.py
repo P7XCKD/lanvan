@@ -166,11 +166,9 @@ class ClipboardConnectionManager:
                     pass  # Socket was already disconnected
             
             # Clean up all tracking references
-            del self.active_connections[connection_id]
-            if connection_id in self.connection_timeouts:
-                del self.connection_timeouts[connection_id]
-            if connection_id in self.connection_metadata:
-                del self.connection_metadata[connection_id]
+            self.active_connections.pop(connection_id, None)
+            self.connection_timeouts.pop(connection_id, None)
+            self.connection_metadata.pop(connection_id, None)
 
     async def cleanup_stale_connections(self):
         """
