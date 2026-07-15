@@ -98,7 +98,7 @@ try:
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
-    print("ℹ  psutil not available - memory monitoring disabled (Android/Termux compatibility mode)")
+    print("[INFO] psutil not available - memory monitoring disabled (Android/Termux compatibility mode)")
 
 def get_memory_usage_mb() -> float:
     """Get current memory usage in MB - Android/Termux compatible"""

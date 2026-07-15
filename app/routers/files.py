@@ -1228,7 +1228,7 @@ async def download_all_files():
     """Download all files as a ZIP archive with proper streaming"""
     
     # Check if there are any files to download
-    files_to_download = [file for file in UPLOAD_FOLDER.iterdir() if file.is_file()]
+    files_to_download = [file for file in UPLOAD_FOLDER.iterdir() if file.is_file() and not file.name.endswith('.tmp')]
     if not files_to_download:
         return JSONResponse(
             status_code=404,
@@ -1517,7 +1517,8 @@ async def upload_chunk(
         if assembler:
             # Add chunk to streaming assembly for real-time processing
             streaming_result = add_streaming_chunk(safe_filename, part_number, chunk_data)
-            print(f"[STREAM] Added chunk to streaming assembly: {streaming_result}")
+            if part_number == 1 or part_number == total_parts or (total_parts and part_number % max(1, total_parts // 10) == 0):
+                print(f"[STREAM] Added chunk {part_number}/{total_parts or '?'} to streaming assembly: {streaming_result.get('status', 'unknown')}")
             
             # Check if file completed via streaming assembly
             if streaming_result and streaming_result.get("status") == "completed":
@@ -2045,7 +2046,11 @@ async def upload_folder(
 @router.get("/download-folder/{folder_name}", name="download_folder")
 async def download_folder(folder_name: str):
     """Download an entire folder as a ZIP file"""
-    folder_path = UPLOAD_FOLDER / folder_name
+    safe_folder = secure_filename(folder_name)
+    if not safe_folder:
+        raise HTTPException(status_code=400, detail="Invalid folder name")
+        
+    folder_path = UPLOAD_FOLDER / safe_folder
     
     if not folder_path.exists() or not folder_path.is_dir():
         raise HTTPException(status_code=404, detail="Folder not found")
@@ -2064,10 +2069,14 @@ async def download_folder(folder_name: str):
     
     zip_buffer.seek(0)
     
+    # Properly quote filename in header to prevent injection
+    from urllib.parse import quote
+    encoded_filename = quote(f"{safe_folder}.zip")
+    
     return StreamingResponse(
         io.BytesIO(zip_buffer.read()),
         media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename={folder_name}.zip"}
+        headers={"Content-Disposition": f"attachment; filename=\"{safe_folder}.zip\"; filename*=UTF-8''{encoded_filename}"}
     )
 
 @router.get("/api/folders", name="list_folders")
@@ -2109,7 +2118,11 @@ async def delete_folder(folder_name: str):
     """Delete an entire folder"""
     import shutil
     
-    folder_path = UPLOAD_FOLDER / folder_name
+    safe_folder = secure_filename(folder_name)
+    if not safe_folder:
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid folder name"})
+        
+    folder_path = UPLOAD_FOLDER / safe_folder
     
     if not folder_path.exists() or not folder_path.is_dir():
         raise HTTPException(status_code=404, detail="Folder not found")
@@ -2118,10 +2131,10 @@ async def delete_folder(folder_name: str):
         shutil.rmtree(folder_path)
         return JSONResponse(content={
             "status": "success",
-            "msg": f"Folder '{folder_name}' deleted successfully"
+            "msg": f"Folder '{safe_folder}' deleted successfully"
         })
     except Exception as e:
-        print(f"[ERR] Error deleting folder {folder_name}: {e}")
+        print(f"[ERR] Error deleting folder {safe_folder}: {e}")
         return JSONResponse(status_code=500, content={
             "status": "error",
             "msg": f"Failed to delete folder: {e}"
