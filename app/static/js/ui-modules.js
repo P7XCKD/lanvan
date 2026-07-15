@@ -1225,17 +1225,32 @@
 
       if (folderCount) folderCount.textContent = `(${folders.length})`;
 
-      folderGrid.innerHTML = folders.map(folder => `
+      function escapeHtml(text) {
+        if (!text) return '';
+        return text
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      folderGrid.innerHTML = folders.map(folder => {
+        const escName = escapeHtml(folder.name);
+        const attrEscName = escName.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+        const encodedName = encodeURIComponent(folder.name);
+        return `
     <div class="file-card">
       <div class="file-icon"></div>
-      <div class="file-name" title="${folder.name}">${folder.name}</div>
+      <div class="file-name" title="${escName}">${escName}</div>
       <div class="file-size">${folder.file_count} files • ${folder.size_formatted}</div>
       <div class="file-actions">
-        <a href="/download-folder/${folder.name}" class="download-btn"> Download</a>
-        <button onclick="deleteFolder('${folder.name}')" class="download-btn" style="background-color: #e74c3c;"></button>
+        <a href="/download-folder/${encodedName}" class="download-btn"> Download</a>
+        <button onclick="deleteFolder('${attrEscName}')" class="download-btn" style="background-color: #e74c3c;"></button>
       </div>
     </div>
-  `).join('');
+  `;
+      }).join('');
     }
 
     async function deleteFolder(folderName) {
@@ -1244,7 +1259,7 @@
       }
 
       try {
-        const response = await fetch(`/delete-folder/${folderName}`, { method: 'POST' });
+        const response = await fetch(`/delete-folder/${encodeURIComponent(folderName)}`, { method: 'POST' });
         const result = await response.json();
 
         if (result.status === 'success') {

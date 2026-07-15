@@ -11,9 +11,11 @@ from fastapi.templating import Jinja2Templates
 from app.utils.simple_mdns import mdns_manager
 from app.routers.files import detect_ios_device, get_file_list, UPLOAD_FOLDER
 
+import time
 # Initialize router and Jinja2 templates engine
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+templates.env.globals["cache_version"] = str(int(time.time()))
 
 def safe_template_response(templates, request, name, context):
     context = dict(context)

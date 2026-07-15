@@ -2178,7 +2178,10 @@ Device Session will reset when browser is closed
 
           xhr.addEventListener('load', () => {
             if (xhr.status === 200) {
-              console.log(` Chunk ${chunkIndex + 1}/${totalChunks} uploaded successfully`);
+              const currentChunk = chunkIndex + 1;
+              if (currentChunk === 1 || currentChunk === totalChunks || currentChunk % 20 === 0) {
+                console.log(` Chunk ${currentChunk}/${totalChunks} uploaded successfully`);
+              }
               resolve(true);
             } else {
               console.log(` Chunk ${chunkIndex + 1}/${totalChunks} failed: ${xhr.status}`);

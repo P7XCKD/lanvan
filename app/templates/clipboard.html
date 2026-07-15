@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_styles %}
-    <link rel="stylesheet" href="{{ request.url_for('static', path='css/clipboard.css') }}?v=3">
+    <link rel="stylesheet" href="{{ request.url_for('static', path='css/clipboard.css') }}?v={{ cache_version }}">
 {% endblock %}
 
 {% block extra_config %}

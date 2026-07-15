@@ -271,11 +271,18 @@ async def get_optimal_chunk_size(file_size: int):
         )
 
 @router.post("/api/shutdown")
-async def emergency_shutdown():
+async def emergency_shutdown(request: Request):
     """
     Emergency server shutdown endpoint - immediately terminates server
-    and notifies all connected clients.
+    and notifies all connected clients. Restricted to localhost.
     """
+    client_host = request.client.host if request.client else None
+    if client_host not in ("127.0.0.1", "localhost", "::1"):
+        raise HTTPException(
+            status_code=403, 
+            detail="Forbidden: Shutdown commands are restricted to the local host machine."
+        )
+        
     import asyncio
     from app.main import shutdown_event, connection_manager
     

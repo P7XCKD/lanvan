@@ -238,12 +238,10 @@ class SimpleMDNSManager:
             # Quick check - browse for existing services (offline-compatible)
             zeroconf_browser = None
             services_found = []
-            collision_detected = False
             
             def service_added(zeroconf, service_type, name, state_change=None, **kwargs):
                 """Handle service discovery with compatibility for different zeroconf versions"""
-                # Accept any additional keyword arguments that newer versions might pass
-                services_found.append(name)
+                services_found.append(name.lower())
             
             try:
                 # Create zeroconf with local-only interfaces to work offline
@@ -253,7 +251,7 @@ class SimpleMDNSManager:
                     browser = ServiceBrowser(zeroconf_browser, self.service_type, handlers=[service_added])
                     
                     # Wait briefly for discovery (reduced time for offline scenarios)
-                    time.sleep(0.3)  # Reduced from 0.5s for offline
+                    time.sleep(0.4)  # 400ms for stable packet capture
                     
                     try:
                         browser.cancel()
@@ -265,17 +263,51 @@ class SimpleMDNSManager:
                     # Continue without collision detection
                 
                 # Check if our desired name conflicts
-                target_service = f"{service_name}.{self.service_type}"
-                collision_detected = target_service in services_found
+                normalized_services = [s.split('.')[0] for s in services_found]
+                base_lower = service_name.lower()
                 
-                if collision_detected:
-                    # Generate alternative name with device ID
-                    alternative_name = f"{service_name}-{self.device_id}"
-                    print(f"[WARN] Name collision detected! '{service_name}' is already in use")
-                    print(f"[RETRY] Using alternative name: '{alternative_name}'")
-                    return alternative_name, True
-                else:
+                # Check system DNS resolution for conflict fallback
+                try:
+                    resolved_ip = socket.gethostbyname(f"{service_name}.local")
+                    our_ip = self.get_lan_ip()
+                    if resolved_ip and resolved_ip != our_ip and resolved_ip != "127.0.0.1":
+                        print(f"[WARN] Host conflict detected via DNS lookup: {service_name}.local already points to {resolved_ip}")
+                        if base_lower not in normalized_services:
+                            normalized_services.append(base_lower)
+                except Exception:
+                    pass
+                
+                if base_lower not in normalized_services:
                     return service_name, False
+                
+                # Find the next free incremental name (e.g. Lanvan-2, Lanvan-3)
+                counter = 2
+                while True:
+                    candidate = f"{service_name}-{counter}"
+                    if candidate.lower() not in normalized_services:
+                        # Double-check via DNS resolution
+                        conflict_via_dns = False
+                        try:
+                            resolved_ip = socket.gethostbyname(f"{candidate}.local")
+                            our_ip = self.get_lan_ip()
+                            if resolved_ip and resolved_ip != our_ip and resolved_ip != "127.0.0.1":
+                                conflict_via_dns = True
+                        except Exception:
+                            pass
+                            
+                        if not conflict_via_dns:
+                            print(f"[WARN] Name collision detected! '{service_name}' is already in use")
+                            print(f"[RETRY] Using alternative name: '{candidate}'")
+                            return candidate, True
+                        else:
+                            normalized_services.append(candidate.lower())
+                    counter += 1
+                    if counter > 100:  # Safety bound
+                        break
+                
+                # Fallback to device ID if counter is too large
+                alternative_name = f"{service_name}-{self.device_id}"
+                return alternative_name, True
                     
             except Exception as browse_error:
                 print(f"[WARN] Collision detection failed (possibly offline): {browse_error}")
@@ -474,7 +506,7 @@ class SimpleMDNSManager:
         try:
             with self._lock:
                 if self.is_running:
-                    print("ℹ mDNS service already running")
+                    print("[INFO] mDNS service already running")
                     return True
                 
                 # Check if mDNS is available
@@ -640,7 +672,7 @@ class SimpleMDNSManager:
                 print(f"[TARGET] Single protocol mode - no redirects needed")
                 
                 if self.conflict_count > 0:
-                    print(f"ℹ Collision resolved - using unique name: {self.service_name}")
+                    print(f"[INFO] Collision resolved - using unique name: {self.service_name}")
                 
                 # Start background thread for periodic announcements (offline-friendly)
                 self._start_announcement_thread()

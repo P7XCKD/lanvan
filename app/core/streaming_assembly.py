@@ -73,7 +73,10 @@ class StreamingChunkAssembler:
         streaming_file.received_parts.add(chunk_number)
         streaming_file.assembled_size += len(chunk_data)
         
-        print(f"[CFG] Added chunk {chunk_number}/{streaming_file.expected_parts} for {streaming_file.filename} ({len(chunk_data):,} bytes)")
+        # Log progress at 10% increments to prevent log flooding
+        expected = streaming_file.expected_parts
+        if chunk_number == 1 or chunk_number == expected or (expected > 10 and chunk_number % max(1, expected // 10) == 0):
+            print(f"[CFG] Added chunk {chunk_number}/{expected} for {streaming_file.filename} ({len(chunk_data):,} bytes)")
         
         # Try real-time assembly if we have consecutive chunks
         self._try_real_time_assembly(file_id)
