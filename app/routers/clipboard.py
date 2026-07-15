@@ -22,6 +22,8 @@ from app.utils.universal_optimizer import get_adaptive_chunk_size
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+import time
+templates.env.globals["cache_version"] = str(int(time.time()))
 
 # State & Persistence Configurations
 CLIPBOARD_FOLDER = Path("data/clipboard")
@@ -338,9 +340,15 @@ async def get_clipboard_item(item_id: int):
             # Return file as download
             file_data = item["data"]
             filename = item["filename"]
+            
+            from app.core.validation import secure_filename
+            from urllib.parse import quote
+            
+            safe_name = secure_filename(filename) or "file"
+            encoded_filename = quote(safe_name)
 
             # Determine MIME type
-            mime_type, _ = guess_type(filename)
+            mime_type, _ = guess_type(safe_name)
             if not mime_type:
                 mime_type = "application/octet-stream"
 
@@ -348,7 +356,7 @@ async def get_clipboard_item(item_id: int):
                 io.BytesIO(file_data),
                 media_type=mime_type,
                 headers={
-                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Content-Disposition": f'attachment; filename="{safe_name}"; filename*=UTF-8\'\'{encoded_filename}',
                     "Content-Length": str(len(file_data))
                 }
             )

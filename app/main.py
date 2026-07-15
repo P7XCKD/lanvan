@@ -53,6 +53,14 @@ class ClientDisconnectFilter(logging.Filter):
         # Filter out the string-based error messages too
         if hasattr(record, 'getMessage'):
             msg = record.getMessage()
+            if any(path in msg for path in [
+                "GET /api/network-info",
+                "GET /api/server-status",
+                "GET /api/files",
+                "GET /api/folders",
+                "POST /upload_chunk"
+            ]):
+                return False
             if any(phrase in msg for phrase in [
                 "ClientDisconnect",
                 "parsing the body", 
@@ -70,6 +78,7 @@ class ClientDisconnectFilter(logging.Filter):
 # Apply filter to uvicorn and starlette loggers
 logging.getLogger("uvicorn.error").addFilter(ClientDisconnectFilter())
 logging.getLogger("uvicorn").addFilter(ClientDisconnectFilter())
+logging.getLogger("uvicorn.access").addFilter(ClientDisconnectFilter())
 logging.getLogger("starlette").addFilter(ClientDisconnectFilter())
 logging.getLogger("fastapi").addFilter(ClientDisconnectFilter())
 logging.getLogger().addFilter(ClientDisconnectFilter())
@@ -556,7 +565,7 @@ async def smart_internal_error_handler(request: Request, exc):
     """Handle server errors smartly"""
     # Check if this is a ClientDisconnect wrapped in other exceptions
     if _is_client_disconnect_error(exc):
-        print(f"ℹ Client disconnected during request to {request.url.path} (wrapped)")
+        print(f"[INFO] Client disconnected during request to {request.url.path} (wrapped)")
         from starlette.responses import PlainTextResponse
         return PlainTextResponse("Client disconnected", status_code=400)
     

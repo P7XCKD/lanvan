@@ -8,7 +8,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <link rel="icon" type="image/png" href="{{ request.url_for('static', path='images/icon.png') }}?v=3">
+  <link rel="icon" type="image/png" href="{{ request.url_for('static', path='images/icon.png') }}?v={{ cache_version }}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
   <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -491,7 +491,12 @@
             
             // Get the original path or default to home
             const urlParams = new URLSearchParams(window.location.search);
-            const originalPath = urlParams.get('redirect') || '/';
+            let originalPath = urlParams.get('redirect') || '/';
+            
+            // Validate redirect path to prevent open redirect vulnerabilities
+            if (!originalPath.startsWith('/') || originalPath.startsWith('//') || /^[a-zA-Z]+:\/\//.test(originalPath)) {
+              originalPath = '/';
+            }
             
             // Try to fetch the original path to make sure it's actually available
             fetch(originalPath, { method: 'HEAD' })
