@@ -25,8 +25,10 @@ templates = Jinja2Templates(directory="app/templates")
 import time
 templates.env.globals["cache_version"] = str(int(time.time()))
 
+from app.utils.android_compat import get_base_data_dir
+
 # State & Persistence Configurations
-CLIPBOARD_FOLDER = Path("data/clipboard")
+CLIPBOARD_FOLDER = get_base_data_dir() / "data/clipboard"
 CLIPBOARD_HISTORY_FILE = CLIPBOARD_FOLDER / "clipboard_history.json"
 clipboard_history = []
 clipboard_id_counter = 1

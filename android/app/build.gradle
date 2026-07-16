@@ -1,0 +1,98 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'com.chaquo.python'
+}
+
+android {
+    namespace 'com.lanvan.app'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.lanvan.app"
+        minSdk 24
+        targetSdk 35
+        versionCode 2
+        versionName "1.1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        vectorDrawables {
+            useSupportLibrary true
+        }
+
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+        }
+
+        python {
+            // buildPython configuration omitted to let Chaquopy automatically resolve suitable host interpreter
+            version "3.10"
+            pip {
+                // Core dependencies - all versions pinned for reproducible builds
+                install "fastapi==0.98.0"
+                install "pydantic==1.10.21"
+                install "uvicorn==0.23.2"
+                install "jinja2==3.1.6"
+                install "python-multipart==0.0.20"
+                install "aiofiles==23.2.1"
+                install "qrcode==7.4.2"
+                install "zeroconf==0.135.0"
+                install "websockets==11.0.3"
+                install "cryptography==42.0.8"
+                install "psutil==7.1.3"
+                install "pyperclip==1.8.2"
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+            shrinkResources false
+        }
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    sourceSets {
+        main {
+            python {
+                srcDirs = ["src/main/python", "../../"]
+                include "start_server.py"
+                include "app/**"
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}
+
+tasks.register('copyAssets', Copy) {
+    from '../../app/static'
+    into 'src/main/assets/app/static'
+    duplicatesStrategy DuplicatesStrategy.INCLUDE
+}
+tasks.register('copyTemplates', Copy) {
+    from '../../app/templates'
+    into 'src/main/assets/app/templates'
+    duplicatesStrategy DuplicatesStrategy.INCLUDE
+}
+preBuild.dependsOn(copyAssets)
+preBuild.dependsOn(copyTemplates)

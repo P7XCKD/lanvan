@@ -51,9 +51,11 @@ from app.core.concurrent_upload_manager import concurrent_upload_manager, Concur
 from app.core.windows_file_manager import WindowsFileManager
 from app.core.streaming_assembly import get_streaming_assembler, add_streaming_chunk, check_streaming_status, get_assembled_file, initialize_streaming_assembly
 
+from app.utils.android_compat import get_base_data_dir
+
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
-UPLOAD_FOLDER = Path("data/uploads")
+UPLOAD_FOLDER = get_base_data_dir() / "data/uploads"
 UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
 def detect_ios_device(user_agent: str) -> dict:
@@ -81,7 +83,7 @@ def detect_ios_device(user_agent: str) -> dict:
         'user_agent': user_agent
     }
 
-TEMP_CHUNKS_FOLDER = Path("data/temp_chunks")
+TEMP_CHUNKS_FOLDER = get_base_data_dir() / "data/temp_chunks"
 TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
 
 MAX_CONCURRENT_UPLOADS = 5  # Maximum parallel uploads per session
@@ -1520,9 +1522,17 @@ async def upload_chunk(
             if part_number == 1 or part_number == total_parts or (total_parts and part_number % max(1, total_parts // 10) == 0):
                 print(f"[STREAM] Added chunk {part_number}/{total_parts or '?'} to streaming assembly: {streaming_result.get('status', 'unknown')}")
             
+            # Broadcast upload progress to Android notification
+            if total_parts:
+                progress = int((part_number / total_parts) * 100)
+                from app.utils.android_compat import update_android_progress
+                update_android_progress(progress, f"Uploading {filename}...")
+            
             # Check if file completed via streaming assembly
             if streaming_result and streaming_result.get("status") == "completed":
                 print(f"[OK] File completed via streaming assembly: {safe_filename}")
+                from app.utils.android_compat import update_android_progress
+                update_android_progress(-1)
                 
                 # Clean up temp chunks since file is completed via streaming
                 try:
