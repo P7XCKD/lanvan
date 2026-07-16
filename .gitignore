@@ -188,3 +188,12 @@ docs/_build/
 # Local configuration overrides
 config.local.py
 settings.local.py
+
+# Android builds and packages
+.gradle/
+local.properties
+.cxx/
+*.apk
+*.aab
+android/app/build/
+temp_gradle/

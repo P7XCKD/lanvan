@@ -481,6 +481,7 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             print("\n[INFO] Ctrl+C received - stopping server...")
             try:
+                proc.terminate() # Actively stop the child uvicorn process
                 proc.wait(timeout=8)   # give uvicorn time to finish gracefully
             except subprocess.TimeoutExpired:
                 print("[WARN] Server did not stop in time - force killing...")

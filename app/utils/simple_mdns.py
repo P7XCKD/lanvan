@@ -18,7 +18,16 @@ import uuid
 import platform
 import os
 from typing import Optional, Dict, Any
-from zeroconf import ServiceInfo, Zeroconf, ServiceBrowser
+try:
+    from zeroconf import ServiceInfo, Zeroconf, ServiceBrowser
+    ZEROCONF_AVAILABLE = True
+except ImportError as e:
+    print(f"[WARN] Zeroconf library failed to load (possibly blocked by Application Control policy): {e}")
+    print("[WARN] mDNS auto-discovery will be disabled. Access via IP address only.")
+    ZEROCONF_AVAILABLE = False
+    ServiceInfo = None
+    Zeroconf = None
+    ServiceBrowser = None
 from app.utils.termux_compat import is_android_environment
 
 # Zeroconf version compatibility check
@@ -32,6 +41,8 @@ except Exception:
 
 def check_mdns_dependencies() -> tuple[bool, str]:
     """Check if mDNS dependencies are available, especially for Termux"""
+    if not ZEROCONF_AVAILABLE:
+        return False, "[ERR] mDNS not available: Zeroconf library failed to load (blocked by security policy)."
     try:
         from zeroconf import Zeroconf
         
@@ -510,8 +521,8 @@ class SimpleMDNSManager:
                     return True
                 
                 # Check if mDNS is available
-                if not self.mdns_available:
-                    print(f"[ERR] {self.mdns_status}")
+                if not self.mdns_available or not ZEROCONF_AVAILABLE:
+                    print("[ERR] mDNS/Zeroconf is unavailable (library not loaded or blocked)")
                     return False
                 
                 print("[SEARCH] Starting mDNS service (offline-compatible, Termux-optimized)...")

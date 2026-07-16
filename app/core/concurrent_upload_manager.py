@@ -289,6 +289,11 @@ class ConcurrentUploadManager:
             # Stop optimizations
             universal_optimizer.upload_active = False
             universal_optimizer.memory_cleanup(force=True)
+            try:
+                from app.utils.android_compat import update_android_progress
+                update_android_progress(-1)
+            except Exception:
+                pass
     
     async def _stream_upload_async(
         self, 
@@ -357,6 +362,13 @@ class ConcurrentUploadManager:
                     # [CLEAN] Adaptive memory management
                     if universal_optimizer.should_run_gc(total_written, chunk_size):
                         gc.collect()
+                    
+                    # Broadcast upload progress to Android notification
+                    if file_size:
+                        percent = int((total_written / file_size) * 100)
+                        if chunk_count % 10 == 0:  # Throttled progress updates
+                            from app.utils.android_compat import update_android_progress
+                            update_android_progress(percent, f"Uploading {upload_file.filename}...")
                     
                     # Update progress
                     with self.upload_lock:
