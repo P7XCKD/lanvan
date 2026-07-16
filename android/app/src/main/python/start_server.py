@@ -94,7 +94,8 @@ def run_fastapi_server(port="5000", use_https="false", files_dir=None):
 def get_qr_matrix(data: str):
     """Generates and returns a 2D boolean matrix representing the QR Code."""
     import qrcode
-    qr = qrcode.QRCode(version=1, error_correction=qrcode.ERROR_CORRECT_L, box_size=1, border=1)
+    # Set ERROR_CORRECT_H to match backend error correction configuration
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.ERROR_CORRECT_H, box_size=1, border=1)
     qr.add_data(data)
     qr.make(fit=True)
     return qr.get_matrix()
