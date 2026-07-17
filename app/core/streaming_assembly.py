@@ -39,6 +39,7 @@ class StreamingFile:
     total_size: int = 0
     assembled_size: int = 0
     chunk_data: Dict[int, bytes] = field(default_factory=dict)
+    last_assembled_chunk: int = 0
     start_time: float = field(default_factory=time.time)
 
 class StreamingChunkAssembler:
@@ -115,12 +116,14 @@ class StreamingChunkAssembler:
             streaming_file.final_path = final_path
             streaming_file.temp_path = final_path.with_suffix(final_path.suffix + '.tmp')
 
-        # Find consecutive chunks starting from 1
+        # Find consecutive chunks starting from last_assembled_chunk + 1
         consecutive_chunks = []
+        next_expected = streaming_file.last_assembled_chunk + 1
         for chunk_num in sorted(streaming_file.chunk_data.keys()):
-            if chunk_num == len(consecutive_chunks) + 1:
+            if chunk_num == next_expected:
                 consecutive_chunks.append(chunk_num)
-            else:
+                next_expected += 1
+            elif chunk_num > next_expected:
                 break
 
         if consecutive_chunks:
@@ -132,7 +135,8 @@ class StreamingChunkAssembler:
                         chunk_data = streaming_file.chunk_data.pop(chunk_num)
                         f.write(chunk_data)
                 
-                print(f"[STREAM] Real-time assembled chunks {consecutive_chunks[0]}-{consecutive_chunks[-1]} for {streaming_file.filename}")
+                # Update last assembled chunk tracker
+                streaming_file.last_assembled_chunk = consecutive_chunks[-1]
                 
                 # Mark as processing started
                 streaming_file.processing_started = True
@@ -185,7 +189,11 @@ class StreamingChunkAssembler:
                     if is_windows:
                         shutil.move(str(streaming_file.temp_path), str(streaming_file.final_path))
                     else:
-                        streaming_file.temp_path.rename(streaming_file.final_path)
+                        try:
+                            streaming_file.temp_path.rename(streaming_file.final_path)
+                        except OSError:
+                            # Fallback to shutil.move for cross-device moves on Android
+                            shutil.move(str(streaming_file.temp_path), str(streaming_file.final_path))
                     break
                 except Exception as rename_err:
                     if attempt < max_retries - 1:

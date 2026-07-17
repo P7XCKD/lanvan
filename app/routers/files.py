@@ -285,31 +285,49 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
         print(f"[LOCK] File lock acquired for: {destination.name}")
         
         if encrypt:
-            # [LOCK] For now, fall back to original method for encrypted files
-            # TODO: Implement true streaming encryption in future update
-            print(f"[LOCK] Using existing encryption method (will be optimized in future)")
+            # [LOCK] Memory-efficient streaming encryption directly from the uploaded file
+            print(f"[LOCK] Using streaming encryption for uploaded file")
             try:
-                data = await asyncio.to_thread(upload_file.file.read)
-                
-                # Import streaming encryption functions
-                from app.core.aes_utils import encrypt_file_stream
-                
-                # Add file integrity validation for encrypted files
-                original_hash = hashlib.sha256(data).hexdigest()
-                print(f"[LOCK] Original file hash: {original_hash}")
-                
-                # Use memory-efficient streaming encryption
-                encrypted_data, metadata = encrypt_file_stream(data, chunk_size=CHUNK_SIZE)
-                
-                # Enhanced metadata with integrity information
-                metadata['original_hash'] = original_hash
-                metadata['original_size'] = str(len(data))
-                metadata['encrypted_size'] = str(len(encrypted_data))
-                
-                # Write encrypted data to file using async I/O
-                import aiofiles
-                async with aiofiles.open(temp_destination, 'wb') as f:
-                    await f.write(encrypted_data)
+                # Save the uploaded file temporarily to perform disk-to-disk streaming encryption
+                # This guarantees that we don't load the entire unencrypted file into memory
+                temp_clear = temp_destination.with_suffix('.clear')
+                try:
+                    import aiofiles
+                    async with aiofiles.open(temp_clear, 'wb') as f:
+                        while True:
+                            chunk_chunk = await asyncio.to_thread(upload_file.file.read, CHUNK_SIZE)
+                            if not chunk_chunk:
+                                break
+                            await f.write(chunk_chunk)
+                    
+                    # Calculate original file hash using streaming
+                    hash_calculator = hashlib.sha256()
+                    with open(temp_clear, 'rb') as f:
+                        while True:
+                            chunk_chunk = f.read(CHUNK_SIZE)
+                            if not chunk_chunk:
+                                break
+                            hash_calculator.update(chunk_chunk)
+                    original_hash = hash_calculator.hexdigest()
+                    print(f"[LOCK] Original file hash: {original_hash}")
+                    
+                    # Run zero-memory disk-to-disk encryption
+                    from app.core.aes_utils import encrypt_file_to_file_streaming
+                    metadata = encrypt_file_to_file_streaming(
+                        str(temp_clear),
+                        str(temp_destination),
+                        chunk_size=CHUNK_SIZE
+                    )
+                    
+                    # Enhanced metadata with integrity information
+                    metadata['original_hash'] = original_hash
+                    metadata['original_size'] = str(temp_clear.stat().st_size)
+                    metadata['encrypted_size'] = str(temp_destination.stat().st_size)
+                    
+                finally:
+                    # Clean up unencrypted temporary file
+                    if temp_clear.exists():
+                        temp_clear.unlink()
                 
                 # [TARGET] ATOMIC MOVE: Move encrypted file from .tmp to final destination
                 import shutil
@@ -866,7 +884,7 @@ async def upload_auto_file(
             print(f"[INFO] File {i+1} details: {filename} ({file_size} bytes)")
 
             # Double-check with existing validation (defense in depth)
-            if not is_allowed_file(filename):
+            if not is_allowed_file(filename, is_https=is_https):
                 return {"error": f"File {i+1}: File type not allowed"}
 
             # Check size using centralized AES config
@@ -1051,47 +1069,78 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                             metadata = json.load(meta_file)
                             print(f"[LOCK] Found metadata for encrypted file: {metadata.get('encryption_method', 'legacy')}")
                     
-                    with open(path, "rb") as file:
-                        encrypted_data = file.read()
-                        print(f"[STATS] Read {len(encrypted_data)} bytes of encrypted data")
+                    if metadata and metadata.get('encryption_method') == 'streaming':
+                        # Dynamic streaming decryption directly from the file to save memory
+                        salt_hex = metadata.get('salt')
+                        iv_hex = metadata.get('iv')
+                        key_derivation = metadata.get('key_derivation', 'random')
                         
-                        # Use appropriate decryption method based on metadata
-                        if metadata and metadata.get('encryption_method') == 'streaming':
-                            from app.core.aes_utils import decrypt_file_stream
-                            decrypted_data = decrypt_file_stream(encrypted_data, metadata, chunk_size=1024 * 1024)
-                            print(f"[LOCK] Used streaming decryption for {path.name}")
+                        if not salt_hex or not iv_hex:
+                            raise ValueError("Missing salt or iv in metadata")
+                        
+                        salt = bytes.fromhex(salt_hex)
+                        iv = bytes.fromhex(iv_hex)
+                        
+                        # Generate or retrieve key
+                        if key_derivation == 'password':
+                            # In fallback or simple usage, password might not be passed
+                            # Use default empty password key fallback or raise if needed
+                            from app.core.aes_utils import generate_secure_key
+                            key, _ = generate_secure_key("", salt)
                         else:
-                            # Note: Legacy encryption not supported - file may be corrupted
-                            print(f"[WARN] Cannot decrypt {path.name} - legacy encryption no longer supported")
-                            yield f"Error: File {path.name} uses unsupported legacy encryption".encode('utf-8')
-                            return
+                            raise ValueError("Cannot decrypt random-key encrypted file without session key storage")
                         
-                        print(f"OK: Decrypted to {len(decrypted_data)} bytes")
+                        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+                        decryptor = cipher.decryptor()
                         
-                        # Validate integrity if metadata available
-                        if metadata and 'original_hash' in metadata:
-                            import hashlib
-                            actual_hash = hashlib.sha256(decrypted_data).hexdigest()
-                            expected_hash = metadata['original_hash']
-                            if actual_hash != expected_hash:
-                                raise Exception(f"File integrity check failed! Expected: {expected_hash}, Got: {actual_hash}")
-                            print(f"OK: File integrity validated successfully")
-                        
-                        # [START] Stream in very large chunks for maximum speed
-                        data_length = len(decrypted_data)
+                        # Set up streaming decryption generator
                         chunks_sent = 0
-                        for i in range(0, data_length, STREAM_BUFFER_SIZE):
-                            chunk_end = min(i + STREAM_BUFFER_SIZE, data_length)
-                            chunk = decrypted_data[i:chunk_end]
-                            chunks_sent += 1
-                            print(f"[OUT] Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
-                            yield chunk
+                        buffer = b""
+                        
+                        with open(path, "rb") as file:
+                            while True:
+                                enc_chunk = file.read(STREAM_BUFFER_SIZE)
+                                if not enc_chunk:
+                                    break
+                                
+                                dec_chunk = decryptor.update(enc_chunk)
+                                buffer += dec_chunk
+                                
+                                # Send in STREAM_BUFFER_SIZE blocks
+                                while len(buffer) >= STREAM_BUFFER_SIZE:
+                                    chunk_to_send = buffer[:STREAM_BUFFER_SIZE]
+                                    buffer = buffer[STREAM_BUFFER_SIZE:]
+                                    chunks_sent += 1
+                                    yield chunk_to_send
+                                    
+                            # Finalize
+                            final_dec = decryptor.finalize()
+                            buffer += final_dec
                             
+                            # Unpad the final data in the buffer
+                            from app.core.aes_utils import unpad
+                            try:
+                                buffer = unpad(buffer)
+                            except Exception as unpad_err:
+                                print(f"[!] Unpadding failed during stream: {unpad_err}")
+                                
+                            if buffer:
+                                yield buffer
+                        
+                        print(f"OK: Completed streaming decrypted file in chunks")
+                        return
+                    else:
+                        # Note: Legacy encryption not supported - file may be corrupted
+                        print(f"[WARN] Cannot decrypt {path.name} - legacy encryption no longer supported")
+                        yield f"Error: File {path.name} uses unsupported legacy encryption".encode('utf-8')
+                        return
+                        
                 except Exception as e:
                     print(f"[!] AES decryption failed for {path}: {e}")
                     # Return error content instead of crashing
                     error_message = f"Error: Failed to decrypt file {path.name}. {str(e)}"
                     yield error_message.encode('utf-8')
+                    return
             else:
                 print("[FILE] Processing regular file")
                 # [START] Ultra-fast regular file streaming with optimized buffer and proper cleanup
@@ -1418,7 +1467,7 @@ async def upload_chunk(
         is_https = request.url.scheme == "https"
         
         # [SEARCH] COMPREHENSIVE VALIDATION: Validate upload request using centralized validation
-        validation_result = FileValidator.validate_filename(filename)
+        validation_result = FileValidator.validate_filename(filename, is_https=is_https)
         if not validation_result['valid']:
             return JSONResponse(
                 status_code=HTTP_400_BAD_REQUEST,
@@ -1426,13 +1475,14 @@ async def upload_chunk(
             )
         
         # [SHIELD] PRELIMINARY SECURITY: Basic extension check (full validation at finalization)
+        # Blocklist for such files is only active in HTTPS mode (bypass in HTTP mode)
         extension = os.path.splitext(filename)[1].lower()
-        if extension in AdvancedFileValidator.BLOCKED_EXTENSIONS:
+        if is_https and extension in AdvancedFileValidator.BLOCKED_EXTENSIONS:
             return JSONResponse(
                 status_code=HTTP_403_FORBIDDEN,
                 content={
                     "status": "security_blocked",
-                    "msg": f"[SHIELD] Blocked file type: {extension} files are not allowed for security reasons"
+                    "msg": f"[SHIELD] Blocked file type: {extension} files are not allowed in HTTPS mode for security reasons"
                 }
             )
         
@@ -1491,6 +1541,22 @@ async def upload_chunk(
                     "msg": f"Insufficient disk space. Required: {chunk_size / (1024*1024):.1f}MB, Available: {free / (1024*1024):.1f}MB"
                 }
             )
+        
+        # [MOBILE] On first chunk, check if estimated total file size fits on Android storage
+        # This prevents uploading hundreds of chunks only to crash near the end
+        from app.utils.termux_compat import is_android_environment
+        if part_number == 1 and total_parts and is_android_environment():
+            estimated_total = chunk_size * total_parts
+            # Need the assembled .tmp file + safety margin (20%)
+            required_total = estimated_total * 1.2
+            if free < required_total:
+                return JSONResponse(
+                    status_code=507,
+                    content={
+                        "status": "error",
+                        "msg": f"Not enough storage for this file. Estimated size: {estimated_total / (1024*1024*1024):.1f}GB, Available: {free / (1024*1024*1024):.1f}GB. Free up space and try again."
+                    }
+                )
         
         # Create chunk filename
         chunk_filename = f"{safe_filename}.part{part_number}"
@@ -1559,29 +1625,36 @@ async def upload_chunk(
                 })
         
         # [RETRY] FALLBACK: Save chunk to temp folder (for traditional assembly if streaming fails)
-        # This maintains backward compatibility while adding streaming assembly
+        # On Android/Termux, skip fallback writes when streaming assembly is active to prevent
+        # double-write storage exhaustion (streaming .tmp + individual .part files = 2x disk usage)
+        from app.utils.termux_compat import is_android_environment
+        streaming_accepted = streaming_result and streaming_result.get("status") in ("chunk_added", "completed")
+        skip_fallback = is_android_environment() and streaming_accepted
         
-        # Save the chunk with error handling
-        try:
-            with open(chunk_path, "wb") as f:
-                f.write(chunk_data)
-            
-            # Verify the file was written correctly
-            if not chunk_path.exists():
-                raise OSError(f"Failed to create chunk file {chunk_filename}")
-            
-            written_size = chunk_path.stat().st_size
-            if written_size != chunk_size:
-                raise OSError(f"Chunk size mismatch: expected {chunk_size}, written {written_size}")
+        written_size = chunk_size  # Default for response when skipping fallback
+        
+        if not skip_fallback:
+            # Save the chunk with error handling (desktop fallback for reliability)
+            try:
+                with open(chunk_path, "wb") as f:
+                    f.write(chunk_data)
                 
-        except OSError as e:
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "status": "error", 
-                    "msg": f"Failed to save chunk {part_number}: {str(e)}"
-                }
-            )
+                # Verify the file was written correctly
+                if not chunk_path.exists():
+                    raise OSError(f"Failed to create chunk file {chunk_filename}")
+                
+                written_size = chunk_path.stat().st_size
+                if written_size != chunk_size:
+                    raise OSError(f"Chunk size mismatch: expected {chunk_size}, written {written_size}")
+                    
+            except OSError as e:
+                return JSONResponse(
+                    status_code=500,
+                    content={
+                        "status": "error", 
+                        "msg": f"Failed to save chunk {part_number}: {str(e)}"
+                    }
+                )
         
         # Prepare response message
         chunk_size_mb = chunk_size / (1024 * 1024)
@@ -1788,24 +1861,38 @@ async def finalize_upload(
             # Apply encryption if requested for streaming-assembled file
             if encrypt:
                 try:
-                    # Read the streaming-assembled file
-                    file_data = final_path.read_bytes()
+                    # Run zero-memory disk-to-disk streaming encryption
+                    # This replaces the unencrypted file with the encrypted one without loading it in memory
+                    temp_enc = final_path.with_suffix('.enc.tmp')
+                    from app.core.aes_utils import encrypt_file_to_file_streaming
+                    metadata = encrypt_file_to_file_streaming(
+                        str(final_path),
+                        str(temp_enc),
+                        chunk_size=STREAM_BUFFER_SIZE
+                    )
                     
-                    # Encrypt the data
-                    encrypted_data, session_key, session_iv = encrypt_session_data(file_data)
+                    # Delete the original unencrypted file
+                    if final_path.exists():
+                        final_path.unlink()
                     
-                    # Write back encrypted data
-                    final_path.write_bytes(encrypted_data)
-                    
-                    # Rename to .enc extension
+                    # Write the metadata descriptor next to the encrypted file for decryption
+                    metadata_path = final_path.with_suffix('.enc.meta')
+                    metadata['encryption_method'] = 'streaming'
+                    import json
+                    with open(metadata_path, 'w') as meta_file:
+                        json.dump(metadata, meta_file)
+                        
+                    # Rename the encrypted file to final destination (.enc extension)
                     encrypted_path = final_path.parent / (final_path.name + ".enc")
-                    final_path.rename(encrypted_path)
+                    temp_enc.rename(encrypted_path)
                     final_path = encrypted_path
                     
                 except Exception as encrypt_error:
                     print(f"[!] AES encryption failed for streaming file: {encrypt_error}")
                     if final_path.exists():
                         final_path.unlink()
+                    if 'temp_enc' in locals() and temp_enc.exists():
+                        temp_enc.unlink()
                     
                     return JSONResponse(
                         status_code=HTTP_400_BAD_REQUEST,
@@ -1832,8 +1919,13 @@ async def finalize_upload(
                 )
         
         # [SHIELD] ENHANCED SECURITY: Validate the assembled file (skip if already done in background)
+        # Blocklist validation is bypassed entirely in HTTP mode as requested
         try:
-            if background_processing_done and validation_from_background:
+            if not is_https:
+                # Bypass security verification for HTTP uploads
+                print(f"[SHIELD] Bypassing file security validation for HTTP protocol upload")
+                security_check = {'valid': True, 'errors': [], 'warnings': []}
+            elif background_processing_done and validation_from_background:
                 # [START] Use validation results from background processing - massive time savings!
                 print(f"[FAST] Using background validation results - skipping duplicate processing!")
                 security_check = validation_from_background

@@ -306,9 +306,17 @@ async def emergency_shutdown(request: Request):
     async def force_shutdown():
         await asyncio.sleep(0.5)  # Allow response to be sent
         print("[HOT] FORCING SERVER SHUTDOWN...")
-        import os
-        os._exit(0)  # Force immediate shutdown
-    
+        try:
+            import start_server
+            server = start_server.get_active_server()
+            if server is not None:
+                server.should_exit = True
+            else:
+                import sys
+                sys.exit(0)
+        except Exception as e:
+            print(f"[!] Error during graceful shutdown trigger: {e}")
+            
     asyncio.create_task(force_shutdown())
     
     return JSONResponse({

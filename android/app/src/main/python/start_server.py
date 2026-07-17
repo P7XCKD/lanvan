@@ -1,6 +1,7 @@
 import sys
 import os
 import uvicorn
+import asyncio
 from datetime import datetime
 
 # Inject paths so python can resolve local imports properly inside Android environment
@@ -65,9 +66,21 @@ def run_fastapi_server(port="5000", use_https="false", files_dir=None):
         except Exception as e:
             print(f"[WARN] Temp cleanup error: {e}")
         
-    # Import app after changing directory so initialization takes place in correct context
+    global _active_server
+    
+    # Create and set a fresh asyncio event loop for this server thread in Chaquopy
     try:
-        from app.main import app
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    except Exception as e:
+        print(f"[WARN] Failed to reset asyncio event loop: {e}")
+
+    # Re-import and reload app module so fresh FastAPI app and lifespan are created
+    try:
+        import importlib
+        import app.main
+        importlib.reload(app.main)
+        app_instance = app.main.app
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -76,20 +89,52 @@ def run_fastapi_server(port="5000", use_https="false", files_dir=None):
     os.environ['PORT'] = str(port)
     os.environ['USE_HTTPS'] = str(use_https).lower()
     
+    # Configure SSL arguments dynamically if HTTPS protocol is selected
+    uvicorn_kwargs = {
+        "app": app_instance,
+        "host": "0.0.0.0",
+        "port": int(port),
+        "log_level": "info",
+        "timeout_keep_alive": 5,
+        "timeout_graceful_shutdown": 3
+    }
+    
+    if str(use_https).lower() == "true":
+        ssl_key = os.path.join(files_dir, "certs", "key.pem") if files_dir else "certs/key.pem"
+        ssl_cert = os.path.join(files_dir, "certs", "cert.pem") if files_dir else "certs/cert.pem"
+        if os.path.exists(ssl_key) and os.path.exists(ssl_cert):
+            uvicorn_kwargs["ssl_keyfile"] = ssl_key
+            uvicorn_kwargs["ssl_certfile"] = ssl_cert
+            print(f"[LOCK] SSL certificates configured successfully on Android")
+        else:
+            print(f"[WARN] HTTPS requested but SSL certificates not found at {ssl_key} / {ssl_cert}")
+            
     try:
+        config = uvicorn.Config(**uvicorn_kwargs)
+        _active_server = uvicorn.Server(config)
         # Configure and launch Uvicorn on all local network interfaces
-        uvicorn.run(
-            app,
-            host="0.0.0.0",
-            port=int(port),
-            log_level="info",
-            timeout_keep_alive=5,
-            timeout_graceful_shutdown=3
-        )
+        _active_server.run()
+    except SystemExit as e:
+        print(f"[!] Server thread received SystemExit")
+        raise e
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise e
+    finally:
+        _active_server = None
+
+_active_server = None
+
+def get_active_server():
+    global _active_server
+    return _active_server
+
+def force_stop_uvicorn_server():
+    global _active_server
+    if _active_server is not None:
+        print("[HOT] Force-stopping Uvicorn server from Python code...")
+        _active_server.should_exit = True
 
 def get_qr_matrix(data: str):
     """Generates and returns a 2D boolean matrix representing the QR Code."""
