@@ -157,8 +157,13 @@ def initiate_graceful_shutdown_process():
         print("[!] Server is now inactive...")
         shutdown_event.set()
         
-        # Force exit to ensure immediate shutdown
-        os._exit(0)
+        # On Android, exit the thread cleanly instead of killing the JVM process
+        # This keeps the host APK running while stopping the FastAPI server
+        import sys
+        if "ANDROID_STORAGE" in os.environ:
+            sys.exit(0)
+        else:
+            os._exit(0)
     
     # Start countdown in background thread
     shutdown_thread = threading.Thread(target=countdown_and_shutdown, daemon=True)

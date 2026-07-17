@@ -37,17 +37,15 @@
             android:paddingStart="16dp"
             android:paddingEnd="16dp" />
 
-        <Button
-            android:id="@+id/btn_copy_logs"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="Copy Logs"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#555555"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp" />
+        <ImageButton
+            android:id="@+id/btn_settings"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_hamburger"
+            android:contentDescription="Settings Menu"
+            android:tint="#FFFFFF"
+            android:layout_marginStart="8dp" />
     </LinearLayout>
 
     <!-- Status indicator bar -->
@@ -122,7 +120,7 @@
             android:text="http://lanvan.local:5000"
             android:textColor="#3078FF"
             android:textSize="16sp"
-            android:layout_marginBottom="8dp"
+            android:layout_marginBottom="16dp"
             android:clickable="true"
             android:focusable="true"
             android:visibility="gone" />
@@ -153,7 +151,28 @@
             android:layout_height="wrap_content"
             android:text="Tap Start Server to launch local sharing"
             android:textColor="#666666"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:layout_marginBottom="16dp" />
+    </LinearLayout>
+
+    <!-- Storage Usage Info Footer -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:gravity="center"
+        android:background="#1E1E1E">
+
+        <TextView
+            android:id="@+id/txt_storage_usage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="App Storage: Calculating..."
+            android:textColor="#888888"
+            android:textSize="13sp" />
+            
     </LinearLayout>
 
 </LinearLayout>

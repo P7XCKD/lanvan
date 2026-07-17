@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId "com.lanvan.app"
-        minSdk 26
+        minSdk 29
         targetSdk 35
         versionCode 2
         versionName "1.1.0"
@@ -94,5 +94,11 @@ tasks.register('copyTemplates', Copy) {
     into 'src/main/assets/app/templates'
     duplicatesStrategy DuplicatesStrategy.INCLUDE
 }
+tasks.register('copyCerts', Copy) {
+    from '../../certs'
+    into 'src/main/assets/certs'
+    duplicatesStrategy DuplicatesStrategy.INCLUDE
+}
 preBuild.dependsOn(copyAssets)
 preBuild.dependsOn(copyTemplates)
+preBuild.dependsOn(copyCerts)

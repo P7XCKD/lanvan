@@ -23,8 +23,8 @@ class ServerService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
     
-    private var currentPort = "5000"
-    private var currentUseHttps = "false"
+    private var instancePort = "5000"
+    private var instanceUseHttps = "false"
 
     companion object {
         const val CHANNEL_ID = "lanvan_server_service_channel"
@@ -36,8 +36,10 @@ class ServerService : Service() {
         // Static state flags so MainActivity can read them on resume
         @Volatile var isRunning = false
             private set
+        var currentPort = "5000"
+            internal set
         var currentUrl = ""
-            private set
+            internal set
         
         // Actions to start/stop the service
         const val ACTION_START = "START_SERVER"
@@ -63,11 +65,12 @@ class ServerService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action ?: ACTION_START
-        val port = intent?.getStringExtra("PORT") ?: currentPort
-        val useHttps = intent?.getStringExtra("USE_HTTPS") ?: currentUseHttps
+        val port = intent?.getStringExtra("PORT") ?: instancePort
+        val useHttps = intent?.getStringExtra("USE_HTTPS") ?: instanceUseHttps
         
+        instancePort = port
+        instanceUseHttps = useHttps
         currentPort = port
-        currentUseHttps = useHttps
 
         when (action) {
             ACTION_STOP, ACTION_NOTIFICATION_SHUTDOWN -> {
@@ -113,9 +116,18 @@ class ServerService : Service() {
 
         // Recursively extract app/static and app/templates assets to filesDir
         copyAssetsToFilesDir("app")
+        copyAssetsToFilesDir("certs")
 
+        val oldThread = serverThread
         // Launch Python FastAPI thread
         serverThread = Thread {
+            if (oldThread != null && oldThread.isAlive) {
+                try {
+                    oldThread.join(3000) // Wait up to 3 seconds in the background
+                } catch (e: InterruptedException) {
+                    e.printStackTrace()
+                }
+            }
             try {
                 if (!Python.isStarted()) {
                     // Start python context if it hasn't started yet
@@ -130,15 +142,33 @@ class ServerService : Service() {
                 
                 // Call uvicorn bootstrapper blocking method
                 // Pass filesDir absolute path to Python environment
-                module.callAttr("run_fastapi_server", port, useHttps, filesDir.absolutePath)
+                module.callAttr("run_fastapi_server", instancePort, instanceUseHttps, filesDir.absolutePath)
             } catch (e: Exception) {
-                val sw = java.io.StringWriter()
-                e.printStackTrace(java.io.PrintWriter(sw))
-                lastErrorLog = "Kotlin Exception: " + e.message + "\n" + sw.toString()
-                e.printStackTrace()
-                sendServerStatus(STATUS_ERROR)
+                var isCleanShutdown = false
+                if (e is com.chaquo.python.PyException) {
+                    val msg = e.message ?: ""
+                    // Uvicorn internally remaps sys.exit(0) to SystemExit: 1 at the runner level
+                    // so we need to catch any SystemExit as a clean shutdown signal
+                    if (msg.contains("SystemExit")) {
+                        isCleanShutdown = true
+                    }
+                }
+                
+                if (isCleanShutdown) {
+                    // Clean thread exit - do not log error or change state to STATUS_ERROR
+                    sendServerStatus(STATUS_STOPPED)
+                } else {
+                    val sw = java.io.StringWriter()
+                    e.printStackTrace(java.io.PrintWriter(sw))
+                    lastErrorLog = "Kotlin Exception: " + e.message + "\n" + sw.toString()
+                    e.printStackTrace()
+                    sendServerStatus(STATUS_ERROR)
+                }
             } finally {
                 sendServerStatus(STATUS_STOPPED)
+                // Now that the Python server is actually dead, clean up locks and stop the service
+                releaseLocks()
+                stopSelf()
             }
         }
         serverThread?.start()
@@ -149,29 +179,48 @@ class ServerService : Service() {
     override fun onDestroy() {
         stopServer()
         super.onDestroy()
-    }
+    }    private fun stopServer() {
+        // 1. Force exit Uvicorn directly via Python reference to avoid zombied loops
+        try {
+            if (Python.isStarted()) {
+                val py = Python.getInstance()
+                val module = py.getModule("start_server")
+                module.callAttr("force_stop_uvicorn_server")
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
-    private fun stopServer() {
-        // Send emergency localhost shutdown API call to uvicorn to terminate gracefully
+        // 2. Fallback localhost shutdown API request to trigger clean cleanup sequence
+        val port = instancePort
+        val isHttps = instanceUseHttps.lowercase() == "true"
         Thread {
             try {
-                val url = java.net.URL("http://127.0.0.1:5000/api/shutdown")
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.connectTimeout = 1000
-                conn.readTimeout = 1000
-                conn.responseCode // Triggers connection request
+                val scheme = if (isHttps) "https" else "http"
+                val url = java.net.URL("$scheme://127.0.0.1:$port/api/shutdown")
+                val conn = url.openConnection()
+                if (isHttps && conn is javax.net.ssl.HttpsURLConnection) {
+                    val trustAll = arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
+                        override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
+                        override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
+                        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+                    })
+                    val sslContext = javax.net.ssl.SSLContext.getInstance("TLS")
+                    sslContext.init(null, trustAll, java.security.SecureRandom())
+                    conn.sslSocketFactory = sslContext.socketFactory
+                    conn.hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true }
+                }
+                
+                if (conn is java.net.HttpURLConnection) {
+                    conn.requestMethod = "POST"
+                    conn.connectTimeout = 1500
+                    conn.readTimeout = 1500
+                    conn.responseCode
+                }
             } catch (e: Exception) {
-                e.printStackTrace()
+                // Ignore
             }
         }.start()
-
-        // Interrupt background thread and release locks
-        serverThread?.interrupt()
-        serverThread = null
-        releaseLocks()
-        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
-        stopSelf()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -266,9 +315,9 @@ class ServerService : Service() {
         // Update static flags so MainActivity can read state synchronously
         isRunning = (status == STATUS_RUNNING)
         if (status == STATUS_RUNNING) {
-            val scheme = if (currentUseHttps == "true") "https" else "http"
+            val scheme = if (instanceUseHttps == "true") "https" else "http"
             val lanIp = getLocalIpAddress()
-            currentUrl = "$scheme://$lanIp:$currentPort"
+            currentUrl = "$scheme://$lanIp:$instancePort"
         } else if (status == STATUS_STOPPED || status == STATUS_ERROR) {
             currentUrl = ""
         }

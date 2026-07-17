@@ -20,7 +20,7 @@ class AdvancedFileValidator:
     MAX_FILENAME_LENGTH = 255
     MAX_PATH_LENGTH = 4096
     
-    # [!] DANGEROUS EXTENSIONS - Always blocked regardless of content
+    # [!] DANGEROUS EXTENSIONS - Blocked in HTTPS mode only (HTTP mode allows all extensions)
     BLOCKED_EXTENSIONS = {
         # Executables (Windows)
         '.exe', '.com', '.scr', '.bat', '.cmd', '.pif', '.msi', '.msp',
@@ -355,12 +355,13 @@ class FileValidator(AdvancedFileValidator):
     """Main file validator class with backward compatibility."""
     
     @classmethod
-    def validate_filename(cls, filename: str) -> Dict[str, Any]:
+    def validate_filename(cls, filename: str, is_https: bool = True) -> Dict[str, Any]:
         """
         Comprehensive filename validation with enhanced security.
         
         Args:
             filename: The filename to validate
+            is_https: Whether HTTPS mode is active. Extension blocklist only active in HTTPS mode.
             
         Returns:
             dict: Validation result with 'valid' boolean and 'errors' list
@@ -379,8 +380,9 @@ class FileValidator(AdvancedFileValidator):
         # Extension check
         file_ext = Path(filename).suffix.lower()
         
-        # [!] SECURITY: Block dangerous extensions
-        if file_ext in cls.BLOCKED_EXTENSIONS:
+        # [!] SECURITY: Block dangerous extensions (HTTPS mode only)
+        # In HTTP mode, the blocklist is bypassed per user configuration
+        if is_https and file_ext in cls.BLOCKED_EXTENSIONS:
             errors.append(f"File type '{file_ext}' is blocked for security reasons (potentially dangerous)")
             return {'valid': False, 'errors': errors, 'security_risk': 'HIGH'}
         
@@ -405,8 +407,8 @@ class FileValidator(AdvancedFileValidator):
         if '\0' in filename:
             errors.append("Filename contains null bytes")
         
-        # [SEARCH] SECURITY: Check for double extensions (e.g., file.txt.exe)
-        if cls._has_suspicious_double_extension(filename):
+        # [SEARCH] SECURITY: Check for double extensions (e.g., file.txt.exe) - HTTPS only
+        if is_https and cls._has_suspicious_double_extension(filename):
             errors.append("Filename has suspicious double extension pattern")
         
         return {
@@ -433,7 +435,7 @@ class FileValidator(AdvancedFileValidator):
         return False
 
     @classmethod
-    def validate_uploaded_file(cls, file_path: Path, original_filename: str) -> Dict[str, Any]:
+    def validate_uploaded_file(cls, file_path: Path, original_filename: str, is_https: bool = True) -> Dict[str, Any]:
         """
         [AUTH] ENHANCED SECURITY: Comprehensive file validation with content analysis.
         
@@ -446,12 +448,13 @@ class FileValidator(AdvancedFileValidator):
         Args:
             file_path: Path to the uploaded file
             original_filename: Original filename from upload
+            is_https: Whether HTTPS mode is active
             
         Returns:
             dict: Comprehensive security assessment
         """
         # Step 1: Basic filename validation
-        filename_result = cls.validate_filename(original_filename)
+        filename_result = cls.validate_filename(original_filename, is_https=is_https)
         if not filename_result['valid']:
             return {
                 'valid': False,
@@ -669,14 +672,14 @@ class FileValidator(AdvancedFileValidator):
 
 # Utility functions for route integration
 def secure_filename(filename: str) -> str:
-    """Get a secure version of filename."""
-    result = FileValidator.validate_filename(filename)
+    """Get a secure version of filename. Does not enforce extension blocklist."""
+    result = FileValidator.validate_filename(filename, is_https=False)
     return result['sanitized_name']
 
 
-def is_allowed_file(filename: str) -> bool:
+def is_allowed_file(filename: str, is_https: bool = True) -> bool:
     """Check if file extension is allowed."""
-    result = FileValidator.validate_filename(filename)
+    result = FileValidator.validate_filename(filename, is_https=is_https)
     return result['valid']
 
 
@@ -702,7 +705,7 @@ async def validate_upload_files_enhanced_fast(files: List[UploadFile], encrypt: 
             return {"error": "File without filename detected"}
         
         # [SEARCH] Basic filename validation only
-        filename_validation = FileValidator.validate_filename(file.filename)
+        filename_validation = FileValidator.validate_filename(file.filename, is_https=is_https)
         if not filename_validation['valid']:
             return {"error": f"{file.filename}: {filename_validation['error']}"}
         
