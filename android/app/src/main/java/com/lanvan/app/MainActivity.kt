@@ -129,7 +129,9 @@ class MainActivity : AppCompatActivity() {
             // Update URL from the static value
             if (ServerService.currentUrl.isNotEmpty()) {
                 currentServerUrl = ServerService.currentUrl
-                statusText.text = "Server active: $currentServerUrl"
+                statusText.setBackgroundColor(0xFF00CC00.toInt())
+                statusText.setTextColor(0xFFFFFFFF.toInt())
+                statusText.text = "Server active"
             }
         }
     }
@@ -171,7 +173,11 @@ class MainActivity : AppCompatActivity() {
                 
                 val lanIp = getLocalIpAddress()
                 currentServerUrl = "http://$lanIp:5000"
-                statusText.text = "Server active: $currentServerUrl"
+                
+                // Set green status banner background and simplify text
+                statusText.setBackgroundColor(0xFF00CC00.toInt())
+                statusText.setTextColor(0xFFFFFFFF.toInt())
+                statusText.text = "Server active"
 
                 txtIpLink.text = currentServerUrl
                 
@@ -194,6 +200,10 @@ class MainActivity : AppCompatActivity() {
                 currentServerUrl = ""
                 toggleButton.text = "Start Server"
                 toggleButton.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF6200EE.toInt()) // Purple color
+                
+                // Reset to standard dark grey banner background
+                statusText.setBackgroundColor(0xFF252525.toInt())
+                statusText.setTextColor(0xFFBBBBBB.toInt())
                 statusText.text = "Server is inactive."
                 
                 // Toggle visibility containers
@@ -205,6 +215,10 @@ class MainActivity : AppCompatActivity() {
                 currentServerUrl = ""
                 toggleButton.text = "Start Server"
                 toggleButton.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF6200EE.toInt())
+                
+                // Reset to standard dark grey banner background
+                statusText.setBackgroundColor(0xFF252525.toInt())
+                statusText.setTextColor(0xFFBBBBBB.toInt())
                 statusText.text = "Server error occurred during startup."
 
                 // Toggle visibility containers
