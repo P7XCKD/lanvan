@@ -41,7 +41,7 @@ def get_android_network_info():
             lambda: socket.gethostbyname(hostname),
             lambda: get_android_wifi_ip(),
             lambda: get_android_cellular_ip(),
-            lambda: "192.168.1.100"  # Fallback
+            lambda: socket.gethostbyname(socket.gethostname())
         ]
         
         for method in methods:
@@ -52,10 +52,12 @@ def get_android_network_info():
             except Exception:
                 continue
                 
-        return "192.168.1.100", hostname  # Ultimate fallback
+        # Resolve dynamic localhost loopback fallback instead of hardcoded string 192.168.1.100
+        fallback_ip = socket.gethostbyname(socket.gethostname())
+        return fallback_ip if fallback_ip else "127.0.0.1", hostname
     except Exception as e:
         print(f"[MOBILE] Android network detection error: {e}")
-        return "192.168.1.100", "android-device"
+        return "127.0.0.1", "android-device"
 
 def get_android_wifi_ip():
     """Get WiFi IP on Android using ifconfig parsing"""

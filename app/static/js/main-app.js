@@ -5036,7 +5036,7 @@ Device Session will reset when browser is closed
         </div>
         <h4 style="margin: 0 0 0.5rem 0; color: var(--text-color); opacity: 0.8; font-size: 0.9rem;"> Alternative IP Connection:</h4>
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.8rem;">
-          <code id="alternative-url" style="flex: 1; background: var(--section-bg); color: var(--text-color); padding: 0.4rem; border-radius: 5px; border: 1px solid var(--border-color); font-size: 0.8rem; word-break: break-all; min-width: 200px;">${lanIpUrl || 'http://192.168.x.x'}</code>
+          <code id="alternative-url" style="flex: 1; background: var(--section-bg); color: var(--text-color); padding: 0.4rem; border-radius: 5px; border: 1px solid var(--border-color); font-size: 0.8rem; word-break: break-all; min-width: 200px;">${lanIpUrl || window.location.origin}</code>
           <button onclick="copyAlternativeUrl()" style="background: var(--settings-bg); color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 5px; cursor: pointer; font-size: 0.8rem; white-space: nowrap;" title="Copy IP URL to clipboard"> Copy</button>
         </div>
         
@@ -5046,7 +5046,7 @@ Device Session will reset when browser is closed
             <small style="color: var(--text-color); opacity: 0.8; font-size: 0.8rem; font-weight: 500;"> IP Access QR Code</small>
           </div>
           <div style="display: flex; justify-content: center; align-items: center;">
-            <img src="/api/qr-code?text=${encodeURIComponent(lanIpUrl || 'http://192.168.0.106')}&size=160" 
+            <img src="/api/qr-code?text=${encodeURIComponent(lanIpUrl || window.location.origin)}&size=160" 
                  style="border: 2px solid var(--border-color); border-radius: 8px; max-width: 160px; height: auto; background: var(--section-bg); display: block;" 
                  alt="IP QR Code"
                  onerror="this.style.display='none'; this.parentElement.nextElementSibling.style.display='block';"
