@@ -1,3 +1,6 @@
+# Lanvan - Secure Local File Transfer
+# Copyright (C) 2025 P7XCKD
+
 import os
 import socket
 import subprocess
