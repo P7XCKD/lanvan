@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -13,6 +13,7 @@
 
     <application
         android:allowBackup="false"
+        android:debuggable="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="Lanvan"
@@ -38,6 +39,13 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" 
                       android:value="Running local Python FastAPI server for high-performance peer-to-peer file sharing and clipboard syncing over local Wi-Fi." />
         </service>
+
+        <!-- Explicitly remove ProfileInstallReceiver to address DUMP permission vulnerability -->
+        <receiver
+            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            android:enabled="false"
+            android:exported="false"
+            tools:node="remove" />
 
     </application>
 
