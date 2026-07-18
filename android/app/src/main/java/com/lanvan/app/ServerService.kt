@@ -182,8 +182,11 @@ class ServerService : Service() {
             } finally {
                 sendServerStatus(STATUS_STOPPED)
                 // Now that the Python server is actually dead, clean up locks and stop the service
-                releaseLocks()
-                stopSelf()
+                // only if this thread is still the active server thread (prevents overlapping restart races)
+                if (serverThread == Thread.currentThread()) {
+                    releaseLocks()
+                    stopSelf()
+                }
             }
         }
         serverThread?.start()

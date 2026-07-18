@@ -120,6 +120,7 @@ class SimpleMDNSManager:
         self.lan_ip = None
         self.device_id = self._generate_device_id()
         self._lock = threading.Lock()
+        self.ref_count = 0
         self._announcement_thread = None
         self._stop_announcements = False
         
@@ -516,8 +517,9 @@ class SimpleMDNSManager:
         """Start mDNS service with offline support, collision detection, and Termux compatibility"""
         try:
             with self._lock:
+                self.ref_count += 1
                 if self.is_running:
-                    print("[INFO] mDNS service already running")
+                    print(f"[INFO] mDNS service already running (ref_count={self.ref_count})")
                     return True
                 
                 # Check if mDNS is available
@@ -705,6 +707,10 @@ class SimpleMDNSManager:
         """Stop the mDNS service with enhanced cleanup for Termux/Android"""
         try:
             with self._lock:
+                self.ref_count -= 1
+                if self.ref_count > 0:
+                    print(f"[INFO] mDNS service stop requested, but other instances are active (ref_count={self.ref_count})")
+                    return
                 if not self.is_running:
                     return
                 
