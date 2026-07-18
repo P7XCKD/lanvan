@@ -233,6 +233,93 @@ class MainActivity : AppCompatActivity() {
             }
             layout.addView(divider2)
 
+            // 3. Storage Management Section
+            val storageTitle = TextView(this).apply {
+                text = "Storage Management"
+                textSize = 16f
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                setTextColor(0xFFFFFFFF.toInt())
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = 10 }
+            }
+            layout.addView(storageTitle)
+
+            val txtStorageDialog = TextView(this).apply {
+                val totalBytes = calculateStorageBytes()
+                val totalMB = totalBytes.toDouble() / (1024.0 * 1024.0)
+                text = String.format("Storage Used: %.2f MB", totalMB)
+                setTextColor(0xFFBBBBBB.toInt())
+                textSize = 14f
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = 15 }
+            }
+            layout.addView(txtStorageDialog)
+
+            val btnClearStorage = Button(this).apply {
+                text = "Clear Storage Data"
+                isAllCaps = false
+                textSize = 14f
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = 40 }
+                setOnClickListener {
+                    val confirmDialog = androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Clear Storage & Clipboard Data?")
+                        .setMessage("This will permanently delete all uploaded files and saved clipboard history. This action cannot be undone.")
+                        .setPositiveButton("Clear (3s)", null)
+                        .setNegativeButton("Cancel", null)
+                        .create()
+
+                    confirmDialog.show()
+
+                    val positiveButton = confirmDialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE)
+                    positiveButton?.isEnabled = false
+
+                    val timer = object : android.os.CountDownTimer(3000, 1000) {
+                        override fun onTick(millisUntilFinished: Long) {
+                            val secondsLeft = (millisUntilFinished / 1000) + 1
+                            positiveButton?.text = "Clear (${secondsLeft}s)"
+                        }
+
+                        override fun onFinish() {
+                            positiveButton?.text = "Clear Data"
+                            positiveButton?.isEnabled = true
+                        }
+                    }
+                    timer.start()
+
+                    confirmDialog.setOnDismissListener {
+                        timer.cancel()
+                    }
+
+                    positiveButton?.setOnClickListener {
+                        clearStorageData()
+                        val newBytes = calculateStorageBytes()
+                        val newMB = newBytes.toDouble() / (1024.0 * 1024.0)
+                        txtStorageDialog.text = String.format("Storage Used: %.2f MB", newMB)
+                        updateStorageUsage()
+                        android.widget.Toast.makeText(this@MainActivity, "Storage and clipboard data cleared!", android.widget.Toast.LENGTH_SHORT).show()
+                        confirmDialog.dismiss()
+                    }
+                }
+            }
+            layout.addView(btnClearStorage)
+
+            // Divider 3
+            val divider3 = View(this).apply {
+                setBackgroundColor(0xFF444444.toInt())
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    2
+                ).apply { bottomMargin = 40 }
+            }
+            layout.addView(divider3)
+
             // 3. Copy Logs Button inside settings
             val btnCopyLogsDialog = Button(this).apply {
                 text = "Copy Server Logs"
@@ -507,18 +594,59 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateStorageUsage() {
         try {
-            // Calculate size of internal storage filesDir and external files if they exist
-            var totalBytes = getDirSize(filesDir)
-            val extDir = getExternalFilesDir(null)
-            if (extDir != null) {
-                totalBytes += getDirSize(extDir)
-            }
-            
-            // Format to a readable MB display string
+            val totalBytes = calculateStorageBytes()
             val totalMB = totalBytes.toDouble() / (1024.0 * 1024.0)
             txtStorageUsage.text = String.format("App Storage: %.2f MB", totalMB)
         } catch (e: Exception) {
             txtStorageUsage.text = "App Storage: Error calculating"
+        }
+    }
+
+    private fun calculateStorageBytes(): Long {
+        var totalBytes = getDirSize(filesDir)
+        val extDir = getExternalFilesDir(null)
+        if (extDir != null) {
+            totalBytes += getDirSize(extDir)
+        }
+        return totalBytes
+    }
+
+    private fun clearStorageData() {
+        try {
+            val uploadsDir = java.io.File(filesDir, "data/uploads")
+            if (uploadsDir.exists()) deleteContents(uploadsDir)
+
+            val tempChunksDir = java.io.File(filesDir, "data/temp_chunks")
+            if (tempChunksDir.exists()) deleteContents(tempChunksDir)
+
+            val dataDir = java.io.File(filesDir, "data")
+            if (dataDir.exists()) {
+                val files = dataDir.listFiles()
+                if (files != null) {
+                    for (f in files) {
+                        if (f.isFile && (f.name.contains("clipboard") || f.name.endsWith(".json") || f.name.endsWith(".tmp"))) {
+                            f.delete()
+                        }
+                    }
+                }
+            }
+
+            val extDir = getExternalFilesDir(null)
+            if (extDir != null && extDir.exists()) deleteContents(extDir)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun deleteContents(dir: java.io.File) {
+        val files = dir.listFiles() ?: return
+        for (f in files) {
+            if (f.isDirectory) {
+                deleteContents(f)
+                f.delete()
+            } else {
+                f.delete()
+            }
         }
     }
 

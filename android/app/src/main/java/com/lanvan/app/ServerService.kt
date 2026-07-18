@@ -48,6 +48,7 @@ class ServerService : Service() {
         // Notification drawer button actions
         const val ACTION_NOTIFICATION_OPEN = "NOTIFICATION_OPEN_URL"
         const val ACTION_NOTIFICATION_SHUTDOWN = "NOTIFICATION_SHUTDOWN"
+        const val ACTION_NOTIFICATION_DISMISSED = "NOTIFICATION_DISMISSED"
         
         // Status Broadcast Actions
         const val ACTION_STATUS_CHANGE = "com.lanvan.app.STATUS_CHANGE"
@@ -77,6 +78,21 @@ class ServerService : Service() {
                 stopServer()
                 return START_NOT_STICKY
             }
+            ACTION_NOTIFICATION_DISMISSED -> {
+                if (isRunning) {
+                    val notification = buildServiceNotification(instancePort, instanceUseHttps)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        var serviceType = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                            serviceType = serviceType or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                        }
+                        startForeground(NOTIFICATION_ID, notification, serviceType)
+                    } else {
+                        startForeground(NOTIFICATION_ID, notification)
+                    }
+                }
+                return START_STICKY
+            }
             ACTION_NOTIFICATION_OPEN -> {
                 val url = intent?.getStringExtra("URL")
                 if (!url.isNullOrEmpty()) {
@@ -89,7 +105,6 @@ class ServerService : Service() {
                         e.printStackTrace()
                     }
                 }
-                // Close drawer — removed ACTION_CLOSE_SYSTEM_DIALOGS (blocked on Android 12+)
                 return START_STICKY
             }
         }
@@ -287,16 +302,31 @@ class ServerService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        // Action 3: Re-post on Dismiss
+        val dismissIntent = Intent(this, ServerService::class.java).apply {
+            action = ACTION_NOTIFICATION_DISMISSED
+        }
+        val dismissPendingIntent = PendingIntent.getService(
+            this, 3, dismissIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentIntent(pendingIntent)
+            .setDeleteIntent(dismissPendingIntent)
             .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setSmallIcon(R.drawable.ic_launcher) // Use custom Lanvan logo icon
             .setContentTitle("Lanvan Server Running")
             .setContentText("Access server at $serverUrl")
             .addAction(android.R.drawable.ic_menu_view, "Open Browser", openBrowserPendingIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop Server", shutdownPendingIntent)
 
-        return builder.build()
+        val notification = builder.build()
+        notification.flags = notification.flags or Notification.FLAG_NO_CLEAR or Notification.FLAG_ONGOING_EVENT
+        return notification
     }
 
     private fun createNotificationChannel() {
@@ -304,7 +334,7 @@ class ServerService : Service() {
             val serviceChannel = NotificationChannel(
                 CHANNEL_ID,
                 "Lanvan Server Background Service Channel",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_DEFAULT
             )
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(serviceChannel)

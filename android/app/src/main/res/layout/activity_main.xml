@@ -162,6 +162,7 @@
         android:orientation="vertical"
         android:padding="16dp"
         android:gravity="center"
+        android:visibility="gone"
         android:background="#1E1E1E">
 
         <TextView
