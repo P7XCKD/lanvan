@@ -197,3 +197,5 @@ local.properties
 *.aab
 android/app/build/
 temp_gradle/
+android/app/src/main/assets/certs/
+android/app/src/main/assets/app/
