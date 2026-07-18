@@ -35,7 +35,7 @@
         <service
             android:name=".ServerService"
             android:enabled="true"
-            android:exported="false"
+            android:exported="true"
             android:foregroundServiceType="dataSync|specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" 
                       android:value="Running local Python FastAPI server for high-performance peer-to-peer file sharing and clipboard syncing over local Wi-Fi." />

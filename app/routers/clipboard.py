@@ -154,7 +154,7 @@ async def add_to_clipboard(
         clipboard_id_counter += 1
         timestamp = time.time()
 
-        if file:
+        if file and isinstance(file, UploadFile):
             # Handle file upload to clipboard
             if not file.filename:
                 return JSONResponse(
@@ -215,7 +215,7 @@ async def add_to_clipboard(
                 "is_image_preview": content_type == 'image' and preview.startswith('data:')
             }
 
-        elif data:
+        elif data and isinstance(data, str):
             # Handle text/data content
             content_size = len(data.encode('utf-8'))
 
@@ -277,6 +277,8 @@ async def add_to_clipboard(
         })
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JSONResponse(
             status_code=500,
             content={"status": "error", "msg": f"Failed to add to clipboard: {str(e)}"}
@@ -449,6 +451,8 @@ async def clipboard_write(request: Request):
             content={"status": "error", "msg": "No clipboard data provided"}
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JSONResponse(
             status_code=500,
             content={"status": "error", "msg": f"Clipboard write failed: {str(e)}"}
