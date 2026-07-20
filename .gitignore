@@ -28,6 +28,7 @@ MANIFEST
 .env.test.local
 .env.production.local
 venv/
+.venv/
 env/
 ENV/
 
