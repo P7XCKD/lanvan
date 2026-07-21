@@ -1372,7 +1372,7 @@ function openSettingsDialog() {
   if (dialog) dialog.style.display = "flex";
   const darkToggle = document.getElementById("darkThemeSettingToggle");
   if (darkToggle) {
-    darkToggle.checked = document.body.getAttribute("data-theme") === "dark";
+    darkToggle.checked = document.documentElement.getAttribute("data-theme") === "dark";
   }
 }
 
@@ -1524,6 +1524,12 @@ function setSim(mode) {
     frame.classList.remove("mobile-sim");
     mobBtn.classList.remove("active");
     deskBtn.classList.add("active");
+  }
+
+  if (activeTab === "clipboard") {
+    renderClipboardHistory();
+  } else {
+    renderDirectory();
   }
 }
 
