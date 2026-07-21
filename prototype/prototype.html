@@ -5,10 +5,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Lanvan Prototype</title>
-  <!-- Google Fonts: Plus Jakarta Sans -->
+  <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap"
     rel="stylesheet">
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -33,7 +34,8 @@
       <!-- 1. Left Sidebar Navigation (Desktop only) -->
       <aside class="app-sidebar">
         <div class="sidebar-brand">
-          <div style="position: relative; width: 52px; height: 34px; display: inline-flex; align-items: center; justify-content: center;">
+          <div
+            style="position: relative; width: 52px; height: 34px; display: inline-flex; align-items: center; justify-content: center;">
             <img class="brand-logo dark-logo" src="../app/static/images/icon_dark_transparent.png" alt="Lanvan Logo">
             <img class="brand-logo light-logo" src="../app/static/images/icon_light_transparent.png" alt="Lanvan Logo">
           </div>
@@ -247,7 +249,6 @@
 
             <div class="desktop-panel-header">
               <div class="panel-title">
-                <i data-lucide="clipboard"></i>
                 <span>Clipboard</span>
               </div>
               <span class="panel-meta">Shared text and links</span>
@@ -258,16 +259,12 @@
               style="display: flex; flex-direction: column; gap: 0.75rem; padding: 1.1rem 1.25rem;">
               <div class="m3-card-title"
                 style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; font-weight: 700; color: var(--text-color);">
-                <div class="avatar-icon"
-                  style="width: 28px; height: 28px; border-radius: 8px; background: var(--primary-container); color: var(--primary); display: flex; align-items: center; justify-content: center;">
-                  <i data-lucide="edit-3" style="width: 15px; height: 15px;"></i>
-                </div>
                 <span>Add to Clipboard</span>
               </div>
 
               <div class="clipboard-input-wrapper">
                 <textarea id="clipboardInput" class="clipboard-input"
-                  placeholder="Type or paste text, links, or notes here..."></textarea>
+                  placeholder="Type or paste text, links, or Media here..."></textarea>
                 <div class="clipboard-action-bar" style="justify-content: flex-start; gap: 0.5rem;">
                   <button class="m3-primary-btn" onclick="addClipboardItem()">
                     <i data-lucide="plus" style="width:15px;height:15px;"></i>
@@ -352,6 +349,12 @@
         <div class="context-item-left">
           <i data-lucide="download"></i>
           <span>Download</span>
+        </div>
+      </div>
+      <div class="context-item" onclick="handleMenuStarToggle()">
+        <div class="context-item-left">
+          <i data-lucide="star" id="menuStarIcon" style="width:16px;height:16px;"></i>
+          <span id="menuStarText">Add to Starred</span>
         </div>
       </div>
       <div class="context-item" onclick="openMoveModal()">

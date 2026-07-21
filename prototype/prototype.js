@@ -414,8 +414,12 @@ function renderQuickAccess() {
 
 function openRowMenu(event, name, type) {
   event.stopPropagation();
-  const rect = event.currentTarget.getBoundingClientRect();
-  selectedItems = [name];
+  closeContextMenu();
+
+  // If clicked item is not in current selection, select only this item
+  if (!selectedItems.includes(name) || selectedItems.length <= 1) {
+    selectedItems = [name];
+  }
   renderDirectory();
 
   const genericOptions = document.getElementById("genericMenuOptions");
@@ -423,10 +427,62 @@ function openRowMenu(event, name, type) {
   if (genericOptions) genericOptions.style.display = "none";
   if (itemOptions) itemOptions.style.display = "block";
 
+  const isSingle = selectedItems.length === 1;
+  const targetName = isSingle ? selectedItems[0] : name;
+  const item = getCurrentDirectoryItems().find(i => i.name === targetName) || 
+               getAllItems().find(i => i.name === targetName);
+
+  // Hide single-item-only options like Rename if multiple items selected
+  const renameOption = document.querySelector("#itemMenuOptions .context-item[onclick*='openRenameModal']");
+  if (renameOption) {
+    renameOption.style.display = isSingle ? "flex" : "none";
+  }
+
+  const starText = document.getElementById("menuStarText");
+  const starIcon = document.getElementById("menuStarIcon");
+  if (starText && item) {
+    starText.textContent = item.starred ? "Remove Star" : "Add to Starred";
+  }
+  if (starIcon && item) {
+    starIcon.style.fill = item.starred ? "var(--yellow)" : "none";
+    starIcon.style.color = item.starred ? "var(--yellow)" : "currentColor";
+    starIcon.style.stroke = item.starred ? "var(--yellow)" : "currentColor";
+  }
+
+  const rect = event.currentTarget.getBoundingClientRect();
   const contextMenu = document.getElementById("contextMenu");
+  if (!contextMenu) return;
+
   contextMenu.style.display = "block";
-  contextMenu.style.left = Math.max(10, rect.left - 130) + "px";
-  contextMenu.style.top = Math.max(10, rect.bottom + 4) + "px";
+  lucide.createIcons();
+
+  const menuHeight = contextMenu.offsetHeight || 180;
+  const menuWidth = contextMenu.offsetWidth || 170;
+
+  let left = rect.left - 130;
+  let top = rect.bottom + 4;
+
+  if (top + menuHeight > window.innerHeight) {
+    top = Math.max(10, rect.top - menuHeight - 4);
+  }
+  if (left + menuWidth > window.innerWidth) {
+    left = Math.max(10, window.innerWidth - menuWidth - 10);
+  }
+  if (left < 10) left = 10;
+
+  contextMenu.style.left = left + "px";
+  contextMenu.style.top = top + "px";
+}
+
+function handleMenuStarToggle() {
+  if (selectedItems.length === 1) {
+    const item = getCurrentDirectoryItems().find(i => i.name === selectedItems[0]) || 
+                 getAllItems().find(i => i.name === selectedItems[0]);
+    if (item) {
+      toggleStar(item.name, item.parentPath || currentPath.join("/"));
+    }
+  }
+  closeContextMenu();
 }
 
 function renderBreadcrumbs() {
@@ -623,8 +679,8 @@ function renderDirectory() {
           <button class="btn-icon hover-btn" onclick="event.stopPropagation(); handleRenameClick('${escapeHtml(item.name.replaceAll("'", "\\'"))}')" title="Rename" style="color:var(--text-muted);">
             <i data-lucide="edit-2" style="width:16px;height:16px;"></i>
           </button>
-          <button class="btn-icon hover-btn" onclick="event.stopPropagation(); toggleStar('${escapeHtml(item.name.replaceAll("'", "\\'"))}', '${escapeHtml((item.parentPath || currentPath.join("/")).replaceAll("'", "\\'"))}')" title="Star" style="color:${item.starred ? 'var(--yellow)' : 'var(--text-muted)'};">
-            <i data-lucide="star" style="width:16px;height:16px; ${item.starred ? 'fill:var(--yellow);' : ''}"></i>
+          <button class="btn-icon hover-btn ${item.starred ? 'starred-btn' : ''}" onclick="event.stopPropagation(); toggleStar('${escapeHtml(item.name.replaceAll("'", "\\'"))}', '${escapeHtml((item.parentPath || currentPath.join("/")).replaceAll("'", "\\'"))}')" title="Star">
+            <i data-lucide="star" style="width:16px;height:16px;"></i>
           </button>
           <button class="btn-icon" onclick="openRowMenu(event, '${escapeHtml(item.name.replaceAll("'", "\\'"))}', '${escapeHtml(item.type)}')" title="More actions" style="color:var(--text-muted);">
             <i data-lucide="more-vertical" style="width:16px;height:16px;"></i>
@@ -1374,7 +1430,7 @@ function switchView(tab) {
   selectedItems = [];
   selectedClipboardItems = [];
   closeContextMenu();
-  updateActionBar();
+  renderSelectionHeader();
 
   const fileView = document.getElementById("fileView");
   const clipboardView = document.getElementById("clipboardView");
