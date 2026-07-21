@@ -96,11 +96,11 @@
           </label>
           <div class="app-actions">
             <!-- Theme toggle -->
-            <button class="btn-icon" onclick="toggleDarkMode()" title="Toggle theme">
+            <button class="btn-icon theme-toggle-btn" onclick="toggleDarkMode()" title="Toggle theme">
               <i data-lucide="sun" style="width:18px;height:18px;"></i>
             </button>
             <!-- Settings toggle -->
-            <button class="btn-icon" onclick="openSettingsDialog()" title="Settings">
+            <button class="btn-icon app-settings-btn" onclick="openSettingsDialog()" title="Settings">
               <i data-lucide="settings" style="width:18px;height:18px;"></i>
             </button>
           </div>
@@ -120,7 +120,7 @@
               </div>
               <div style="display: flex; align-items: center; gap: 0.75rem;">
                 <span class="panel-meta" id="filePanelMeta"></span>
-                <button onclick="openSettingsDialog()" title="Settings"
+                <button class="file-settings-btn" onclick="openSettingsDialog()" title="Settings"
                   style="display: flex; align-items: center; gap: 0.4rem; height: 32px; padding: 0 0.85rem; border-radius: 999px; border: 1px solid var(--border-color); background: transparent; color: var(--text-color); font-size: 0.8rem; font-weight: 600; cursor: pointer;">
                   <i data-lucide="settings" style="width: 15px; height: 15px; color: var(--primary);"></i>
                   <span>Settings</span>

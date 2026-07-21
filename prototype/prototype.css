@@ -795,10 +795,18 @@ body:has(.viewport-frame:not(.mobile-sim)) .sim-bar {
   padding: 0 0.8rem;
 }
 
-.mobile-sim .app-actions .pill-checkbox,
-.mobile-sim .app-actions .btn-icon:nth-of-type(2),
+.mobile-sim .app-actions .theme-toggle-btn,
+.mobile-sim .file-settings-btn,
 .mobile-sim .panel-meta {
   display: none;
+}
+
+.mobile-sim .app-actions .app-settings-btn {
+  display: flex;
+}
+
+.mobile-sim .file-settings-btn {
+  display: none !important;
 }
 
 .mobile-sim .panel-title {
@@ -1157,6 +1165,11 @@ body:has(.viewport-frame:not(.mobile-sim)) .sim-bar {
   overflow-y: auto !important;
   width: 100%;
   padding-right: 4px;
+}
+
+.m3-list {
+  scrollbar-width: auto;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 /* List View Flat Table Rows Style */
@@ -2008,6 +2021,35 @@ body:has(.viewport-frame:not(.mobile-sim)) .sim-bar {
 
 .mobile-sim .m3-list:not(.grid-mode) .m3-list-item {
   display: flex;
+}
+
+.mobile-sim .m3-list {
+  padding-right: 0;
+  scrollbar-width: none;
+  scrollbar-color: transparent transparent;
+  -ms-overflow-style: none;
+}
+
+.mobile-sim .m3-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.mobile-sim .m3-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mobile-sim .m3-list::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+[data-theme="light"] .mobile-sim .m3-list {
+  scrollbar-color: transparent transparent;
+}
+
+[data-theme="light"] .mobile-sim .m3-list::-webkit-scrollbar-thumb {
+  background: transparent;
 }
 
 .mobile-sim .m3-list.grid-mode {
