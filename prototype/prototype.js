@@ -41,6 +41,8 @@ let isCreatingFolderInMove = false;
 let sortBy = "name";
 let sortDirection = "asc";
 let sortFolders = "top";
+let searchResultsBuffer = [];
+let searchResultsExpanded = false;
 
 function setViewMode(mode) {
   viewMode = mode;
@@ -90,6 +92,67 @@ function getAllItems() {
   return Object.entries(db).flatMap(([path, items]) => {
     return items.map(item => ({ ...item, parentPath: path }));
   });
+}
+
+function getItemAvatarInfo(item) {
+  if (item.type === "folder") return { avatarClass: "avatar-folder", iconName: "folder" };
+  if (item.type === "image") return { avatarClass: "avatar-image", iconName: "image" };
+  if (item.type === "video") return { avatarClass: "avatar-video", iconName: "video" };
+  if (item.type === "audio") return { avatarClass: "avatar-audio", iconName: "music" };
+  if (item.type === "archive") return { avatarClass: "avatar-archive", iconName: "archive" };
+  return { avatarClass: "avatar-doc", iconName: "file-text" };
+}
+
+function getReadablePath(pathStr) {
+  if (!pathStr || pathStr === "Home") return "Home";
+  return pathStr.replace(/^Home\//, "Home / ");
+}
+
+function getSearchResults(query) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+
+  const scored = getAllItems()
+    .map(item => {
+      const fullPath = `${item.parentPath}/${item.name}`.toLowerCase();
+      const parentPath = (item.parentPath || "").toLowerCase();
+      let score = 3;
+
+      if (item.name.toLowerCase().startsWith(needle)) score = 0;
+      else if (item.name.toLowerCase().includes(needle)) score = 1;
+      else if (fullPath.includes(needle)) score = 2;
+      else if (parentPath.includes(needle)) score = 4;
+      else return null;
+
+      return { item, score };
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      if (a.score !== b.score) return a.score - b.score;
+      return a.item.name.localeCompare(b.item.name, undefined, { numeric: true, sensitivity: "base" });
+    });
+
+  return scored.map(entry => entry.item);
+}
+
+function openSearchResult(item) {
+  activeTab = "file";
+  searchQuery = "";
+  searchResultsExpanded = false;
+  lastSelectedIndex = -1;
+
+  if (item.type === "folder") {
+    selectedItems = [];
+    currentPath = item.parentPath.split("/");
+    currentPath.push(item.name);
+  } else {
+    selectedItems = [item.name];
+    currentPath = item.parentPath.split("/");
+  }
+  const input = document.getElementById("searchInput");
+  if (input) input.value = "";
+  updateSearchClearButton();
+  renderDirectory();
 }
 
 function getVisibleItems() {
@@ -243,7 +306,100 @@ function getActiveListTitle() {
 
 function setSearchQuery(value) {
   searchQuery = value;
+  searchResultsExpanded = false;
+  updateSearchClearButton();
   renderDirectory();
+}
+
+function clearSearchQuery(event) {
+  if (event) event.preventDefault();
+  searchQuery = "";
+  searchResultsExpanded = false;
+  const input = document.getElementById("searchInput");
+  if (input) input.value = "";
+  updateSearchClearButton();
+  renderDirectory();
+  if (input) input.focus();
+}
+
+function updateSearchClearButton() {
+  const btn = document.getElementById("clearSearchBtn");
+  if (!btn) return;
+  btn.classList.toggle("visible", !!searchQuery.trim());
+}
+
+function renderSearchResultsPanel() {
+  const panel = document.getElementById("searchResultsPanel");
+  if (!panel) return;
+
+  const query = searchQuery.trim();
+  const hasQuery = query.length > 0;
+  panel.classList.toggle("active", hasQuery);
+
+  if (!hasQuery) {
+    panel.innerHTML = "";
+    return;
+  }
+
+  const results = getSearchResults(query);
+  const visibleResults = searchResultsExpanded ? results : results.slice(0, 3);
+  searchResultsBuffer = visibleResults;
+  const hiddenCount = Math.max(0, results.length - visibleResults.length);
+  const queryLabel = escapeHtml(query);
+
+  panel.innerHTML = `
+    <div class="search-results-list">
+      ${
+        visibleResults.length
+          ? visibleResults.map((item, index) => {
+              const { avatarClass, iconName } = getItemAvatarInfo(item);
+              const count = item.type === "folder"
+                ? `${db[`${item.parentPath}/${item.name}`]?.length || 0} items`
+                : `${item.size || ""}`;
+              const badge = getReadablePath(item.parentPath);
+              const meta = item.type === "folder"
+                ? `${count} - ${item.modified || "Today"}`
+                : `${(item.type || "file").toUpperCase()} - ${count} - ${item.modified || "Today"}`;
+              return `
+                <button type="button" class="search-result-item" data-search-index="${index}" aria-label="Open ${escapeHtml(item.name)}">
+                  <div class="search-result-main">
+                    <div class="search-result-icon ${avatarClass}"><i data-lucide="${iconName}" style="width:18px;height:18px;"></i></div>
+                    <div class="search-result-copy">
+                      <div class="search-result-name">${escapeHtml(item.name)}</div>
+                      <div class="search-result-meta">${escapeHtml(meta)}</div>
+                    </div>
+                  </div>
+                  <div class="search-result-badge">${escapeHtml(badge)}</div>
+                </button>
+              `;
+            }).join("")
+          : `<div class="search-results-empty">No matches found for "${queryLabel}".</div>`
+      }
+    </div>
+    ${hiddenCount > 0 ? `
+      <button type="button" class="search-results-more" id="searchResultsMoreBtn">
+        View all results (+${hiddenCount} more)
+      </button>
+    ` : ""}
+  `;
+
+  panel.querySelectorAll(".search-result-item").forEach(button => {
+    button.addEventListener("click", () => {
+      const index = Number(button.getAttribute("data-search-index"));
+      const item = searchResultsBuffer[index];
+      if (item) openSearchResult(item);
+    });
+  });
+
+  const moreBtn = panel.querySelector("#searchResultsMoreBtn");
+  if (moreBtn) {
+    moreBtn.addEventListener("click", () => {
+      searchResultsExpanded = true;
+      renderDirectory();
+    });
+  }
+
+  lucide.createIcons();
 }
 
 function toggleTypeDropdown(event) {
@@ -506,7 +662,7 @@ function renderBreadcrumbs() {
   if (isMobileInteraction() && activeTab === "file") {
     const title = document.createElement("span");
     title.className = "mobile-breadcrumb-title";
-    title.textContent = currentPath[currentPath.length - 1] === "Home" ? "My files" : currentPath[currentPath.length - 1];
+    title.textContent = currentPath[currentPath.length - 1] === "Home" ? "Home" : currentPath[currentPath.length - 1];
 
     if (currentPath.length > 1) {
       const backBtn = document.createElement("button");
@@ -547,7 +703,7 @@ function renderBreadcrumbs() {
 
     const item = document.createElement("span");
     item.className = "breadcrumb-item";
-    item.textContent = (idx === 0 && folder === "Home") ? "My files" : folder;
+    item.textContent = (idx === 0 && folder === "Home") ? "Home" : folder;
     if (idx < currentPath.length - 1) {
       item.onclick = () => {
         currentPath = currentPath.slice(0, idx + 1);
@@ -564,13 +720,18 @@ function renderBreadcrumbs() {
 function renderDirectory() {
   const quickContainer = document.getElementById("quickAccessContainer");
   if (quickContainer) {
-    quickContainer.style.display = (activeTab === "recent" || activeTab === "starred" || currentPath.length > 1) ? "none" : "grid";
+    const searchActive = !!searchQuery.trim();
+    quickContainer.style.display = searchActive
+      ? "none"
+      : (activeTab === "recent" || activeTab === "starred" || currentPath.length > 1) ? "none" : "grid";
   }
 
+  updateSearchClearButton();
   renderBreadcrumbs();
   renderQuickAccess();
   updateViewModeDOM();
   updateSortHeaderArrows();
+  renderSearchResultsPanel();
 
   const fileList = document.getElementById("nasFileList");
   if (!fileList) return;
@@ -842,12 +1003,12 @@ function triggerFileInput(type) {
   }
 }
 
-function handleMockUpload(event) {
+function handleMockUpload(event, targetPathOverride = "") {
   const files = event.target.files;
   if (files.length === 0) return;
 
   activeTab = "file";
-  const pathStr = currentPath.join("/");
+  const pathStr = targetPathOverride || getUploadTargetPath();
   if (!db[pathStr]) db[pathStr] = [];
 
   for (let file of files) {
@@ -1045,6 +1206,17 @@ function clearSelection() {
   selectedItems = [];
   lastSelectedIndex = -1;
   renderDirectory();
+}
+
+function getUploadTargetPath() {
+  if (selectedItems.length === 1) {
+    const selectedName = selectedItems[0];
+    const selectedItem = getCurrentDirectoryItems().find(item => item.name === selectedName);
+    if (selectedItem && selectedItem.type === "folder") {
+      return `${currentPath.join("/")}/${selectedItem.name}`;
+    }
+  }
+  return currentPath.join("/");
 }
 
 function deleteSelected() {
@@ -1369,6 +1541,7 @@ function setConnectMode(mode) {
   if (mdnsTab) mdnsTab.classList.toggle("active", mode === "mdns");
 
   renderQrPreview(address);
+  refreshConnectQrDialog();
 }
 
 function openSettingsDialog() {
@@ -1382,6 +1555,29 @@ function openSettingsDialog() {
 
 function closeSettingsDialog() {
   const dialog = document.getElementById("settingsDialog");
+  if (dialog) dialog.style.display = "none";
+}
+
+function refreshConnectQrDialog() {
+  const dialogBox = document.getElementById("connectQrDialogBox");
+  const dialogAddress = document.getElementById("connectQrDialogAddress");
+  const address = connectionTargets[connectMode] || connectionTargets.ip;
+  if (dialogAddress) dialogAddress.textContent = address;
+  if (dialogBox) {
+    renderQrPreview(address);
+    dialogBox.innerHTML = document.getElementById("qrBox") ? document.getElementById("qrBox").innerHTML : dialogBox.innerHTML;
+  }
+}
+
+function openConnectQrDialog() {
+  const dialog = document.getElementById("connectQrDialog");
+  if (!dialog) return;
+  refreshConnectQrDialog();
+  dialog.style.display = "flex";
+}
+
+function closeConnectQrDialog() {
+  const dialog = document.getElementById("connectQrDialog");
   if (dialog) dialog.style.display = "none";
 }
 
@@ -1538,7 +1734,7 @@ function setSim(mode) {
 }
 
 // Initial setup on DOM load
-document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener("DOMContentLoaded", () => {
   renderQrPreview(connectionTargets.ip);
 
   // Context Menu Handling
@@ -1632,7 +1828,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const files = e.dataTransfer.files;
       if (files.length > 0) {
-        handleMockUpload({ target: { files: files, value: "" } });
+        handleMockUpload({ target: { files: files, value: "" } }, getUploadTargetPath());
       }
     });
   }

@@ -41,10 +41,6 @@
           </div>
           <span class="brand-title">Lanvan</span>
         </div>
-        <button class="new-button" onclick="showMobileUploadMenu(event)">
-          <i data-lucide="plus" style="width:24px;height:24px;"></i>
-          <span>New</span>
-        </button>
         <nav class="sidebar-menu">
           <div class="sidebar-item active" id="sideItemFile" onclick="switchView('file')">
             <i data-lucide="folder"></i> Files
@@ -92,7 +88,12 @@
           <span class="app-title">Lanvan</span>
           <label class="search-shell">
             <i data-lucide="search" style="width:20px;height:20px;"></i>
-            <input id="searchInput" type="search" placeholder="Search in Lanvan" oninput="setSearchQuery(this.value)">
+            <input id="searchInput" type="search" placeholder="Search in Lanvan" autocomplete="off"
+              autocapitalize="off" spellcheck="false" oninput="setSearchQuery(this.value)">
+            <button id="clearSearchBtn" type="button" class="search-clear-btn" onclick="clearSearchQuery(event)"
+              title="Clear search" aria-label="Clear search">
+              <i data-lucide="x" style="width:15px;height:15px;"></i>
+            </button>
           </label>
           <div class="app-actions">
             <!-- Theme toggle -->
@@ -105,6 +106,8 @@
             </button>
           </div>
         </header>
+
+        <section id="searchResultsPanel" class="search-results-panel" aria-live="polite"></section>
 
         <!-- App Content Area -->
         <main class="app-content">
@@ -120,6 +123,10 @@
               </div>
               <div style="display: flex; align-items: center; gap: 0.75rem;">
                 <span class="panel-meta" id="filePanelMeta"></span>
+                <button class="btn-icon qr-launch-btn" onclick="openConnectQrDialog()" title="Show QR"
+                  aria-label="Show QR">
+                  <i data-lucide="qr-code" style="width:15px;height:15px;"></i>
+                </button>
                 <button class="file-settings-btn" onclick="openSettingsDialog()" title="Settings"
                   style="display: flex; align-items: center; gap: 0.4rem; height: 32px; padding: 0 0.85rem; border-radius: 999px; border: 1px solid var(--border-color); background: transparent; color: var(--text-color); font-size: 0.8rem; font-weight: 600; cursor: pointer;">
                   <i data-lucide="settings" style="width: 15px; height: 15px; color: var(--primary);"></i>
@@ -359,21 +366,18 @@
           <i data-lucide="file-up"></i>
           <span>File upload</span>
         </div>
-        <span class="context-shortcut">Alt+C then U</span>
       </div>
       <div class="context-item" onclick="triggerFileInput('folder')">
         <div class="context-item-left">
           <i data-lucide="folder-up"></i>
           <span>Folder upload</span>
         </div>
-        <span class="context-shortcut">Alt+C then I</span>
       </div>
       <div class="context-item" onclick="openNewFolderDialog()">
         <div class="context-item-left">
           <i data-lucide="folder-plus"></i>
           <span>New folder</span>
         </div>
-        <span class="context-shortcut">Alt+C then F</span>
       </div>
     </div>
     <div id="itemMenuOptions" style="display:none;">
@@ -615,6 +619,28 @@
 
       <div class="dialog-actions" style="margin-top: 1.25rem;">
         <button class="dialog-btn dialog-btn-primary" onclick="closeSettingsDialog()">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connect QR Dialog -->
+  <div id="connectQrDialog" class="m3-modal-overlay" style="display: none; z-index: 21000;" onclick="closeConnectQrDialog()">
+    <div class="m3-modal-card connect-qr-card" onclick="event.stopPropagation()">
+      <div class="connect-qr-header">
+        <div class="connect-qr-title">
+          <i data-lucide="qr-code" style="width:20px;height:20px;color:var(--primary);"></i>
+          <span>Connect QR</span>
+        </div>
+        <button class="btn-icon" onclick="closeConnectQrDialog()" aria-label="Close QR" style="width:32px;height:32px;">
+          <i data-lucide="x" style="width:16px;height:16px;"></i>
+        </button>
+      </div>
+      <div class="connect-qr-subtitle">Scan this code to open Lanvan on another device.</div>
+      <div class="qr-box connect-qr-box" id="connectQrDialogBox" aria-label="Connection QR preview"></div>
+      <div class="connect-qr-address" id="connectQrDialogAddress"></div>
+      <div class="connect-qr-actions">
+        <button class="dialog-btn" onclick="closeConnectQrDialog()" style="color:var(--text-muted);">Close</button>
+        <button class="dialog-btn dialog-btn-primary" onclick="copyConnectAddress()">Copy address</button>
       </div>
     </div>
   </div>
