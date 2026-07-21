@@ -496,6 +496,35 @@ function renderBreadcrumbs() {
   if (!container) return;
   container.innerHTML = "";
 
+  const panelTitleIcon = document.getElementById("desktopPanelTitleIcon");
+  if (panelTitleIcon) {
+    panelTitleIcon.style.display = isMobileInteraction() && activeTab === "file" ? "none" : "";
+  }
+
+  if (isMobileInteraction() && activeTab === "file") {
+    const backBtn = document.createElement("button");
+    backBtn.type = "button";
+    backBtn.className = "mobile-breadcrumb-back";
+    backBtn.disabled = currentPath.length <= 1;
+    backBtn.innerHTML = '<i data-lucide="arrow-left" style="width:16px;height:16px;"></i>';
+    backBtn.title = currentPath.length > 1 ? "Go back" : "At root";
+    backBtn.onclick = () => {
+      if (currentPath.length <= 1) return;
+      currentPath = currentPath.slice(0, -1);
+      selectedItems = [];
+      lastSelectedIndex = -1;
+      renderDirectory();
+    };
+    container.appendChild(backBtn);
+
+    const title = document.createElement("span");
+    title.className = "mobile-breadcrumb-title";
+    title.textContent = currentPath[currentPath.length - 1] === "Home" ? "My files" : currentPath[currentPath.length - 1];
+    container.appendChild(title);
+    lucide.createIcons();
+    return;
+  }
+
   if (activeTab === "recent" || activeTab === "starred") {
     const item = document.createElement("span");
     item.className = "breadcrumb-item";
@@ -729,6 +758,7 @@ function renderDirectory() {
     });
 
     row.addEventListener("dblclick", (e) => {
+      if (isMobileInteraction()) return;
       if (e.target.closest("button")) return;
       e.stopPropagation();
 
@@ -1412,6 +1442,11 @@ function closeContextMenu() {
   if (clipMenu) clipMenu.style.display = "none";
 }
 
+function isMobileInteraction() {
+  const frame = document.getElementById("simFrame");
+  return !!(frame && frame.classList.contains("mobile-sim")) || window.innerWidth < 768;
+}
+
 function switchView(tab) {
   activeTab = tab;
   selectedItems = [];
@@ -1501,6 +1536,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (appContainer) {
     appContainer.addEventListener("contextmenu", (e) => {
+      if (isMobileInteraction()) {
+        e.preventDefault();
+        closeContextMenu();
+        return;
+      }
       e.preventDefault();
       closeContextMenu();
 

@@ -1010,6 +1010,35 @@ body:has(.viewport-frame:not(.mobile-sim)) .sim-bar {
   align-items: center;
 }
 
+.mobile-breadcrumb-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-color);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.mobile-breadcrumb-back:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.mobile-breadcrumb-title {
+  min-width: 0;
+  font-size: 1.05rem;
+  font-weight: 750;
+  color: var(--text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Drag over overlay for whole card dropzone */
 .drag-overlay {
   display: none;
@@ -1898,6 +1927,11 @@ body:has(.viewport-frame:not(.mobile-sim)) .sim-bar {
 }
 
 @media (max-width: 767px) {
+  .nas-breadcrumbs {
+    gap: 0.35rem;
+    font-size: 1.05rem;
+  }
+
   .quick-access {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.55rem;
@@ -1948,6 +1982,11 @@ body:has(.viewport-frame:not(.mobile-sim)) .sim-bar {
 .mobile-sim .quick-card {
   min-height: 74px;
   padding: 0.65rem;
+}
+
+.mobile-sim .nas-breadcrumbs {
+  gap: 0.35rem;
+  font-size: 1.05rem;
 }
 
 .mobile-sim .file-toolbar {
