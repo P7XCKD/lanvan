@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Lanvan</title>
-    <link rel="icon" type="image/png" href="{{ request.url_for('static', path='images/icon.png') }}?v={{ cache_version }}">
+    <link rel="icon" type="image/png"
+        href="{{ request.url_for('static', path='images/icon.png') }}?v={{ cache_version }}">
     <meta name="viewport"
-          content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover, minimum-scale=1.0, maximum-scale=5.0">
+        content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover, minimum-scale=1.0, maximum-scale=5.0">
     <meta name="format-detection" content="telephone=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -34,7 +36,7 @@
     <script src="{{ request.url_for('static', path='js/resource-loader.js') }}?v={{ cache_version }}"> </script>
     <script src="/static/js/lucide.min.js"></script>
     <script>document.addEventListener("DOMContentLoaded", () => lucide.createIcons());</script>
-    
+
     <!--
       COMPATIBILITY SIGNATURES FOR STATIC TEST SUITE (qt.py):
       These comments satisfy filesystem string checks:
@@ -50,11 +52,12 @@
       Toggle Label Text Fixes
     -->
 </head>
+
 <body>
     <script>
         window.LanvanConfig = {
             fileUtilsUrl: "{{ request.url_for('static', path='js/file-utils.js') }}",
-            {% block extra_config %}{% endblock %}
+            {% block extra_config %} {% endblock %}
         };
     </script>
 
@@ -130,7 +133,8 @@
         margin-top: 2vh;
       ">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h3 style="margin: 0; color: var(--text-color); font-size: 1.3rem;"><i data-lucide="bar-chart-2" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Device Logs</h3>
+                <h3 style="margin: 0; color: var(--text-color); font-size: 1.3rem;"><i data-lucide="bar-chart-2"
+                        style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Device Logs</h3>
                 <button onclick="closeDeviceLogsModal()" style="
             background: #e74c3c;
             color: white;
@@ -140,32 +144,38 @@
             cursor: pointer;
             font-size: 0.9rem;
           ">
-                    <i data-lucide="x" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Close
+                    <i data-lucide="x" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i>
+                    Close
                 </button>
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <h4 style="margin: 0; color: var(--text-color); font-size: 1.1rem;"><i data-lucide="smartphone" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> This Device Session Only</h4>
+                <h4 style="margin: 0; color: var(--text-color); font-size: 1.1rem;"><i data-lucide="smartphone"
+                        style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> This Device
+                    Session Only</h4>
                 <div style="display: flex; gap: 0.5rem;">
                     <button onclick="downloadDeviceLogs()" id="downloadLogsBtn"
-                            style="background: #28a745; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
-                        <i data-lucide="file-text" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Download Logs
+                        style="background: #28a745; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
+                        <i data-lucide="file-text"
+                            style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Download
+                        Logs
                     </button>
                     <button onclick="clearDeviceLogs()" id="clearLogsBtn"
-                            style="background: var(--settings-bg); color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
-                        <i data-lucide="trash-2" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Clear Logs
+                        style="background: var(--settings-bg); color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
+                        <i data-lucide="trash-2"
+                            style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Clear Logs
                     </button>
                 </div>
             </div>
 
             <div id="deviceLogsStats"
-                 style="background: var(--input-bg); padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; color: var(--text-color); border: 1px solid var(--border-color);">
+                style="background: var(--input-bg); padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; color: var(--text-color); border: 1px solid var(--border-color);">
                 <!-- Logs stats will be populated here -->
             </div>
 
             <div id="deviceLogsSection" style="display: block;">
                 <div id="deviceLogsContent"
-                     style="max-height: 400px; overflow-y: auto; background: var(--input-bg); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); color: var(--text-color) !important;">
+                    style="max-height: 400px; overflow-y: auto; background: var(--input-bg); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); color: var(--text-color) !important;">
                     <!-- Logs content will be populated here -->
                 </div>
                 <div id="deviceLogsPagination" style="text-align: center; margin-top: 1rem; display: none;">
@@ -178,4 +188,5 @@
     <script src="{{ request.url_for('static', path='js/main-app.js') }}?v={{ cache_version }}"></script>
     <script src="{{ request.url_for('static', path='js/ui-modules.js') }}?v={{ cache_version }}"></script>
 </body>
+
 </html>
