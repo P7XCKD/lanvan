@@ -693,6 +693,7 @@ function renderDirectory() {
         ${previewMarkup}
       `;
     } else {
+      const showInlineRowActions = !isMobileInteraction();
       row.innerHTML = `
         <div class="file-name-cell">
           <div class="avatar-icon ${avatarClass}"><i data-lucide="${iconName}"></i></div>
@@ -704,7 +705,7 @@ function renderDirectory() {
         <div class="item-date">${modified}</div>
         <div class="item-size">${size}</div>
         <div class="row-actions">
-          <button class="btn-icon hover-btn" onclick="event.stopPropagation(); handleDownloadItem('${escapeHtml(item.name.replaceAll("'", "\\'"))}')" title="Download" style="color:var(--text-muted);">
+          ${showInlineRowActions ? `<button class="btn-icon hover-btn" onclick="event.stopPropagation(); handleDownloadItem('${escapeHtml(item.name.replaceAll("'", "\\'"))}')" title="Download" style="color:var(--text-muted);">
             <i data-lucide="download" style="width:16px;height:16px;"></i>
           </button>
           <button class="btn-icon hover-btn" onclick="event.stopPropagation(); handleRenameClick('${escapeHtml(item.name.replaceAll("'", "\\'"))}')" title="Rename" style="color:var(--text-muted);">
@@ -712,7 +713,7 @@ function renderDirectory() {
           </button>
           <button class="btn-icon hover-btn ${item.starred ? 'starred-btn' : ''}" onclick="event.stopPropagation(); toggleStar('${escapeHtml(item.name.replaceAll("'", "\\'"))}', '${escapeHtml((item.parentPath || currentPath.join("/")).replaceAll("'", "\\'"))}')" title="Star">
             <i data-lucide="star" style="width:16px;height:16px;"></i>
-          </button>
+          </button>` : ''}
           <button class="btn-icon" onclick="openRowMenu(event, '${escapeHtml(item.name.replaceAll("'", "\\'"))}', '${escapeHtml(item.type)}')" title="More actions" style="color:var(--text-muted);">
             <i data-lucide="more-vertical" style="width:16px;height:16px;"></i>
           </button>
