@@ -1347,9 +1347,26 @@ function showMobileUploadMenu(event) {
   if (genericOptions) genericOptions.style.display = "block";
   if (itemOptions) itemOptions.style.display = "none";
 
+  const btn = event.currentTarget || event.target;
+  const rect = btn.getBoundingClientRect();
+
   contextMenu.style.display = "block";
-  contextMenu.style.left = Math.max(12, event.clientX - 100) + "px";
-  contextMenu.style.top = Math.max(12, event.clientY - 120) + "px";
+
+  const menuHeight = contextMenu.offsetHeight || 160;
+  const menuWidth = contextMenu.offsetWidth || 180;
+
+  let left = rect.left;
+  let top = rect.bottom + 6;
+
+  if (top + menuHeight > window.innerHeight) {
+    top = Math.max(12, rect.top - menuHeight - 6);
+  }
+  if (left + menuWidth > window.innerWidth) {
+    left = Math.max(12, window.innerWidth - menuWidth - 12);
+  }
+
+  contextMenu.style.left = left + "px";
+  contextMenu.style.top = top + "px";
 }
 
 function switchView(tab) {
