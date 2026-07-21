@@ -498,28 +498,32 @@ function renderBreadcrumbs() {
 
   const panelTitleIcon = document.getElementById("desktopPanelTitleIcon");
   if (panelTitleIcon) {
-    panelTitleIcon.style.display = isMobileInteraction() && activeTab === "file" ? "none" : "";
+    const isMobileFileView = isMobileInteraction() && activeTab === "file";
+    const isNestedFolder = isMobileFileView && currentPath.length > 1;
+    panelTitleIcon.style.display = isNestedFolder ? "none" : "";
   }
 
   if (isMobileInteraction() && activeTab === "file") {
-    const backBtn = document.createElement("button");
-    backBtn.type = "button";
-    backBtn.className = "mobile-breadcrumb-back";
-    backBtn.disabled = currentPath.length <= 1;
-    backBtn.innerHTML = '<i data-lucide="arrow-left" style="width:16px;height:16px;"></i>';
-    backBtn.title = currentPath.length > 1 ? "Go back" : "At root";
-    backBtn.onclick = () => {
-      if (currentPath.length <= 1) return;
-      currentPath = currentPath.slice(0, -1);
-      selectedItems = [];
-      lastSelectedIndex = -1;
-      renderDirectory();
-    };
-    container.appendChild(backBtn);
-
     const title = document.createElement("span");
     title.className = "mobile-breadcrumb-title";
     title.textContent = currentPath[currentPath.length - 1] === "Home" ? "My files" : currentPath[currentPath.length - 1];
+
+    if (currentPath.length > 1) {
+      const backBtn = document.createElement("button");
+      backBtn.type = "button";
+      backBtn.className = "mobile-breadcrumb-back";
+      backBtn.innerHTML = '<i data-lucide="arrow-left" style="width:16px;height:16px;"></i>';
+      backBtn.title = "Go back";
+      backBtn.onclick = () => {
+        if (currentPath.length <= 1) return;
+        currentPath = currentPath.slice(0, -1);
+        selectedItems = [];
+        lastSelectedIndex = -1;
+        renderDirectory();
+      };
+      container.appendChild(backBtn);
+    }
+
     container.appendChild(title);
     lucide.createIcons();
     return;
