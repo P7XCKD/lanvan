@@ -1890,6 +1890,30 @@ body:has(.viewport-frame:not(.mobile-sim)) .sim-bar {
   border: 1px solid var(--border-color);
 }
 
+.clipboard-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.clipboard-shared-badge {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--toggle-bg);
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+[data-theme="dark"] .clipboard-shared-badge {
+  background: #242528;
+}
+
 .clipboard-input-wrapper {
   display: flex;
   flex-direction: column;
