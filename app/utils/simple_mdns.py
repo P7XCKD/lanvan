@@ -18,17 +18,18 @@ import uuid
 import platform
 import os
 from typing import Optional, Dict, Any
-from zeroconf import ServiceInfo, Zeroconf, ServiceBrowser
 from app.utils.termux_compat import is_android_environment
 
-# Zeroconf version compatibility check
 try:
-    # Check zeroconf version to handle callback signature changes
+    from zeroconf import ServiceInfo, Zeroconf, ServiceBrowser
     import zeroconf
     ZEROCONF_VERSION = getattr(zeroconf, '__version__', '0.0.0')
     ZEROCONF_NEW_API = tuple(map(int, ZEROCONF_VERSION.split('.')[:2])) >= (0, 132)
-except Exception:
-    ZEROCONF_NEW_API = True  # Assume newer version if can't detect
+    HAS_ZEROCONF = True
+except (ImportError, Exception):
+    ServiceInfo = Zeroconf = ServiceBrowser = None
+    ZEROCONF_NEW_API = True
+    HAS_ZEROCONF = False
 
 def check_mdns_dependencies() -> tuple[bool, str]:
     """Check if mDNS dependencies are available, especially for Termux"""

@@ -519,8 +519,9 @@ async def encrypt_http_safe(
     encrypted_path = None
     
     try:
+        UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
         # Save uploaded file temporarily using chunked streaming
-        temp_input_path = UPLOAD_FOLDER / f"temp_input_{int(time.time())}_{file.filename}"
+        temp_input_path = UPLOAD_FOLDER / f"temp_input_{int(time.time())}_{secure_filename(file.filename or 'file')}"
         
         # [RETRY] MEMORY FIX: Use Termux-optimized chunk size for streaming
         from app.utils.universal_optimizer import universal_optimizer, get_adaptive_chunk_size

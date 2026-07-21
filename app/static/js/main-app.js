@@ -3343,13 +3343,9 @@ Device Session will reset when browser is closed
         const aesToggle = document.getElementById('enableEncryption');
         const isHTTP = location.protocol === 'http:';
 
-        // Always enable HTTP-Safe mode when AES is used over HTTP
-        if (isHTTP && aesToggle && aesToggle.checked) {
-          return true;
-        }
-
-        // For HTTPS, HTTP-Safe mode is optional but still beneficial
-        return aesToggle && aesToggle.checked;
+        // HTTP-Safe metadata obfuscation is ONLY needed on HTTP connections.
+        // On HTTPS, TLS already encrypts all headers, file names, and metadata natively.
+        return isHTTP && !!(aesToggle && aesToggle.checked);
       }
 
       async function encryptFileHttpSafe(file) {

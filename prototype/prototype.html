@@ -114,7 +114,8 @@
         <main class="app-content">
 
           <!-- 1. File Explorer Tab Panel -->
-          <div id="fileView" class="view-content" style="display: flex; flex-direction: column; gap: 0.75rem; width:100%; flex: 1; min-height: 0; overflow: hidden;">
+          <div id="fileView" class="view-content"
+            style="display: flex; flex-direction: column; gap: 0.75rem; width:100%; flex: 1; min-height: 0; overflow: hidden;">
 
             <div class="desktop-panel-header">
               <div class="panel-title">
@@ -123,7 +124,8 @@
               </div>
               <div style="display: flex; align-items: center; gap: 0.75rem;">
                 <span class="panel-meta" id="filePanelMeta"></span>
-                <button onclick="openSettingsDialog()" title="Settings" style="display: flex; align-items: center; gap: 0.4rem; height: 32px; padding: 0 0.85rem; border-radius: 999px; border: 1px solid var(--border-color); background: transparent; color: var(--text-color); font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+                <button onclick="openSettingsDialog()" title="Settings"
+                  style="display: flex; align-items: center; gap: 0.4rem; height: 32px; padding: 0 0.85rem; border-radius: 999px; border: 1px solid var(--border-color); background: transparent; color: var(--text-color); font-size: 0.8rem; font-weight: 600; cursor: pointer;">
                   <i data-lucide="settings" style="width: 15px; height: 15px; color: var(--primary);"></i>
                   <span>Settings</span>
                 </button>
@@ -134,7 +136,8 @@
 
             <!-- Toolbar Row (Default vs Selection State) -->
             <div class="file-toolbar" id="fileToolbar">
-              <div id="toolbarDefaultContent" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+              <div id="toolbarDefaultContent"
+                style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
                 <div class="dropdown" style="position: relative; display: inline-block;">
                   <div id="typeBtnWrapper" style="display: inline-block;">
                     <button class="filter-chip" id="typeDropdownBtn" onclick="toggleTypeDropdown(event)"
@@ -199,7 +202,8 @@
                   </button>
                 </div>
               </div>
-              <div id="toolbarSelectionContent" style="display: none; align-items: center; justify-content: space-between; width: 100%;">
+              <div id="toolbarSelectionContent"
+                style="display: none; align-items: center; justify-content: space-between; width: 100%;">
                 <!-- Selection Actions Rendered Dynamically -->
               </div>
             </div>
@@ -256,16 +260,20 @@
             </div>
 
             <!-- Clipboard Input Card -->
-            <div class="m3-card clipboard-composer-card" style="display: flex; flex-direction: column; gap: 0.75rem; padding: 1.1rem 1.25rem;">
-              <div class="m3-card-title" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; font-weight: 700; color: var(--text-color);">
-                <div class="avatar-icon" style="width: 28px; height: 28px; border-radius: 8px; background: var(--primary-container); color: var(--primary); display: flex; align-items: center; justify-content: center;">
+            <div class="m3-card clipboard-composer-card"
+              style="display: flex; flex-direction: column; gap: 0.75rem; padding: 1.1rem 1.25rem;">
+              <div class="m3-card-title"
+                style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; font-weight: 700; color: var(--text-color);">
+                <div class="avatar-icon"
+                  style="width: 28px; height: 28px; border-radius: 8px; background: var(--primary-container); color: var(--primary); display: flex; align-items: center; justify-content: center;">
                   <i data-lucide="edit-3" style="width: 15px; height: 15px;"></i>
                 </div>
                 <span>Add to Clipboard</span>
               </div>
-              
+
               <div class="clipboard-input-wrapper">
-                <textarea id="clipboardInput" class="clipboard-input" placeholder="Type or paste text, links, or notes here..."></textarea>
+                <textarea id="clipboardInput" class="clipboard-input"
+                  placeholder="Type or paste text, links, or notes here..."></textarea>
                 <div class="clipboard-action-bar" style="justify-content: flex-start; gap: 0.5rem;">
                   <button class="m3-primary-btn" onclick="addClipboardItem()">
                     <i data-lucide="plus" style="width:15px;height:15px;"></i>
@@ -531,7 +539,8 @@
   <div id="settingsDialog" class="m3-dialog-overlay" style="z-index: 21000; display: none;">
     <div class="m3-dialog" style="max-width: 420px; width: 90%; padding: 1.5rem; border-radius: 20px;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem;">
-        <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 1.15rem; font-weight: 700; color: var(--text-color);">
+        <div
+          style="display: flex; align-items: center; gap: 0.5rem; font-size: 1.15rem; font-weight: 700; color: var(--text-color);">
           <i data-lucide="settings" style="width: 20px; height: 20px; color: var(--primary);"></i>
           <span>Settings</span>
         </div>
@@ -542,9 +551,11 @@
 
       <div style="display: flex; flex-direction: column; gap: 1rem;">
         <!-- AES Protection Setting Item -->
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; background: var(--toggle-bg); border-radius: 14px; border: 1px solid var(--border-color);">
+        <div
+          style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; background: var(--toggle-bg); border-radius: 14px; border: 1px solid var(--border-color);">
           <div style="display: flex; flex-direction: column; gap: 0.2rem;">
-            <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; font-weight: 650; color: var(--text-color);">
+            <div
+              style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; font-weight: 650; color: var(--text-color);">
               <i data-lucide="shield-check" style="width: 16px; height: 16px; color: var(--primary);"></i>
               <span>AES Protection</span>
             </div>
@@ -557,16 +568,19 @@
         </div>
 
         <!-- Dark Mode Setting Item -->
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; background: var(--toggle-bg); border-radius: 14px; border: 1px solid var(--border-color);">
+        <div
+          style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; background: var(--toggle-bg); border-radius: 14px; border: 1px solid var(--border-color);">
           <div style="display: flex; flex-direction: column; gap: 0.2rem;">
-            <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; font-weight: 650; color: var(--text-color);">
+            <div
+              style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; font-weight: 650; color: var(--text-color);">
               <i data-lucide="moon" style="width: 16px; height: 16px; color: var(--primary);"></i>
               <span>Dark Theme</span>
             </div>
             <span style="font-size: 0.75rem; color: var(--text-muted);">Use sleek dark mode interface</span>
           </div>
           <label class="m3-switch" style="position: relative; display: inline-block; width: 44px; height: 24px;">
-            <input type="checkbox" id="darkThemeSettingToggle" onchange="toggleDarkMode()" style="opacity: 0; width: 0; height: 0;">
+            <input type="checkbox" id="darkThemeSettingToggle" onchange="toggleDarkMode()"
+              style="opacity: 0; width: 0; height: 0;">
             <span class="m3-switch-slider"></span>
           </label>
         </div>

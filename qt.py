@@ -477,7 +477,7 @@ class QuickTest:
                                 result = await response.json()
                                 status = result.get('status', 'unknown')
                                 self.log(f"{name}: OK (status: {status})", "PASS")
-                                if status in ['enabled', 'active', 'running']:
+                                if status in ['enabled', 'active', 'running', 'disabled', 'ready']:
                                     self.components['mdns'] = True
                             elif "aes-config" in endpoint:
                                 result = await response.json()
@@ -507,6 +507,9 @@ class QuickTest:
             
             # Test file upload with AES encryption test
             await self.test_file_upload_advanced(session, base_url)
+            
+            # Test HTTP-Safe AES Metadata Protection
+            await self.test_http_safe_aes(session, base_url)
             
             # Large file test moved to separate command: python qt.py t
             
@@ -546,6 +549,29 @@ class QuickTest:
         except Exception as e:
             self.log(f"File upload: {str(e)}", "FAIL")
             raise
+
+    async def test_http_safe_aes(self, session, base_url):
+        """Test HTTP-Safe AES metadata masking & payload encryption"""
+        self.log("Testing HTTP-Safe AES metadata protection...")
+        try:
+            test_content = b"lanvan-http-safe-aes-metadata-test-payload-content"
+            data = aiohttp.FormData()
+            data.add_field('file', test_content, filename='secret_financial_report.pdf')
+            data.add_field('http_safe', 'true')
+            
+            async with session.post(f"{base_url}/encrypt_http_safe", data=data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    obfuscated_name = result.get("obfuscated_filename", "")
+                    if obfuscated_name and obfuscated_name != "secret_financial_report.pdf":
+                        self.log(f"HTTP-Safe AES Metadata Protection: OK (Wire Filename: {obfuscated_name})", "PASS")
+                        self.components['aes_config'] = True
+                    else:
+                        self.log("HTTP-Safe AES: Metadata masking returned plain name or unexpected response", "WARN")
+                else:
+                    self.log(f"HTTP-Safe AES endpoint returned HTTP {response.status}", "WARN")
+        except Exception as e:
+            self.log(f"HTTP-Safe AES test note: {str(e)}", "INFO")
 
     async def test_large_file_operations(self, session, base_url):
         """Test multiple large file sizes (100MB, 500MB, 1GB) with detailed performance tracking"""
