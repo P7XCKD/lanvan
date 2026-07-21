@@ -53,8 +53,6 @@ function updateViewModeDOM() {
   const fileTableHead = document.getElementById("fileTableHead");
   const listBtn = document.getElementById("listViewBtn");
   const gridBtn = document.getElementById("gridViewBtn");
-  const listBtnSel = document.getElementById("listViewBtnSel");
-  const gridBtnSel = document.getElementById("gridViewBtnSel");
 
   const switcherPills = document.querySelectorAll(".view-switcher-pill");
   switcherPills.forEach(pill => {
@@ -73,8 +71,6 @@ function updateViewModeDOM() {
 
   if (listBtn) listBtn.classList.toggle("active", viewMode === "list");
   if (gridBtn) gridBtn.classList.toggle("active", viewMode === "grid");
-  if (listBtnSel) listBtnSel.classList.toggle("active", viewMode === "list");
-  if (gridBtnSel) gridBtnSel.classList.toggle("active", viewMode === "grid");
 }
 
 const connectionTargets = {
@@ -484,7 +480,7 @@ function renderDirectory() {
   const fileList = document.getElementById("nasFileList");
   if (!fileList) return;
   fileList.innerHTML = "";
-  const panelTitle = document.getElementById("filePanelTitle");
+  const panelTitle = document.getElementById("desktopPanelTitle");
   const panelMeta = document.getElementById("filePanelMeta");
   if (panelTitle) {
     panelTitle.textContent = activeTab === "recent" ? "Recent" : activeTab === "starred" ? "Starred" : "My files";
@@ -1185,26 +1181,6 @@ function toggleDarkMode() {
   document.documentElement.setAttribute("data-theme", nextTheme);
 }
 
-function toggleAesState(fromTop) {
-  const aesToggle = document.getElementById("aesToggle");
-  const topAesToggle = document.getElementById("topAesToggle");
-
-  let enabled = true;
-  if (fromTop && topAesToggle) {
-    enabled = topAesToggle.checked;
-    if (aesToggle) aesToggle.checked = enabled;
-  } else if (aesToggle) {
-    enabled = aesToggle.checked;
-    if (topAesToggle) topAesToggle.checked = enabled;
-  }
-
-  const status = document.getElementById("aesStatus");
-  if (status) {
-    status.textContent = enabled
-      ? "Encrypted sharing is on for file and clipboard transfers."
-      : "AES is off for this preview session.";
-  }
-}
 
 function setConnectMode(mode) {
   connectMode = mode;
@@ -1232,6 +1208,95 @@ function openSettingsDialog() {
 function closeSettingsDialog() {
   const dialog = document.getElementById("settingsDialog");
   if (dialog) dialog.style.display = "none";
+}
+
+function openRenameModal() {
+  closeContextMenu();
+  const modal = document.getElementById("renameModal");
+  const input = document.getElementById("renameInput");
+  if (selectedItems.length === 1 && input) {
+    input.value = selectedItems[0].name;
+  }
+  if (modal) modal.style.display = "flex";
+}
+
+function closeRenameModal() {
+  const modal = document.getElementById("renameModal");
+  if (modal) modal.style.display = "none";
+}
+
+function submitRename() {
+  const input = document.getElementById("renameInput");
+  if (input && selectedItems.length === 1) {
+    const newName = input.value.trim();
+    if (newName) {
+      selectedItems[0].name = newName;
+      renderDirectory();
+    }
+  }
+  closeRenameModal();
+}
+
+function openNewFolderModal() {
+  closeContextMenu();
+  const modal = document.getElementById("folderModal");
+  const input = document.getElementById("folderNameInput");
+  if (input) input.value = "";
+  if (modal) modal.style.display = "flex";
+}
+
+function closeFolderModal() {
+  const modal = document.getElementById("folderModal");
+  if (modal) modal.style.display = "none";
+}
+
+function submitNewFolder() {
+  const input = document.getElementById("folderNameInput");
+  const name = input ? input.value.trim() : "";
+  if (name) {
+    const items = getCurrentDirectoryItems();
+    items.push({ name, kind: "Folder", size: "--", modified: "Just now", isStarred: false });
+    renderDirectory();
+  }
+  closeFolderModal();
+}
+
+function openMoveModal() {
+  closeContextMenu();
+  const modal = document.getElementById("moveModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function closeMoveModal() {
+  const modal = document.getElementById("moveModal");
+  if (modal) modal.style.display = "none";
+}
+
+function submitMove() {
+  closeMoveModal();
+  renderDirectory();
+}
+
+function openPreviewModal(item) {
+  closeContextMenu();
+  const modal = document.getElementById("previewModal");
+  const title = document.getElementById("previewTitle");
+  const body = document.getElementById("previewBody");
+  if (title && item) title.textContent = item.name;
+  if (body && item) {
+    body.innerHTML = `<div style="text-align: center; color: var(--text-muted);">
+      <i data-lucide="${item.kind === 'Folder' ? 'folder' : 'file-text'}" style="width: 48px; height: 48px; margin-bottom: 0.5rem; color: var(--primary);"></i>
+      <p style="margin: 0; font-size: 0.95rem; font-weight: 650; color: var(--text-color);">${item.name}</p>
+      <p style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">${item.size || '--'} • ${item.modified || 'Recent'}</p>
+    </div>`;
+    if (window.lucide) lucide.createIcons();
+  }
+  if (modal) modal.style.display = "flex";
+}
+
+function closePreviewModal() {
+  const modal = document.getElementById("previewModal");
+  if (modal) modal.style.display = "none";
 }
 
 function renderQrPreview(value) {
@@ -1289,6 +1354,10 @@ function showMobileUploadMenu(event) {
 
 function switchView(tab) {
   activeTab = tab;
+  selectedItems = [];
+  selectedClipboardItems = [];
+  closeContextMenu();
+  updateActionBar();
 
   const fileView = document.getElementById("fileView");
   const clipboardView = document.getElementById("clipboardView");
