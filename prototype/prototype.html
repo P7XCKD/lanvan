@@ -287,12 +287,6 @@
 
         </main>
 
-        <!-- Floating Action Button (FAB) - Hidden on desktop layout, visible on mobile -->
-        <button class="m3-fab" id="mainFab" onclick="showMobileUploadMenu(event)">
-          <i data-lucide="plus" style="width:18px;height:18px;"></i>
-          <span id="fabText">Add</span>
-        </button>
-
         <!-- Bottom Navigation Bar - Hidden on desktop layout, visible on mobile -->
         <nav class="bottom-nav">
           <div class="nav-item active" id="navItemFile" onclick="switchView('file')">
@@ -301,11 +295,33 @@
             </div>
             <span>Files</span>
           </div>
+
           <div class="nav-item" id="navItemClipboard" onclick="switchView('clipboard')">
             <div class="nav-item-icon-wrapper">
               <i data-lucide="clipboard" style="width:20px;height:20px;"></i>
             </div>
             <span>Clipboard</span>
+          </div>
+
+          <!-- YouTube-style Circular (+) Button -->
+          <div class="yt-nav-add" onclick="showMobileUploadMenu(event)" title="Add new item">
+            <button class="yt-add-btn" id="ytNavAddBtn">
+              <i data-lucide="plus" style="width:22px;height:22px;"></i>
+            </button>
+          </div>
+
+          <div class="nav-item" id="navItemRecent" onclick="switchView('recent')">
+            <div class="nav-item-icon-wrapper">
+              <i data-lucide="clock-3" style="width:20px;height:20px;"></i>
+            </div>
+            <span>Recent</span>
+          </div>
+
+          <div class="nav-item" id="navItemStarred" onclick="switchView('starred')">
+            <div class="nav-item-icon-wrapper">
+              <i data-lucide="star" style="width:20px;height:20px;"></i>
+            </div>
+            <span>Starred</span>
           </div>
         </nav>
       </div>
@@ -313,16 +329,31 @@
 
   </div>
 
+  <!-- Animated Mobile Add Bottom Sheet -->
+  <div id="mobileAddSheetOverlay" class="mobile-sheet-overlay" onclick="closeMobileAddSheet()">
+    <div class="mobile-add-sheet" onclick="event.stopPropagation()">
+      <div class="sheet-handle-bar"></div>
+      <div class="sheet-header">Create & Upload</div>
+      <div class="sheet-actions">
+        <button class="sheet-action-item" onclick="closeMobileAddSheet(); triggerFileInput('file');">
+          <div class="sheet-action-icon"><i data-lucide="file-up" style="width:18px;height:18px;"></i></div>
+          <span>File upload</span>
+        </button>
+        <button class="sheet-action-item" onclick="closeMobileAddSheet(); triggerFileInput('folder');">
+          <div class="sheet-action-icon"><i data-lucide="folder-up" style="width:18px;height:18px;"></i></div>
+          <span>Folder upload</span>
+        </button>
+        <button class="sheet-action-item" onclick="closeMobileAddSheet(); openNewFolderDialog();">
+          <div class="sheet-action-icon"><i data-lucide="folder-plus" style="width:18px;height:18px;"></i></div>
+          <span>New folder</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Custom Context Menu Markup -->
   <div id="contextMenu" class="custom-context-menu">
     <div id="genericMenuOptions">
-      <div class="context-item" onclick="openNewFolderDialog()">
-        <div class="context-item-left">
-          <i data-lucide="folder-plus"></i>
-          <span>New folder</span>
-        </div>
-        <span class="context-shortcut">Alt+C then F</span>
-      </div>
       <div class="context-item" onclick="triggerFileInput('file')">
         <div class="context-item-left">
           <i data-lucide="file-up"></i>
@@ -336,6 +367,13 @@
           <span>Folder upload</span>
         </div>
         <span class="context-shortcut">Alt+C then I</span>
+      </div>
+      <div class="context-item" onclick="openNewFolderDialog()">
+        <div class="context-item-left">
+          <i data-lucide="folder-plus"></i>
+          <span>New folder</span>
+        </div>
+        <span class="context-shortcut">Alt+C then F</span>
       </div>
     </div>
     <div id="itemMenuOptions" style="display:none;">
@@ -469,22 +507,14 @@
   <div id="moveFileDialog" class="m3-dialog-overlay">
     <div class="m3-dialog"
       style="max-width: 520px; width: 90%; display: flex; flex-direction: column; gap: 0.85rem; padding: 1.5rem;">
-      <div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; width: 100%; min-width: 0;">
         <div class="dialog-title" id="moveDialogTitle"
-          style="font-size: 1.25rem; font-weight: 700; color: var(--text-color); margin-bottom: 0.25rem;">Move items
-        </div>
-        <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">
-          <span>Current location:</span>
-          <span id="moveCurrentLoc"
-            style="border: 1px solid var(--border-color); border-radius: 6px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 0.25rem; font-weight: 600;">
-            <i data-lucide="folder" style="width: 13px; height: 13px; color: var(--primary);"></i>
-            <span id="moveCurrentLocName">Home</span>
-          </span>
+          style="font-size: 1.25rem; font-weight: 700; color: var(--text-color); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Move items
         </div>
       </div>
 
       <button id="movePrevBtn" onclick="navigateMoveUp()"
-        style="display: flex; align-items: center; gap: 0.35rem; border: none; background: transparent; color: var(--primary); font-size: 0.82rem; font-weight: 700; cursor: pointer; padding: 0.25rem 0; align-self: flex-start;">
+        style="display: none; align-items: center; gap: 0.35rem; border: none; background: transparent; color: var(--primary); font-size: 0.82rem; font-weight: 700; cursor: pointer; padding: 0.15rem 0; align-self: flex-start;">
         <i data-lucide="arrow-left" style="width: 16px; height: 16px;"></i>
         <span>Previous</span>
       </button>
@@ -585,64 +615,6 @@
 
       <div class="dialog-actions" style="margin-top: 1.25rem;">
         <button class="dialog-btn dialog-btn-primary" onclick="closeSettingsDialog()">Done</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Rename Modal -->
-  <div id="renameModal" class="m3-modal-overlay" style="display: none;">
-    <div class="m3-modal-card">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-        <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-color);">Rename Item</h3>
-        <button class="btn-icon" onclick="closeRenameModal()"><i data-lucide="x"
-            style="width: 16px; height: 16px;"></i></button>
-      </div>
-      <input type="text" id="renameInput" class="m3-input"
-        style="width: 100%; padding: 0.65rem 0.85rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--toggle-bg); color: var(--text-color); font-size: 0.9rem; box-sizing: border-box;"
-        placeholder="Enter new name">
-      <div class="dialog-actions" style="margin-top: 1.25rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
-        <button class="m3-secondary-btn" onclick="closeRenameModal()">Cancel</button>
-        <button class="m3-primary-btn" onclick="submitRename()">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- New Folder Modal -->
-  <div id="folderModal" class="m3-modal-overlay" style="display: none;">
-    <div class="m3-modal-card">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-        <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-color);">New Folder</h3>
-        <button class="btn-icon" onclick="closeFolderModal()"><i data-lucide="x"
-            style="width: 16px; height: 16px;"></i></button>
-      </div>
-      <input type="text" id="folderNameInput" class="m3-input"
-        style="width: 100%; padding: 0.65rem 0.85rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--toggle-bg); color: var(--text-color); font-size: 0.9rem; box-sizing: border-box;"
-        placeholder="Folder name">
-      <div class="dialog-actions" style="margin-top: 1.25rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
-        <button class="m3-secondary-btn" onclick="closeFolderModal()">Cancel</button>
-        <button class="m3-primary-btn" onclick="submitNewFolder()">Create</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Move Modal -->
-  <div id="moveModal" class="m3-modal-overlay" style="display: none;">
-    <div class="m3-modal-card">
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-        <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-color);">Move Item</h3>
-        <button class="btn-icon" onclick="closeMoveModal()"><i data-lucide="x"
-            style="width: 16px; height: 16px;"></i></button>
-      </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0 0 1rem 0;">Select target folder location:</p>
-      <select id="moveTargetSelect"
-        style="width: 100%; padding: 0.65rem 0.85rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--toggle-bg); color: var(--text-color); font-size: 0.9rem; box-sizing: border-box;">
-        <option value="">My files (Root)</option>
-        <option value="Documents">Documents</option>
-        <option value="Photos">Photos</option>
-      </select>
-      <div class="dialog-actions" style="margin-top: 1.25rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
-        <button class="m3-secondary-btn" onclick="closeMoveModal()">Cancel</button>
-        <button class="m3-primary-btn" onclick="submitMove()">Move</button>
       </div>
     </div>
   </div>

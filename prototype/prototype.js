@@ -414,6 +414,11 @@ function renderQuickAccess() {
 
 function openRowMenu(event, name, type) {
   event.stopPropagation();
+
+  // Capture button bounding rect BEFORE renderDirectory re-renders DOM elements
+  const btn = event.currentTarget;
+  const rect = btn && btn.getBoundingClientRect ? btn.getBoundingClientRect() : { left: 100, top: 100, bottom: 130, right: 130 };
+
   closeContextMenu();
 
   // If clicked item is not in current selection, select only this item
@@ -429,8 +434,8 @@ function openRowMenu(event, name, type) {
 
   const isSingle = selectedItems.length === 1;
   const targetName = isSingle ? selectedItems[0] : name;
-  const item = getCurrentDirectoryItems().find(i => i.name === targetName) || 
-               getAllItems().find(i => i.name === targetName);
+  const item = getCurrentDirectoryItems().find(i => i.name === targetName) ||
+    getAllItems().find(i => i.name === targetName);
 
   // Hide single-item-only options like Rename if multiple items selected
   const renameOption = document.querySelector("#itemMenuOptions .context-item[onclick*='openRenameModal']");
@@ -449,7 +454,6 @@ function openRowMenu(event, name, type) {
     starIcon.style.stroke = item.starred ? "var(--yellow)" : "currentColor";
   }
 
-  const rect = event.currentTarget.getBoundingClientRect();
   const contextMenu = document.getElementById("contextMenu");
   if (!contextMenu) return;
 
@@ -459,25 +463,27 @@ function openRowMenu(event, name, type) {
   const menuHeight = contextMenu.offsetHeight || 180;
   const menuWidth = contextMenu.offsetWidth || 170;
 
-  let left = rect.left - 130;
-  let top = rect.bottom + 4;
+  let left = rect.right - menuWidth;
+  if (left < 10) left = rect.left;
+  if (left + menuWidth > window.innerWidth - 10) {
+    left = window.innerWidth - menuWidth - 10;
+  }
 
-  if (top + menuHeight > window.innerHeight) {
-    top = Math.max(10, rect.top - menuHeight - 4);
+  let top = rect.bottom + 4;
+  if (top + menuHeight > window.innerHeight - 10) {
+    top = rect.top - menuHeight - 4;
   }
-  if (left + menuWidth > window.innerWidth) {
-    left = Math.max(10, window.innerWidth - menuWidth - 10);
-  }
-  if (left < 10) left = 10;
+  if (top < 10) top = 10;
 
   contextMenu.style.left = left + "px";
   contextMenu.style.top = top + "px";
+  console.log(`[MENU] Opened row menu at left: ${left}px, top: ${top}px for item '${name}'`);
 }
 
 function handleMenuStarToggle() {
   if (selectedItems.length === 1) {
-    const item = getCurrentDirectoryItems().find(i => i.name === selectedItems[0]) || 
-                 getAllItems().find(i => i.name === selectedItems[0]);
+    const item = getCurrentDirectoryItems().find(i => i.name === selectedItems[0]) ||
+      getAllItems().find(i => i.name === selectedItems[0]);
     if (item) {
       toggleStar(item.name, item.parentPath || currentPath.join("/"));
     }
@@ -525,7 +531,7 @@ function renderBreadcrumbs() {
 function renderDirectory() {
   const quickContainer = document.getElementById("quickAccessContainer");
   if (quickContainer) {
-    quickContainer.style.display = (activeTab === "recent" || activeTab === "starred") ? "none" : "grid";
+    quickContainer.style.display = (activeTab === "recent" || activeTab === "starred" || currentPath.length > 1) ? "none" : "grid";
   }
 
   renderBreadcrumbs();
@@ -536,11 +542,7 @@ function renderDirectory() {
   const fileList = document.getElementById("nasFileList");
   if (!fileList) return;
   fileList.innerHTML = "";
-  const panelTitle = document.getElementById("desktopPanelTitle");
   const panelMeta = document.getElementById("filePanelMeta");
-  if (panelTitle) {
-    panelTitle.textContent = activeTab === "recent" ? "Recent" : activeTab === "starred" ? "Starred" : "My files";
-  }
   if (panelMeta) {
     panelMeta.textContent = activeTab === "recent"
       ? "Recently changed items"
@@ -849,6 +851,7 @@ function submitNewFolder() {
   const name = document.getElementById("newFolderNameInput").value.trim() || "Untitled folder";
   if (isCreatingFolderInMove) {
     const target = moveCurrentPath.join("/");
+    console.log(`[FOLDER] Creating new folder '${name}' inside Move target path: '${target}'`);
     if (!db[target]) db[target] = [];
     db[target].push({ name: name, type: "folder", itemsCount: 0, modified: "Today", starred: false });
     db[target + "/" + name] = [];
@@ -857,6 +860,7 @@ function submitNewFolder() {
     renderMoveFolderContents();
   } else {
     const pathStr = currentPath.join("/");
+    console.log(`[FOLDER] Creating new folder '${name}' inside active directory path: '${pathStr}'`);
     if (!db[pathStr]) db[pathStr] = [];
     db[pathStr].push({ name: name, type: "folder", itemsCount: 0, modified: "Today", starred: false });
     db[pathStr + "/" + name] = [];
@@ -1010,12 +1014,29 @@ function clearSelection() {
 
 function deleteSelected() {
   if (selectedItems.length === 0) return;
-  if (confirm(`Delete ${selectedItems.length} selected items?`)) {
-    const pathStr = currentPath.join("/");
-    if (db[pathStr]) {
-      db[pathStr] = db[pathStr].filter(item => !selectedItems.includes(item.name));
-      clearSelection();
-    }
+  console.log("[DELETE] Attempting to delete items:", selectedItems);
+  if (confirm(`Delete ${selectedItems.length} selected item(s)?`)) {
+    selectedItems.forEach(name => {
+      for (const [folderPath, itemsList] of Object.entries(db)) {
+        if (!Array.isArray(itemsList)) continue;
+        const idx = itemsList.findIndex(entry => entry && entry.name === name);
+        if (idx !== -1) {
+          const [deleted] = itemsList.splice(idx, 1);
+          console.log(`[DELETE] Deleted item '${name}' from '${folderPath}'`);
+          if (deleted && deleted.type === "folder") {
+            const oldFolderPath = folderPath + "/" + name;
+            Object.keys(db).forEach(k => {
+              if (k === oldFolderPath || k.startsWith(oldFolderPath + "/")) {
+                delete db[k];
+                console.log(`[DELETE] Cleaned up folder sub-key: '${k}'`);
+              }
+            });
+          }
+        }
+      }
+    });
+    clearSelection();
+    console.log("[DELETE] Delete operation completed successfully.");
   }
 }
 
@@ -1027,29 +1048,45 @@ function downloadSelected() {
 
 let moveCurrentPath = ["Home"];
 let moveTargetFolder = "Home";
+let itemsToMove = [];
 
 function openMoveModal() {
-  if (selectedItems.length === 0) return;
+  const targets = selectedItems.map(s => typeof s === "string" ? s : (s && s.name ? s.name : "")).filter(Boolean);
+  if (targets.length === 0) {
+    console.warn("[MOVE] Cannot open Move dialog: no items selected");
+    return;
+  }
+
+  itemsToMove = [...targets];
+  console.log("[MOVE] Opening Move dialog for targets:", itemsToMove);
+  closeContextMenu();
   const titleNode = document.getElementById("moveDialogTitle");
   if (titleNode) {
-    titleNode.textContent = selectedItems.length === 1
-      ? `Move ${selectedItems[0]}`
-      : `Move ${selectedItems.length} items`;
+    titleNode.textContent = itemsToMove.length === 1
+      ? `Move ${itemsToMove[0]}`
+      : `Move ${itemsToMove.length} items`;
   }
 
   moveCurrentPath = [...currentPath];
   moveTargetFolder = moveCurrentPath.join("/");
   renderMoveFolderContents();
-  document.getElementById("moveFileDialog").style.display = "flex";
+  const dialog = document.getElementById("moveFileDialog");
+  if (dialog) dialog.style.display = "flex";
 }
 
 function closeMoveDialog() {
-  document.getElementById("moveFileDialog").style.display = "none";
+  console.log("[MOVE] Closing Move dialog");
+  itemsToMove = [];
+  const dialog = document.getElementById("moveFileDialog");
+  if (dialog) dialog.style.display = "none";
+}
+
+function closeMoveModal() {
+  closeMoveDialog();
 }
 
 function renderMoveFolderContents() {
   const optionsList = document.getElementById("moveFolderOptions");
-  const currentLocName = document.getElementById("moveCurrentLocName");
   const prevBtn = document.getElementById("movePrevBtn");
   const breadcrumbs = document.getElementById("moveBreadcrumbs");
 
@@ -1057,10 +1094,10 @@ function renderMoveFolderContents() {
 
   const currentFolderStr = moveCurrentPath.join("/");
   moveTargetFolder = currentFolderStr;
-  if (currentLocName) currentLocName.textContent = moveCurrentPath[moveCurrentPath.length - 1];
+  console.log("[MOVE] Target folder in Move modal:", currentFolderStr);
 
   if (prevBtn) {
-    prevBtn.style.visibility = moveCurrentPath.length > 1 ? "visible" : "hidden";
+    prevBtn.style.display = moveCurrentPath.length > 1 ? "flex" : "none";
   }
 
   if (breadcrumbs) {
@@ -1089,7 +1126,10 @@ function renderMoveFolderContents() {
   optionsList.innerHTML = "";
   const items = db[currentFolderStr] || [];
 
-  const visibleItems = items.filter(item => !selectedItems.includes(item.name));
+  const selectedNames = itemsToMove.length > 0
+    ? itemsToMove
+    : selectedItems.map(s => typeof s === "string" ? s : (s && s.name ? s.name : ""));
+  const visibleItems = items.filter(item => !selectedNames.includes(item.name));
 
   if (visibleItems.length === 0) {
     optionsList.innerHTML = `
@@ -1141,6 +1181,7 @@ function navigateMoveUp() {
 }
 
 function handleNewFolderInMove() {
+  console.log("[FOLDER] User clicked 'New folder' inside Move modal");
   isCreatingFolderInMove = true;
   document.getElementById("newFolderDialog").style.display = "flex";
   const input = document.getElementById("newFolderNameInput");
@@ -1150,39 +1191,74 @@ function handleNewFolderInMove() {
 }
 
 function submitMove() {
-  if (selectedItems.length === 0) return;
+  const targets = itemsToMove.length > 0
+    ? [...itemsToMove]
+    : selectedItems.map(s => typeof s === "string" ? s : (s && s.name ? s.name : "")).filter(Boolean);
 
-  const targetPathStr = moveTargetFolder;
-  const currentPathStr = currentPath.join("/");
-
-  if (targetPathStr === currentPathStr) {
+  if (targets.length === 0) {
+    console.warn("[MOVE] Move operation aborted: no targets specified");
     closeMoveDialog();
     return;
   }
 
-  if (!db[targetPathStr]) db[targetPathStr] = [];
+  const targetPathStr = moveTargetFolder;
+  console.log("[MOVE] Executing Move operation. Targets:", targets, "Destination:", targetPathStr);
 
-  selectedItems.forEach(name => {
-    const itemIndex = db[currentPathStr].findIndex(entry => entry.name === name);
-    if (itemIndex > -1) {
-      const [movedItem] = db[currentPathStr].splice(itemIndex, 1);
-      db[targetPathStr].push(movedItem);
+  targets.forEach(name => {
+    if (!name) return;
 
-      if (movedItem.type === "folder") {
-        const oldFolderPath = currentPathStr + "/" + name;
-        const newFolderPath = targetPathStr + "/" + name;
+    let sourcePath = currentPath.join("/");
+    let itemIndex = -1;
 
-        if (db[oldFolderPath]) {
-          db[newFolderPath] = db[oldFolderPath];
-          delete db[oldFolderPath];
+    if (Array.isArray(db[sourcePath])) {
+      itemIndex = db[sourcePath].findIndex(entry => entry && entry.name === name);
+    }
+
+    if (itemIndex === -1) {
+      for (const [folderPath, itemsList] of Object.entries(db)) {
+        if (!Array.isArray(itemsList)) continue;
+        const idx = itemsList.findIndex(entry => entry && entry.name === name);
+        if (idx !== -1) {
+          sourcePath = folderPath;
+          itemIndex = idx;
+          break;
         }
       }
     }
+
+    if (itemIndex > -1 && sourcePath !== targetPathStr) {
+      if (!Array.isArray(db[targetPathStr])) db[targetPathStr] = [];
+      const spliced = db[sourcePath].splice(itemIndex, 1);
+      if (spliced && spliced.length > 0) {
+        const movedItem = spliced[0];
+        movedItem.parentPath = targetPathStr;
+        db[targetPathStr].push(movedItem);
+        console.log(`[MOVE] Moved '${name}' from '${sourcePath}' -> '${targetPathStr}'`);
+
+        if (movedItem.type === "folder") {
+          const oldFolderPath = sourcePath + "/" + name;
+          const newFolderPath = targetPathStr + "/" + name;
+
+          Object.keys(db).forEach(k => {
+            if (k === oldFolderPath || k.startsWith(oldFolderPath + "/")) {
+              const suffix = k.substring(oldFolderPath.length);
+              db[newFolderPath + suffix] = db[k];
+              delete db[k];
+              console.log(`[MOVE] Re-keyed nested folder: '${k}' -> '${newFolderPath + suffix}'`);
+            }
+          });
+        }
+      }
+    } else {
+      console.warn(`[MOVE] Skipped item '${name}': source ('${sourcePath}') matches destination ('${targetPathStr}') or item not found.`);
+    }
   });
 
+  itemsToMove = [];
   closeMoveDialog();
   clearSelection();
   renderDirectory();
+  console.log("[MOVE] Move operation completed successfully.");
 }
 
 function openRenameModal() {
@@ -1200,15 +1276,21 @@ function closeRenameDialog() {
   document.getElementById("renameDialog").style.display = "none";
 }
 
+function closeRenameModal() {
+  closeRenameDialog();
+}
+
 function submitRename() {
   if (selectedItems.length !== 1) return;
   const oldName = selectedItems[0];
   const newName = document.getElementById("renameInput").value.trim();
   if (!newName || newName === oldName) {
+    console.log("[RENAME] Rename cancelled: new name empty or identical");
     closeRenameDialog();
     return;
   }
 
+  console.log(`[RENAME] Renaming '${oldName}' -> '${newName}'`);
   const pathStr = currentPath.join("/");
   const items = db[pathStr];
   if (items) {
@@ -1221,6 +1303,7 @@ function submitRename() {
         if (db[oldFolderPath]) {
           db[newFolderPath] = db[oldFolderPath];
           delete db[oldFolderPath];
+          console.log(`[RENAME] Re-keyed folder key '${oldFolderPath}' -> '${newFolderPath}'`);
         }
       }
     }
@@ -1229,6 +1312,7 @@ function submitRename() {
   closeRenameDialog();
   clearSelection();
   renderDirectory();
+  console.log("[RENAME] Rename operation completed successfully.");
 }
 
 function toggleDarkMode() {
@@ -1266,72 +1350,6 @@ function closeSettingsDialog() {
   if (dialog) dialog.style.display = "none";
 }
 
-function openRenameModal() {
-  closeContextMenu();
-  const modal = document.getElementById("renameModal");
-  const input = document.getElementById("renameInput");
-  if (selectedItems.length === 1 && input) {
-    input.value = selectedItems[0].name;
-  }
-  if (modal) modal.style.display = "flex";
-}
-
-function closeRenameModal() {
-  const modal = document.getElementById("renameModal");
-  if (modal) modal.style.display = "none";
-}
-
-function submitRename() {
-  const input = document.getElementById("renameInput");
-  if (input && selectedItems.length === 1) {
-    const newName = input.value.trim();
-    if (newName) {
-      selectedItems[0].name = newName;
-      renderDirectory();
-    }
-  }
-  closeRenameModal();
-}
-
-function openNewFolderModal() {
-  closeContextMenu();
-  const modal = document.getElementById("folderModal");
-  const input = document.getElementById("folderNameInput");
-  if (input) input.value = "";
-  if (modal) modal.style.display = "flex";
-}
-
-function closeFolderModal() {
-  const modal = document.getElementById("folderModal");
-  if (modal) modal.style.display = "none";
-}
-
-function submitNewFolder() {
-  const input = document.getElementById("folderNameInput");
-  const name = input ? input.value.trim() : "";
-  if (name) {
-    const items = getCurrentDirectoryItems();
-    items.push({ name, kind: "Folder", size: "--", modified: "Just now", isStarred: false });
-    renderDirectory();
-  }
-  closeFolderModal();
-}
-
-function openMoveModal() {
-  closeContextMenu();
-  const modal = document.getElementById("moveModal");
-  if (modal) modal.style.display = "flex";
-}
-
-function closeMoveModal() {
-  const modal = document.getElementById("moveModal");
-  if (modal) modal.style.display = "none";
-}
-
-function submitMove() {
-  closeMoveModal();
-  renderDirectory();
-}
 
 function openPreviewModal(item) {
   closeContextMenu();
@@ -1394,37 +1412,6 @@ function closeContextMenu() {
   if (clipMenu) clipMenu.style.display = "none";
 }
 
-function showMobileUploadMenu(event) {
-  event.stopPropagation();
-  const contextMenu = document.getElementById("contextMenu");
-  if (!contextMenu) return;
-  const genericOptions = document.getElementById("genericMenuOptions");
-  const itemOptions = document.getElementById("itemMenuOptions");
-  if (genericOptions) genericOptions.style.display = "block";
-  if (itemOptions) itemOptions.style.display = "none";
-
-  const btn = event.currentTarget || event.target;
-  const rect = btn.getBoundingClientRect();
-
-  contextMenu.style.display = "block";
-
-  const menuHeight = contextMenu.offsetHeight || 160;
-  const menuWidth = contextMenu.offsetWidth || 180;
-
-  let left = rect.left;
-  let top = rect.bottom + 6;
-
-  if (top + menuHeight > window.innerHeight) {
-    top = Math.max(12, rect.top - menuHeight - 6);
-  }
-  if (left + menuWidth > window.innerWidth) {
-    left = Math.max(12, window.innerWidth - menuWidth - 12);
-  }
-
-  contextMenu.style.left = left + "px";
-  contextMenu.style.top = top + "px";
-}
-
 function switchView(tab) {
   activeTab = tab;
   selectedItems = [];
@@ -1442,14 +1429,18 @@ function switchView(tab) {
 
   const navFile = document.getElementById("navItemFile");
   const navClip = document.getElementById("navItemClipboard");
+  const navRecent = document.getElementById("navItemRecent");
+  const navStarred = document.getElementById("navItemStarred");
 
   if (sideFile) sideFile.classList.toggle("active", tab === 'file');
   if (sideClip) sideClip.classList.toggle("active", tab === 'clipboard');
   if (sideRecent) sideRecent.classList.toggle("active", tab === 'recent');
   if (sideStarred) sideStarred.classList.toggle("active", tab === 'starred');
 
-  if (navFile) navFile.classList.toggle("active", tab === 'file' || tab === 'recent' || tab === 'starred');
+  if (navFile) navFile.classList.toggle("active", tab === 'file');
   if (navClip) navClip.classList.toggle("active", tab === 'clipboard');
+  if (navRecent) navRecent.classList.toggle("active", tab === 'recent');
+  if (navStarred) navStarred.classList.toggle("active", tab === 'starred');
 
   if (tab === 'file' || tab === 'recent' || tab === 'starred') {
     if (fileView) fileView.style.display = "flex";
@@ -1459,6 +1450,28 @@ function switchView(tab) {
     if (fileView) fileView.style.display = "none";
     if (clipboardView) clipboardView.style.display = "flex";
     renderClipboardHistory();
+  }
+}
+
+function showMobileUploadMenu(event) {
+  if (event) event.stopPropagation();
+  closeContextMenu();
+
+  const sheetOverlay = document.getElementById("mobileAddSheetOverlay");
+  if (sheetOverlay) {
+    sheetOverlay.classList.add("active");
+    lucide.createIcons();
+    console.log("[MOBILE] Opened animated mobile upload bottom sheet");
+  } else {
+    openNewFolderDialog();
+  }
+}
+
+function closeMobileAddSheet() {
+  const sheetOverlay = document.getElementById("mobileAddSheetOverlay");
+  if (sheetOverlay) {
+    sheetOverlay.classList.remove("active");
+    console.log("[MOBILE] Closed mobile upload bottom sheet");
   }
 }
 
