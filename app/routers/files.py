@@ -2114,6 +2114,128 @@ async def list_folders():
             "msg": "Failed to list folders"
         })
 
+@router.post("/api/files/rename", name="rename_file")
+async def rename_file(filename: str = Form(...), new_name: str = Form(...)):
+    """Rename a file with validation and path traversal prevention"""
+    # Validate source filename
+    safe_filename = secure_filename(filename)
+    if not safe_filename:
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid source filename"})
+    
+    src_path = UPLOAD_FOLDER / safe_filename
+    if not src_path.exists() or not src_path.is_file():
+        return JSONResponse(status_code=404, content={"status": "error", "msg": "Source file not found"})
+    
+    # Validate destination filename
+    safe_new = secure_filename(new_name)
+    if not safe_new:
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid target filename"})
+    
+    # Prevent path traversal
+    if '/' in safe_new or '\\' in safe_new or '..' in safe_new:
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid characters in filename"})
+    
+    # Check for duplicates
+    dst_path = UPLOAD_FOLDER / safe_new
+    if dst_path.exists():
+        return JSONResponse(status_code=409, content={"status": "error", "msg": f"'{safe_new}' already exists"})
+    
+    try:
+        os.rename(src_path, dst_path)
+        print(f"[RENAME] Renamed '{safe_filename}' to '{safe_new}'")
+        return JSONResponse(content={
+            "status": "success",
+            "msg": f"File renamed to '{safe_new}'",
+            "old_name": safe_filename,
+            "new_name": safe_new
+        })
+    except Exception as e:
+        print(f"[ERR] Rename error: {e}")
+        return JSONResponse(status_code=500, content={
+            "status": "error",
+            "msg": f"Failed to rename file: {e}"
+        })
+
+
+@router.post("/api/files/move", name="move_file")
+async def move_file(filename: str = Form(...), destination: str = Form(...)):
+    """Move a file to a different directory"""
+    safe_filename = secure_filename(filename)
+    if not safe_filename:
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid source filename"})
+    
+    src_path = UPLOAD_FOLDER / safe_filename
+    if not src_path.exists() or not src_path.is_file():
+        return JSONResponse(status_code=404, content={"status": "error", "msg": "Source file not found"})
+    
+    # Validate destination directory
+    safe_dest = secure_filename(destination)
+    if not safe_dest:
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid destination"})
+    
+    # Prevent path traversal
+    if '..' in destination or '//' in destination:
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid path"})
+    
+    # Ensure destination directory exists
+    dest_dir = UPLOAD_FOLDER
+    if destination:
+        dest_dir = UPLOAD_FOLDER / destination.strip('/')
+        dest_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Prevent overwrites
+    dst_path = dest_dir / safe_filename
+    if dst_path.exists():
+        return JSONResponse(status_code=409, content={"status": "error", "msg": f"'{safe_filename}' already exists in destination"})
+    
+    try:
+        shutil.move(str(src_path), str(dst_path))
+        print(f"[MOVE] Moved '{safe_filename}' to '{destination}'")
+        return JSONResponse(content={
+            "status": "success",
+            "msg": f"File moved to '{destination}'",
+            "filename": safe_filename,
+            "destination": destination
+        })
+    except Exception as e:
+        print(f"[ERR] Move error: {e}")
+        return JSONResponse(status_code=500, content={
+            "status": "error",
+            "msg": f"Failed to move file: {e}"
+        })
+
+
+@router.post("/api/files/mkdir", name="create_folder")
+async def create_folder(folder_name: str = Form(...)):
+    """Create a new folder"""
+    safe_name = secure_filename(folder_name)
+    if not safe_name:
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid folder name"})
+    
+    # Validate folder name
+    if '/' in safe_name or '\\' in safe_name or '..' in safe_name:
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid characters in folder name"})
+    
+    folder_path = UPLOAD_FOLDER / safe_name
+    if folder_path.exists():
+        return JSONResponse(status_code=409, content={"status": "error", "msg": f"Folder '{safe_name}' already exists"})
+    
+    try:
+        folder_path.mkdir(parents=True, exist_ok=False)
+        print(f"[MKDIR] Created folder '{safe_name}'")
+        return JSONResponse(content={
+            "status": "success",
+            "msg": f"Folder '{safe_name}' created",
+            "folder_name": safe_name
+        })
+    except Exception as e:
+        print(f"[ERR] Folder creation error: {e}")
+        return JSONResponse(status_code=500, content={
+            "status": "error",
+            "msg": f"Failed to create folder: {e}"
+        })
+
+
 @router.post("/delete-folder/{folder_name}", name="delete_folder")
 async def delete_folder(folder_name: str):
     """Delete an entire folder"""

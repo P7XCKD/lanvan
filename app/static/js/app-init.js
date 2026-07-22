@@ -640,18 +640,111 @@
 
     // --- Stub Operations (no production equivalent yet) ---
     window.submitNewFolder = function () {
-        alert("Folder creation not yet wired to backend API.");
+        var input = document.getElementById("newFolderNameInput");
+        var name = (input && input.value.trim()) || "Untitled folder";
+        if (!name) return;
+
+        var formData = new FormData();
+        formData.append("folder_name", name);
+
+        fetch("/api/files/mkdir", { method: "POST", body: formData })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.status === "success") {
+                    if (typeof showToast === "function") showToast("Folder '" + name + "' created.", 3000);
+                    if (typeof refreshFileList === "function") refreshFileList();
+                } else {
+                    if (typeof showToast === "function") showToast(data.msg || "Failed to create folder.", 4000);
+                }
+            })
+            .catch(function () {
+                if (typeof showToast === "function") showToast("Network error creating folder.", 4000);
+            });
+
+        window.closeNewFolderDialog();
     };
 
     window.submitRename = function () {
+        var oldName = prototypeSelectedItems[0] || (window._contextMenuTarget || "");
         var newName = (document.getElementById("renameInput") || {}).value;
-        if (!newName) return;
-        alert("Rename not yet wired to backend API. New name: " + newName);
+        if (!oldName || !newName || newName === oldName) {
+            window.closeRenameDialog();
+            return;
+        }
+
+        var formData = new FormData();
+        formData.append("filename", oldName);
+        formData.append("new_name", newName);
+
+        fetch("/api/files/rename", { method: "POST", body: formData })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.status === "success") {
+                    if (typeof showToast === "function") showToast("Renamed to '" + newName + "'.", 3000);
+                    if (typeof refreshFileList === "function") refreshFileList();
+                } else {
+                    if (typeof showToast === "function") showToast(data.msg || "Rename failed.", 4000);
+                }
+            })
+            .catch(function () {
+                if (typeof showToast === "function") showToast("Network error renaming file.", 4000);
+            });
+
         window.closeRenameDialog();
+        window.clearSelection();
     };
 
     window.submitMove = function () {
-        alert("Move not yet wired to backend API.");
+        var filesToMove = prototypeSelectedItems.slice();
+        if (filesToMove.length === 0) {
+            window.closeMoveDialog();
+            return;
+        }
+
+        // Move to the root directory for now (move dialog browsing would need folder list population)
+        var destination = "";
+
+        var completed = 0;
+        var failed = [];
+
+        function moveNext(index) {
+            if (index >= filesToMove.length) {
+                if (failed.length > 0) {
+                    if (typeof showToast === "function") {
+                        showToast("Moved " + completed + " file(s). " + failed.length + " failed.", 4000);
+                    }
+                } else {
+                    if (typeof showToast === "function") {
+                        showToast("Moved " + completed + " file(s) successfully.", 3000);
+                    }
+                }
+                window.clearSelection();
+                if (typeof refreshFileList === "function") refreshFileList();
+                return;
+            }
+
+            var filename = filesToMove[index];
+            var formData = new FormData();
+            formData.append("filename", filename);
+            formData.append("destination", destination);
+
+            fetch("/api/files/move", { method: "POST", body: formData })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.status === "success") {
+                        completed++;
+                    } else {
+                        failed.push(filename);
+                    }
+                    moveNext(index + 1);
+                })
+                .catch(function () {
+                    failed.push(filename);
+                    moveNext(index + 1);
+                });
+        }
+
+        moveNext(0);
         window.closeMoveDialog();
     };
 
