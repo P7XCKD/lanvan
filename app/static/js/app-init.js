@@ -312,6 +312,9 @@
         var navFile = document.getElementById("navItemFile");
         var navClip = document.getElementById("navItemClipboard");
 
+        // Clear selection when switching views — selection shouldn't survive tab changes
+        window.clearSelection();
+
         if (tab === "clipboard") {
             if (fileView) fileView.style.display = "none";
             if (clipView) clipView.style.display = "flex";
@@ -404,11 +407,27 @@
 
     // --- File Operations ---
     window.downloadSelected = function () {
-        if (prototypeSelectedItems.length === 0) return;
-        for (var i = 0; i < prototypeSelectedItems.length; i++) {
-            downloadFileByName(prototypeSelectedItems[i]);
+        var items = prototypeSelectedItems.slice();
+        if (items.length === 0) return;
+
+        var index = 0;
+        function downloadNext() {
+            if (index >= items.length) {
+                if (typeof showToast === "function") {
+                    showToast("Downloaded " + items.length + " file(s).", 3000);
+                }
+                window.clearSelection();
+                return;
+            }
+            downloadFileByName(items[index]);
+            index++;
+            if (index < items.length) {
+                setTimeout(downloadNext, 300); // 300ms delay between downloads
+            } else {
+                downloadNext(); // Last one — no delay needed
+            }
         }
-        window.clearSelection();
+        downloadNext();
     };
 
     window.deleteSelected = function () {
@@ -709,6 +728,7 @@
 
         function moveNext(index) {
             if (index >= filesToMove.length) {
+                // All done — show result, close dialog, refresh
                 if (failed.length > 0) {
                     if (typeof showToast === "function") {
                         showToast("Moved " + completed + " file(s). " + failed.length + " failed.", 4000);
@@ -720,6 +740,7 @@
                 }
                 window.clearSelection();
                 if (typeof refreshFileList === "function") refreshFileList();
+                window.closeMoveDialog();
                 return;
             }
 
@@ -745,7 +766,7 @@
         }
 
         moveNext(0);
-        window.closeMoveDialog();
+        // Dialog closes after all moves complete (inside moveNext completion handler)
     };
 
     window.navigateMoveUp = function () {
