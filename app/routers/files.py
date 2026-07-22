@@ -2123,8 +2123,19 @@ async def rename_file(filename: str = Form(...), new_name: str = Form(...)):
     if not safe_filename:
         return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid source filename"})
     
+    # Search for the file in root and all subdirectories
     src_path = UPLOAD_FOLDER / safe_filename
-    if not src_path.exists() or not src_path.is_file():
+    if not src_path.exists():
+        # Search subdirectories
+        found = False
+        for subdir_file in UPLOAD_FOLDER.rglob(safe_filename):
+            if subdir_file.is_file():
+                src_path = subdir_file
+                found = True
+                break
+        if not found:
+            return JSONResponse(status_code=404, content={"status": "error", "msg": "Source file not found"})
+    elif not src_path.is_file():
         return JSONResponse(status_code=404, content={"status": "error", "msg": "Source file not found"})
     
     # Validate destination filename
@@ -2165,8 +2176,18 @@ async def move_file(filename: str = Form(...), destination: str = Form(...)):
     if not safe_filename:
         return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid source filename"})
     
+    # Search for the file in root and all subdirectories
     src_path = UPLOAD_FOLDER / safe_filename
-    if not src_path.exists() or not src_path.is_file():
+    if not src_path.exists():
+        found = False
+        for subdir_file in UPLOAD_FOLDER.rglob(safe_filename):
+            if subdir_file.is_file():
+                src_path = subdir_file
+                found = True
+                break
+        if not found:
+            return JSONResponse(status_code=404, content={"status": "error", "msg": "Source file not found"})
+    elif not src_path.is_file():
         return JSONResponse(status_code=404, content={"status": "error", "msg": "Source file not found"})
     
     # Validate destination directory
