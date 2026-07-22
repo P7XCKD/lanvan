@@ -15,21 +15,30 @@
 (function () {
     "use strict";
 
+    // GUARD: Prevent double-wrapping if script loads multiple times
+    if (window.__appInitLoaded) {
+        console.log("[app-init] Already loaded — skipping duplicate initialization");
+        return;
+    }
+    window.__appInitLoaded = true;
+
     // =========================================================================
     // 1. RENDERING WRAPPERS — Sync prototype containers with production data
     // =========================================================================
 
     // Wrap updateFileDisplay() — called by production refreshFileList() and auto-refresh
-    if (typeof updateFileDisplay === "function") {
+    // Guard: only wrap if not already wrapped by a previous partial load
+    if (typeof updateFileDisplay === "function" && !updateFileDisplay.__prototypeWrapped) {
         const _originalUpdateFileDisplay = updateFileDisplay;
         updateFileDisplay = function (files) {
             _originalUpdateFileDisplay(files);
             renderPrototypeFileList(files);
         };
+        updateFileDisplay.__prototypeWrapped = true;
     }
 
     // Wrap refreshClipboardHistory() — called by production WebSocket and manual refresh
-    if (typeof refreshClipboardHistory === "function") {
+    if (typeof refreshClipboardHistory === "function" && !refreshClipboardHistory.__prototypeWrapped) {
         const _originalRefreshClipboardHistory = refreshClipboardHistory;
         refreshClipboardHistory = async function () {
             await _originalRefreshClipboardHistory();
@@ -37,6 +46,7 @@
             // Production stores data in #clipboardHistoryContent DOM
             setTimeout(() => syncPrototypeClipboard(), 100);
         };
+        refreshClipboardHistory.__prototypeWrapped = true;
     }
 
     // =========================================================================
@@ -403,12 +413,10 @@
 
     window.deleteSelected = function () {
         if (prototypeSelectedItems.length === 0) return;
-        if (!confirm("Delete " + prototypeSelectedItems.length + " selected item(s)?")) return;
-        // Production clearAllFiles handles bulk deletion. For individual, call clear.
-        if (typeof clearAllFiles === "function") {
-            // NOTE: clearAllFiles removes ALL files. For per-file delete, backend API needed.
-            // This is a stub — production currently has no per-file delete endpoint.
-            alert("Per-file deletion not yet available via API. Use Clear History instead.");
+        if (typeof showToast === "function") {
+            showToast("Per-file deletion not yet available. This operation is safe — no files were deleted.", 4000);
+        } else {
+            alert("Per-file deletion not yet available. This operation is safe — no files were deleted.");
         }
         window.clearSelection();
     };
