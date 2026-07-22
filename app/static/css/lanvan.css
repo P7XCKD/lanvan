@@ -116,12 +116,8 @@ body {
     color: var(--text-color);
     height: 100vh;
     overflow: hidden;
-    min-height: 100vh;
-    padding: 1.5rem 1rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    transition: background-color 0.2s ease, color 0.2s ease;
+    margin: 0;
+    padding: 0;
 }
 
 /* ==========================================================================
