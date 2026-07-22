@@ -92,6 +92,10 @@
 
         // Attach click handlers (delegated would be cleaner, but prototype uses inline)
         attachListItemHandlers(container, files);
+
+        // Also render quick access cards from the same data
+        renderQuickAccess(files);
+
         if (window.lucide) lucide.createIcons();
     }
 
@@ -984,6 +988,155 @@
     }
 
     // =========================================================================
+    // 4.5 UPLOAD TOAST TRAY — Mirror production uploadQueue to prototype tray
+    // =========================================================================
+
+    function renderUploadTray() {
+        var stack = document.getElementById("uploadToastStack");
+        if (!stack) return;
+
+        var queue = window.uploadQueue || [];
+        var activeUploads = queue.filter(function (item) {
+            return item.status === "uploading" || item.status === "queued" || item.status === "processing";
+        });
+
+        if (activeUploads.length === 0) {
+            stack.classList.remove("active");
+            stack.innerHTML = "";
+            return;
+        }
+
+        stack.classList.add("active");
+        var html = "";
+
+        for (var i = 0; i < activeUploads.length; i++) {
+            var item = activeUploads[i];
+            var pct = Math.round(item.progress || 0);
+            var name = escapeHtml(item.fileName || "Unknown");
+            var speed = item.speed ? (item.speed / (1024 * 1024)).toFixed(1) + " MB/s" : "";
+            var statusText = item.status === "processing" ? "Processing..." : "Uploading";
+
+            html +=
+                '<div class="upload-toast">' +
+                '<div class="upload-toast-top">' +
+                '<div class="upload-toast-title">' +
+                '<span class="upload-toast-filename" title="' + name + '">' + name + "</span>" +
+                '<span class="upload-toast-meta">' + speed + "</span>" +
+                "</div>" +
+                '<div class="upload-toast-actions">' +
+                '<button type="button" class="upload-toast-cancel-pill" data-upload-id="' + item.id + '" title="Cancel upload">' +
+                '<i data-lucide="x"></i><span>Cancel</span>' +
+                "</button>" +
+                "</div>" +
+                "</div>" +
+                '<div class="upload-toast-bottom">' +
+                "<span>" + statusText + "</span>" +
+                '<span class="upload-toast-status">' + pct + "%</span>" +
+                "</div>" +
+                '<div class="upload-toast-progress">' +
+                '<div class="upload-toast-progress-fill" style="width:' + pct + '%"></div>' +
+                "</div>" +
+                "</div>";
+        }
+
+        stack.innerHTML = html;
+
+        // Wire cancel buttons
+        var cancelBtns = stack.querySelectorAll(".upload-toast-cancel-pill");
+        for (var j = 0; j < cancelBtns.length; j++) {
+            cancelBtns[j].addEventListener("click", function (e) {
+                var uploadId = this.getAttribute("data-upload-id");
+                if (uploadId && typeof cancelUpload === "function") {
+                    cancelUpload(parseInt(uploadId));
+                }
+            });
+        }
+
+        if (window.lucide) lucide.createIcons();
+    }
+
+    // Poll uploadQueue for changes every 500ms while uploads are active
+    var uploadTrayInterval = null;
+    function startUploadTrayPolling() {
+        if (uploadTrayInterval) return;
+        uploadTrayInterval = setInterval(function () {
+            var queue = window.uploadQueue || [];
+            var activeCount = queue.filter(function (item) {
+                return item.status === "uploading" || item.status === "queued" || item.status === "processing";
+            }).length;
+            if (activeCount === 0) {
+                renderUploadTray(); // One final render to show completion
+                clearInterval(uploadTrayInterval);
+                uploadTrayInterval = null;
+            } else {
+                renderUploadTray();
+            }
+        }, 500);
+    }
+
+    // Listen for production upload events to start/stop polling
+    document.addEventListener("DOMContentLoaded", function () {
+        // Watch the upload queue via the production autoUpload/addToUploadQueue
+        // We check every time the file list renders
+        var origAddToQueue = window.addToUploadQueue;
+        if (typeof origAddToQueue === "function") {
+            window.addToUploadQueue = function (files) {
+                origAddToQueue(files);
+                startUploadTrayPolling();
+            };
+        }
+    });
+
+    // =========================================================================
+    // 5.5 QUICK ACCESS CARDS — Show recent files from production data
+    // =========================================================================
+
+    function renderQuickAccess(files) {
+        var container = document.getElementById("quickAccessContainer");
+        if (!container || !files || files.length === 0) {
+            if (container) container.innerHTML = "";
+            return;
+        }
+
+        // Take up to 4 recent files
+        var recentFiles = files.slice(0, 4);
+        var html = "";
+        for (var i = 0; i < recentFiles.length; i++) {
+            var name = recentFiles[i];
+            var ext = name.split(".").pop().toLowerCase();
+            var info = getFileTypeInfo(name, ext);
+            var escName = escapeHtml(name);
+
+            html +=
+                '<div class="quick-card" data-filename="' + escName + '">' +
+                '<div class="quick-icon ' + info.avatarClass + '"><i data-lucide="' + info.iconName + '"></i></div>' +
+                '<div class="quick-copy" style="flex:1;min-width:0;">' +
+                '<div class="quick-title">' + escName + "</div>" +
+                '<div class="quick-subtitle">File</div>' +
+                "</div>" +
+                "</div>";
+        }
+        container.innerHTML = html;
+
+        // Click to select
+        var cards = container.querySelectorAll(".quick-card");
+        for (var k = 0; k < cards.length; k++) {
+            cards[k].addEventListener("click", function () {
+                var fname = this.getAttribute("data-filename");
+                if (prototypeSelectedItems.indexOf(fname) === -1) {
+                    prototypeSelectedItems = [fname];
+                }
+                // Scroll to highlight
+                var listItem = document.querySelector('#nasFileList [data-filename="' + fname.replace(/"/g, '"') + '"]');
+                if (listItem) listItem.scrollIntoView({ behavior: "smooth", block: "center" });
+                updateSelectionToolbar();
+            });
+        }
+
+        if (window.lucide) lucide.createIcons();
+    }
+
+    // =========================================================================
     // 6. INITIALIZATION — Kick off on DOM ready
     // =========================================================================
 
@@ -991,18 +1144,16 @@
         setupDropzone();
         setupSearch();
 
-        // Initial sync — if production already rendered files server-side
+        // Initial sync — always call renderPrototypeFileList so empty state renders
         var fileGrid = document.getElementById("fileGrid");
+        var initialFiles = [];
         if (fileGrid) {
             var cards = fileGrid.querySelectorAll(".file-card .file-name");
-            if (cards.length > 0) {
-                var initialFiles = [];
-                for (var i = 0; i < cards.length; i++) {
-                    initialFiles.push(cards[i].textContent.trim());
-                }
-                renderPrototypeFileList(initialFiles);
+            for (var i = 0; i < cards.length; i++) {
+                initialFiles.push(cards[i].textContent.trim());
             }
         }
+        renderPrototypeFileList(initialFiles);
 
         // Initial clipboard sync
         if (typeof refreshClipboardHistory === "function") {
