@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
@@ -19,17 +19,29 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap"
         rel="stylesheet">
 
-    <!--  INSTANT DARK MODE - NO FLASH! -->
+    <!--  INSTANT THEME LOADER - NO FLASH! -->
     <script>
-        // Apply dark mode IMMEDIATELY before page renders to prevent flash
+        // Apply theme IMMEDIATELY before page renders to prevent flash
         (function () {
-            const savedDarkMode = localStorage.getItem('dark_mode_enabled');
-            let isDarkMode = false;  // Default to light mode
-
-            if (savedDarkMode !== null) {
-                isDarkMode = savedDarkMode === '1';
+            let themePref = localStorage.getItem('theme_preference');
+            if (themePref === null) {
+                const legacyDark = localStorage.getItem('dark_mode_enabled');
+                if (legacyDark !== null) {
+                    themePref = legacyDark === '1' ? 'dark' : 'light';
+                } else {
+                    themePref = 'system';
+                }
+                localStorage.setItem('theme_preference', themePref);
             }
-            // Removed system preference check to ensure light mode is default
+
+            let isDarkMode = true;
+            if (themePref === 'dark') {
+                isDarkMode = true;
+            } else if (themePref === 'light') {
+                isDarkMode = false;
+            } else {
+                isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }
 
             if (isDarkMode) {
                 document.documentElement.setAttribute('data-theme', 'dark');
@@ -38,8 +50,9 @@
             }
         })();
     </script>
-    <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}?v={{ cache_version }}">
-    <link rel="stylesheet" href="{{ request.url_for('static', path='css/main-styles.css') }}?v={{ cache_version }}">
+    <!-- Legacy CSS (preserved for rollback — inactive) -->
+    <!-- <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}?v={{ cache_version }}"> -->
+    <!-- <link rel="stylesheet" href="{{ request.url_for('static', path='css/main-styles.css') }}?v={{ cache_version }}"> -->
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/lanvan.css') }}?v={{ cache_version }}">
     {% block page_styles %}{% endblock %}
     <script src="{{ request.url_for('static', path='js/resource-loader.js') }}?v={{ cache_version }}"> </script>
