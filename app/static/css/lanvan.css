@@ -2340,3 +2340,565 @@ body {
 [data-theme="dark"] .m3-list-item:hover {
     background: #242528;
 }
+
+/* ==========================================================================
+   MISSING PROTOTYPE CLASSES — Added by scanner
+   ========================================================================== */
+
+/* AES card (sidebar utility) */
+.aes-card {
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--card-bg);
+    padding: 0.85rem;
+    color: var(--text-color);
+}
+
+/* App settings button */
+.app-settings-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+/* New button (sidebar) */
+.new-button {
+    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 56px;
+    padding: 0 1.35rem 0 1rem;
+    margin: 0.3rem 0 0.55rem;
+    border: none;
+    border-radius: 16px;
+    background: var(--card-bg);
+    color: var(--text-color);
+    font-weight: 700;
+    font-size: 0.92rem;
+    cursor: pointer;
+    box-shadow: var(--shadow-soft);
+    transition: box-shadow 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+
+.new-button:hover {
+    background: var(--hover-bg);
+    box-shadow: var(--shadow-lift);
+    transform: translateY(-1px);
+}
+
+/* Filter chips container */
+.filter-chips {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    overflow-x: auto;
+}
+
+/* Mobile breadcrumb back button */
+.mobile-breadcrumb-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-color);
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.mobile-breadcrumb-back:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+/* Mobile breadcrumb title */
+.mobile-breadcrumb-title {
+    min-width: 0;
+    font-size: 1.05rem;
+    font-weight: 750;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Document preview (grid view) */
+.doc-preview-sheet {
+    width: 82%;
+    height: 90%;
+    background: #ffffff;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    padding: 0.65rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.doc-preview-line {
+    height: 4px;
+    background: #e0e0e0;
+    border-radius: 2px;
+    width: 100%;
+}
+
+.doc-preview-line.short {
+    width: 55%;
+}
+
+.doc-preview-line.title {
+    height: 7px;
+    background: var(--primary);
+    width: 75%;
+}
+
+/* File card (used by app-init.js for initial sync from production) */
+.file-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.file-card .file-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--toggle-bg);
+    color: var(--primary);
+}
+
+.file-card .file-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Switch (legacy toggle) */
+.switch {
+    position: relative;
+    width: 38px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.switch input {
+    display: none;
+}
+
+.switch-track {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: var(--surface-variant);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.switch-track::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.switch input:checked+.switch-track {
+    background: var(--primary-container);
+    border-color: transparent;
+}
+
+.switch input:checked+.switch-track::after {
+    transform: translateX(16px);
+    background: var(--primary-hover);
+}
+
+/* Pill checkbox */
+.pill-checkbox {
+    background: var(--toggle-bg);
+    padding: 0.3rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.pill-checkbox input {
+    display: none;
+}
+
+.pill-checkbox-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background-color 0.2s ease;
+}
+
+.pill-checkbox input:checked+.pill-checkbox-indicator {
+    background-color: var(--primary);
+}
+
+/* Toggle switch (legacy production) */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--border-color);
+    transition: 0.3s;
+    border-radius: 24px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.toggle-switch input:checked+.slider {
+    background-color: var(--primary);
+}
+
+.toggle-switch input:checked+.slider:before {
+    transform: translateX(20px);
+}
+
+.dark-mode-slider {
+    background-color: var(--primary);
+}
+
+/* Upload mode slider */
+.upload-mode-slider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.slider-toggle {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.slider-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider-track {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--border-color);
+    transition: 0.3s;
+    border-radius: 24px;
+}
+
+.slider-track .slider-thumb {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.slider-toggle input:checked+.slider-track {
+    background-color: var(--primary);
+}
+
+.slider-toggle input:checked+.slider-track .slider-thumb {
+    transform: translateX(20px);
+}
+
+.mode-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.mode-label.active {
+    color: var(--primary);
+    opacity: 1;
+}
+
+.mode-label:not(.active) {
+    opacity: 0.5;
+}
+
+/* Upload area */
+.upload-area {
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.upload-area:hover,
+.upload-area.dragover {
+    border-color: var(--primary);
+    background: rgba(11, 87, 208, 0.04);
+}
+
+/* File preview */
+.file-preview {
+    margin-top: 1rem;
+}
+
+/* File grid (legacy production) */
+.file-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+/* File count */
+.file-count {
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+/* File manager */
+.file-manager {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Upload section */
+.upload-section {
+    margin-bottom: 1.5rem;
+}
+
+.file-upload-section {
+    margin-bottom: 1.5rem;
+}
+
+/* Network info */
+.network-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Upload queue */
+.upload-queue {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Upload item */
+.upload-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--card-bg);
+}
+
+.upload-item.uploading {
+    border-color: var(--primary);
+}
+
+.upload-item.completed {
+    opacity: 0.6;
+}
+
+.upload-item.error {
+    border-color: var(--danger);
+}
+
+.upload-item.cancelled {
+    opacity: 0.4;
+}
+
+.upload-file-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.upload-file-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.upload-file-details {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.upload-progress-section {
+    flex: 1;
+}
+
+.upload-progress-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--toggle-bg);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.upload-progress-fill {
+    height: 100%;
+    background: var(--primary);
+    border-radius: inherit;
+    transition: width 0.3s ease;
+}
+
+.upload-progress-text {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.upload-controls {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.upload-manager-btn {
+    background: var(--toggle-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.upload-cancel-btn,
+.upload-remove-btn,
+.upload-retry-btn {
+    background: transparent;
+    border: none;
+    padding: 0.3rem;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+.upload-cancel-btn:hover {
+    background: rgba(217, 48, 37, 0.12);
+    color: var(--danger);
+}
+
+/* Clipboard button */
+.clipboard-btn {
+    background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Switch button */
+.switch-btn {
+    background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Drop zone */
+.drop-zone {
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.drop-zone:hover,
+.drop-zone.dragover {
+    border-color: var(--primary);
+    background: rgba(11, 87, 208, 0.04);
+}
+
+/* No files message */
+.no-files-message {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 2rem;
+    font-style: italic;
+}
