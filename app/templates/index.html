@@ -586,20 +586,27 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         </label>
       </div>
       <div
-        style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; background: var(--toggle-bg); border-radius: 14px; border: 1px solid var(--border-color);">
-        <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+        style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; background: var(--toggle-bg); border-radius: 14px; border: 1px solid var(--border-color); gap: 1rem;">
+        <div style="display: flex; flex-direction: column; gap: 0.2rem; flex: 1;">
           <div
             style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; font-weight: 650; color: var(--text-color);">
-            <i data-lucide="moon" style="width: 16px; height: 16px; color: var(--primary);"></i>
-            <span>Dark Theme</span>
+            <i id="themeSettingIcon" data-lucide="monitor" style="width: 16px; height: 16px; color: var(--primary);"></i>
+            <span id="themeSettingTitle">System Theme</span>
           </div>
-          <span style="font-size: 0.75rem; color: var(--text-muted);">Use sleek dark mode interface</span>
+          <span id="themeSettingDesc" style="font-size: 0.75rem; color: var(--text-muted);">Follow device's theme settings</span>
         </div>
-        <label class="m3-switch" style="position: relative; display: inline-block; width: 44px; height: 24px;">
-          <input type="checkbox" id="darkThemeSettingToggle" onchange="toggleDarkMode()"
-            style="opacity: 0; width: 0; height: 0;">
-          <span class="m3-switch-slider"></span>
-        </label>
+        <div class="segmented-control" id="themeSegmentedControl">
+          <input type="radio" id="themeLight" name="themePref" value="light" onchange="window.setThemePreference('light')">
+          <label for="themeLight">Light</label>
+          
+          <input type="radio" id="themeDark" name="themePref" value="dark" onchange="window.setThemePreference('dark')">
+          <label for="themeDark">Dark</label>
+          
+          <input type="radio" id="themeSystem" name="themePref" value="system" onchange="window.setThemePreference('system')" checked>
+          <label for="themeSystem">System</label>
+          
+          <span class="segmented-control-slider"></span>
+        </div>
       </div>
     </div>
     <div class="dialog-actions" style="margin-top: 1.25rem;">

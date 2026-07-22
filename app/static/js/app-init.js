@@ -384,18 +384,26 @@
     };
 
     // --- Theme ---
+    window.setThemePreference = function (theme) {
+        localStorage.setItem("theme_preference", theme);
+        // Keep legacy dark_mode_enabled in sync
+        localStorage.setItem("dark_mode_enabled", theme === "dark" ? "1" : "0");
+        if (typeof window.applyThemePreference === "function") {
+            window.applyThemePreference(theme);
+        }
+    };
+
     window.toggleDarkMode = function () {
-        var current = document.documentElement.getAttribute("data-theme");
-        var next = current === "dark" ? "light" : "dark";
-        document.documentElement.setAttribute("data-theme", next);
-        document.body.setAttribute("data-theme", next); // Sync for production
-        localStorage.setItem("dark_mode_enabled", next === "dark" ? "1" : "0");
-
-        var prodToggle = document.getElementById("enableDarkMode");
-        if (prodToggle) prodToggle.checked = next === "dark";
-
-        var settingsToggle = document.getElementById("darkThemeSettingToggle");
-        if (settingsToggle) settingsToggle.checked = next === "dark";
+        var currentPref = localStorage.getItem("theme_preference") || "system";
+        var nextPref = "system";
+        if (currentPref === "system") {
+            nextPref = "light";
+        } else if (currentPref === "light") {
+            nextPref = "dark";
+        } else {
+            nextPref = "system";
+        }
+        window.setThemePreference(nextPref);
     };
 
     // --- Settings Dialog ---
@@ -408,10 +416,11 @@
         var aesSetting = document.getElementById("aesSettingToggle");
         if (aesProd && aesSetting) aesSetting.checked = aesProd.checked;
 
-        // Sync dark theme toggle
-        var isDark = document.documentElement.getAttribute("data-theme") === "dark";
-        var darkSetting = document.getElementById("darkThemeSettingToggle");
-        if (darkSetting) darkSetting.checked = isDark;
+        // Sync theme preferences
+        var themePref = localStorage.getItem("theme_preference") || "system";
+        if (typeof window.applyThemePreference === "function") {
+            window.applyThemePreference(themePref);
+        }
 
         dialog.style.display = "flex";
 
@@ -843,7 +852,16 @@
         if (mdnsTab) mdnsTab.classList.toggle("active", mode === "mdns");
         if (qrLanTab) qrLanTab.classList.toggle("active", mode === "ip");
         if (qrMdnsTab) qrMdnsTab.classList.toggle("active", mode === "mdns");
-        // Trigger production network info refresh
+
+        if (window._currentNetworkInfo) {
+            var url = window._currentNetworkInfo.lanIpUrl;
+            if (mode === "mdns" && window._currentNetworkInfo.networkInfo && window._currentNetworkInfo.networkInfo.mdns) {
+                url = window._currentNetworkInfo.networkInfo.mdns.url || url;
+            }
+            window._currentNetworkInfo.fullUrl = url;
+            renderSidebarQR();
+        }
+
         if (typeof updateMDNSStatus === "function") updateMDNSStatus();
     };
 
@@ -1271,8 +1289,32 @@
             }
         }
 
-        // Render QR code in sidebar
-        setTimeout(renderSidebarQR, 1000);
+        // Fetch network info to populate window._currentNetworkInfo and render QR code
+        fetch('/api/network-info')
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                var protocol = window.location.protocol;
+                var port = window.location.port;
+                var lanIp = data.lan_ip || window.location.hostname;
+                var lanIpUrl = protocol + '//' + lanIp;
+                if (port && port !== '80' && port !== '443') {
+                    lanIpUrl += ':' + port;
+                }
+                var fullUrl = lanIpUrl;
+                if (data.mdns && data.mdns.status === 'active' && data.mdns.url) {
+                    fullUrl = data.mdns.url;
+                }
+                window._currentNetworkInfo = {
+                    networkInfo: data,
+                    lanIpUrl: lanIpUrl,
+                    useMDNS: data.mdns && data.mdns.status === 'active',
+                    fullUrl: fullUrl
+                };
+                renderSidebarQR();
+            }).catch(function(err) {
+                console.error("Failed to load initial network info:", err);
+                renderSidebarQR();
+            });
 
         // Initial clipboard sync
         if (typeof refreshClipboardHistory === "function") {

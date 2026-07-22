@@ -116,6 +116,12 @@ body {
     color: var(--text-color);
     height: 100vh;
     overflow: hidden;
+    min-height: 100vh;
+    padding: 1.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* ==========================================================================
@@ -295,10 +301,13 @@ body {
     padding: 8px;
     border-radius: 12px;
     background: #ffffff;
-    display: flex;
+    display: grid;
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    grid-template-columns: repeat(9, 1fr);
+    grid-template-rows: repeat(9, 1fr);
+    gap: 3px;
 }
 
 .qr-box img {
@@ -799,11 +808,11 @@ body {
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    transition: color 0.15s ease;
+    transition: color 0.18s ease;
 }
 
 .breadcrumb-item:hover {
-    color: var(--primary-hover);
+    color: var(--primary);
     text-decoration: underline;
 }
 
@@ -818,6 +827,7 @@ body {
     font-size: 1.1rem;
     display: inline-flex;
     align-items: center;
+    opacity: 0.6;
 }
 
 /* ==========================================================================
@@ -1257,6 +1267,7 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: none !important;
 }
 
 .row-actions {
@@ -1483,7 +1494,7 @@ body {
     height: 64px;
     background: var(--card-bg);
     border-top: 1px solid var(--border-color);
-    display: none;
+    display: flex;
     /* Hidden by default on desktop */
     justify-content: space-around;
     align-items: center;
@@ -2111,7 +2122,7 @@ body {
 /* Desktop: hide bottom nav and FAB */
 @media (min-width: 550px) {
 
-    .bottom-nav,
+    body .bottom-nav,
     .m3-fab {
         display: none !important;
     }
@@ -2120,18 +2131,18 @@ body {
 /* 700px-1024px: Hide date column, keep size column */
 @media (max-width: 1024px) and (min-width: 700px) {
 
-    .file-table-head,
+    body .file-table-head,
     .m3-list:not(.grid-mode) .m3-list-item {
         grid-template-columns: minmax(0, 1fr) 110px 40px !important;
     }
 
-    .file-table-head>span:nth-child(2),
-    .item-date {
+    body .file-table-head>span:nth-child(2),
+    body .item-date {
         display: none !important;
     }
 
-    .file-table-head>span:nth-child(3),
-    .item-size {
+    body .file-table-head>span:nth-child(3),
+    body .item-size {
         display: inline-block !important;
     }
 }
@@ -2139,15 +2150,15 @@ body {
 /* 550px-699px: Hide date and size columns */
 @media (max-width: 699px) and (min-width: 550px) {
 
-    .file-table-head,
+    body .file-table-head,
     .m3-list:not(.grid-mode) .m3-list-item {
         grid-template-columns: minmax(0, 1fr) 40px !important;
     }
 
-    .file-table-head>span:nth-child(2),
-    .file-table-head>span:nth-child(3),
-    .item-date,
-    .item-size {
+    body .file-table-head>span:nth-child(2),
+    body .file-table-head>span:nth-child(3),
+    body .item-date,
+    body .item-size {
         display: none !important;
     }
 }
@@ -2158,7 +2169,7 @@ body {
         display: none !important;
     }
 
-    .file-table-head,
+    body .file-table-head,
     .m3-list:not(.grid-mode) .m3-list-item {
         grid-template-columns: minmax(0, 1fr) 140px 110px 40px;
     }
@@ -2166,7 +2177,7 @@ body {
 
 /* Max 767px: Compact breadcrumbs, 2-col quick access, hide table headers */
 @media (max-width: 767px) {
-    .nas-breadcrumbs {
+    body .nas-breadcrumbs {
         gap: 0.35rem;
         font-size: 1.05rem;
     }
@@ -2192,9 +2203,9 @@ body {
         justify-content: space-between;
     }
 
-    .file-table-head,
-    .item-date,
-    .item-size {
+    body .file-table-head,
+    body .item-date,
+    body .item-size {
         display: none !important;
     }
 
@@ -2243,15 +2254,15 @@ body {
         padding: 0.25rem 0.85rem 5rem;
     }
 
-    .desktop-panel-header {
+    body .desktop-panel-header {
         min-height: 38px;
     }
 
-    .panel-title {
+    body .panel-title {
         font-size: 1.18rem;
     }
 
-    .panel-meta {
+    body .panel-meta {
         display: none;
     }
 
@@ -2276,7 +2287,7 @@ body {
         justify-content: space-between;
     }
 
-    .file-table-head {
+    body .file-table-head {
         display: none !important;
     }
 
@@ -2285,12 +2296,12 @@ body {
         justify-content: space-between;
     }
 
-    .item-date,
-    .item-size {
+    body .item-date,
+    body .item-size {
         display: none !important;
     }
 
-    .bottom-nav {
+    body .bottom-nav {
         display: flex !important;
     }
 
@@ -2314,7 +2325,7 @@ body {
         border-radius: 14px;
     }
 
-    .qr-launch-btn {
+    body .qr-launch-btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -2901,4 +2912,181 @@ body {
     color: var(--text-muted);
     padding: 2rem;
     font-style: italic;
+}
+
+/* Added missing prototype selector */
+.aes-card,
+.connection-card {
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--card-bg);
+    padding: 0.85rem;
+    color: var(--text-color);
+}
+
+/* Added missing prototype selector (responsive helper) */
+@media (max-width: 767px) {
+
+    .file-table-head,
+    .item-date,
+    .item-size {
+        display: none !important;
+    }
+}
+
+/* Added missing prototype selector (responsive helper) */
+@media (max-width: 1150px) {
+
+    .file-table-head,
+    .m3-list:not(.grid-mode) .m3-list-item {
+        grid-template-columns: minmax(0, 1fr) 140px 110px 40px;
+    }
+}
+
+/* Added missing prototype selector (responsive helper) */
+@media (max-width: 699px) and (min-width: 550px) {
+
+    .file-table-head>span:nth-child(2),
+    .file-table-head>span:nth-child(3),
+    .item-date,
+    .item-size {
+        display: none !important;
+    }
+}
+
+/* Added missing prototype selector (responsive helper) */
+@media (max-width: 1024px) and (min-width: 700px) {
+
+    .file-table-head>span:nth-child(2),
+    .item-date {
+        display: none !important;
+    }
+}
+
+/* Added missing prototype selector (responsive helper) */
+@media (max-width: 1024px) and (min-width: 700px) {
+
+    .file-table-head>span:nth-child(3),
+    .item-size {
+        display: inline-block !important;
+    }
+}
+
+/* Added missing prototype selector */
+.m3-fab {
+    display: none !important;
+}
+
+/* Added missing prototype selector */
+.m3-list.grid-mode .m3-list-item .item-main {
+    width: 100%;
+    text-align: center;
+    margin-top: 0.5rem;
+}
+
+/* Added missing prototype selector */
+.upload-toast-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-shrink: 0;
+}
+
+/* Added missing prototype selector */
+.video-play-badge {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Added missing prototype selector */
+.video-preview-box {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #111827, #1f2937);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+/* Added missing prototype selector */
+[data-theme="dark"] .aes-card,
+[data-theme="dark"] .connection-card {
+    background: #202124;
+}
+
+/* Segmented Control Styles for 3-Way Theme Selection */
+.segmented-control {
+    position: relative;
+    display: flex;
+    background: var(--toggle-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 2px;
+    width: 200px;
+    height: 32px;
+    user-select: none;
+    align-items: center;
+}
+
+.segmented-control input[type="radio"] {
+    display: none;
+}
+
+.segmented-control label {
+    flex: 1;
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    z-index: 2;
+    line-height: 28px;
+    transition: color 0.2s ease;
+    margin: 0;
+    padding: 0;
+    display: block;
+    height: 100%;
+}
+
+.segmented-control input[type="radio"]:checked+label {
+    color: var(--text-color);
+}
+
+.segmented-control-slider {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: calc(33.333% - 2px);
+    height: calc(100% - 4px);
+    background: var(--card-bg);
+    border-radius: 18px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    z-index: 1;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="dark"] .segmented-control-slider {
+    background: #3c4043;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+#themeLight:checked~.segmented-control-slider {
+    transform: translateX(0);
+}
+
+#themeDark:checked~.segmented-control-slider {
+    transform: translateX(100%);
+}
+
+#themeSystem:checked~.segmented-control-slider {
+    transform: translateX(200%);
 }

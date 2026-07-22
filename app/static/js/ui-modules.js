@@ -787,41 +787,104 @@ document.addEventListener('DOMContentLoaded', () => {
   //  HTTP-Safe mode is now automatic - no toggle management needed
 
   //  Dark Mode Toggle Functionality
-  const darkModeToggle = DOM_CACHE.darkModeToggle;
-  if (darkModeToggle) {
-    // Load saved dark mode preference
-    const savedDarkMode = localStorage.getItem('dark_mode_enabled');
-    if (savedDarkMode !== null) {
-      const isDarkMode = savedDarkMode === '1';
-      darkModeToggle.checked = isDarkMode;
-      applyDarkMode(isDarkMode);
-    } else {
-      // Check system preference
-      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      darkModeToggle.checked = prefersDark;
-      applyDarkMode(prefersDark);
-    }
-
-    // Save state on change
-    darkModeToggle.addEventListener('change', () => {
-      const isDarkMode = darkModeToggle.checked;
-      localStorage.setItem('dark_mode_enabled', isDarkMode ? '1' : '0');
-      applyDarkMode(isDarkMode);
-
-      // Show toast notification
-      showToast(isDarkMode ? ' Dark mode enabled' : ' Light mode enabled', 2000);
-    });
-
-    // Listen for system theme changes
-    if (window.matchMedia) {
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-        // Only auto-switch if user hasn't manually set preference
-        if (localStorage.getItem('dark_mode_enabled') === null) {
-          darkModeToggle.checked = e.matches;
-          applyDarkMode(e.matches);
+  // --- 3-Way Theme Preference Initializer ---
+  window.applyThemePreference = function (themePref) {
+    // Migrate legacy settings if themePref is not set
+    if (!themePref) {
+      themePref = localStorage.getItem('theme_preference');
+      if (themePref === null) {
+        const legacyDark = localStorage.getItem('dark_mode_enabled');
+        if (legacyDark !== null) {
+          themePref = legacyDark === '1' ? 'dark' : 'light';
+        } else {
+          themePref = 'system';
         }
-      });
+        localStorage.setItem('theme_preference', themePref);
+      }
     }
+
+    let isDarkMode = false;
+    if (themePref === 'dark') {
+      isDarkMode = true;
+    } else if (themePref === 'light') {
+      isDarkMode = false;
+    } else {
+      isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+
+    applyDarkMode(isDarkMode);
+
+    // Update settings radio buttons
+    const themeLightRadio = document.getElementById('themeLight');
+    const themeDarkRadio = document.getElementById('themeDark');
+    const themeSystemRadio = document.getElementById('themeSystem');
+
+    if (themeLightRadio && themeDarkRadio && themeSystemRadio) {
+      themeLightRadio.checked = themePref === 'light';
+      themeDarkRadio.checked = themePref === 'dark';
+      themeSystemRadio.checked = themePref === 'system';
+    }
+
+    // Keep legacy checkboxes in sync
+    if (DOM_CACHE.darkModeToggle) {
+      DOM_CACHE.darkModeToggle.checked = isDarkMode;
+    }
+    const settingsToggle = document.getElementById("darkThemeSettingToggle");
+    if (settingsToggle) {
+      settingsToggle.checked = isDarkMode;
+    }
+
+    // Dynamic label/icon/description updates
+    const themeIcon = document.getElementById('themeSettingIcon');
+    const themeTitle = document.getElementById('themeSettingTitle');
+    const themeDesc = document.getElementById('themeSettingDesc');
+
+    if (themeIcon && themeTitle && themeDesc) {
+      if (themePref === 'light') {
+        themeIcon.setAttribute('data-lucide', 'sun');
+        themeTitle.textContent = 'Light Theme';
+        themeDesc.textContent = 'Use clean light mode interface';
+      } else if (themePref === 'dark') {
+        themeIcon.setAttribute('data-lucide', 'moon');
+        themeTitle.textContent = 'Dark Theme';
+        themeDesc.textContent = 'Use sleek dark mode interface';
+      } else {
+        themeIcon.setAttribute('data-lucide', 'monitor');
+        themeTitle.textContent = 'System Theme';
+        themeDesc.textContent = "Follow device's theme settings";
+      }
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+      }
+    }
+
+    // Sync header toggle icon
+    const headerToggleBtn = document.querySelector('button[onclick="toggleDarkMode()"]');
+    if (headerToggleBtn) {
+      const iconEl = headerToggleBtn.querySelector('i');
+      if (iconEl) {
+        let iconName = 'monitor';
+        if (themePref === 'light') iconName = 'sun';
+        else if (themePref === 'dark') iconName = 'moon';
+        iconEl.setAttribute('data-lucide', iconName);
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons();
+        }
+      }
+    }
+  };
+
+  // Run initialization
+  window.applyThemePreference(null);
+
+  // Listen for system theme changes dynamically
+  if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      const themePref = localStorage.getItem('theme_preference') || 'system';
+      if (themePref === 'system') {
+        applyDarkMode(e.matches);
+      }
+    });
   }
 
   //  Apply Dark Mode Function
@@ -829,7 +892,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isDarkMode) {
       document.documentElement.setAttribute('data-theme', 'dark');
     } else {
-      document.documentElement.removeAttribute('data-theme');
+      document.documentElement.setAttribute('data-theme', 'light');
     }
 
     // Update dark mode toggle text based on current mode

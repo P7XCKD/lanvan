@@ -4675,6 +4675,7 @@ Device Session will reset when browser is closed
       window.downloadAsZip = downloadAsZip;
       window.downloadIndividually = downloadIndividually;
       window.closeDownloadModal = closeDownloadModal;
+      window.generateQRCode = generateQRCode;
 
       //  Enhanced QR Code Generation for Connection Info - Offline-First
       function generateQRCode(text, size = 200) {
