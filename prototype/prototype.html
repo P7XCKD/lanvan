@@ -75,7 +75,7 @@
                 <i data-lucide="copy" style="width:14px;height:14px;"></i>
               </button>
             </div>
-            <div class="utility-subtitle">Prefer LAN IP on the same Wi-Fi. Use mDNS only if your device resolves it.
+            <div class="utility-subtitle">Connect to Lanvan using the URL or QR code. Make sure you are on the same Wi-Fi or hotspot.
             </div>
           </section>
         </div>
@@ -300,6 +300,9 @@
 
         </main>
 
+        <!-- Desktop upload tray -->
+        <div id="uploadToastStack" class="upload-toast-stack" aria-live="polite"></div>
+
         <!-- Bottom Navigation Bar - Hidden on desktop layout, visible on mobile -->
         <nav class="bottom-nav">
           <div class="nav-item active" id="navItemFile" onclick="switchView('file')">
@@ -387,6 +390,12 @@
       </div>
     </div>
     <div id="itemMenuOptions" style="display:none;">
+      <div class="context-item" id="uploadCancelMenuItem" onclick="cancelSelectedUpload()" style="display:none; color:var(--danger);">
+        <div class="context-item-left">
+          <i data-lucide="x-circle" style="color:var(--danger);"></i>
+          <span>Cancel upload</span>
+        </div>
+      </div>
       <div class="context-item" onclick="openRenameModal()">
         <div class="context-item-left">
           <i data-lucide="pencil"></i>
@@ -497,7 +506,7 @@
   </div>
 
   <!-- Hidden inputs for file/folder upload triggers -->
-  <input type="file" id="hiddenFileInput" style="display:none;" onchange="handleMockUpload(event)">
+  <input type="file" id="hiddenFileInput" style="display:none;" multiple onchange="handleMockUpload(event)">
   <input type="file" id="hiddenFolderInput" style="display:none;" webkitdirectory onchange="handleMockUpload(event)">
 
   <!-- New Folder Dialog Prompter -->
@@ -641,7 +650,11 @@
           <i data-lucide="x" style="width:16px;height:16px;"></i>
         </button>
       </div>
-      <div class="connect-qr-subtitle">Scan this code to open Lanvan on another device.</div>
+      <div class="connect-qr-subtitle">Connect to Lanvan using the URL or QR code. Make sure you are on the same Wi-Fi or hotspot.</div>
+      <div class="connect-tabs connect-qr-tabs">
+        <button id="connectQrLanIpTab" class="connect-tab active" onclick="setConnectMode('ip')">LAN IP</button>
+        <button id="connectQrMdnsTab" class="connect-tab" onclick="setConnectMode('mdns')">mDNS</button>
+      </div>
       <div class="qr-box connect-qr-box" id="connectQrDialogBox" aria-label="Connection QR preview"></div>
       <div class="connect-qr-address" id="connectQrDialogAddress"></div>
       <div class="connect-qr-actions">

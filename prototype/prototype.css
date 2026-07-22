@@ -1045,6 +1045,10 @@ body:has(.viewport-frame:not(.mobile-sim)) .sim-bar {
   justify-content: center;
 }
 
+.mobile-sim .upload-toast-stack {
+  display: none !important;
+}
+
 .mobile-sim .panel-title {
   font-size: 1.18rem;
 }
@@ -1078,6 +1082,11 @@ body:has(.viewport-frame:not(.mobile-sim)) .sim-bar {
 
 .mobile-sim .m3-list:not(.grid-mode) .m3-list-item {
   display: flex;
+}
+
+.mobile-sim .upload-progress-badge {
+  width: 28px;
+  height: 28px;
 }
 
 /* Android Material 3 Card style */
@@ -1296,6 +1305,175 @@ body:has(.viewport-frame:not(.mobile-sim)) .sim-bar {
 
 .qr-launch-btn:hover {
   background: var(--hover-bg);
+}
+
+.upload-toast-stack {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  display: none;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: min(100%, 320px);
+  z-index: 1200;
+  pointer-events: none;
+}
+
+.upload-toast-stack.active {
+  display: flex;
+}
+
+.upload-toast {
+  pointer-events: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--card-bg) 90%, transparent);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-soft);
+  padding: 0.8rem 0.85rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.upload-toast-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.upload-toast-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+.upload-toast-title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.upload-toast-filename {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upload-toast-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.upload-toast-cancel {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--danger);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.upload-toast-cancel:hover {
+  background: rgba(217, 48, 37, 0.12);
+}
+
+.upload-toast-cancel-pill {
+  border: 1px solid rgba(217, 48, 37, 0.22);
+  background: rgba(217, 48, 37, 0.08);
+  color: var(--danger);
+  border-radius: 999px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.7rem;
+  font-weight: 750;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
+.upload-toast-cancel-pill:hover {
+  background: rgba(217, 48, 37, 0.14);
+}
+
+.upload-toast-progress {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--toggle-bg);
+  overflow: hidden;
+}
+
+.upload-toast-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+  transition: width 0.2s ease;
+}
+
+.upload-toast-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 650;
+}
+
+.upload-toast-status {
+  color: var(--primary);
+}
+
+.upload-progress-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: conic-gradient(var(--primary) calc(var(--progress) * 1%), rgba(127, 127, 127, 0.18) 0);
+  color: var(--primary);
+}
+
+.upload-progress-badge::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--card-bg);
+}
+
+.upload-progress-badge span {
+  position: relative;
+  z-index: 1;
+  font-size: 0.55rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--primary);
+}
+
+.upload-progress-badge-grid {
+  width: 30px;
+  height: 30px;
+}
+
+.upload-progress-badge-desktop {
+  width: 34px;
+  height: 34px;
 }
 
 /* Drag over overlay for whole card dropzone */

@@ -43,6 +43,216 @@ let sortDirection = "asc";
 let sortFolders = "top";
 let searchResultsBuffer = [];
 let searchResultsExpanded = false;
+let uploadQueue = [];
+let uploadSeq = 0;
+let uploadNoticeSeq = 0;
+let uploadNotices = [];
+let uploadBatchStates = {};
+let uploadRenderTimer = null;
+let contextMenuTargetName = "";
+let contextMenuTargetUploadId = "";
+
+function createUploadId() {
+  uploadSeq += 1;
+  return `upload_${Date.now()}_${uploadSeq}`;
+}
+
+function createUploadBatchId() {
+  return `batch_${Date.now()}_${++uploadSeq}`;
+}
+
+function initUploadBatchState(batchId, totalCount) {
+  uploadBatchStates[batchId] = {
+    totalCount,
+    completedCount: 0,
+    lastProgress: 0
+  };
+}
+
+function getUploadBatchState(batchId) {
+  if (!uploadBatchStates[batchId]) {
+    uploadBatchStates[batchId] = {
+      totalCount: 0,
+      completedCount: 0,
+      lastProgress: 0
+    };
+  }
+  return uploadBatchStates[batchId];
+}
+
+function recalculateUploadBatchProgress(batchId) {
+  const state = getUploadBatchState(batchId);
+  const entries = uploadQueue.filter(entry => entry.batchId === batchId);
+  const totalCount = Math.max(state.totalCount || 0, entries.length + state.completedCount);
+  if (totalCount <= 0) {
+    state.lastProgress = 0;
+    return 0;
+  }
+
+  const activeProgress = entries.reduce((sum, entry) => {
+    const item = getUploadItemFromDb(entry.id);
+    const progress = getUploadItemState(item)?.progress ?? 0;
+    return sum + Math.min(100, Math.max(0, progress));
+  }, 0);
+
+  const calculated = Math.min(100, Math.round(((state.completedCount * 100) + activeProgress) / totalCount));
+  state.lastProgress = Math.max(state.lastProgress || 0, calculated);
+  return state.lastProgress;
+}
+
+function scheduleUploadRender() {
+  if (uploadRenderTimer) return;
+  uploadRenderTimer = window.setTimeout(() => {
+    uploadRenderTimer = null;
+    renderDirectory();
+  }, 120);
+}
+
+function getUploadItemState(item) {
+  if (!item || !item.uploading) return null;
+  return {
+    progress: Math.max(0, Math.min(100, Number(item.uploadProgress) || 0)),
+    status: item.uploadStatus || "uploading"
+  };
+}
+
+function updateUploadItemInDb(uploadId, patch) {
+  for (const [path, items] of Object.entries(db)) {
+    if (!Array.isArray(items)) continue;
+    const target = items.find(entry => entry && entry.uploadId === uploadId);
+    if (target) {
+      Object.assign(target, patch);
+      return target;
+    }
+  }
+  return null;
+}
+
+function getUploadItemFromDb(uploadId) {
+  for (const items of Object.values(db)) {
+    if (!Array.isArray(items)) continue;
+    const target = items.find(entry => entry && entry.uploadId === uploadId);
+    if (target) return target;
+  }
+  return null;
+}
+
+function removeUploadItemFromDb(uploadId) {
+  for (const [path, items] of Object.entries(db)) {
+    if (!Array.isArray(items)) continue;
+    const idx = items.findIndex(entry => entry && entry.uploadId === uploadId);
+    if (idx !== -1) {
+      items.splice(idx, 1);
+      return true;
+    }
+  }
+  return false;
+}
+
+function syncUploadQueueFromDb() {
+  uploadQueue = uploadQueue.filter(entry => {
+    const item = updateUploadItemInDb(entry.id, {});
+    return !!item;
+  });
+}
+
+function finalizeUpload(uploadId) {
+  const queueItem = uploadQueue.find(entry => entry.id === uploadId);
+  if (!queueItem) return;
+
+  if (queueItem.finalizeTimer) {
+    clearTimeout(queueItem.finalizeTimer);
+    queueItem.finalizeTimer = null;
+  }
+  updateUploadItemInDb(uploadId, {
+    uploading: false,
+    uploadStatus: "complete",
+    uploadProgress: 100,
+    modified: "Today"
+  });
+  const batchState = getUploadBatchState(queueItem.batchId);
+  batchState.completedCount = Math.min(batchState.totalCount || 0, batchState.completedCount + 1);
+  uploadQueue = uploadQueue.filter(entry => entry.id !== uploadId);
+  const remainingInBatch = uploadQueue.some(entry => entry.batchId === queueItem.batchId);
+  if (!remainingInBatch) {
+    delete uploadBatchStates[queueItem.batchId];
+    showUploadNotice({
+      title: queueItem.batchTotal > 1 ? `${queueItem.batchTotal} files uploaded` : `${queueItem.name} uploaded`,
+      subtitle: queueItem.path ? getReadablePath(queueItem.path) : "Home",
+      kind: "success"
+    });
+  }
+  renderDirectory();
+}
+
+function cancelUpload(uploadId) {
+  const queueItem = uploadQueue.find(entry => entry.id === uploadId);
+  if (!queueItem) return;
+
+  if (queueItem.timer) clearInterval(queueItem.timer);
+  if (queueItem.finalizeTimer) clearTimeout(queueItem.finalizeTimer);
+  const batchState = getUploadBatchState(queueItem.batchId);
+  batchState.totalCount = Math.max(0, (batchState.totalCount || 0) - 1);
+  removeUploadItemFromDb(uploadId);
+  uploadQueue = uploadQueue.filter(entry => entry.id !== uploadId);
+  if (!uploadQueue.some(entry => entry.batchId === queueItem.batchId)) {
+    delete uploadBatchStates[queueItem.batchId];
+  }
+  closeContextMenu();
+  renderDirectory();
+}
+
+function cancelUploadBatch(batchId) {
+  const batchItems = uploadQueue.filter(entry => entry.batchId === batchId);
+  batchItems.forEach(entry => {
+    if (entry.timer) clearInterval(entry.timer);
+    if (entry.finalizeTimer) clearTimeout(entry.finalizeTimer);
+    removeUploadItemFromDb(entry.id);
+  });
+  uploadQueue = uploadQueue.filter(entry => entry.batchId !== batchId);
+  delete uploadBatchStates[batchId];
+  closeContextMenu();
+  renderDirectory();
+}
+
+function showUploadNotice({ title, subtitle, kind = "success", duration = 2200 }) {
+  const notice = {
+    id: `notice_${Date.now()}_${++uploadNoticeSeq}`,
+    title,
+    subtitle,
+    kind
+  };
+  uploadNotices.unshift(notice);
+  window.setTimeout(() => {
+    uploadNotices = uploadNotices.filter(entry => entry.id !== notice.id);
+    renderUploadTray();
+  }, duration);
+  renderUploadTray();
+}
+
+function startMockUploadProgress(uploadEntry) {
+  const totalTicks = 8 + Math.floor(Math.random() * 5);
+  const tickMs = 260 + Math.floor(Math.random() * 180);
+  let ticks = 0;
+
+  const step = () => {
+    ticks += 1;
+    const current = Math.min(96, Math.round((ticks / totalTicks) * 100));
+    updateUploadItemInDb(uploadEntry.id, {
+      uploadProgress: current,
+      uploadStatus: "uploading"
+    });
+    scheduleUploadRender();
+
+    if (ticks >= totalTicks) {
+      clearInterval(uploadEntry.timer);
+      uploadEntry.finalizeTimer = setTimeout(() => finalizeUpload(uploadEntry.id), 250);
+    }
+  };
+
+  uploadEntry.timer = setInterval(step, tickMs);
+  step();
+}
 
 function setViewMode(mode) {
   viewMode = mode;
@@ -196,6 +406,9 @@ function parseSizeToBytes(sizeStr, isFolder) {
 function sortItems(itemsList) {
   const list = [...itemsList];
   list.sort((a, b) => {
+    if (a.uploading && !b.uploading) return -1;
+    if (!a.uploading && b.uploading) return 1;
+
     if (sortFolders === "top") {
       if (a.type === "folder" && b.type !== "folder") return -1;
       if (a.type !== "folder" && b.type === "folder") return 1;
@@ -512,7 +725,7 @@ function renderQuickAccess() {
   const container = document.getElementById("quickAccessContainer");
   if (!container) return;
 
-  const allFiles = getAllItems().filter(item => item.type !== 'folder');
+  const allFiles = getAllItems().filter(item => item.type !== 'folder' && !item.uploading);
   const rank = { "Today": 0, "Yesterday": 1, "Jul 18": 2, "Jul 17": 3, "Jul 16": 4 };
   allFiles.sort((a, b) => {
     return (rank[a.modified] ?? 99) - (rank[b.modified] ?? 99);
@@ -577,26 +790,42 @@ function openRowMenu(event, name, type) {
 
   closeContextMenu();
 
-  // If clicked item is not in current selection, select only this item
-  if (!selectedItems.includes(name) || selectedItems.length <= 1) {
-    selectedItems = [name];
-  }
-  renderDirectory();
-
   const genericOptions = document.getElementById("genericMenuOptions");
   const itemOptions = document.getElementById("itemMenuOptions");
   if (genericOptions) genericOptions.style.display = "none";
   if (itemOptions) itemOptions.style.display = "block";
 
   const isSingle = selectedItems.length === 1;
-  const targetName = isSingle ? selectedItems[0] : name;
+  const directItem = getCurrentDirectoryItems().find(i => i.name === name) ||
+    getAllItems().find(i => i.name === name);
+  const targetName = directItem && directItem.uploading ? name : (isSingle ? selectedItems[0] : name);
   const item = getCurrentDirectoryItems().find(i => i.name === targetName) ||
-    getAllItems().find(i => i.name === targetName);
+    getAllItems().find(i => i.name === targetName) ||
+    directItem;
+  contextMenuTargetName = targetName;
+  contextMenuTargetUploadId = item && item.uploadId ? item.uploadId : "";
+  const uploadCancelOption = document.getElementById("uploadCancelMenuItem");
+  const rowMenuItems = itemOptions ? Array.from(itemOptions.children) : [];
+  const isUploading = !!(item && item.uploading);
 
-  // Hide single-item-only options like Rename if multiple items selected
-  const renameOption = document.querySelector("#itemMenuOptions .context-item[onclick*='openRenameModal']");
-  if (renameOption) {
-    renameOption.style.display = isSingle ? "flex" : "none";
+  if (!isUploading && (!selectedItems.includes(name) || selectedItems.length <= 1)) {
+    selectedItems = [name];
+    renderDirectory();
+  }
+
+  if (itemOptions) {
+    rowMenuItems.forEach(option => {
+      option.style.display = isUploading ? "none" : "flex";
+    });
+    if (uploadCancelOption) uploadCancelOption.style.display = isUploading ? "flex" : "none";
+  }
+
+  if (!isUploading) {
+    // Hide single-item-only options like Rename if multiple items selected
+    const renameOption = document.querySelector("#itemMenuOptions .context-item[onclick*='openRenameModal']");
+    if (renameOption) {
+      renameOption.style.display = isSingle ? "flex" : "none";
+    }
   }
 
   const starText = document.getElementById("menuStarText");
@@ -790,9 +1019,20 @@ function renderDirectory() {
       const folderPath = (item.parentPath || currentPath.join("/")) + "/" + item.name;
       count = db[folderPath] ? db[folderPath].length : 0;
     }
-    const subtitle = item.type === "folder" ? `${count} items` : item.size;
-    const modified = activeTab === "recent" || activeTab === "starred" ? (item.parentPath || currentPath.join("/")) : (item.modified || "Today");
-    const size = item.type === "folder" ? "-" : item.size;
+    const uploadState = getUploadItemState(item);
+    const isUploading = !!uploadState;
+    const uploadProgressLabel = uploadState ? `${uploadState.progress}%` : "";
+    const subtitle = item.type === "folder"
+      ? `${count} items`
+      : isUploading
+        ? `${uploadProgressLabel} • Uploading`
+        : item.size;
+    const modified = isUploading
+      ? "Uploading"
+      : activeTab === "recent" || activeTab === "starred"
+        ? (item.parentPath || currentPath.join("/"))
+        : (item.modified || "Today");
+    const size = item.type === "folder" ? "-" : (isUploading ? uploadProgressLabel : item.size);
 
     if (viewMode === "grid") {
       let previewMarkup = "";
@@ -845,12 +1085,21 @@ function renderDirectory() {
         `;
       }
 
+      const gridUploadBadge = isUploading
+        ? `
+          <div class="upload-progress-badge upload-progress-badge-grid" style="--progress:${uploadState.progress};">
+            <span>${uploadProgressLabel}</span>
+          </div>
+        `
+        : "";
+
       row.innerHTML = `
         <div class="grid-card-head">
           <div style="display:flex; align-items:center; gap:0.45rem; min-width:0; flex:1;">
             <div class="avatar-icon ${avatarClass}"><i data-lucide="${iconName}"></i></div>
             <span class="item-title" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
           </div>
+          ${gridUploadBadge}
           <button class="btn-icon" onclick="openRowMenu(event, '${escapeHtml(item.name.replaceAll("'", "\\'"))}', '${escapeHtml(item.type)}')" title="More actions" style="width:28px;height:28px;padding:0;flex-shrink:0;">
             <i data-lucide="more-vertical" style="width:14px;height:14px;color:var(--text-muted);"></i>
           </button>
@@ -858,7 +1107,14 @@ function renderDirectory() {
         ${previewMarkup}
       `;
     } else {
-      const showInlineRowActions = !isMobileInteraction();
+      const showInlineRowActions = !isUploading && !isMobileInteraction();
+      const rowUploadBadge = isUploading
+        ? `
+          <div class="upload-progress-badge" style="--progress:${uploadState.progress};">
+            <span>${uploadProgressLabel}</span>
+          </div>
+        `
+        : "";
       row.innerHTML = `
         <div class="file-name-cell">
           <div class="avatar-icon ${avatarClass}"><i data-lucide="${iconName}"></i></div>
@@ -870,6 +1126,7 @@ function renderDirectory() {
         <div class="item-date">${modified}</div>
         <div class="item-size">${size}</div>
         <div class="row-actions">
+          ${rowUploadBadge}
           ${showInlineRowActions ? `<button class="btn-icon hover-btn" onclick="event.stopPropagation(); handleDownloadItem('${escapeHtml(item.name.replaceAll("'", "\\'"))}')" title="Download" style="color:var(--text-muted);">
             <i data-lucide="download" style="width:16px;height:16px;"></i>
           </button>
@@ -889,6 +1146,7 @@ function renderDirectory() {
     row.addEventListener("click", (e) => {
       if (e.target.closest("button")) return;
       e.stopPropagation();
+      if (item.uploading) return;
 
       const idx = items.indexOf(item);
       const isMobile = document.getElementById("simFrame").classList.contains("mobile-sim") || window.innerWidth < 768;
@@ -927,6 +1185,7 @@ function renderDirectory() {
       if (isMobileInteraction()) return;
       if (e.target.closest("button")) return;
       e.stopPropagation();
+      if (item.uploading) return;
 
       if (item.type === "folder") {
         currentPath = (item.parentPath || currentPath.join("/")).split("/");
@@ -942,6 +1201,7 @@ function renderDirectory() {
   });
 
   renderSelectionHeader();
+  renderUploadTray();
   lucide.createIcons();
 }
 
@@ -1010,19 +1270,41 @@ function handleMockUpload(event, targetPathOverride = "") {
   activeTab = "file";
   const pathStr = targetPathOverride || getUploadTargetPath();
   if (!db[pathStr]) db[pathStr] = [];
+  const batchId = createUploadBatchId();
+  const batchTotal = files.length;
+  initUploadBatchState(batchId, batchTotal);
 
   for (let file of files) {
     let type = "doc";
     if (file.type.startsWith("image/")) type = "image";
     else if (file.type.startsWith("video/")) type = "video";
 
-    db[pathStr].push({
+    const uploadId = createUploadId();
+    const tempItem = {
       name: file.name,
-      type: type,
+      type,
       size: (file.size / (1024 * 1024)).toFixed(1) + " MB",
-      modified: "Today",
-      starred: false
-    });
+      modified: "Uploading",
+      starred: false,
+      uploading: true,
+      uploadProgress: 0,
+      uploadStatus: "uploading",
+      uploadId,
+      batchId,
+      batchTotal
+    };
+
+    db[pathStr].unshift(tempItem);
+    const uploadEntry = {
+      id: uploadId,
+      name: file.name,
+      path: pathStr,
+      batchId,
+      batchTotal,
+      timer: null
+    };
+    uploadQueue.push(uploadEntry);
+    startMockUploadProgress(uploadEntry);
   }
 
   event.target.value = "";
@@ -1217,6 +1499,98 @@ function getUploadTargetPath() {
     }
   }
   return currentPath.join("/");
+}
+
+function getItemByName(name) {
+  if (!name) return null;
+  const currentItem = getCurrentDirectoryItems().find(entry => entry.name === name);
+  if (currentItem) return currentItem;
+  return getAllItems().find(entry => entry.name === name) || null;
+}
+
+function cancelSelectedUpload() {
+  const item = contextMenuTargetUploadId
+    ? getUploadItemFromDb(contextMenuTargetUploadId)
+    : getItemByName(contextMenuTargetName);
+  if (!item || !item.uploadId || !item.uploading) return;
+  cancelUpload(item.uploadId);
+  contextMenuTargetName = "";
+  contextMenuTargetUploadId = "";
+}
+
+function renderUploadTray() {
+  const stack = document.getElementById("uploadToastStack");
+  if (!stack) return;
+
+  const groupedUploads = new Map();
+  uploadQueue.forEach(entry => {
+    const item = getUploadItemFromDb(entry.id);
+    if (!item) return;
+    if (!groupedUploads.has(entry.batchId)) {
+      groupedUploads.set(entry.batchId, []);
+    }
+    groupedUploads.get(entry.batchId).push(item);
+  });
+
+  stack.innerHTML = "";
+  const activeGroups = Array.from(groupedUploads.entries());
+  if (activeGroups.length === 0 && uploadNotices.length === 0) {
+    stack.classList.remove("active");
+    return;
+  }
+
+  stack.classList.add("active");
+  uploadNotices.forEach(notice => {
+    const row = document.createElement("div");
+    row.className = "upload-toast";
+    row.innerHTML = `
+      <div class="upload-toast-top">
+        <div class="upload-toast-title">
+          <span class="upload-toast-filename">${escapeHtml(notice.title)}</span>
+          <span class="upload-toast-meta">${escapeHtml(notice.subtitle)}</span>
+        </div>
+        <div class="upload-toast-success-badge"><i data-lucide="check"></i></div>
+      </div>
+      <div class="upload-toast-bottom">
+        <span>Completed</span>
+      </div>
+    `;
+    stack.appendChild(row);
+  });
+
+  activeGroups.forEach(([batchId, items]) => {
+    const representative = items[0];
+    const batchState = getUploadBatchState(batchId);
+    const progress = recalculateUploadBatchProgress(batchId);
+    const totalCount = items.length;
+    const title = totalCount > 1 ? `Uploading ${totalCount} files` : representative.name;
+    const subtitle = totalCount > 1
+      ? `${representative.path ? getReadablePath(representative.path) : "Home"}`
+      : `${representative.path ? getReadablePath(representative.path) : "Home"}`;
+
+    const row = document.createElement("div");
+    row.className = "upload-toast";
+    row.innerHTML = `
+      <div class="upload-toast-top">
+        <div class="upload-toast-title">
+          <span class="upload-toast-filename" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+          <span class="upload-toast-meta">${escapeHtml(subtitle)}</span>
+        </div>
+        <div class="upload-toast-actions">
+          <button type="button" class="upload-toast-cancel-pill" data-upload-batch-id="${escapeHtml(batchId)}" title="Cancel upload batch" aria-label="Cancel upload batch">
+            <i data-lucide="x"></i>
+            <span>Cancel</span>
+          </button>
+        </div>
+      </div>
+      <div class="upload-toast-bottom">
+        <span>${totalCount > 1 ? `${totalCount} files uploading` : "Uploading"}</span>
+        <span class="upload-toast-status">${progress}%</span>
+      </div>
+    `;
+    stack.appendChild(row);
+  });
+  lucide.createIcons();
 }
 
 function deleteSelected() {
@@ -1537,8 +1911,12 @@ function setConnectMode(mode) {
 
   const lanTab = document.getElementById("lanIpTab");
   const mdnsTab = document.getElementById("mdnsTab");
+  const qrLanTab = document.getElementById("connectQrLanIpTab");
+  const qrMdnsTab = document.getElementById("connectQrMdnsTab");
   if (lanTab) lanTab.classList.toggle("active", mode === "ip");
   if (mdnsTab) mdnsTab.classList.toggle("active", mode === "mdns");
+  if (qrLanTab) qrLanTab.classList.toggle("active", mode === "ip");
+  if (qrMdnsTab) qrMdnsTab.classList.toggle("active", mode === "mdns");
 
   renderQrPreview(address);
   refreshConnectQrDialog();
@@ -1635,6 +2013,10 @@ function copyConnectAddress() {
 function closeContextMenu() {
   const contextMenu = document.getElementById("contextMenu");
   if (contextMenu) contextMenu.style.display = "none";
+  const uploadCancel = document.getElementById("uploadCancelMenuItem");
+  if (uploadCancel) uploadCancel.style.display = "none";
+  contextMenuTargetName = "";
+  contextMenuTargetUploadId = "";
   const sortMenu = document.getElementById("sortDropdownMenu");
   if (sortMenu) sortMenu.style.display = "none";
   const typeMenu = document.getElementById("typeDropdownMenu");
@@ -1740,6 +2122,19 @@ function setSim(mode) {
   // Context Menu Handling
   const contextMenu = document.getElementById("contextMenu");
   const appContainer = document.querySelector(".android-app");
+  const uploadToastStack = document.getElementById("uploadToastStack");
+
+  if (uploadToastStack) {
+    uploadToastStack.addEventListener("pointerdown", (e) => {
+      const button = e.target.closest(".upload-toast-cancel-pill");
+      if (!button) return;
+      const batchId = button.getAttribute("data-upload-batch-id");
+      if (!batchId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      cancelUploadBatch(batchId);
+    });
+  }
 
   if (appContainer) {
     appContainer.addEventListener("contextmenu", (e) => {
@@ -1767,15 +2162,30 @@ function setSim(mode) {
         if (clipboardOptions) clipboardOptions.style.display = "none";
         if (targetItem) {
           const itemNameElement = targetItem.querySelector(".item-title, .quick-title");
+          const prospectiveName = itemNameElement ? itemNameElement.textContent.trim() : "";
+          const activeItem = getCurrentDirectoryItems().find(i => i.name === prospectiveName) ||
+            getAllItems().find(i => i.name === prospectiveName);
           if (itemNameElement) {
             const itemName = itemNameElement.textContent.trim();
-            if (!selectedItems.includes(itemName)) {
+            if ((!activeItem || !activeItem.uploading) && !selectedItems.includes(itemName)) {
               selectedItems = [itemName];
               renderDirectory();
             }
           }
           if (genericOptions) genericOptions.style.display = "none";
           if (itemOptions) itemOptions.style.display = "block";
+
+          const uploadCancelOption = document.getElementById("uploadCancelMenuItem");
+          const rowMenuItems = itemOptions ? Array.from(itemOptions.children) : [];
+          const isUploading = !!(activeItem && activeItem.uploading);
+          contextMenuTargetName = activeItem ? activeItem.name : prospectiveName;
+          contextMenuTargetUploadId = activeItem && activeItem.uploadId ? activeItem.uploadId : "";
+          if (itemOptions) {
+            rowMenuItems.forEach(option => {
+              option.style.display = isUploading ? "none" : "flex";
+            });
+          }
+          if (uploadCancelOption) uploadCancelOption.style.display = isUploading ? "flex" : "none";
         } else {
           if (genericOptions) genericOptions.style.display = "block";
           if (itemOptions) itemOptions.style.display = "none";
