@@ -57,44 +57,88 @@
      * Render files in prototype #nasFileList from the same data production uses.
      * @param {string[]} files - Array of filenames from production API
      */
+    // Store last files_data for metadata access (name, size, mtime)
+    var lastFilesData = [];
+
     function renderPrototypeFileList(files) {
         var container = document.getElementById("nasFileList");
         var filePanelMeta = document.getElementById("filePanelMeta");
         if (!container) return;
 
+        // files can be either string[] (names only) or object[] (with metadata)
+        // Normalize to always have name, size, mtime
+        var normalizedFiles = [];
+        if (files && files.length > 0) {
+            for (var i = 0; i < files.length; i++) {
+                if (typeof files[i] === "string") {
+                    // Find metadata from lastFilesData
+                    var meta = lastFilesData.find(function (f) { return f.name === files[i]; });
+                    normalizedFiles.push({
+                        name: files[i],
+                        size: meta ? meta.size : "--",
+                        mtime: meta ? meta.mtime : 0
+                    });
+                } else {
+                    normalizedFiles.push(files[i]);
+                }
+            }
+        }
+
         // Update file count in prototype panel meta
         if (filePanelMeta) {
-            filePanelMeta.textContent = files && files.length
-                ? files.length + " file" + (files.length === 1 ? "" : "s")
+            filePanelMeta.textContent = normalizedFiles.length
+                ? normalizedFiles.length + " file" + (normalizedFiles.length === 1 ? "" : "s")
                 : "";
         }
 
-        if (!files || files.length === 0) {
-            container.innerHTML =
-                '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; width:100%;">' +
-                '<div class="avatar-icon avatar-folder" style="width:72px;height:72px;border-radius:18px;margin-bottom:1rem;">' +
-                '<i data-lucide="folder-open" style="width:34px;height:34px;"></i></div>' +
-                '<div style="font-size:1.05rem; font-weight:500; color:var(--text-color); margin-bottom:0.25rem;">Drop files here</div>' +
-                '<div style="font-size:0.8rem; color:var(--text-muted);">or right-click to upload / create folders.</div>' +
-                "</div>";
+        if (!normalizedFiles || normalizedFiles.length === 0) {
+            // Check if uploads are active — show different message
+            var queue = window.uploadQueue || [];
+            var activeUploads = queue.filter(function (item) {
+                return item.status === "uploading" || item.status === "queued" || item.status === "processing";
+            });
+            if (activeUploads.length > 0) {
+                container.innerHTML =
+                    '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; width:100%;">' +
+                    '<div class="avatar-icon avatar-folder" style="width:72px;height:72px;border-radius:18px;margin-bottom:1rem;">' +
+                    '<i data-lucide="upload-cloud" style="width:34px;height:34px;"></i></div>' +
+                    '<div style="font-size:1.05rem; font-weight:500; color:var(--text-color); margin-bottom:0.25rem;">Uploading ' + activeUploads.length + ' file' + (activeUploads.length === 1 ? '' : 's') + '...</div>' +
+                    '<div style="font-size:0.8rem; color:var(--text-muted);">Files will appear here when upload completes.</div>' +
+                    "</div>";
+            } else {
+                container.innerHTML =
+                    '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; width:100%;">' +
+                    '<div class="avatar-icon avatar-folder" style="width:72px;height:72px;border-radius:18px;margin-bottom:1rem;">' +
+                    '<i data-lucide="folder-open" style="width:34px;height:34px;"></i></div>' +
+                    '<div style="font-size:1.05rem; font-weight:500; color:var(--text-color); margin-bottom:0.25rem;">Drop files here</div>' +
+                    '<div style="font-size:0.8rem; color:var(--text-muted);">or right-click to upload / create folders.</div>' +
+                    "</div>";
+            }
             if (window.lucide) lucide.createIcons();
             return;
         }
 
         var html = "";
-        for (var i = 0; i < files.length; i++) {
-            var name = files[i];
+        for (var i = 0; i < normalizedFiles.length; i++) {
+            var fileData = normalizedFiles[i];
+            var name = fileData.name;
             var ext = name.split(".").pop().toLowerCase();
             var info = getFileTypeInfo(name, ext);
-            html += buildListItem(name, info, ext);
+            var size = fileData.size || "--";
+            var dateStr = "--";
+            if (fileData.mtime) {
+                var d = new Date(fileData.mtime * 1000);
+                dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+            }
+            html += buildListItem(name, info, size, dateStr);
         }
         container.innerHTML = html;
 
         // Attach click handlers (delegated would be cleaner, but prototype uses inline)
-        attachListItemHandlers(container, files);
+        attachListItemHandlers(container, normalizedFiles.map(function (f) { return f.name; }));
 
         // Also render quick access cards from the same data
-        renderQuickAccess(files);
+        renderQuickAccess(normalizedFiles.map(function (f) { return f.name; }));
 
         if (window.lucide) lucide.createIcons();
     }
@@ -120,8 +164,10 @@
     /**
      * Build a single prototype-styled list item HTML.
      */
-    function buildListItem(name, info) {
+    function buildListItem(name, info, size, date) {
         var escName = escapeHtml(name);
+        var sizeStr = size || "--";
+        var dateStr = date || "--";
         return (
             '<div class="m3-list-item" data-filename="' +
             escName +
@@ -139,8 +185,8 @@
             '<div class="item-subtitle">File</div>' +
             "</div>" +
             "</div>" +
-            '<div class="item-date">--</div>' +
-            '<div class="item-size">--</div>' +
+            '<div class="item-date">' + dateStr + '</div>' +
+            '<div class="item-size">' + sizeStr + '</div>' +
             '<div class="row-actions">' +
             '<button class="btn-icon hover-btn" title="Download" data-action="download" data-filename="' +
             escName +
@@ -1140,26 +1186,119 @@
     // 6. INITIALIZATION — Kick off on DOM ready
     // =========================================================================
 
+    // Fetch full file data with metadata from API
+    function fetchFilesData() {
+        return fetch("/api/files")
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.files_data) {
+                    lastFilesData = data.files_data;
+                }
+                return data.files_data || data.files || [];
+            })
+            .catch(function () {
+                return [];
+            });
+    }
+
+    // Render QR code in sidebar using production QR generation
+    function renderSidebarQR() {
+        var qrBox = document.getElementById("qrBox");
+        var connectAddress = document.getElementById("connectAddress");
+        if (!qrBox) return;
+
+        var url = window.location.origin;
+        if (window._currentNetworkInfo && window._currentNetworkInfo.fullUrl) {
+            url = window._currentNetworkInfo.fullUrl;
+        }
+
+        if (typeof generateQRCode === "function") {
+            var qrResult = generateQRCode(url, 100);
+            var qrUrl = qrResult.primary || qrResult.toString();
+            qrBox.innerHTML = '<img src="' + qrUrl + '" alt="Connection QR" style="width:100%;height:100%;object-fit:contain;">';
+        }
+
+        if (connectAddress) {
+            connectAddress.textContent = url;
+        }
+    }
+
+    // Trigger instant file list refresh after upload completes
+    function triggerInstantRefresh() {
+        fetchFilesData().then(function (filesData) {
+            renderPrototypeFileList(filesData);
+        });
+        if (typeof refreshFileList === "function") {
+            refreshFileList();
+        }
+    }
+
     function init() {
         setupDropzone();
         setupSearch();
 
-        // Initial sync — always call renderPrototypeFileList so empty state renders
-        var fileGrid = document.getElementById("fileGrid");
-        var initialFiles = [];
-        if (fileGrid) {
-            var cards = fileGrid.querySelectorAll(".file-card .file-name");
-            for (var i = 0; i < cards.length; i++) {
-                initialFiles.push(cards[i].textContent.trim());
+        // Show loading state immediately
+        var container = document.getElementById("nasFileList");
+        if (container) {
+            container.innerHTML =
+                '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; width:100%;">' +
+                '<div style="width:40px; height:40px; border:4px solid var(--border-color); border-top:4px solid var(--primary); border-radius:50%; animation:spin 1s linear infinite; margin-bottom:1rem;"></div>' +
+                '<div style="font-size:0.9rem; color:var(--text-muted);">Loading files...</div>' +
+                "</div>";
+            if (!document.getElementById("lanvan-spin-keyframes")) {
+                var style = document.createElement("style");
+                style.id = "lanvan-spin-keyframes";
+                style.textContent = "@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
+                document.head.appendChild(style);
             }
         }
-        renderPrototypeFileList(initialFiles);
+
+        // Fetch full file data with metadata from API
+        fetchFilesData().then(function (filesData) {
+            renderPrototypeFileList(filesData);
+        });
+
+        // Also try reading from production #fileGrid (server-rendered files)
+        var fileGrid = document.getElementById("fileGrid");
+        if (fileGrid) {
+            var cards = fileGrid.querySelectorAll(".file-card .file-name");
+            if (cards.length > 0) {
+                var initialFiles = [];
+                for (var i = 0; i < cards.length; i++) {
+                    initialFiles.push(cards[i].textContent.trim());
+                }
+                renderPrototypeFileList(initialFiles);
+            }
+        }
+
+        // Render QR code in sidebar
+        setTimeout(renderSidebarQR, 1000);
 
         // Initial clipboard sync
         if (typeof refreshClipboardHistory === "function") {
             setTimeout(function () {
                 refreshClipboardHistory();
             }, 500);
+        }
+
+        // Wrap addToUploadQueue to trigger instant refresh after uploads complete
+        var origAddToQueue = window.addToUploadQueue;
+        if (typeof origAddToQueue === "function" && !origAddToQueue.__refreshWrapped) {
+            window.addToUploadQueue = function (files) {
+                origAddToQueue(files);
+                startUploadTrayPolling();
+                var checkInterval = setInterval(function () {
+                    var queue = window.uploadQueue || [];
+                    var activeCount = queue.filter(function (item) {
+                        return item.status === "uploading" || item.status === "queued" || item.status === "processing";
+                    }).length;
+                    if (activeCount === 0) {
+                        clearInterval(checkInterval);
+                        setTimeout(triggerInstantRefresh, 500);
+                    }
+                }, 500);
+            };
+            window.addToUploadQueue.__refreshWrapped = true;
         }
 
         console.log("[app-init] Prototype UI adapter initialized. " +

@@ -645,12 +645,13 @@ async def generate_decoy_traffic(request: Request):
 
 @router.get("/api/files", name="api_files")
 async def api_files():
-    """API endpoint to get current file list as JSON"""
+    """API endpoint to get current file list as JSON with full metadata"""
     try:
         files = get_file_list()
         return JSONResponse(content={
             "status": "success",
             "files": [f["name"] for f in files],
+            "files_data": files,
             "count": len(files)
         })
     except Exception as e:
