@@ -23,231 +23,711 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
 
 {% block content %}
 
-<!-- Main File Transfer View -->
+<!-- ==========================================================================
+     PROTOTYPE APPLICATION SHELL
+     Wraps around all production content.
+     ========================================================================== -->
+<div class="android-app">
 
-<!--  Main Responsive Container -->
-<div style="min-height: 100vh; width: 100%; max-width: 100vw; padding: 0 1rem;">
-
-  <header
-    style="padding: 1rem; background-color: #ffffff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); margin-bottom: 1rem;">
-    <!-- Title -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; gap: 1rem;">
-      <h1 style="margin: 0; font-size: 1.8rem; color: var(--text-color); flex-shrink: 1; min-width: 0;">{{ msg }}</h1>
-
-      <!-- AES Toggle Block (keep on right side) -->
-      <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 1; min-width: 0;">
-        <!-- Dark Mode Toggle -->
-        <div
-          style="display: flex; align-items: center; background-color: var(--toggle-bg); padding: 0.4rem 0.6rem; border-radius: 25px; gap: 0.4rem; transition: background-color 0.3s ease; flex-shrink: 1; min-width: 0;">
-          <span id="darkModeLabel"
-            style="font-size: 0.85rem; color: #333; transition: color 0.3s ease; white-space: nowrap;"><b><i
-                data-lucide="moon" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i>
-              Dark</b></span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="enableDarkMode">
-            <span class="slider dark-mode-slider"></span>
-          </label>
-        </div>
-
-        <!-- AES Encryption Toggle -->
-        <div
-          style="display: flex; align-items: center; background-color: var(--toggle-bg); padding: 0.4rem 0.6rem; border-radius: 25px; gap: 0.4rem; transition: background-color 0.3s ease; flex-shrink: 1; min-width: 0;">
-          <span id="aesLabel"
-            style="font-size: 0.85rem; color: #333; transition: color 0.3s ease; white-space: nowrap;"><b>AES</b></span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="enableEncryption">
-            <span class="slider"></span>
-          </label>
-        </div>
+  <!-- 1. Desktop Sidebar Navigation -->
+  <aside class="app-sidebar">
+    <div class="sidebar-brand">
+      <div
+        style="position: relative; width: 52px; height: 34px; display: inline-flex; align-items: center; justify-content: center;">
+        <img class="brand-logo dark-logo" src="{{ request.url_for('static', path='images/icon_dark_transparent.png') }}"
+          alt="Lanvan Logo">
+        <img class="brand-logo light-logo"
+          src="{{ request.url_for('static', path='images/icon_light_transparent.png') }}" alt="Lanvan Logo">
       </div>
+      <span class="brand-title">Lanvan</span>
     </div>
-
-    <!-- Protocol Status and Settings Row -->
-    <div class="network-info connection-info"
-      style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-      <div id="protocolStatus" onclick="showConnectionInfo()"
-        style="display: flex; align-items: center; background-color: var(--protocol-bg); padding: 0.5rem 0.8rem; border-radius: 20px; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; transition: all 0.3s ease;"
-        onmouseover="this.style.backgroundColor='#d0e9f7'" onmouseout="this.style.backgroundColor='var(--protocol-bg)'">
-        <span id="protocolIcon"><i data-lucide="globe"
-            style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i></span>
-        <span id="protocolText"
-          style="color: var(--protocol-text); font-weight: 500; transition: color 0.3s ease;">HTTP</span>
-        <span id="qrHintText"
-          style="color: var(--protocol-text); font-size: 0.75rem; opacity: 0.8; font-weight: 400; transition: all 0.3s ease;">ΓÇó
-          Click for QR code</span>
+    <nav class="sidebar-menu">
+      <div class="sidebar-item active" id="sideItemFile" onclick="switchView('file')">
+        <i data-lucide="folder"></i> Files
       </div>
+      <div class="sidebar-item" id="sideItemClipboard" onclick="switchView('clipboard')">
+        <i data-lucide="clipboard"></i> Clipboard
+      </div>
+    </nav>
+    <div class="sidebar-utility">
+      <section class="connection-card">
+        <div class="utility-head">
+          <div class="utility-title">
+            <i data-lucide="qr-code" style="width:17px;height:17px;color:var(--primary);"></i>
+            <span>Connect</span>
+          </div>
+          <span style="font-size:0.65rem;color:var(--text-muted);font-weight:800;">QR</span>
+        </div>
+        <div class="connect-tabs">
+          <button id="lanIpTab" class="connect-tab active" onclick="setConnectMode('ip')">LAN IP</button>
+          <button id="mdnsTab" class="connect-tab" onclick="setConnectMode('mdns')">mDNS</button>
+        </div>
+        <div class="qr-box" id="qrBox" aria-label="Connection QR preview">
+          <!-- Populated by production QR generation -->
+        </div>
+        <div class="connect-value">
+          <span id="connectAddress">...</span>
+          <button class="mini-copy" onclick="copyConnectAddress()" title="Copy address">
+            <i data-lucide="copy" style="width:14px;height:14px;"></i>
+          </button>
+        </div>
+        <div class="utility-subtitle">Connect to Lanvan using the URL or QR code. Make sure you are on the same Wi-Fi or
+          hotspot.</div>
+      </section>
+    </div>
+  </aside>
 
-      <!-- Settings Button -->
-      <div style="position: relative;">
-        <button id="settingsBtn" onclick="toggleSettingsMenu()" style="
-        background: var(--settings-bg);
-        color: white;
-        border: none;
-        padding: 0.5rem 0.8rem;
-        border-radius: 25px;
-        cursor: pointer;
-        font-size: 0.9rem;
-        display: flex;
-        align-items: center;
-        gap: 0.3rem;
-        transition: all 0.3s ease;
-      " onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='var(--settings-bg)'">
-          <i data-lucide="settings" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i>
-          Settings
+  <!-- 2. Main App Body -->
+  <div class="app-body">
+
+    <!-- Top App Bar -->
+    <header class="app-bar">
+      <span class="app-title">Lanvan</span>
+      <label class="search-shell">
+        <i data-lucide="search" style="width:20px;height:20px;"></i>
+        <input id="searchInput" type="search" placeholder="Search in Lanvan" autocomplete="off" autocapitalize="off"
+          spellcheck="false">
+        <button id="clearSearchBtn" type="button" class="search-clear-btn" title="Clear search"
+          aria-label="Clear search">
+          <i data-lucide="x" style="width:15px;height:15px;"></i>
+        </button>
+      </label>
+      <div class="app-actions">
+        <button class="btn-icon" onclick="toggleDarkMode()" title="Toggle theme">
+          <i data-lucide="sun" style="width:18px;height:18px;"></i>
+        </button>
+        <button class="btn-icon" onclick="openSettingsDialog()" title="Settings">
+          <i data-lucide="settings" style="width:18px;height:18px;"></i>
         </button>
       </div>
-    </div>
+    </header>
 
-    <!-- Settings Dropdown Menu (positioned below AES toggle) -->
-    <div id="settingsMenu" style="
-    display: none;
-    position: absolute;
-    right: 1rem;
-    top: 6rem;
-    background: var(--section-bg);
-    border-radius: 10px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-    border: 1px solid var(--border-color);
-    min-width: 200px;
-    z-index: 1000;
-    overflow: hidden;
-  ">
-      <button onclick="toggleDeviceLogs(); toggleSettingsMenu();" style="
-      width: 100%;
-      padding: 0.8rem 1rem;
-      border: none;
-      background: var(--section-bg);
-      color: var(--text-color);
-      text-align: left;
-      cursor: pointer;
-      font-size: 0.9rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      transition: background-color 0.2s ease;
-    " onmouseover="this.style.background='var(--input-bg)'" onmouseout="this.style.background='var(--section-bg)'">
-        <i data-lucide="bar-chart-2" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i>
-        Device Logs
+    <!-- Search Results Panel -->
+    <section id="searchResultsPanel" class="search-results-panel" aria-live="polite"></section>
+
+    <!-- App Content Area -->
+    <main class="app-content">
+
+      <!-- ======= FILE BROWSER VIEW ======= -->
+      <div id="fileView" class="view-content"
+        style="display: flex; flex-direction: column; gap: 0.75rem; width:100%; flex: 1; min-height: 0; overflow: hidden;">
+
+        <!-- Desktop Panel Header -->
+        <div class="desktop-panel-header">
+          <div class="panel-title" id="desktopPanelTitle">
+            <i data-lucide="folder" id="desktopPanelTitleIcon"></i>
+            <div class="nas-breadcrumbs" id="breadcrumbsContainer"></div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <span class="panel-meta" id="filePanelMeta"></span>
+            <button class="btn-icon qr-launch-btn" onclick="openConnectQrDialog()" title="Show QR" aria-label="Show QR">
+              <i data-lucide="qr-code" style="width:15px;height:15px;"></i>
+            </button>
+            <button class="file-settings-btn" onclick="openSettingsDialog()" title="Settings">
+              <i data-lucide="settings" style="width: 15px; height: 15px; color: var(--primary);"></i>
+              <span>Settings</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick Access Cards -->
+        <div class="quick-access" id="quickAccessContainer"></div>
+
+        <!-- Toolbar Row -->
+        <div class="file-toolbar" id="fileToolbar">
+          <div id="toolbarDefaultContent"
+            style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+            <div class="dropdown" style="position: relative; display: inline-block;">
+              <div id="typeBtnWrapper" style="display: inline-block;">
+                <button class="filter-chip" id="typeDropdownBtn" onclick="toggleTypeDropdown(event)"
+                  style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.76rem; font-weight: 700; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-color); border-radius: 999px; padding: 0.45rem 0.8rem; cursor: pointer;">
+                  <span>Type</span>
+                  <i data-lucide="chevron-down" style="width: 12px; height: 12px;"></i>
+                </button>
+              </div>
+              <div id="typeDropdownMenu" class="custom-context-menu"
+                style="display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 100; min-width: 170px; padding: 0.35rem 0; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 8px; background: var(--card-bg); border: 1px solid var(--border-color);">
+                <div class="context-item" onclick="setTypeFilter('all')" style="padding: 0.45rem 0.85rem;">
+                  <div class="context-item-left" style="display:flex; align-items:center; gap:0.5rem;">
+                    <i data-lucide="check" style="width: 14px; height: 14px; color: var(--primary);"></i>
+                    <span>All Types</span>
+                  </div>
+                </div>
+                <div class="context-item" onclick="setTypeFilter('image')" style="padding: 0.45rem 0.85rem;">
+                  <div class="context-item-left" style="display:flex; align-items:center; gap:0.5rem;">
+                    <i data-lucide="image" style="width: 14px; height: 14px;"></i>
+                    <span>Photos</span>
+                  </div>
+                </div>
+                <div class="context-item" onclick="setTypeFilter('video')" style="padding: 0.45rem 0.85rem;">
+                  <div class="context-item-left" style="display:flex; align-items:center; gap:0.5rem;">
+                    <i data-lucide="video" style="width: 14px; height: 14px;"></i>
+                    <span>Videos</span>
+                  </div>
+                </div>
+                <div class="context-item" onclick="setTypeFilter('audio')" style="padding: 0.45rem 0.85rem;">
+                  <div class="context-item-left" style="display:flex; align-items:center; gap:0.5rem;">
+                    <i data-lucide="music" style="width: 14px; height: 14px;"></i>
+                    <span>Audio</span>
+                  </div>
+                </div>
+                <div class="context-item" onclick="setTypeFilter('doc')" style="padding: 0.45rem 0.85rem;">
+                  <div class="context-item-left" style="display:flex; align-items:center; gap:0.5rem;">
+                    <i data-lucide="file-text" style="width: 14px; height: 14px;"></i>
+                    <span>Documents</span>
+                  </div>
+                </div>
+                <div class="context-item" onclick="setTypeFilter('folder')" style="padding: 0.45rem 0.85rem;">
+                  <div class="context-item-left" style="display:flex; align-items:center; gap:0.5rem;">
+                    <i data-lucide="folder" style="width: 14px; height: 14px;"></i>
+                    <span>Folder</span>
+                  </div>
+                </div>
+                <div class="context-item" onclick="setTypeFilter('archive')" style="padding: 0.45rem 0.85rem;">
+                  <div class="context-item-left" style="display:flex; align-items:center; gap:0.5rem;">
+                    <i data-lucide="archive" style="width: 14px; height: 14px;"></i>
+                    <span>Archives</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="view-switcher-pill">
+              <button id="listViewBtn" class="view-switcher-btn active" onclick="setViewMode('list')" title="List View">
+                <i data-lucide="menu" style="width:16px;height:16px;"></i>
+              </button>
+              <button id="gridViewBtn" class="view-switcher-btn" onclick="setViewMode('grid')" title="Grid View">
+                <i data-lucide="layout-grid" style="width:16px;height:16px;"></i>
+              </button>
+            </div>
+          </div>
+          <div id="toolbarSelectionContent"
+            style="display: none; align-items: center; justify-content: space-between; width: 100%;">
+            <!-- Populated dynamically by adapter -->
+          </div>
+        </div>
+
+        <!-- File Explorer Dropzone + List -->
+        <div class="m3-card" id="nasDropzone">
+          <div class="drag-overlay">
+            <i data-lucide="upload-cloud" style="width: 48px; height: 48px;"></i>
+            <span>Drop files to upload here</span>
+          </div>
+          <div class="file-table-head" id="fileTableHead">
+            <span onclick="handleHeaderSortClick('name')"
+              style="cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; user-select:none;">
+              <span>Name</span>
+              <span id="sortArrow-name"></span>
+            </span>
+            <span onclick="handleHeaderSortClick('date')"
+              style="cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; user-select:none;">
+              <span>Modified</span>
+              <span id="sortArrow-date"></span>
+            </span>
+            <span onclick="handleHeaderSortClick('size')"
+              style="cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; user-select:none;">
+              <span>Size</span>
+              <span id="sortArrow-size"></span>
+            </span>
+            <span style="display:flex; justify-content:flex-end;">
+              <button id="sortMenuBtn" onclick="toggleSortMenu(event)"
+                style="display:flex; align-items:center; gap:0.25rem; border:none; background:var(--toggle-bg); color:var(--text-color); font-size:0.7rem; font-weight:700; padding:4px 10px; border-radius:12px; cursor:pointer;">
+                <i data-lucide="arrow-up-down" style="width:12px;height:12px;"></i>
+                <span>Sort</span>
+              </button>
+            </span>
+          </div>
+          <div class="m3-list" id="nasFileList">
+            <!-- Populated dynamically by adapter -->
+          </div>
+        </div>
+      </div>
+
+      <!-- ======= CLIPBOARD VIEW ======= -->
+      <div id="clipboardView" class="view-content"
+        style="display: none; flex-direction: column; gap: 0.75rem; width:100%; flex: 1; min-height: 0; overflow: hidden;">
+        <div class="desktop-panel-header">
+          <div class="panel-title">
+            <span>Clipboard</span>
+          </div>
+          <div class="clipboard-header-actions">
+            <span class="panel-meta">Shared text and links</span>
+            <button class="clipboard-shared-badge" type="button" title="Show QR" aria-label="Show QR"
+              onclick="openConnectQrDialog()">
+              <i data-lucide="qr-code" style="width:14px;height:14px;"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Clipboard Input Card -->
+        <div class="m3-card clipboard-composer-card"
+          style="display: flex; flex-direction: column; gap: 0.75rem; padding: 1.1rem 1.25rem;">
+          <div class="m3-card-title"
+            style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; font-weight: 700; color: var(--text-color);">
+            <span>Add to Clipboard</span>
+          </div>
+          <div class="clipboard-input-wrapper">
+            <textarea id="clipboardInput" class="clipboard-input"
+              placeholder="Type or paste text, links, or Media here..."></textarea>
+            <div class="clipboard-action-bar" style="justify-content: flex-start; gap: 0.5rem;">
+              <button class="m3-primary-btn" onclick="addClipboardItem()">
+                <i data-lucide="plus" style="width:15px;height:15px;"></i>
+                <span>Add Text</span>
+              </button>
+              <button class="m3-secondary-btn" onclick="clearClipboardInput()">
+                <i data-lucide="x" style="width:15px;height:15px;"></i>
+                <span>Clear</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clipboard History -->
+        <span class="list-header">Clipboard History</span>
+        <div class="m3-list" id="clipboardHistory" style="flex: 1; min-height: 0; overflow-y: auto !important;">
+          <!-- Populated dynamically by adapter -->
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Desktop Upload Toast Tray -->
+    <div id="uploadToastStack" class="upload-toast-stack" aria-live="polite"></div>
+
+    <!-- Bottom Navigation Bar (Mobile) -->
+    <nav class="bottom-nav">
+      <div class="nav-item active" id="navItemFile" onclick="switchView('file')">
+        <div class="nav-item-icon-wrapper">
+          <i data-lucide="folder" style="width:20px;height:20px;"></i>
+        </div>
+        <span>Files</span>
+      </div>
+      <div class="nav-item" id="navItemClipboard" onclick="switchView('clipboard')">
+        <div class="nav-item-icon-wrapper">
+          <i data-lucide="clipboard" style="width:20px;height:20px;"></i>
+        </div>
+        <span>Clipboard</span>
+      </div>
+      <div class="yt-nav-add" onclick="showMobileUploadMenu(event)" title="Add new item">
+        <button class="yt-add-btn">
+          <i data-lucide="plus" style="width:22px;height:22px;"></i>
+        </button>
+      </div>
+      <div class="nav-item" id="navItemRecent" onclick="switchView('recent')">
+        <div class="nav-item-icon-wrapper">
+          <i data-lucide="clock-3" style="width:20px;height:20px;"></i>
+        </div>
+        <span>Recent</span>
+      </div>
+      <div class="nav-item" id="navItemStarred" onclick="switchView('starred')">
+        <div class="nav-item-icon-wrapper">
+          <i data-lucide="star" style="width:20px;height:20px;"></i>
+        </div>
+        <span>Starred</span>
+      </div>
+    </nav>
+  </div><!-- /app-body -->
+
+</div><!-- /android-app -->
+
+<!-- ==========================================================================
+     CONTEXT MENUS & DIALOGS
+     ========================================================================== -->
+
+<!-- Mobile Add Bottom Sheet -->
+<div id="mobileAddSheetOverlay" class="mobile-sheet-overlay" onclick="closeMobileAddSheet()">
+  <div class="mobile-add-sheet" onclick="event.stopPropagation()">
+    <div class="sheet-handle-bar"></div>
+    <div class="sheet-header">Create & Upload</div>
+    <div class="sheet-actions">
+      <button class="sheet-action-item" onclick="closeMobileAddSheet(); triggerFileInput('file');">
+        <div class="sheet-action-icon"><i data-lucide="file-up" style="width:18px;height:18px;"></i></div>
+        <span>File upload</span>
+      </button>
+      <button class="sheet-action-item" onclick="closeMobileAddSheet(); triggerFileInput('folder');">
+        <div class="sheet-action-icon"><i data-lucide="folder-up" style="width:18px;height:18px;"></i></div>
+        <span>Folder upload</span>
+      </button>
+      <button class="sheet-action-item" onclick="closeMobileAddSheet(); openNewFolderDialog();">
+        <div class="sheet-action-icon"><i data-lucide="folder-plus" style="width:18px;height:18px;"></i></div>
+        <span>New folder</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom Context Menu -->
+<div id="contextMenu" class="custom-context-menu">
+  <div id="genericMenuOptions">
+    <div class="context-item" onclick="triggerFileInput('file')">
+      <div class="context-item-left">
+        <i data-lucide="file-up"></i>
+        <span>File upload</span>
+      </div>
+    </div>
+    <div class="context-item" onclick="triggerFileInput('folder')">
+      <div class="context-item-left">
+        <i data-lucide="folder-up"></i>
+        <span>Folder upload</span>
+      </div>
+    </div>
+    <div class="context-item" onclick="openNewFolderDialog()">
+      <div class="context-item-left">
+        <i data-lucide="folder-plus"></i>
+        <span>New folder</span>
+      </div>
+    </div>
+  </div>
+  <div id="itemMenuOptions" style="display:none;">
+    <div class="context-item" id="uploadCancelMenuItem" onclick="cancelSelectedUpload()"
+      style="display:none; color:var(--danger);">
+      <div class="context-item-left">
+        <i data-lucide="x-circle" style="color:var(--danger);"></i>
+        <span>Cancel upload</span>
+      </div>
+    </div>
+    <div class="context-item" onclick="openRenameModal()">
+      <div class="context-item-left">
+        <i data-lucide="pencil"></i>
+        <span>Rename</span>
+      </div>
+    </div>
+    <div class="context-item" onclick="downloadSelected()">
+      <div class="context-item-left">
+        <i data-lucide="download"></i>
+        <span>Download</span>
+      </div>
+    </div>
+    <div class="context-item" onclick="openMoveModal()">
+      <div class="context-item-left">
+        <i data-lucide="folder-input"></i>
+        <span>Move to</span>
+      </div>
+    </div>
+    <div class="context-item" onclick="deleteSelected()" style="color:var(--danger);">
+      <div class="context-item-left">
+        <i data-lucide="trash-2" style="color:var(--danger);"></i>
+        <span>Delete</span>
+      </div>
+    </div>
+  </div>
+  <div id="clipboardMenuOptions" style="display:none;">
+    <div class="context-item" onclick="handleClipboardMenuDownload()">
+      <div class="context-item-left">
+        <i data-lucide="download"></i>
+        <span>Download</span>
+      </div>
+    </div>
+    <div class="context-item" onclick="handleClipboardMenuDelete()" style="color:var(--danger);">
+      <div class="context-item-left">
+        <i data-lucide="trash-2" style="color:var(--danger);"></i>
+        <span>Delete</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sort Dropdown Menu -->
+<div id="sortDropdownMenu" class="custom-context-menu"
+  style="display:none; z-index:10005; min-width:180px; padding:0.4rem 0;">
+  <div
+    style="font-size:0.68rem; font-weight:750; color:var(--text-muted); padding:0.3rem 0.8rem; text-transform:uppercase; letter-spacing:0.5px;">
+    Sort by</div>
+  <div class="context-item" onclick="setSortOption('by', 'name')">
+    <div class="context-item-left">
+      <i data-lucide="check" id="check-by-name" style="width:14px;height:14px;visibility:visible;"></i>
+      <span>Name</span>
+    </div>
+  </div>
+  <div class="context-item" onclick="setSortOption('by', 'date')">
+    <div class="context-item-left">
+      <i data-lucide="check" id="check-by-date" style="width:14px;height:14px;visibility:hidden;"></i>
+      <span>Date modified</span>
+    </div>
+  </div>
+  <div class="context-item" onclick="setSortOption('by', 'size')">
+    <div class="context-item-left">
+      <i data-lucide="check" id="check-by-size" style="width:14px;height:14px;visibility:hidden;"></i>
+      <span>Size</span>
+    </div>
+  </div>
+  <hr style="border:none; border-top:1px solid var(--border-color); margin:0.4rem 0;" />
+  <div
+    style="font-size:0.68rem; font-weight:750; color:var(--text-muted); padding:0.3rem 0.8rem; text-transform:uppercase; letter-spacing:0.5px;">
+    Sort direction</div>
+  <div class="context-item" onclick="setSortOption('direction', 'asc')">
+    <div class="context-item-left">
+      <i data-lucide="check" id="check-dir-asc" style="width:14px;height:14px;visibility:visible;"></i>
+      <span>A to Z</span>
+    </div>
+  </div>
+  <div class="context-item" onclick="setSortOption('direction', 'desc')">
+    <div class="context-item-left">
+      <i data-lucide="check" id="check-dir-desc" style="width:14px;height:14px;visibility:hidden;"></i>
+      <span>Z to A</span>
+    </div>
+  </div>
+  <hr style="border:none; border-top:1px solid var(--border-color); margin:0.4rem 0;" />
+  <div
+    style="font-size:0.68rem; font-weight:750; color:var(--text-muted); padding:0.3rem 0.8rem; text-transform:uppercase; letter-spacing:0.5px;">
+    Folders</div>
+  <div class="context-item" onclick="setSortOption('folders', 'top')">
+    <div class="context-item-left">
+      <i data-lucide="check" id="check-folders-top" style="width:14px;height:14px;visibility:visible;"></i>
+      <span>On top</span>
+    </div>
+  </div>
+  <div class="context-item" onclick="setSortOption('folders', 'mixed')">
+    <div class="context-item-left">
+      <i data-lucide="check" id="check-folders-mixed" style="width:14px;height:14px;visibility:hidden;"></i>
+      <span>Mixed with files</span>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden File/Folder Inputs -->
+<input type="file" id="hiddenFileInput" style="display:none;" multiple>
+<input type="file" id="hiddenFolderInput" style="display:none;" webkitdirectory>
+
+<!-- New Folder Dialog -->
+<div id="newFolderDialog" class="m3-dialog-overlay" style="z-index: 21000;">
+  <div class="m3-dialog">
+    <span class="dialog-title">New folder</span>
+    <input type="text" id="newFolderNameInput" class="dialog-input" placeholder="Untitled folder"
+      value="Untitled folder">
+    <div class="dialog-actions">
+      <button class="dialog-btn" onclick="closeNewFolderDialog()" style="color:var(--text-muted);">Cancel</button>
+      <button class="dialog-btn dialog-btn-primary" onclick="submitNewFolder()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Move File Dialog -->
+<div id="moveFileDialog" class="m3-dialog-overlay">
+  <div class="m3-dialog"
+    style="max-width: 520px; width: 90%; display: flex; flex-direction: column; gap: 0.85rem; padding: 1.5rem;">
+    <div class="dialog-title" id="moveDialogTitle"
+      style="font-size: 1.25rem; font-weight: 700; color: var(--text-color);">Move items</div>
+    <button id="movePrevBtn" onclick="navigateMoveUp()"
+      style="display: none; align-items: center; gap: 0.35rem; border: none; background: transparent; color: var(--primary); font-size: 0.82rem; font-weight: 700; cursor: pointer; padding: 0.15rem 0; align-self: flex-start;">
+      <i data-lucide="arrow-left" style="width: 16px; height: 16px;"></i>
+      <span>Previous</span>
+    </button>
+    <div id="moveBreadcrumbs"
+      style="font-size: 0.76rem; color: var(--text-muted); font-weight: 600; display: flex; align-items: center; gap: 0.25rem; overflow-x: auto; white-space: nowrap; padding-bottom: 0.25rem;">
+    </div>
+    <div
+      style="display: grid; grid-template-columns: 1fr 100px; padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--border-color); font-size: 0.72rem; font-weight: 750; color: var(--text-muted);">
+      <span>Name</span>
+      <span>Date modified</span>
+    </div>
+    <div id="moveFolderOptions"
+      style="max-height: 220px; min-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 0.25rem 0; border-bottom: 1px solid var(--border-color);">
+    </div>
+    <div class="dialog-actions" style="justify-content: space-between; align-items: center; width: 100%;">
+      <button class="dialog-btn" onclick="handleNewFolderInMove()"
+        style="border: 1px solid var(--border-color); border-radius: 99px; padding: 0.5rem 1rem; display: flex; align-items: center; gap: 0.35rem; font-weight: 650; color: var(--primary); background: transparent; cursor: pointer;">
+        <i data-lucide="folder-plus" style="width: 14px; height: 14px;"></i>
+        <span>New folder</span>
+      </button>
+      <div style="display: flex; gap: 0.5rem;">
+        <button class="dialog-btn" onclick="closeMoveDialog()"
+          style="color:var(--text-muted); background: transparent; cursor: pointer;">Cancel</button>
+        <button class="dialog-btn dialog-btn-primary" onclick="submitMove()" style="cursor: pointer;">Move</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Rename Dialog -->
+<div id="renameDialog" class="m3-dialog-overlay" style="z-index: 21000;">
+  <div class="m3-dialog">
+    <span class="dialog-title">Rename</span>
+    <input type="text" id="renameInput" class="dialog-input" placeholder="Enter new name">
+    <div class="dialog-actions">
+      <button class="dialog-btn" onclick="closeRenameDialog()" style="color:var(--text-muted);">Cancel</button>
+      <button class="dialog-btn dialog-btn-primary" onclick="submitRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Dialog -->
+<div id="settingsDialog" class="m3-dialog-overlay" style="z-index: 21000; display: none;">
+  <div class="m3-dialog" style="max-width: 420px; width: 90%; padding: 1.5rem; border-radius: 20px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem;">
+      <div
+        style="display: flex; align-items: center; gap: 0.5rem; font-size: 1.15rem; font-weight: 700; color: var(--text-color);">
+        <i data-lucide="settings" style="width: 20px; height: 20px; color: var(--primary);"></i>
+        <span>Settings</span>
+      </div>
+      <button class="btn-icon" onclick="closeSettingsDialog()" style="width: 32px; height: 32px;">
+        <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+      </button>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 1rem;">
+      <div
+        style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; background: var(--toggle-bg); border-radius: 14px; border: 1px solid var(--border-color);">
+        <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+          <div
+            style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; font-weight: 650; color: var(--text-color);">
+            <i data-lucide="shield-check" style="width: 16px; height: 16px; color: var(--primary);"></i>
+            <span>AES Protection</span>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--text-muted);">Encrypt transfer payloads with AES-256</span>
+        </div>
+        <label class="m3-switch" style="position: relative; display: inline-block; width: 44px; height: 24px;">
+          <input type="checkbox" id="aesSettingToggle" checked style="opacity: 0; width: 0; height: 0;">
+          <span class="m3-switch-slider"></span>
+        </label>
+      </div>
+      <div
+        style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem; background: var(--toggle-bg); border-radius: 14px; border: 1px solid var(--border-color);">
+        <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+          <div
+            style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; font-weight: 650; color: var(--text-color);">
+            <i data-lucide="moon" style="width: 16px; height: 16px; color: var(--primary);"></i>
+            <span>Dark Theme</span>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--text-muted);">Use sleek dark mode interface</span>
+        </div>
+        <label class="m3-switch" style="position: relative; display: inline-block; width: 44px; height: 24px;">
+          <input type="checkbox" id="darkThemeSettingToggle" onchange="toggleDarkMode()"
+            style="opacity: 0; width: 0; height: 0;">
+          <span class="m3-switch-slider"></span>
+        </label>
+      </div>
+    </div>
+    <div class="dialog-actions" style="margin-top: 1.25rem;">
+      <button class="dialog-btn dialog-btn-primary" onclick="closeSettingsDialog()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Connect QR Dialog -->
+<div id="connectQrDialog" class="m3-modal-overlay" style="display: none; z-index: 21000;"
+  onclick="closeConnectQrDialog()">
+  <div class="m3-modal-card connect-qr-card" onclick="event.stopPropagation()">
+    <div class="connect-qr-header">
+      <div class="connect-qr-title">
+        <i data-lucide="qr-code" style="width:20px;height:20px;color:var(--primary);"></i>
+        <span>Connect QR</span>
+      </div>
+      <button class="btn-icon" onclick="closeConnectQrDialog()" aria-label="Close QR" style="width:32px;height:32px;">
+        <i data-lucide="x" style="width:16px;height:16px;"></i>
+      </button>
+    </div>
+    <div class="connect-qr-subtitle">Connect to Lanvan using the URL or QR code. Make sure you are on the same Wi-Fi or
+      hotspot.</div>
+    <div class="connect-tabs connect-qr-tabs">
+      <button id="connectQrLanIpTab" class="connect-tab active" onclick="setConnectMode('ip')">LAN IP</button>
+      <button id="connectQrMdnsTab" class="connect-tab" onclick="setConnectMode('mdns')">mDNS</button>
+    </div>
+    <div class="qr-box connect-qr-box" id="connectQrDialogBox" aria-label="Connection QR preview">
+      <!-- Populated by production QR generation -->
+    </div>
+    <div class="connect-qr-address" id="connectQrDialogAddress"></div>
+    <div class="connect-qr-actions">
+      <button class="dialog-btn" onclick="closeConnectQrDialog()" style="color:var(--text-muted);">Close</button>
+      <button class="dialog-btn dialog-btn-primary" onclick="copyConnectAddress()">Copy address</button>
+    </div>
+  </div>
+</div>
+
+<!-- File Preview Modal -->
+<div id="previewModal" class="m3-modal-overlay" style="display: none;">
+  <div class="m3-modal-card" style="max-width: 500px; width: 90%;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+      <h3 id="previewTitle" style="margin: 0; font-size: 1.1rem; color: var(--text-color);">File Preview</h3>
+      <button class="btn-icon" onclick="closePreviewModal()"><i data-lucide="x"
+          style="width: 16px; height: 16px;"></i></button>
+    </div>
+    <div id="previewBody"
+      style="min-height: 180px; display: flex; align-items: center; justify-content: center; background: var(--toggle-bg); border-radius: 12px; padding: 1.25rem;">
+    </div>
+    <div class="dialog-actions" style="margin-top: 1.25rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
+      <button class="m3-secondary-btn" onclick="closePreviewModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==========================================================================
+     PRODUCTION LEGACY CONTAINER (HIDDEN)
+     All original production DOM IDs preserved for main-app.js compatibility.
+     ========================================================================== -->
+<div id="production-legacy"
+  style="display: none !important; position: absolute; width: 0; height: 0; overflow: hidden;">
+
+  <!-- Production header controls (toggles, buttons, settings) -->
+  <div>
+    <!-- Dark Mode Toggle (production) -->
+    <div
+      style="display: flex; align-items: center; background-color: var(--toggle-bg); padding: 0.4rem 0.6rem; border-radius: 25px; gap: 0.4rem;">
+      <span id="darkModeLabel" style="font-size: 0.85rem; color: #333;">
+        <b><i data-lucide="moon" style="width:1em;height:1em;vertical-align:-0.125em;"></i> Dark</b>
+      </span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="enableDarkMode">
+        <span class="slider dark-mode-slider"></span>
+      </label>
+    </div>
+    <!-- AES Encryption Toggle (production) -->
+    <div
+      style="display: flex; align-items: center; background-color: var(--toggle-bg); padding: 0.4rem 0.6rem; border-radius: 25px; gap: 0.4rem;">
+      <span id="aesLabel" style="font-size: 0.85rem; color: #333;"><b>AES</b></span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="enableEncryption">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div id="protocolStatus" onclick="showConnectionInfo()"
+      style="display: flex; align-items: center; background-color: var(--protocol-bg); padding: 0.5rem 0.8rem; border-radius: 20px; gap: 0.5rem; font-size: 0.85rem; cursor: pointer;">
+      <span id="protocolIcon"><i data-lucide="globe" style="width:1em;height:1em;vertical-align:-0.125em;"></i></span>
+      <span id="protocolText" style="color: var(--protocol-text); font-weight: 500;">HTTP</span>
+      <span id="qrHintText" style="color: var(--protocol-text); font-size: 0.75rem; opacity: 0.8;">• Click for QR
+        code</span>
+    </div>
+    <button id="settingsBtn" onclick="toggleSettingsMenu()"
+      style="background: var(--settings-bg); color: white; border: none; padding: 0.5rem 0.8rem; border-radius: 25px; cursor: pointer; font-size: 0.9rem;">
+      <i data-lucide="settings" style="width:1em;height:1em;vertical-align:-0.125em;"></i> Settings
+    </button>
+    <div id="settingsMenu"
+      style="display: none; position: absolute; right: 1rem; top: 6rem; background: var(--section-bg); border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); border: 1px solid var(--border-color); min-width: 200px; z-index: 1000; overflow: hidden;">
+      <button onclick="toggleDeviceLogs(); toggleSettingsMenu();"
+        style="width: 100%; padding: 0.8rem 1rem; border: none; background: var(--section-bg); color: var(--text-color); text-align: left; cursor: pointer; font-size: 0.9rem;">
+        <i data-lucide="bar-chart-2" style="width:1em;height:1em;vertical-align:-0.125em;"></i> Device Logs
       </button>
       <div style="height: 1px; background: var(--border-color); margin: 0;"></div>
-      <button onclick="showAccessControlSettings(); toggleSettingsMenu();" style="
-      width: 100%;
-      padding: 0.8rem 1rem;
-      border: none;
-      background: var(--section-bg);
-      color: var(--text-color);
-      text-align: left;
-      cursor: pointer;
-      font-size: 0.9rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      transition: background-color 0.2s ease;
-    " onmouseover="this.style.background='var(--input-bg)'" onmouseout="this.style.background='var(--section-bg)'"
-        title="Coming soon - Access control features">
-        <i data-lucide="lock-keyhole" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i>
-        Access Control <span style="font-size: 0.7rem; opacity: 0.6; color: var(--text-color);">(Soon)</span>
+      <button onclick="showAccessControlSettings(); toggleSettingsMenu();"
+        style="width: 100%; padding: 0.8rem 1rem; border: none; background: var(--section-bg); color: var(--text-color); text-align: left; cursor: pointer; font-size: 0.9rem;"
+        title="Coming soon">
+        <i data-lucide="lock-keyhole" style="width:1em;height:1em;vertical-align:-0.125em;"></i> Access Control <span
+          style="font-size: 0.7rem; opacity: 0.6;">(Soon)</span>
       </button>
     </div>
-  </header>
+  </div>
 
-  {% if not show_clipboard_only or show_both_sections %}
-  <!--  Upload Files & Manager (Merged Section) -->
-  <section id="fileTransferSection" class="upload-section file-upload-section"
-    style="{% if default_view == 'clipboard' %}display: none;{% endif %}">
-    <div class="header"
-      style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-      <h2 style="margin: 0; color: var(--text-color);"><i data-lucide="upload"
-          style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Upload Files & Manager</h2>
-      <div style="position: relative;">
-        <button onclick="showSwitchDropdown(event, 'switchDropdownMain')" class="clipboard-btn btn switch-btn" style="
-        background: linear-gradient(135deg, #6c5ce7, #a29bfe);
-        color: white;
-        border: none;
-        padding: 0.5rem 1rem;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 0.9rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 4px rgba(108, 92, 231, 0.3);
-      " title="Switch between File Sharing and Clipboard">
-          <i data-lucide="refresh-cw" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i>
-          Switch
-        </button>
-        <div id="switchDropdownMain"
-          style="display:none; position:absolute; right:0; top:110%; background:var(--section-bg); border:1px solid var(--border-color); border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); min-width:150px; z-index:10001;">
-          <div
-            style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem; color: var(--text-color); transition: background-color 0.2s ease;"
-            onclick="switchToPage('file')" onmouseover="this.style.backgroundColor='var(--input-bg)'"
-            onmouseout="this.style.backgroundColor='transparent'">
-            <span
-              style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; color: var(--text-color);">
-              <span style="font-size: 1.3em;"><i data-lucide="folder"
-                  style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i></span>
-              <span>File Sharing</span>
-            </span>
-          </div>
-          <div
-            style="padding:0.5rem 1rem; cursor:pointer; display: flex; align-items: center; justify-content: space-between; white-space: nowrap; gap: 0.5rem; color: var(--text-color); transition: background-color 0.2s ease;"
-            onclick="switchToPage('clipboard')" onmouseover="this.style.backgroundColor='var(--input-bg)'"
-            onmouseout="this.style.backgroundColor='transparent'">
-            <span
-              style="display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; color: var(--text-color);">
-              <span style="font-size: 1.3em;"></span>
-              <span>Clipboard</span>
-            </span>
-          </div>
-        </div>
-      </div>
+  <!-- Production File Transfer Section -->
+  <section id="fileTransferSection" class="upload-section file-upload-section" style="display: block;">
+    <div id="switchDropdownMain"
+      style="display:none; position:absolute; right:0; top:110%; background:var(--section-bg); border:1px solid var(--border-color); border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); min-width:150px; z-index:10001;">
     </div>
-
-    <!-- Upload Form -->
     <form id="unifiedUploadForm">
-      <!-- Upload Mode Toggle -->
-      <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-        <button onclick="toggleUploadMode()" class="clipboard-btn" id="uploadModeToggle" style="
-        background: linear-gradient(135deg, #6c5ce7, #a29bfe);
-        color: white;
-        border: none;
-        padding: 0.5rem 1rem;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 0.9rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 4px rgba(108, 92, 231, 0.3);
-      " title="Switch between Files and Folders upload mode">
-          Files
-        </button>
-      </div>
-
-      <!-- NEW: Beautiful Sliding Toggle -->
+      <button onclick="toggleUploadMode()" class="clipboard-btn" id="uploadModeToggle"
+        style="background: linear-gradient(135deg, #6c5ce7, #a29bfe); color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.9rem;">Files</button>
       <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 1rem;" id="newSliderContainer">
         <div class="upload-mode-slider">
           <span id="filesLabel" class="mode-label active" style="color: #333;"><i data-lucide="file-text"
-              style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Files</span>
-
+              style="width:1em;height:1em;vertical-align:-0.125em;"></i> Files</span>
           <label class="slider-toggle">
             <input type="checkbox" id="uploadModeSlider" onchange="toggleUploadModeNew()">
-            <span class="slider-track">
-              <span class="slider-thumb"></span>
-            </span>
+            <span class="slider-track"><span class="slider-thumb"></span></span>
           </label>
-
           <span id="foldersLabel" class="mode-label" style="color: #333;"><i data-lucide="folder"
-              style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Folders</span>
+              style="width:1em;height:1em;vertical-align:-0.125em;"></i> Folders</span>
         </div>
       </div>
-
       <div class="drop-zone upload-area" id="drop-zone">
-        <p id="dropZoneText"><i data-lucide="folder"
-            style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Drag & Drop files or folders
-          here or click to select</p>
+        <p id="dropZoneText"><i data-lucide="folder" style="width:1em;height:1em;vertical-align:-0.125em;"></i> Drag &
+          Drop files or folders here or click to select</p>
         <input type="file" id="fileInput" name="files" multiple required style="display: none;">
         <input type="file" id="folderInput" name="folder" webkitdirectory multiple style="display: none;">
         <div class="file-preview" id="file-preview"></div>
@@ -255,96 +735,44 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
       <progress id="uploadProgress" value="0" max="100"></progress>
       <p id="uploadStatus"></p>
     </form>
-
-    <!-- Upload Manager (Always Visible) -->
     <div id="uploadManager" style="margin-top: 2rem; border-top: 2px solid #e0e0e0; padding-top: 1.5rem;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
         <h3 style="margin: 0; color: var(--text-color);"><i data-lucide="zap"
-            style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Active Uploads <span
-            id="uploadCount" style="color: var(--text-color); font-size: 0.9rem;">(0)</span></h3>
+            style="width:1em;height:1em;vertical-align:-0.125em;"></i> Active Uploads <span id="uploadCount"
+            style="color: var(--text-color); font-size: 0.9rem;">(0)</span></h3>
         <div style="display: flex; gap: 0.5rem;">
           <button onclick="cancelAllUploads()" class="upload-manager-btn" style="background: #dc3545;"><i
-              data-lucide="x-circle" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i>
-            Cancel
-            All</button>
+              data-lucide="x-circle" style="width:1em;height:1em;vertical-align:-0.125em;"></i> Cancel All</button>
         </div>
       </div>
-
-      <div id="uploadQueue" class="upload-queue">
-        <!-- Upload items will be dynamically added here -->
-      </div>
+      <div id="uploadQueue" class="upload-queue"></div>
     </div>
   </section>
-  {% endif %}
 
-  {% if not show_clipboard_only or show_both_sections %}
-  <!--  File List -->
-  <section id="fileListSection" style="{% if default_view == 'clipboard' %}display: none;{% endif %}">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <div>
-        <h2 style="color: var(--text-color);">Available Files</h2>
-        <span id="fileCount" class="file-count"
-          style="color: var(--text-color); font-size: 0.9em; margin-left: 0.5rem;"></span>
-      </div>
-      <div class="file-manager" style="display: flex; gap: 0.5rem;">
-        <button onclick="refreshFileListManually()" class="download-btn btn"
-          style="background-color: #17a2b8; margin-right: 0.5rem;" title="Refresh file list"><i data-lucide="refresh-cw"
-            style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Refresh</button>
-        <button onclick="showDownloadOptions(event)" class="download-btn btn" style="margin-right: 0.5rem;"><i
-            data-lucide="download" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i>
-          Download
-          All</button>
-        <button onclick="clearAllFiles()" class="download-btn btn" style="background-color: #e74c3c;"><i
-            data-lucide="trash-2" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Clear
-          History</button>
-      </div>
-    </div>
-
-    {% if files %}
-    <div id="fileGrid" class="file-grid">
-      {% for file in files %}
-      <div class="file-card">
-        <div class="file-icon"><i data-lucide="file-text"
-            style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i></div>
-        <div class="file-name" title="{{ file }}">{{ file }}</div>
-        <a href="{{ url_for('download_file', filename=file) }}" download class="download-btn"><i data-lucide="download"
-            style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Download</a>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <div id="fileGrid" class="file-grid" style="display: none;">
-      <!-- Files will be populated by JavaScript -->
-    </div>
-    {% endif %}
-
-    <!--  Folder List Section -->
+  <!-- Production File List Section -->
+  <section id="fileListSection" style="display: block;">
+    <span id="fileCount" class="file-count"
+      style="color: var(--text-color); font-size: 0.9em; margin-left: 0.5rem;"></span>
+    <div id="fileGrid" class="file-grid"></div>
     <div style="margin-top: 2rem; border-top: 2px solid var(--border-color, #e0e0e0); padding-top: 1.5rem;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <div>
-          <h3 style="color: var(--text-color); margin: 0;"><i data-lucide="folder"
-              style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Available Folders</h3>
-          <span id="folderCount" class="file-count"
-            style="color: var(--text-color); font-size: 0.9em; margin-left: 0.5rem;">(0)</span>
-        </div>
-        <div style="display: flex; gap: 0.5rem;">
-          <button onclick="refreshFolderList()" class="download-btn" style="background-color: #17a2b8;"
-            title="Refresh folder list"><i data-lucide="refresh-cw"
-              style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i> Refresh</button>
-          <button onclick="clearAllFolders()" class="download-btn" style="background-color: #e74c3c;"><i
-              data-lucide="trash-2" style="width:1em;height:1em;vertical-align:-0.125em;display:inline-block;"></i>
-            Clear
-            All</button>
-        </div>
-      </div>
-
-      <div id="folderGrid" class="file-grid">
-        <!-- Folders will be populated by JavaScript -->
-      </div>
+      <span id="folderCount" class="file-count" style="color: var(--text-color); font-size: 0.9em;">(0)</span>
+      <div id="folderGrid" class="file-grid"></div>
     </div>
   </section>
-  {% endif %}
 
+  <!-- Production Clipboard Section (hidden on main page) -->
+  <section id="clipboardSection" style="display: block;">
+    <textarea id="clipboardTextInput"
+      style="width: 100%; height: 100px; padding: 0.5rem; border: 2px dashed var(--border-color); background: var(--input-bg); color: var(--text-color); border-radius: 6px; resize: vertical; font-family: monospace; font-size: 0.9rem;"></textarea>
+    <button id="addTextToClipboardBtn" onclick="addTextToClipboard()" class="download-btn"
+      style="background: #28a745; color: white; border: none; padding: 0.5rem 1rem; border-radius: 25px; cursor: pointer; font-size: 0.9rem;">
+      <i data-lucide="file-pen" style="width:1em;height:1em;vertical-align:-0.125em;"></i> Add Text
+    </button>
+    <div id="clipboardHistoryContent"
+      style="max-height: 300px; overflow-y: auto; background: var(--input-bg); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+    </div>
+  </section>
 
+</div><!-- /production-legacy -->
 
-  {% endblock %}
+{% endblock %}

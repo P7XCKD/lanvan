@@ -12,6 +12,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
+    <!-- Google Fonts: Inter (matching prototype) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap"
+        rel="stylesheet">
 
     <!--  INSTANT DARK MODE - NO FLASH! -->
     <script>
@@ -32,6 +38,7 @@
     </script>
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/style.css') }}?v={{ cache_version }}">
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/main-styles.css') }}?v={{ cache_version }}">
+    <link rel="stylesheet" href="{{ request.url_for('static', path='css/lanvan.css') }}?v={{ cache_version }}">
     {% block page_styles %}{% endblock %}
     <script src="{{ request.url_for('static', path='js/resource-loader.js') }}?v={{ cache_version }}"> </script>
     <script src="/static/js/lucide.min.js"></script>
