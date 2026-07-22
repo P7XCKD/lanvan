@@ -413,12 +413,49 @@
 
     window.deleteSelected = function () {
         if (prototypeSelectedItems.length === 0) return;
-        if (typeof showToast === "function") {
-            showToast("Per-file deletion not yet available. This operation is safe — no files were deleted.", 4000);
-        } else {
-            alert("Per-file deletion not yet available. This operation is safe — no files were deleted.");
+        if (!confirm("Delete " + prototypeSelectedItems.length + " selected item(s)? This cannot be undone.")) return;
+
+        var itemsToDelete = prototypeSelectedItems.slice();
+        var completed = 0;
+        var failed = [];
+
+        function deleteNext(index) {
+            if (index >= itemsToDelete.length) {
+                // All done
+                if (failed.length > 0) {
+                    if (typeof showToast === "function") {
+                        showToast("Deleted " + completed + " file(s). " + failed.length + " failed.", 4000);
+                    }
+                } else {
+                    if (typeof showToast === "function") {
+                        showToast("Deleted " + completed + " file(s) successfully.", 3000);
+                    }
+                }
+                window.clearSelection();
+                // Refresh file list
+                if (typeof refreshFileList === "function") refreshFileList();
+                return;
+            }
+
+            var filename = itemsToDelete[index];
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/delete/" + encodeURIComponent(filename));
+            xhr.onload = function () {
+                if (xhr.status === 200) {
+                    completed++;
+                } else {
+                    failed.push(filename);
+                }
+                deleteNext(index + 1);
+            };
+            xhr.onerror = function () {
+                failed.push(filename);
+                deleteNext(index + 1);
+            };
+            xhr.send();
         }
-        window.clearSelection();
+
+        deleteNext(0);
     };
 
     function downloadFileByName(filename) {
