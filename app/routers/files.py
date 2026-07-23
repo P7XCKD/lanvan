@@ -90,9 +90,17 @@ def cleanup_temp_file_for_filename(filename: str, parent_path: Optional[str] = N
     if parent_path:
         clean_parent = parent_path.strip('/\\')
         if clean_parent:
-            sub_dir = UPLOAD_FOLDER / clean_parent
-            if sub_dir.exists():
-                target_dirs.append(sub_dir)
+            # Sanitize each path component to prevent traversal
+            parts = [secure_filename(p) for p in clean_parent.replace('\\', '/').split('/') if p and secure_filename(p)]
+            if parts:
+                sub_dir = UPLOAD_FOLDER.joinpath(*parts)
+                try:
+                    sub_dir.resolve().relative_to(UPLOAD_FOLDER.resolve())
+                    if sub_dir.exists():
+                        target_dirs.append(sub_dir)
+                except ValueError:
+                    print(f"[SECURITY] Blocked path traversal attempt in cleanup_temp_file_for_filename: '{parent_path}'")
+                    pass
 
     for d in target_dirs:
         for p in d.rglob("*.tmp"):
@@ -2493,9 +2501,14 @@ async def create_folder(folder_name: str = Form(...), parent_path: Optional[str]
     # Ensure parent folder exists
     target_dir.mkdir(parents=True, exist_ok=True)
     
+    # Auto-increment if folder already exists: "Folder" -> "Folder (1)" -> "Folder (2)"
+    original_name = safe_name
+    counter = 1
     new_folder = target_dir / safe_name
-    if new_folder.exists():
-        return JSONResponse(status_code=409, content={"status": "error", "msg": f"Folder '{safe_name}' already exists"})
+    while new_folder.exists():
+        safe_name = f"{original_name} ({counter})"
+        new_folder = target_dir / safe_name
+        counter += 1
     
     try:
         new_folder.mkdir()

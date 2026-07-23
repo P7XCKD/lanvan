@@ -434,13 +434,28 @@
         }
 
         if (!normalizedFiles || normalizedFiles.length === 0) {
-            container.innerHTML =
-                '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; width:100%;">' +
-                '<div class="avatar-icon avatar-folder" style="width:72px;height:72px;border-radius:18px;margin-bottom:1rem;">' +
-                '<i data-lucide="folder-open" style="width:34px;height:34px;"></i></div>' +
-                '<div style="font-size:1.05rem; font-weight:500; color:var(--text-color); margin-bottom:0.25rem;">Drop files here</div>' +
-                '<div style="font-size:0.8rem; color:var(--text-muted);">or right-click to upload / create folders.</div>' +
-                "</div>";
+            // Check if uploads are active — show different message
+            var queue = window.uploadQueue || [];
+            var activeUploadsCount = queue.filter(function (item) {
+                return item && (item.status === "uploading" || item.status === "queued" || item.status === "processing");
+            }).length;
+            if (activeUploadsCount > 0) {
+                container.innerHTML =
+                    '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; width:100%;">' +
+                    '<div class="avatar-icon avatar-folder" style="width:72px;height:72px;border-radius:18px;margin-bottom:1rem;">' +
+                    '<i data-lucide="upload-cloud" style="width:34px;height:34px;"></i></div>' +
+                    '<div style="font-size:1.05rem; font-weight:500; color:var(--text-color); margin-bottom:0.25rem;">Uploading ' + activeUploadsCount + ' file' + (activeUploadsCount === 1 ? '' : 's') + '...</div>' +
+                    '<div style="font-size:0.8rem; color:var(--text-muted);">Files will appear here when upload completes.</div>' +
+                    "</div>";
+            } else {
+                container.innerHTML =
+                    '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; width:100%;">' +
+                    '<div class="avatar-icon avatar-folder" style="width:72px;height:72px;border-radius:18px;margin-bottom:1rem;">' +
+                    '<i data-lucide="folder-open" style="width:34px;height:34px;"></i></div>' +
+                    '<div style="font-size:1.05rem; font-weight:500; color:var(--text-color); margin-bottom:0.25rem;">Drop files here</div>' +
+                    '<div style="font-size:0.8rem; color:var(--text-muted);">or right-click to upload / create folders.</div>' +
+                    "</div>";
+            }
             if (window.lucide) lucide.createIcons();
             return;
         }

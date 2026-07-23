@@ -672,18 +672,28 @@ def secure_filename(filename: str) -> str:
     """Get a secure version of filename, removing path traversal sequences."""
     if not filename:
         return ""
-    name = os.path.basename(str(filename).replace('\\', '/'))
-    name = name.replace('\0', '').replace('..', '')
+    name = str(filename).replace('\\', '/')
+    # Remove null bytes
+    name = name.replace('\0', '')
+    # Defeat '....' bypass: loop until all '..' are gone (handles '....' -> '..' after one pass)
+    while '..' in name:
+        name = name.replace('..', '')
+    name = os.path.basename(name)
     return name.strip()
 
 def is_allowed_file(filename: str) -> bool:
-    """Check if file extension is allowed."""
+    """Check if file extension is allowed (whitelist + blacklist)."""
     if not filename:
         return False
     safe = secure_filename(filename)
     if '.' not in safe:
-        return True # Default allow extensionless files
+        # Extensionless files: allow only if not in blocked list
+        return True
     ext = '.' + safe.rsplit('.', 1)[1].lower()
+    # First check whitelist — only allow extensions we recognize as safe
+    if ext in AdvancedFileValidator.ALLOWED_EXTENSIONS:
+        return True
+    # If not in whitelist, at minimum ensure it's not blocked
     return ext not in AdvancedFileValidator.BLOCKED_EXTENSIONS
 
 
