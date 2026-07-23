@@ -2115,20 +2115,33 @@ async def list_folders():
             "msg": "Failed to list folders"
         })
 
-@router.get("/api/folders/{folder_name}/files", name="list_folder_contents")
-async def list_folder_contents(folder_name: str):
-    """Get files inside a specific folder"""
-    safe_folder = secure_filename(folder_name)
-    if not safe_folder:
-        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid folder name"})
+@router.get("/api/folders/{folder_path:path}/files", name="list_folder_contents")
+async def list_folder_contents(folder_path: str):
+    """Get files inside a specific folder (supports nested paths like FolderA/SubFolder)"""
+    # Sanitize each path component
+    parts = [p for p in folder_path.split("/") if p and p != ".."]
+    if not parts:
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid folder path"})
     
-    folder_path = UPLOAD_FOLDER / safe_folder
-    if not folder_path.exists() or not folder_path.is_dir():
+    folder_path_obj = UPLOAD_FOLDER
+    for part in parts:
+        safe_part = secure_filename(part)
+        if not safe_part:
+            return JSONResponse(status_code=400, content={"status": "error", "msg": f"Invalid path component: {part}"})
+        folder_path_obj = folder_path_obj / safe_part
+    
+    # Path traversal check
+    try:
+        folder_path_obj.resolve().relative_to(UPLOAD_FOLDER.resolve())
+    except ValueError:
+        return JSONResponse(status_code=403, content={"status": "error", "msg": "Access denied"})
+    
+    if not folder_path_obj.exists() or not folder_path_obj.is_dir():
         return JSONResponse(status_code=404, content={"status": "error", "msg": "Folder not found"})
     
     try:
         files = []
-        for f in folder_path.iterdir():
+        for f in folder_path_obj.iterdir():
             if f.is_file() and not f.name.endswith('.tmp') and not should_ignore_file(f.name):
                 files.append({
                     "name": f.name,
@@ -2142,17 +2155,14 @@ async def list_folder_contents(folder_name: str):
                     "mtime": f.stat().st_mtime,
                     "isFolder": True
                 })
-        files.sort(key=lambda x: (not x.get("isFolder", False), x["mtime"]), reverse=False)
-        # Folders first, then by mtime
-        folders = [f for f in files if f.get("isFolder")]
-        regulars = [f for f in files if not f.get("isFolder")]
-        regulars.sort(key=lambda x: x["mtime"], reverse=True)
-        folders.sort(key=lambda x: x["mtime"], reverse=True)
+        # Folders first, then by mtime descending
+        folders_list = sorted([f for f in files if f.get("isFolder")], key=lambda x: x["mtime"], reverse=True)
+        regulars_list = sorted([f for f in files if not f.get("isFolder")], key=lambda x: x["mtime"], reverse=True)
         return JSONResponse(content={
             "status": "success",
-            "files": folders + regulars,
+            "files": folders_list + regulars_list,
             "count": len(files),
-            "folder": safe_folder
+            "folder": folder_path
         })
     except Exception as e:
         print(f"[ERR] Error listing folder contents: {e}")
@@ -2307,28 +2317,39 @@ async def create_folder(folder_name: str = Form(...)):
         })
 
 
-@router.post("/delete-folder/{folder_name}", name="delete_folder")
-async def delete_folder(folder_name: str):
-    """Delete an entire folder"""
-    import shutil
+@router.post("/delete-folder/{folder_path:path}", name="delete_folder")
+async def delete_folder(folder_path: str):
+    """Delete an entire folder (supports nested paths)"""
+    # Sanitize each path component
+    parts = [p for p in folder_path.split("/") if p and p != ".."]
+    if not parts:
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid folder path"})
     
-    safe_folder = secure_filename(folder_name)
-    if not safe_folder:
-        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid folder name"})
-        
-    folder_path = UPLOAD_FOLDER / safe_folder
+    folder_path_obj = UPLOAD_FOLDER
+    for part in parts:
+        safe_part = secure_filename(part)
+        if not safe_part:
+            return JSONResponse(status_code=400, content={"status": "error", "msg": f"Invalid path component: {part}"})
+        folder_path_obj = folder_path_obj / safe_part
     
-    if not folder_path.exists() or not folder_path.is_dir():
-        raise HTTPException(status_code=404, detail="Folder not found")
+    # Path traversal check
+    try:
+        folder_path_obj.resolve().relative_to(UPLOAD_FOLDER.resolve())
+    except ValueError:
+        return JSONResponse(status_code=403, content={"status": "error", "msg": "Access denied"})
+    
+    if not folder_path_obj.exists() or not folder_path_obj.is_dir():
+        return JSONResponse(status_code=404, content={"status": "error", "msg": "Folder not found"})
     
     try:
-        shutil.rmtree(folder_path)
+        shutil.rmtree(folder_path_obj)
+        print(f"[OK] Deleted folder: {folder_path}")
         return JSONResponse(content={
             "status": "success",
-            "msg": f"Folder '{safe_folder}' deleted successfully"
+            "msg": f"Folder '{folder_path}' deleted successfully"
         })
     except Exception as e:
-        print(f"[ERR] Error deleting folder {safe_folder}: {e}")
+        print(f"[ERR] Error deleting folder {folder_path}: {e}")
         return JSONResponse(status_code=500, content={
             "status": "error",
             "msg": f"Failed to delete folder: {e}"

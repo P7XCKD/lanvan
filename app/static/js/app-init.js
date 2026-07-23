@@ -65,37 +65,78 @@
     // 2. PROTOTYPE RENDERERS — Consume production data, output prototype DOM
     // =========================================================================
 
-    // Current folder path for breadcrumb navigation
+    // Current folder path for breadcrumb navigation (e.g. "Home" or "Home/FolderName")
     var currentFolderPath = "Home";
+
+    // Move dialog state
+    var moveCurrentPath = ["Home"];
+    var moveTargetFolder = "Home";
+    var itemsToMove = [];
+    var isCreatingFolderInMove = false;
+
+    // Star state persisted in localStorage
+    var starredItems = JSON.parse(localStorage.getItem("starred_items") || "[]");
+    function isStarred(name) { return starredItems.indexOf(name) !== -1; }
+    function toggleStar(name, btnEl) {
+        var idx = starredItems.indexOf(name);
+        if (idx !== -1) { starredItems.splice(idx, 1); }
+        else { starredItems.push(name); }
+        localStorage.setItem("starred_items", JSON.stringify(starredItems));
+        if (btnEl) {
+            var icon = btnEl.querySelector("i[data-lucide='star']");
+            if (icon) {
+                icon.style.fill = isStarred(name) ? "var(--yellow, #f59e0b)" : "none";
+                icon.style.color = isStarred(name) ? "var(--yellow, #f59e0b)" : "";
+            }
+        }
+    }
 
     function renderBreadcrumbs() {
         var container = document.getElementById("breadcrumbsContainer");
         if (!container) return;
         container.innerHTML = "";
 
-        var parts = currentFolderPath.split("/");
-        for (var i = 0; i < parts.length; i++) {
+        // Always start from "Home", then show current subfolder path parts
+        // currentFolderPath: "Home" | "FolderA" | "FolderA/SubFolder"
+        var fullParts = ["Home"];
+        if (currentFolderPath && currentFolderPath !== "Home" && currentFolderPath !== "") {
+            // currentFolderPath is stored without "Home/" prefix
+            var subParts = currentFolderPath.split("/");
+            fullParts = fullParts.concat(subParts);
+        }
+
+        for (var i = 0; i < fullParts.length; i++) {
             if (i > 0) {
                 var sep = document.createElement("span");
                 sep.className = "breadcrumb-separator";
                 sep.innerHTML = '<i data-lucide="chevron-right" style="width:16px;height:16px;"></i>';
                 container.appendChild(sep);
             }
-            var item = document.createElement("span");
-            item.className = "breadcrumb-item";
-            item.textContent = parts[i];
-            if (i < parts.length - 1) {
+            var bItem = document.createElement("span");
+            bItem.className = "breadcrumb-item";
+            bItem.textContent = fullParts[i];
+            if (i < fullParts.length - 1) {
+                // Clickable — navigate to that level
                 (function (idx) {
-                    item.onclick = function () {
-                        currentFolderPath = parts.slice(0, idx + 1).join("/");
+                    bItem.onclick = function () {
+                        if (idx === 0) {
+                            // Go back to root
+                            currentFolderPath = "Home";
+                        } else {
+                            // Navigate to the subfolder path (strip "Home" prefix)
+                            currentFolderPath = fullParts.slice(1, idx + 1).join("/");
+                        }
+                        prototypeSelectedItems = [];
+                        updateSelectionToolbar();
+                        renderBreadcrumbs();
                         fetchFilesData().then(function (filesData) {
                             renderPrototypeFileList(filesData);
                         });
                     };
                 })(i);
-                item.style.cursor = "pointer";
+                bItem.style.cursor = "pointer";
             }
-            container.appendChild(item);
+            container.appendChild(bItem);
         }
 
         // Update panel title icon
@@ -176,7 +217,7 @@
             var fileData = normalizedFiles[i];
             var name = fileData.name;
             var ext = name.split(".").pop().toLowerCase();
-            var info = fileData.isFolder 
+            var info = fileData.isFolder
                 ? { avatarClass: "avatar-folder", iconName: "folder" }
                 : getFileTypeInfo(name, ext);
             var size = fileData.size || "--";
@@ -186,15 +227,17 @@
                 var d = new Date(fileData.mtime * 1000);
                 dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
             }
-            html += buildListItem(name, info, size, dateStr);
+            html += buildListItem(name, info, size, dateStr, subtitle, !!fileData.isFolder);
         }
         container.innerHTML = html;
 
-        // Attach click handlers (delegated would be cleaner, but prototype uses inline)
-        attachListItemHandlers(container, normalizedFiles.map(function (f) { return f.name; }));
+        // Attach click handlers — pass full normalized data for folder detection
+        attachListItemHandlers(container, normalizedFiles.map(function (f) { return f.name; }), normalizedFiles);
 
-        // Also render quick access cards from the same data
-        renderQuickAccess(normalizedFiles.map(function (f) { return f.name; }));
+        // Also render quick access cards (only non-folders)
+        renderQuickAccess(normalizedFiles
+            .filter(function (f) { return !f.isFolder; })
+            .map(function (f) { return f.name; }));
 
         if (window.lucide) lucide.createIcons();
     }
@@ -219,90 +262,154 @@
 
     /**
      * Build a single prototype-styled list item HTML.
+     * @param {string} name - File/folder name
+     * @param {object} info - {avatarClass, iconName}
+     * @param {string} size - Formatted size string
+     * @param {string} date - Formatted date string
+     * @param {string} subtitle - "File" or "Folder"
+     * @param {boolean} isFolder - Whether item is a folder
      */
-    function buildListItem(name, info, size, date) {
+    function buildListItem(name, info, size, date, subtitle, isFolder) {
         var escName = escapeHtml(name);
         var sizeStr = size || "--";
         var dateStr = date || "--";
+        var subtitleText = subtitle || (isFolder ? "Folder" : "File");
+        var starred = isStarred(name);
+        var starFill = starred ? "var(--yellow, #f59e0b)" : "none";
+        var starColor = starred ? "var(--yellow, #f59e0b)" : "";
+        // Folders show "--" for size column; files show size
+        var displaySize = isFolder ? "-" : sizeStr;
         return (
-            '<div class="m3-list-item" data-filename="' +
-            escName +
-            '">' +
+            '<div class="m3-list-item" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '">' +
             '<div class="file-name-cell">' +
-            '<div class="avatar-icon ' +
-            info.avatarClass +
-            '"><i data-lucide="' +
-            info.iconName +
-            '"></i></div>' +
+            '<div class="avatar-icon ' + info.avatarClass + '"><i data-lucide="' + info.iconName + '"></i></div>' +
             '<div class="item-main">' +
-            '<div class="item-title">' +
-            escName +
-            "</div>" +
-            '<div class="item-subtitle">File</div>' +
-            "</div>" +
-            "</div>" +
+            '<div class="item-title">' + escName + '</div>' +
+            '<div class="item-subtitle">' + subtitleText + '</div>' +
+            '</div>' +
+            '</div>' +
             '<div class="item-date">' + dateStr + '</div>' +
-            '<div class="item-size">' + sizeStr + '</div>' +
+            '<div class="item-size">' + displaySize + '</div>' +
             '<div class="row-actions">' +
-            '<button class="btn-icon hover-btn" title="Download" data-action="download" data-filename="' +
-            escName +
-            '">' +
+            '<button class="btn-icon hover-btn" title="Download" data-action="download" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '">' +
             '<i data-lucide="download" style="width:16px;height:16px;"></i>' +
-            "</button>" +
-            '<button class="btn-icon" title="More actions" data-action="menu" data-filename="' +
-            escName +
-            '">' +
+            '</button>' +
+            (isFolder ? '' :
+                '<button class="btn-icon hover-btn" title="Rename" data-action="rename" data-filename="' + escName + '">' +
+                '<i data-lucide="edit-2" style="width:16px;height:16px;"></i>' +
+                '</button>' +
+                '<button class="btn-icon hover-btn" title="Star" data-action="star" data-filename="' + escName + '" style="color:' + starColor + ';">' +
+                '<i data-lucide="star" style="width:16px;height:16px;fill:' + starFill + ';"></i>' +
+                '</button>'
+            ) +
+            '<button class="btn-icon" title="More actions" data-action="menu" data-filename="' + escName + '">' +
             '<i data-lucide="more-vertical" style="width:16px;height:16px;"></i>' +
-            "</button>" +
-            "</div>" +
-            "</div>"
+            '</button>' +
+            '</div>' +
+            '</div>'
         );
     }
 
     /**
      * Attach click handlers to prototype list items after render.
+     * @param {Element} container - The list container
+     * @param {string[]} files - Array of file/folder names
+     * @param {object[]} filesData - Array of file metadata objects
      */
     function attachListItemHandlers(container, files, filesData) {
-        // Item click — select
         var items = container.querySelectorAll(".m3-list-item");
         for (var i = 0; i < items.length; i++) {
             (function (item, index) {
+                var name = files[index];
+                var itemData = (filesData || [])[index] || {};
+                var folderFlag = item.getAttribute("data-is-folder") === "1" || !!itemData.isFolder;
+
+                // Single click: select (and navigate into folder on mobile)
                 item.addEventListener("click", function (e) {
                     if (e.target.closest("button")) return;
+                    var isMobile = window.innerWidth < 768;
+                    if (folderFlag && isMobile) {
+                        // Mobile: single-click navigates into folder
+                        navigateIntoFolder(name);
+                        return;
+                    }
                     handleListItemClick(item, index, files);
                 });
-                // Double-click: navigate into folder
+
+                // Double-click: navigate into folder (desktop)
                 item.addEventListener("dblclick", function (e) {
                     if (e.target.closest("button")) return;
-                    var name = files[index];
-                    var itemData = (filesData || [])[index] || {};
-                    if (itemData.isFolder) {
-                        currentFolderPath = name;
-                        fetchFilesData().then(function (fd) {
-                            renderPrototypeFileList(fd);
-                        });
+                    if (folderFlag) {
+                        navigateIntoFolder(name);
                     }
                 });
+
                 // Download button
                 var dlBtn = item.querySelector('[data-action="download"]');
                 if (dlBtn) {
                     dlBtn.addEventListener("click", function (e) {
                         e.stopPropagation();
-                        var filename = dlBtn.getAttribute("data-filename");
-                        downloadFileByName(filename);
+                        var fname = dlBtn.getAttribute("data-filename");
+                        var isF = dlBtn.getAttribute("data-is-folder") === "1";
+                        if (isF) {
+                            downloadFolderAsZip(fname);
+                        } else {
+                            downloadFileByName(fname);
+                        }
                     });
                 }
+
+                // Rename button (files only)
+                var renameBtn = item.querySelector('[data-action="rename"]');
+                if (renameBtn) {
+                    renameBtn.addEventListener("click", function (e) {
+                        e.stopPropagation();
+                        var fname = renameBtn.getAttribute("data-filename");
+                        prototypeSelectedItems = [fname];
+                        window._contextMenuTarget = fname;
+                        window.openRenameModal();
+                    });
+                }
+
+                // Star button (files only)
+                var starBtn = item.querySelector('[data-action="star"]');
+                if (starBtn) {
+                    starBtn.addEventListener("click", function (e) {
+                        e.stopPropagation();
+                        var fname = starBtn.getAttribute("data-filename");
+                        toggleStar(fname, starBtn);
+                    });
+                }
+
                 // Menu button
                 var menuBtn = item.querySelector('[data-action="menu"]');
                 if (menuBtn) {
                     menuBtn.addEventListener("click", function (e) {
                         e.stopPropagation();
-                        var filename = menuBtn.getAttribute("data-filename");
-                        openRowMenu(e, filename);
+                        var fname = menuBtn.getAttribute("data-filename");
+                        openRowMenu(e, fname);
                     });
                 }
             })(items[i], i);
         }
+    }
+
+    /**
+     * Navigate into a subfolder, updating breadcrumbs and fetching contents.
+     */
+    function navigateIntoFolder(folderName) {
+        // Build the full path from the current folder
+        if (currentFolderPath === "Home" || currentFolderPath === "") {
+            currentFolderPath = folderName;
+        } else {
+            currentFolderPath = currentFolderPath + "/" + folderName;
+        }
+        prototypeSelectedItems = [];
+        updateSelectionToolbar();
+        renderBreadcrumbs();
+        fetchFilesData().then(function (fd) {
+            renderPrototypeFileList(fd);
+        });
     }
 
     /**
@@ -425,13 +532,13 @@
     window.switchView = function (tab) {
         var fileView = document.getElementById("fileView");
         var clipView = document.getElementById("clipboardView");
-        
+
         // Sidebar items
         var sideFile = document.getElementById("sideItemFile");
         var sideClip = document.getElementById("sideItemClipboard");
         var sideRecent = document.getElementById("sideItemRecent");
         var sideStarred = document.getElementById("sideItemStarred");
-        
+
         // Bottom nav items
         var navFile = document.getElementById("navItemFile");
         var navClip = document.getElementById("navItemClipboard");
@@ -446,7 +553,7 @@
         for (var i = 0; i < allSideItems.length; i++) {
             if (allSideItems[i]) allSideItems[i].classList.remove("active");
         }
-        
+
         // Deactivate all nav items
         var allNavItems = [navFile, navClip, navRecent, navStarred];
         for (var j = 0; j < allNavItems.length; j++) {
@@ -463,7 +570,7 @@
             // file, recent, starred — all show file view
             if (fileView) fileView.style.display = "flex";
             if (clipView) clipView.style.display = "none";
-            
+
             // Highlight correct sidebar item based on tab
             if (tab === "recent" && sideRecent) {
                 sideRecent.classList.add("active");
@@ -594,31 +701,38 @@
 
         function deleteNext(index) {
             if (index >= itemsToDelete.length) {
-                // All done
                 if (failed.length > 0) {
-                    if (typeof showToast === "function") {
-                        showToast("Deleted " + completed + " file(s). " + failed.length + " failed.", 4000);
-                    }
+                    if (typeof showToast === "function") showToast("Deleted " + completed + " item(s). " + failed.length + " failed.", 4000);
                 } else {
-                    if (typeof showToast === "function") {
-                        showToast("Deleted " + completed + " file(s) successfully.", 3000);
-                    }
+                    if (typeof showToast === "function") showToast("Deleted " + completed + " item(s) successfully.", 3000);
                 }
                 window.clearSelection();
-                // Refresh file list
                 if (typeof refreshFileList === "function") refreshFileList();
+                fetchFilesData().then(function(fd) { renderPrototypeFileList(fd); });
                 return;
             }
 
             var filename = itemsToDelete[index];
+
+            // Check if this is a folder by looking at the rendered list
+            var listEl = document.querySelector('#nasFileList [data-filename="' + filename.replace(/"/g, '&quot;') + '"]');
+            var isFolder = listEl && listEl.getAttribute("data-is-folder") === "1";
+
+            var url, method;
+            if (isFolder) {
+                // Use folder delete endpoint
+                url = "/delete-folder/" + encodeURIComponent(filename);
+                method = "POST";
+            } else {
+                url = "/delete/" + encodeURIComponent(filename);
+                method = "POST";
+            }
+
             var xhr = new XMLHttpRequest();
-            xhr.open("POST", "/delete/" + encodeURIComponent(filename));
+            xhr.open(method, url);
             xhr.onload = function () {
-                if (xhr.status === 200) {
-                    completed++;
-                } else {
-                    failed.push(filename);
-                }
+                if (xhr.status === 200 || xhr.status === 302) { completed++; }
+                else { failed.push(filename); }
                 deleteNext(index + 1);
             };
             xhr.onerror = function () {
@@ -636,6 +750,18 @@
         var link = document.createElement("a");
         link.href = "/download/" + encodeURIComponent(filename);
         link.download = filename;
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function downloadFolderAsZip(folderName) {
+        if (!folderName) return;
+        // Use the production folder-download endpoint which returns ZIP
+        var link = document.createElement("a");
+        link.href = "/download-folder/" + encodeURIComponent(folderName);
+        link.download = folderName + ".zip";
         link.style.display = "none";
         document.body.appendChild(link);
         link.click();
@@ -674,7 +800,7 @@
             clearTimeout(menuCloseTimer);
             menuCloseTimer = null;
         }
-        
+
         var menu = document.getElementById("contextMenu");
         if (menu && menu.style.display === "block") {
             // If clicking outside the menu, close it immediately
@@ -683,7 +809,7 @@
             }
             // If clicking inside the menu, let the click through
         }
-        
+
         var sortMenu = document.getElementById("sortDropdownMenu");
         if (sortMenu && sortMenu.style.display === "block" && !sortMenu.contains(e.target)) {
             sortMenu.style.display = "none";
@@ -702,11 +828,13 @@
         if (!dialog || !input) return;
         input.value = name;
         dialog.style.display = "flex";
-        // Delay to ensure dialog is visible before selecting text
+        // Pre-select only the filename part, NOT the extension
         setTimeout(function () {
             input.focus();
+            var dotIdx = name.lastIndexOf(".");
+            var selectEnd = (dotIdx > 0) ? dotIdx : name.length;
             if (input.setSelectionRange) {
-                input.setSelectionRange(0, input.value.length);
+                input.setSelectionRange(0, selectEnd);
             } else {
                 input.select();
             }
@@ -718,15 +846,160 @@
         if (dialog) dialog.style.display = "none";
     };
 
+    // Alias used by some HTML
+    window.closeRenameModal = window.closeRenameDialog;
+
+    // -------------------------------------------------------------------------
+    // Move Modal — full folder tree browser
+    // -------------------------------------------------------------------------
     window.openMoveModal = function () {
+        var targets = prototypeSelectedItems.slice();
+        if (targets.length === 0 && window._contextMenuTarget) {
+            targets = [window._contextMenuTarget];
+        }
+        if (targets.length === 0) return;
+
+        itemsToMove = targets.slice();
+        isCreatingFolderInMove = false;
+
+        // Set dialog title
+        var titleNode = document.getElementById("moveDialogTitle");
+        if (titleNode) {
+            titleNode.textContent = itemsToMove.length === 1
+                ? "Move " + itemsToMove[0]
+                : "Move " + itemsToMove.length + " items";
+        }
+
+        // Start at current folder root
+        moveCurrentPath = ["Home"];
+        moveTargetFolder = "Home";
+        renderMoveFolderContents();
+
         var dialog = document.getElementById("moveFileDialog");
         if (dialog) dialog.style.display = "flex";
     };
 
     window.closeMoveDialog = function () {
+        itemsToMove = [];
+        isCreatingFolderInMove = false;
         var dialog = document.getElementById("moveFileDialog");
         if (dialog) dialog.style.display = "none";
     };
+
+    window.closeMoveModal = window.closeMoveDialog;
+
+    window.navigateMoveUp = function () {
+        if (moveCurrentPath.length > 1) {
+            moveCurrentPath.pop();
+            renderMoveFolderContents();
+        }
+    };
+
+    window.handleNewFolderInMove = function () {
+        isCreatingFolderInMove = true;
+        var dlg = document.getElementById("newFolderDialog");
+        var inp = document.getElementById("newFolderNameInput");
+        if (!dlg) return;
+        if (inp) { inp.value = "Untitled folder"; inp.focus(); inp.select(); }
+        dlg.style.display = "flex";
+    };
+
+    function renderMoveFolderContents() {
+        var optionsList = document.getElementById("moveFolderOptions");
+        var prevBtn = document.getElementById("movePrevBtn");
+        var breadcrumbs = document.getElementById("moveBreadcrumbs");
+        if (!optionsList) return;
+
+        var currentFolderStr = moveCurrentPath.join("/");
+        moveTargetFolder = currentFolderStr;
+
+        // Show/hide back button
+        if (prevBtn) prevBtn.style.display = moveCurrentPath.length > 1 ? "flex" : "none";
+
+        // Render breadcrumbs
+        if (breadcrumbs) {
+            breadcrumbs.innerHTML = "";
+            for (var b = 0; b < moveCurrentPath.length; b++) {
+                if (b > 0) {
+                    var sep = document.createElement("span");
+                    sep.className = "breadcrumb-separator";
+                    sep.innerHTML = '<i data-lucide="chevron-right" style="width:12px;height:12px;"></i>';
+                    breadcrumbs.appendChild(sep);
+                }
+                (function(idx) {
+                    var bItem = document.createElement("span");
+                    bItem.style.cursor = idx < moveCurrentPath.length - 1 ? "pointer" : "default";
+                    bItem.style.color = idx < moveCurrentPath.length - 1 ? "var(--primary)" : "var(--text-color)";
+                    bItem.textContent = moveCurrentPath[idx];
+                    if (idx < moveCurrentPath.length - 1) {
+                        bItem.onclick = function() {
+                            moveCurrentPath = moveCurrentPath.slice(0, idx + 1);
+                            renderMoveFolderContents();
+                        };
+                    }
+                    breadcrumbs.appendChild(bItem);
+                })(b);
+            }
+            if (window.lucide) lucide.createIcons();
+        }
+
+        // Fetch folder contents from backend
+        optionsList.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-muted);font-size:0.8rem;">Loading...</div>';
+
+        var fetchUrl;
+        if (moveCurrentPath.length === 1 && moveCurrentPath[0] === "Home") {
+            fetchUrl = "/api/folders";
+        } else {
+            // Build the subfolder path relative to upload root (strip "Home/")
+            var subPath = moveCurrentPath.slice(1).join("/");
+            fetchUrl = "/api/folders/" + encodeURIComponent(subPath) + "/files";
+        }
+
+        fetch(fetchUrl)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                optionsList.innerHTML = "";
+                var items = [];
+                if (data.folders) {
+                    // Root level: only show folders
+                    items = data.folders;
+                } else if (data.files) {
+                    // Subfolder level: only show sub-folders
+                    items = data.files.filter(function(f) { return f.isFolder || f.is_folder; });
+                }
+
+                // Filter out items being moved (can't move into themselves)
+                items = items.filter(function(f) { return itemsToMove.indexOf(f.name) === -1; });
+
+                if (items.length === 0) {
+                    optionsList.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--text-muted);font-size:0.8rem;">No subfolders here</div>';
+                    return;
+                }
+
+                items.forEach(function(folderItem) {
+                    var row = document.createElement("div");
+                    row.style.cssText = "display:grid;grid-template-columns:1fr auto;align-items:center;padding:0.55rem 0.6rem;font-size:0.78rem;border-radius:6px;cursor:pointer;transition:background-color 0.15s ease;";
+                    row.innerHTML =
+                        '<div style="display:flex;align-items:center;gap:0.5rem;min-width:0;">' +
+                        '<i data-lucide="folder" style="width:16px;height:16px;color:var(--primary);"></i>' +
+                        '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;">' + escapeHtml(folderItem.name) + '</span>' +
+                        '</div>' +
+                        '<i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-muted);"></i>';
+                    row.onmouseover = function() { row.style.backgroundColor = "var(--hover-bg)"; };
+                    row.onmouseout = function() { row.style.backgroundColor = "transparent"; };
+                    row.onclick = function() {
+                        moveCurrentPath.push(folderItem.name);
+                        renderMoveFolderContents();
+                    };
+                    optionsList.appendChild(row);
+                });
+
+                if (window.lucide) lucide.createIcons();
+            })
+            .catch(function() {
+                optionsList.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--text-muted);font-size:0.8rem;">Failed to load folders</div>';
+            });
+    }
 
     window.openNewFolderDialog = function () {
         var dialog = document.getElementById("newFolderDialog");
@@ -861,17 +1134,27 @@
 
         var formData = new FormData();
         formData.append("folder_name", name);
+        if (isCreatingFolderInMove) {
+            var destination = moveCurrentPath.length > 1 ? moveCurrentPath.slice(1).join("/") : "";
+            formData.append("parent_path", destination);
+        }
 
         fetch("/api/files/mkdir", { method: "POST", body: formData })
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.status === "success") {
                     if (typeof showToast === "function") showToast("Folder '" + name + "' created.", 3000);
+                    // If creating from within move dialog, refresh move folder tree
+                    if (isCreatingFolderInMove) {
+                        isCreatingFolderInMove = false;
+                        renderMoveFolderContents();
+                    } else {
+                        fetchFilesData().then(function(fd) { renderPrototypeFileList(fd); });
+                        if (typeof refreshFileList === "function") refreshFileList();
+                    }
                 } else {
                     if (typeof showToast === "function") showToast(data.msg || "Failed to create folder.", 4000);
                 }
-                // Always refresh file list (folder may have been created on retry, or already exists)
-                if (typeof refreshFileList === "function") refreshFileList();
             })
             .catch(function () {
                 if (typeof showToast === "function") showToast("Network error creating folder.", 4000);
@@ -911,32 +1194,30 @@
     };
 
     window.submitMove = function () {
-        var filesToMove = prototypeSelectedItems.slice();
+        // Use itemsToMove if populated by openMoveModal, else fall back to prototypeSelectedItems
+        var filesToMove = (itemsToMove.length > 0 ? itemsToMove : prototypeSelectedItems).slice();
         if (filesToMove.length === 0) {
             window.closeMoveDialog();
             return;
         }
 
-        // Move to the root directory for now (move dialog browsing would need folder list population)
-        var destination = "";
+        // Destination is the current move dialog path (strip "Home" prefix since backend uses relative paths)
+        var destination = moveCurrentPath.length > 1 ? moveCurrentPath.slice(1).join("/") : "";
 
         var completed = 0;
         var failed = [];
 
         function moveNext(index) {
             if (index >= filesToMove.length) {
-                // All done — show result, close dialog, refresh
                 if (failed.length > 0) {
-                    if (typeof showToast === "function") {
-                        showToast("Moved " + completed + " file(s). " + failed.length + " failed.", 4000);
-                    }
+                    if (typeof showToast === "function") showToast("Moved " + completed + " file(s). " + failed.length + " failed.", 4000);
                 } else {
-                    if (typeof showToast === "function") {
-                        showToast("Moved " + completed + " file(s) successfully.", 3000);
-                    }
+                    if (typeof showToast === "function") showToast("Moved " + completed + " file(s) to '" + (destination || "Home") + "'.", 3000);
                 }
                 window.clearSelection();
+                itemsToMove = [];
                 if (typeof refreshFileList === "function") refreshFileList();
+                fetchFilesData().then(function(fd) { renderPrototypeFileList(fd); });
                 window.closeMoveDialog();
                 return;
             }
@@ -949,11 +1230,8 @@
             fetch("/api/files/move", { method: "POST", body: formData })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
-                    if (data.status === "success") {
-                        completed++;
-                    } else {
-                        failed.push(filename);
-                    }
+                    if (data.status === "success") { completed++; }
+                    else { failed.push(filename); }
                     moveNext(index + 1);
                 })
                 .catch(function () {
@@ -963,15 +1241,6 @@
         }
 
         moveNext(0);
-        // Dialog closes after all moves complete (inside moveNext completion handler)
-    };
-
-    window.navigateMoveUp = function () {
-        // Stub — move dialog folder navigation
-    };
-
-    window.handleNewFolderInMove = function () {
-        window.openNewFolderDialog();
     };
 
     window.cancelSelectedUpload = function () {
@@ -1051,10 +1320,10 @@
         if (appContainer) {
             appContainer.addEventListener("contextmenu", function (e) {
                 e.preventDefault();
-                
+
                 var menu = document.getElementById("contextMenu");
                 if (!menu) return;
-                
+
                 // Hide menu first (close if already open)
                 menu.style.display = "none";
 
@@ -1071,7 +1340,7 @@
                     var filename = targetItem.getAttribute("data-filename") || "";
                     var nameEl = targetItem.querySelector(".item-title, .quick-title");
                     var itemName = nameEl ? nameEl.textContent.trim() : filename;
-                    
+
                     // Select this item if not already selected
                     if (prototypeSelectedItems.indexOf(itemName) === -1) {
                         prototypeSelectedItems = [itemName];
@@ -1086,7 +1355,7 @@
                         }
                         updateSelectionToolbar();
                     }
-                    
+
                     if (genericOps) genericOps.style.display = "none";
                     if (itemOps) itemOps.style.display = "block";
                     if (clipboardOps) clipboardOps.style.display = "none";
@@ -1405,7 +1674,34 @@
     // =========================================================================
 
     // Fetch full file data with metadata from API (includes folders)
+    // Respects currentFolderPath for subfolder navigation
     function fetchFilesData() {
+        // If we're in a subfolder (currentFolderPath is not "Home"), fetch that folder's contents
+        var isSubfolder = currentFolderPath && currentFolderPath !== "Home" && currentFolderPath !== "";
+
+        if (isSubfolder) {
+            // Subfolder: use /api/folders/{folder_name}/files
+            // currentFolderPath may be "FolderA" or "FolderA/SubFolder" — encode properly
+            var encodedPath = encodeURIComponent(currentFolderPath);
+            return fetch("/api/folders/" + encodedPath + "/files")
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.files) {
+                        return data.files.map(function(f) {
+                            return {
+                                name: f.name,
+                                size: f.size || "--",
+                                mtime: f.mtime || 0,
+                                isFolder: !!f.isFolder
+                            };
+                        });
+                    }
+                    return [];
+                })
+                .catch(function () { return []; });
+        }
+
+        // Root: fetch files + folders in parallel
         var filePromise = fetch("/api/files")
             .then(function (r) { return r.json(); })
             .then(function (data) {
@@ -1441,7 +1737,7 @@
         });
     }
 
-    // Render QR code in sidebar using production QR generation
+    // Render QR code in sidebar using production QR API
     function renderSidebarQR() {
         var qrBox = document.getElementById("qrBox");
         var connectAddress = document.getElementById("connectAddress");
@@ -1452,14 +1748,38 @@
             url = window._currentNetworkInfo.fullUrl;
         }
 
-        if (typeof generateQRCode === "function") {
-            var qrResult = generateQRCode(url, 100);
-            var qrUrl = qrResult.primary || qrResult.toString();
-            qrBox.innerHTML = '<img src="' + qrUrl + '" alt="Connection QR" style="width:100%;height:100%;object-fit:contain;">';
-        }
-
         if (connectAddress) {
             connectAddress.textContent = url;
+        }
+
+        // Try production QR API endpoint first (offline-capable)
+        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=140";
+        var img = document.createElement("img");
+        img.alt = "QR Code";
+        img.style.cssText = "width:100%;height:100%;object-fit:contain;border-radius:6px;";
+        img.src = qrApiUrl;
+        img.onerror = function() {
+            // Fallback: render mock QR grid like prototype
+            renderMockQr(qrBox, url);
+        };
+        qrBox.innerHTML = "";
+        qrBox.appendChild(img);
+    }
+
+    function renderMockQr(box, value) {
+        // Render a simple pixel-grid mock QR (same as prototype)
+        box.innerHTML = "";
+        var chars = String(value);
+        for (var i = 0; i < 81; i++) {
+            var pixel = document.createElement("span");
+            pixel.className = "qr-pixel";
+            var row = Math.floor(i / 9);
+            var col = i % 9;
+            var finder = (row < 3 && col < 3) || (row < 3 && col > 5) || (row > 5 && col < 3);
+            var code = chars.charCodeAt(i % chars.length);
+            var on = finder || ((code + row * 7 + col * 11 + i) % 4 < 2);
+            if (on) pixel.classList.add("on");
+            box.appendChild(pixel);
         }
     }
 
@@ -1513,8 +1833,8 @@
 
         // Fetch network info to populate window._currentNetworkInfo and render QR code
         fetch('/api/network-info')
-            .then(function(res) { return res.json(); })
-            .then(function(data) {
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
                 var protocol = window.location.protocol;
                 var port = window.location.port;
                 var lanIp = data.lan_ip || window.location.hostname;
@@ -1533,7 +1853,7 @@
                     fullUrl: fullUrl
                 };
                 renderSidebarQR();
-            }).catch(function(err) {
+            }).catch(function (err) {
                 console.error("Failed to load initial network info:", err);
                 renderSidebarQR();
             });
