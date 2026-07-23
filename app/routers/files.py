@@ -2115,6 +2115,50 @@ async def list_folders():
             "msg": "Failed to list folders"
         })
 
+@router.get("/api/folders/{folder_name}/files", name="list_folder_contents")
+async def list_folder_contents(folder_name: str):
+    """Get files inside a specific folder"""
+    safe_folder = secure_filename(folder_name)
+    if not safe_folder:
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid folder name"})
+    
+    folder_path = UPLOAD_FOLDER / safe_folder
+    if not folder_path.exists() or not folder_path.is_dir():
+        return JSONResponse(status_code=404, content={"status": "error", "msg": "Folder not found"})
+    
+    try:
+        files = []
+        for f in folder_path.iterdir():
+            if f.is_file() and not f.name.endswith('.tmp') and not should_ignore_file(f.name):
+                files.append({
+                    "name": f.name,
+                    "size": format_size(f.stat().st_size),
+                    "mtime": f.stat().st_mtime
+                })
+            elif f.is_dir() and not f.name.startswith('.'):
+                files.append({
+                    "name": f.name,
+                    "size": format_size(sum(f2.stat().st_size for f2 in f.rglob('*') if f2.is_file())),
+                    "mtime": f.stat().st_mtime,
+                    "isFolder": True
+                })
+        files.sort(key=lambda x: (not x.get("isFolder", False), x["mtime"]), reverse=False)
+        # Folders first, then by mtime
+        folders = [f for f in files if f.get("isFolder")]
+        regulars = [f for f in files if not f.get("isFolder")]
+        regulars.sort(key=lambda x: x["mtime"], reverse=True)
+        folders.sort(key=lambda x: x["mtime"], reverse=True)
+        return JSONResponse(content={
+            "status": "success",
+            "files": folders + regulars,
+            "count": len(files),
+            "folder": safe_folder
+        })
+    except Exception as e:
+        print(f"[ERR] Error listing folder contents: {e}")
+        return JSONResponse(status_code=500, content={"status": "error", "msg": f"Failed to list folder contents: {e}"})
+
+
 @router.post("/api/files/rename", name="rename_file")
 async def rename_file(filename: str = Form(...), new_name: str = Form(...)):
     """Rename a file with validation and path traversal prevention"""

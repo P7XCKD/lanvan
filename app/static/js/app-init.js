@@ -65,6 +65,47 @@
     // 2. PROTOTYPE RENDERERS — Consume production data, output prototype DOM
     // =========================================================================
 
+    // Current folder path for breadcrumb navigation
+    var currentFolderPath = "Home";
+
+    function renderBreadcrumbs() {
+        var container = document.getElementById("breadcrumbsContainer");
+        if (!container) return;
+        container.innerHTML = "";
+
+        var parts = currentFolderPath.split("/");
+        for (var i = 0; i < parts.length; i++) {
+            if (i > 0) {
+                var sep = document.createElement("span");
+                sep.className = "breadcrumb-separator";
+                sep.innerHTML = '<i data-lucide="chevron-right" style="width:16px;height:16px;"></i>';
+                container.appendChild(sep);
+            }
+            var item = document.createElement("span");
+            item.className = "breadcrumb-item";
+            item.textContent = parts[i];
+            if (i < parts.length - 1) {
+                (function (idx) {
+                    item.onclick = function () {
+                        currentFolderPath = parts.slice(0, idx + 1).join("/");
+                        fetchFilesData().then(function (filesData) {
+                            renderPrototypeFileList(filesData);
+                        });
+                    };
+                })(i);
+                item.style.cursor = "pointer";
+            }
+            container.appendChild(item);
+        }
+
+        // Update panel title icon
+        var panelIcon = document.getElementById("desktopPanelTitleIcon");
+        if (panelIcon) {
+            panelIcon.setAttribute("data-lucide", "folder");
+        }
+        if (window.lucide) lucide.createIcons();
+    }
+
     /**
      * Render files in prototype #nasFileList from the same data production uses.
      * @param {string[]} files - Array of filenames from production API
@@ -221,7 +262,7 @@
     /**
      * Attach click handlers to prototype list items after render.
      */
-    function attachListItemHandlers(container, files) {
+    function attachListItemHandlers(container, files, filesData) {
         // Item click — select
         var items = container.querySelectorAll(".m3-list-item");
         for (var i = 0; i < items.length; i++) {
@@ -229,6 +270,18 @@
                 item.addEventListener("click", function (e) {
                     if (e.target.closest("button")) return;
                     handleListItemClick(item, index, files);
+                });
+                // Double-click: navigate into folder
+                item.addEventListener("dblclick", function (e) {
+                    if (e.target.closest("button")) return;
+                    var name = files[index];
+                    var itemData = (filesData || [])[index] || {};
+                    if (itemData.isFolder) {
+                        currentFolderPath = name;
+                        fetchFilesData().then(function (fd) {
+                            renderPrototypeFileList(fd);
+                        });
+                    }
                 });
                 // Download button
                 var dlBtn = item.querySelector('[data-action="download"]');
@@ -694,17 +747,35 @@
 
     // --- Sort & Filter ---
     window.setSortOption = function (category, value) {
-        // Stub — sort state managed locally until server-side support
-        console.log("Sort:", category, value);
         var el = document.getElementById("sortDropdownMenu");
         if (el) el.style.display = "none";
     };
 
     window.setTypeFilter = function (type) {
-        // Stub — type filtering via client-side filtering of file list
-        console.log("Type filter:", type);
         var el = document.getElementById("typeDropdownMenu");
         if (el) el.style.display = "none";
+    };
+
+    window.clearTypeFilter = function (event) {
+        if (event) event.stopPropagation();
+        window.setTypeFilter("all");
+    };
+
+    window.setSearchQuery = function (value) {
+        var searchInput = document.getElementById("searchInput");
+        if (searchInput) {
+            searchInput.value = value;
+            searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+    };
+
+    window.clearSearchQuery = function (event) {
+        if (event) event.preventDefault();
+        var searchInput = document.getElementById("searchInput");
+        if (searchInput) {
+            searchInput.value = "";
+            searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+        }
     };
 
     window.toggleSortMenu = function (event) {
