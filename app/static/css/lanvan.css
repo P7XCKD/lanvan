@@ -150,6 +150,7 @@ body {
     background: var(--sidebar-bg);
     display: flex;
     flex-direction: column;
+    justify-content: flex-start;
     padding: 1.25rem 0.75rem;
     gap: 1rem;
     flex-shrink: 0;
@@ -235,7 +236,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    margin-top: 1.25rem;
+    margin-top: 0.5rem;
 }
 
 .connection-card {
@@ -1339,10 +1340,30 @@ body {
     overflow: hidden;
     cursor: default;
     user-select: none;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .upload-toast-stack.active {
     display: flex;
+}
+
+@media (min-width: 768px) {
+    .upload-toast-stack.empty-state {
+        left: 1.5rem;
+        right: auto;
+        width: 208px;
+        transition: width 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    /* When expanded while docked: grow upward from the bottom */
+    .upload-toast-stack.empty-state:has(.upload-toast-body:not(.collapsed)) {
+        width: 260px;
+    }
+    .upload-toast-stack.empty-state .upload-toast-body:not(.collapsed) {
+        display: flex;
+        flex-direction: column;
+        max-height: 240px;
+        overflow-y: auto;
+    }
 }
 
 .upload-toast-header {
@@ -1386,11 +1407,37 @@ body {
 }
 
 .upload-toast-body {
-    max-height: 280px;
+    max-height: 240px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     transition: max-height 0.2s ease-out;
+}
+
+/* Sleek custom scrollbar for upload toast body */
+.upload-toast-body::-webkit-scrollbar {
+    width: 5px;
+}
+
+.upload-toast-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.upload-toast-body::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.18);
+    border-radius: 4px;
+}
+
+.upload-toast-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] .upload-toast-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.22);
+}
+
+[data-theme="dark"] .upload-toast-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.45);
 }
 
 .upload-toast-body.collapsed {
@@ -1406,10 +1453,27 @@ body {
     gap: 0.45rem;
     background: var(--card-bg);
     border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
 }
 
 .upload-toast:last-child {
     border-bottom: none;
+}
+
+.upload-toast.deleted-toast {
+    opacity: 0.85;
+    border-left: 3px solid #dc2626;
+}
+
+.upload-toast.deleted-toast .upload-toast-filename {
+    color: #dc2626;
+    text-decoration: line-through;
+    text-decoration-color: rgba(220, 38, 38, 0.6);
+}
+
+.upload-toast.deleted-toast .upload-toast-meta {
+    color: #dc2626;
+    opacity: 0.8;
 }
 
 .upload-toast-top {

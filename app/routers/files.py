@@ -18,6 +18,7 @@ import zipfile
 import base64
 import tempfile
 import asyncio
+import urllib.parse
 from typing import List, Optional, Dict, Any, Tuple
 from pathlib import Path
 from mimetypes import guess_type
@@ -55,6 +56,92 @@ router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 UPLOAD_FOLDER = Path("data/uploads")
 UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+
+# Upload history file - cleared on every server startup
+UPLOAD_HISTORY_FILE = Path("data/upload_history.json")
+# Clear history on startup so it resets with every server restart
+try:
+    UPLOAD_HISTORY_FILE.write_text("[]", encoding="utf-8")
+except Exception:
+    pass
+
+# Startup cleanup of orphan .tmp files in upload folder
+try:
+    for orphan_tmp in UPLOAD_FOLDER.rglob("*.tmp"):
+        if orphan_tmp.is_file():
+            try:
+                orphan_tmp.unlink()
+                print(f"[STARTUP CLEANUP] Removed orphan temporary file: {orphan_tmp}")
+            except Exception:
+                pass
+except Exception:
+    pass
+
+def cleanup_temp_file_for_filename(filename: str, parent_path: Optional[str] = None) -> int:
+    """Find and delete all .tmp files and chunk artifacts associated with a filename."""
+    deleted_count = 0
+    safe_name = secure_filename(filename) if filename else ""
+    if not safe_name:
+        return 0
+
+    base_name = safe_name.rsplit('.', 1)[0] if '.' in safe_name else safe_name
+
+    target_dirs = [UPLOAD_FOLDER]
+    if parent_path:
+        clean_parent = parent_path.strip('/\\')
+        if clean_parent:
+            sub_dir = UPLOAD_FOLDER / clean_parent
+            if sub_dir.exists():
+                target_dirs.append(sub_dir)
+
+    for d in target_dirs:
+        for p in d.rglob("*.tmp"):
+            p_name = p.name
+            if (base_name in p_name or safe_name in p_name) and p.is_file():
+                try:
+                    p.unlink()
+                    deleted_count += 1
+                    print(f"[CLEANUP] Deleted temporary file: {p}")
+                except Exception as e:
+                    print(f"[ERR] Failed to delete temp file {p}: {e}")
+
+    temp_chunks_dir = Path("data/temp_chunks")
+    if temp_chunks_dir.exists():
+        for chunk in temp_chunks_dir.glob(f"*{base_name}*"):
+            try:
+                if chunk.is_file():
+                    chunk.unlink()
+                    deleted_count += 1
+                elif chunk.is_dir():
+                    shutil.rmtree(chunk, ignore_errors=True)
+                    deleted_count += 1
+            except Exception:
+                pass
+
+    return deleted_count
+
+@router.get("/api/upload-history")
+async def get_upload_history():
+    """Return persisted upload tray history for this server session."""
+    try:
+        if UPLOAD_HISTORY_FILE.exists():
+            data = json.loads(UPLOAD_HISTORY_FILE.read_text(encoding="utf-8"))
+            return JSONResponse(content=data)
+    except Exception:
+        pass
+    return JSONResponse(content=[])
+
+@router.post("/api/upload-history")
+async def save_upload_history(request: Request):
+    """Save upload tray history for this server session."""
+    try:
+        body = await request.json()
+        if isinstance(body, list):
+            UPLOAD_HISTORY_FILE.write_text(json.dumps(body), encoding="utf-8")
+            return JSONResponse(content={"ok": True})
+    except Exception as e:
+        return JSONResponse(content={"ok": False, "error": str(e)}, status_code=400)
+    return JSONResponse(content={"ok": False, "error": "Invalid payload"}, status_code=400)
 
 def detect_ios_device(user_agent: str) -> dict:
     """Detect iOS devices and Safari browser"""
@@ -691,7 +778,8 @@ async def upload_files(
         # Resolve target directory based on parent_path
         target_dir = UPLOAD_FOLDER
         if parent_path:
-            parts = [p for p in parent_path.split("/") if p and p != ".."]
+            clean_parent = urllib.parse.unquote(parent_path)
+            parts = [p for p in clean_parent.split("/") if p and p != ".."]
             for part in parts:
                 safe_part = secure_filename(part)
                 if safe_part:
@@ -890,7 +978,8 @@ async def upload_auto_file(
             # Resolve target directory based on parent_path
             target_dir = UPLOAD_FOLDER
             if parent_path:
-                parts = [p for p in parent_path.split("/") if p and p != ".."]
+                clean_parent = urllib.parse.unquote(parent_path)
+                parts = [p for p in clean_parent.split("/") if p and p != ".."]
                 for part in parts:
                     safe_part = secure_filename(part)
                     if safe_part:
@@ -1384,6 +1473,27 @@ async def clear_files():
             content={"status": "error", "msg": f"Failed to clear files: {str(e)}"}
         )
 
+@router.post("/api/cancel-upload", name="cancel_upload_api")
+@router.post("/cancel-upload", name="cancel_upload_legacy")
+async def cancel_upload_api(filename: Optional[str] = Form(None), parent_path: Optional[str] = Form(None), request: Request = None):
+    """Cancel an upload and purge any temporary .tmp files or chunks on disk."""
+    try:
+        target_file = filename
+        target_parent = parent_path
+        if not target_file and request:
+            try:
+                form = await request.form()
+                target_file = form.get("filename")
+                target_parent = form.get("parent_path")
+            except Exception:
+                pass
+        deleted = cleanup_temp_file_for_filename(target_file or "", target_parent)
+        print(f"[CANCEL] Purged {deleted} temporary file(s) for '{target_file}'")
+        return JSONResponse(content={"status": "success", "msg": f"Cleaned up {deleted} temporary file(s)", "deleted_files": deleted})
+    except Exception as e:
+        print(f"[ERR] Error in cancel_upload_api: {e}")
+        return JSONResponse(status_code=500, content={"status": "error", "msg": str(e)})
+
 @router.post("/delete/{filename}", name="delete_file")
 async def delete_file(filename: str):
     """Delete a specific file with proper error handling"""
@@ -1398,13 +1508,29 @@ async def delete_file(filename: str):
         file_path = UPLOAD_FOLDER / safe_name
         
         if not file_path.exists():
-            # Fallback: search subdirectories recursively
+            # Fallback 1: search subdirectories recursively
             found = False
             for subdir_file in UPLOAD_FOLDER.rglob(safe_name):
                 if subdir_file.is_file():
                     file_path = subdir_file
                     found = True
                     break
+            if not found:
+                # Fallback 2: match base name & extension if server auto-renamed duplicate file
+                dot_idx = safe_name.rfind(".")
+                base = safe_name[:dot_idx] if dot_idx > 0 else safe_name
+                ext = safe_name[dot_idx:] if dot_idx > 0 else ""
+                for candidate in UPLOAD_FOLDER.rglob("*"):
+                    if candidate.is_file():
+                        c_name = candidate.name
+                        if ext and c_name.startswith(base) and c_name.endswith(ext):
+                            file_path = candidate
+                            found = True
+                            break
+                        elif not ext and c_name.startswith(base):
+                            file_path = candidate
+                            found = True
+                            break
             if not found:
                 return JSONResponse(
                     status_code=404,
@@ -1413,8 +1539,8 @@ async def delete_file(filename: str):
             
         if file_path.is_file():
             file_path.unlink()
-            print(f"OK: Deleted file: {safe_name}")
-            return RedirectResponse(url="/", status_code=HTTP_302_FOUND)
+            print(f"OK: Deleted file: {file_path.name}")
+            return JSONResponse(content={"status": "success", "msg": f"Deleted {file_path.name}"})
         else:
             return JSONResponse(
                 status_code=HTTP_400_BAD_REQUEST,
@@ -1448,7 +1574,8 @@ async def upload_chunk(
     chunk: UploadFile = File(...),
     filename: str = Form(...),
     part_number: int = Form(...),
-    total_parts: int = Form(None)  # Make optional since adaptive chunking may not know final count
+    total_parts: int = Form(None),  # Make optional since adaptive chunking may not know final count
+    parent_path: Optional[str] = Form(None)
 ):
     """Handle individual chunk uploads for large files - supports both HTTP and HTTPS with adaptive chunking"""
     try:
@@ -1846,7 +1973,8 @@ async def finalize_upload(
         # Resolve target directory based on parent_path
         target_dir = UPLOAD_FOLDER
         if parent_path:
-            parts = [p for p in parent_path.split("/") if p and p != ".."]
+            clean_parent = urllib.parse.unquote(parent_path)
+            parts = [p for p in clean_parent.split("/") if p and p != ".."]
             for part in parts:
                 safe_part = secure_filename(part)
                 if safe_part:
@@ -2173,8 +2301,9 @@ async def list_folders():
 @router.get("/api/folders/{folder_path:path}/files", name="list_folder_contents")
 async def list_folder_contents(folder_path: str):
     """Get files inside a specific folder (supports nested paths like FolderA/SubFolder)"""
-    # Sanitize each path component
-    parts = [p for p in folder_path.split("/") if p and p != ".."]
+    # Unquote URL-encoded path components (%20 -> space)
+    clean_path = urllib.parse.unquote(folder_path)
+    parts = [p for p in clean_path.split("/") if p and p != ".."]
     if not parts:
         return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid folder path"})
     
@@ -2348,7 +2477,8 @@ async def create_folder(folder_name: str = Form(...), parent_path: Optional[str]
     # Resolve target directory based on parent_path
     target_dir = UPLOAD_FOLDER
     if parent_path:
-        parts = [p for p in parent_path.split("/") if p and p != ".."]
+        clean_parent = urllib.parse.unquote(parent_path)
+        parts = [p for p in clean_parent.split("/") if p and p != ".."]
         for part in parts:
             safe_part = secure_filename(part)
             if safe_part:
@@ -2360,18 +2490,16 @@ async def create_folder(folder_name: str = Form(...), parent_path: Optional[str]
         except ValueError:
             return JSONResponse(status_code=403, content={"status": "error", "msg": "Access denied"})
 
-    # Auto-increment if folder already exists: "Folder" -> "Folder (1)" -> "Folder (2)"
-    original_name = safe_name
-    counter = 1
-    folder_path = target_dir / safe_name
-    while folder_path.exists():
-        safe_name = f"{original_name} ({counter})"
-        folder_path = target_dir / safe_name
-        counter += 1
+    # Ensure parent folder exists
+    target_dir.mkdir(parents=True, exist_ok=True)
+    
+    new_folder = target_dir / safe_name
+    if new_folder.exists():
+        return JSONResponse(status_code=409, content={"status": "error", "msg": f"Folder '{safe_name}' already exists"})
     
     try:
-        folder_path.mkdir(parents=True, exist_ok=False)
-        print(f"[MKDIR] Created folder '{safe_name}' in '{parent_path or ''}'")
+        new_folder.mkdir()
+        print(f"[MKDIR] Created folder: {new_folder}")
         return JSONResponse(content={
             "status": "success",
             "msg": f"Folder '{safe_name}' created",
@@ -2388,37 +2516,50 @@ async def create_folder(folder_name: str = Form(...), parent_path: Optional[str]
 @router.post("/delete-folder/{folder_path:path}", name="delete_folder")
 async def delete_folder(folder_path: str):
     """Delete an entire folder (supports nested paths)"""
-    # Sanitize each path component
-    parts = [p for p in folder_path.split("/") if p and p != ".."]
-    if not parts:
-        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid folder path"})
-    
-    folder_path_obj = UPLOAD_FOLDER
-    for part in parts:
-        safe_part = secure_filename(part)
-        if not safe_part:
-            return JSONResponse(status_code=400, content={"status": "error", "msg": f"Invalid path component: {part}"})
-        folder_path_obj = folder_path_obj / safe_part
-    
-    # Path traversal check
     try:
-        folder_path_obj.resolve().relative_to(UPLOAD_FOLDER.resolve())
-    except ValueError:
-        return JSONResponse(status_code=403, content={"status": "error", "msg": "Access denied"})
-    
-    if not folder_path_obj.exists() or not folder_path_obj.is_dir():
-        return JSONResponse(status_code=404, content={"status": "error", "msg": "Folder not found"})
-    
-    try:
-        shutil.rmtree(folder_path_obj)
+        # Sanitize each path component
+        clean_path = urllib.parse.unquote(folder_path)
+        parts = [p for p in clean_path.split("/") if p and p != ".."]
+        if not parts:
+            return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid folder path"})
+        
+        folder_path_obj = UPLOAD_FOLDER
+        for part in parts:
+            safe_part = secure_filename(part)
+            if not safe_part:
+                return JSONResponse(status_code=400, content={"status": "error", "msg": f"Invalid path component: {part}"})
+            folder_path_obj = folder_path_obj / safe_part
+        
+        # Path traversal check
+        try:
+            folder_path_obj.resolve().relative_to(UPLOAD_FOLDER.resolve())
+        except ValueError:
+            return JSONResponse(status_code=403, content={"status": "error", "msg": "Access denied"})
+        
+        if not folder_path_obj.exists() or not folder_path_obj.is_dir():
+            return JSONResponse(status_code=404, content={"status": "error", "msg": "Folder not found"})
+        
+        # Force garbage collection to release any open file handles on Windows
+        gc.collect()
+
+        def handle_remove_readonly(func, path, exc_info):
+            import stat
+            try:
+                os.chmod(path, stat.S_IWRITE)
+                func(path)
+            except Exception:
+                pass
+
+        try:
+            shutil.rmtree(folder_path_obj, onerror=handle_remove_readonly)
+        except Exception:
+            shutil.rmtree(folder_path_obj, ignore_errors=True)
+
         print(f"[OK] Deleted folder: {folder_path}")
         return JSONResponse(content={
             "status": "success",
             "msg": f"Folder '{folder_path}' deleted successfully"
         })
     except Exception as e:
-        print(f"[ERR] Error deleting folder {folder_path}: {e}")
-        return JSONResponse(status_code=500, content={
-            "status": "error",
-            "msg": f"Failed to delete folder: {e}"
-        })
+        print(f"[ERR] Failed to delete folder {folder_path}: {e}")
+        return JSONResponse(status_code=500, content={"status": "error", "msg": f"Failed to delete folder: {str(e)}"})

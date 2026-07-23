@@ -586,30 +586,10 @@ function updateNetworkSpeed(speedMBps) {
 }
 
 // Function to create an upload item
-function createUploadItem(file, uploadId) {
-  // Check if AES encryption is enabled
-  const isAESEnabled = isEncryptionEnabled && document.getElementById('enableEncryption').checked;
-
-  return {
-    id: uploadId,
-    file: file,
-    fileName: file.name,
-    fileSize: file.size,
-    status: 'queued', // queued, uploading, completed, error, cancelled
-    progress: 0,
-    uploadedBytes: 0,
-    startTime: null,
-    speed: 0,
-    timeRemaining: 0,
-    xhr: null,
-    error: null,
-    isAESEnabled: isAESEnabled, // Store AES encryption state
-    uploadedChunks: 0, // For resume functionality
-    totalChunks: 0, // For chunked uploads
-    //  Statistics tracking
-    resumeCount: 0
-  };
-}
+// NOTE: createUploadItem is intentionally defined ONLY in main-app.js so that
+// the captured target folder (targetDir) is consistent across all uploads.
+// Do not add a duplicate definition here; doing so would overwrite the
+// folder-aware version after file-utils.js loads asynchronously.
 
 // Function to close settings menu when clicking outside
 function closeSettingsOnOutsideClick(event) {

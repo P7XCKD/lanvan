@@ -669,15 +669,22 @@ class FileValidator(AdvancedFileValidator):
 
 # Utility functions for route integration
 def secure_filename(filename: str) -> str:
-    """Get a secure version of filename."""
-    result = FileValidator.validate_filename(filename)
-    return result['sanitized_name']
-
+    """Get a secure version of filename, removing path traversal sequences."""
+    if not filename:
+        return ""
+    name = os.path.basename(str(filename).replace('\\', '/'))
+    name = name.replace('\0', '').replace('..', '')
+    return name.strip()
 
 def is_allowed_file(filename: str) -> bool:
     """Check if file extension is allowed."""
-    result = FileValidator.validate_filename(filename)
-    return result['valid']
+    if not filename:
+        return False
+    safe = secure_filename(filename)
+    if '.' not in safe:
+        return True # Default allow extensionless files
+    ext = '.' + safe.rsplit('.', 1)[1].lower()
+    return ext not in AdvancedFileValidator.BLOCKED_EXTENSIONS
 
 
 async def validate_upload_files_enhanced_fast(files: List[UploadFile], encrypt: bool = False, is_https: bool = False) -> Tuple[bool, List[str], List[Dict], List[str]]:

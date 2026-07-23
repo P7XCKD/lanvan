@@ -561,25 +561,38 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     raise exc
 
 @app.exception_handler(500)
-async def smart_internal_error_handler(request: Request, exc):
-    """Handle server errors smartly"""
-    # Check if this is a ClientDisconnect wrapped in other exceptions
+@app.exception_handler(Exception)
+async def smart_internal_error_handler(request: Request, exc: Exception):
+    """Handle server errors smartly with clear console traceback & JSON error responses for API calls."""
     if _is_client_disconnect_error(exc):
         print(f"[INFO] Client disconnected during request to {request.url.path} (wrapped)")
-        from starlette.responses import PlainTextResponse
         return PlainTextResponse("Client disconnected", status_code=400)
     
-    # Print the traceback so it is visible in the console
     import traceback
+    tb_str = traceback.format_exc()
     print("=== [SERVER ERROR TRACEBACK] ===")
-    traceback.print_exc()
+    print(tb_str)
     print("================================")
     
-    # Only redirect to loading page during startup period
+    path = str(request.url.path)
+    if path.startswith("/api/") or path.startswith("/upload") or path.startswith("/delete") or request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "msg": str(exc) or "Internal Server Error",
+                "path": path,
+                "error_type": type(exc).__name__
+            }
+        )
+
     if not are_resources_ready():
         return RedirectResponse(url="/loading?redirect=/", status_code=302)
-    # Otherwise, let the error be handled normally
-    raise exc
+
+    return JSONResponse(
+        status_code=500,
+        content={"status": "error", "msg": str(exc) or "Internal Server Error"}
+    )
 
 def _is_client_disconnect_error(exc) -> bool:
     """Check if exception is caused by client disconnect"""
