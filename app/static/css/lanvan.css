@@ -1048,6 +1048,7 @@ body {
     gap: 1rem;
     transition: background-color 0.2s ease;
     cursor: pointer;
+    touch-action: manipulation;
 }
 
 .m3-list-item:hover {

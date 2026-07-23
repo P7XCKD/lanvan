@@ -580,13 +580,13 @@
                 var itemData = (filesData || [])[index] || {};
                 var folderFlag = item.getAttribute("data-is-folder") === "1" || !!itemData.isFolder;
 
-                // Single click: select (and navigate into folder on mobile)
+                // Single click: select (and navigate into folder on mobile or if already selected)
                 item.addEventListener("click", function (e) {
                     if (e.target.closest("button")) return;
                     if (itemData.uploading) return; // Prevent selection/navigation if uploading
                     var isMobile = window.innerWidth < 768;
-                    if (folderFlag && isMobile) {
-                        // Mobile: single-click navigates into folder
+                    var isSelected = item.classList.contains("selected");
+                    if (folderFlag && (isMobile || isSelected)) {
                         navigateIntoFolder(name);
                         return;
                     }
@@ -2276,6 +2276,64 @@
         }
     }
 
+    function buildHeaderActionsHtml(isAllCompleted, pausedCount, expanded, totalCount) {
+        var toggleHtml = "";
+        if (totalCount > 0) {
+            if (isAllCompleted) {
+                var chevronIcon = expanded ? "chevron-down" : "chevron-up";
+                toggleHtml = '<button type="button" class="upload-toast-header-btn header-expand-btn" title="Toggle detailed list">' +
+                    '<i data-lucide="' + chevronIcon + '"></i>' +
+                    '</button>';
+            } else {
+                if (pausedCount > 0) {
+                    toggleHtml = '<button type="button" class="upload-toast-header-btn header-playpause-btn" title="Resume all uploads" data-action="resume">' +
+                        '<i data-lucide="play" style="fill: currentColor;"></i>' +
+                        '</button>';
+                } else {
+                    toggleHtml = '<button type="button" class="upload-toast-header-btn header-playpause-btn" title="Pause all uploads" data-action="pause">' +
+                        '<i data-lucide="pause"></i>' +
+                        '</button>';
+                }
+            }
+        }
+        return toggleHtml +
+            '<button type="button" class="upload-toast-header-btn close-panel-btn" title="Cancel all uploads and close">' +
+            '<i data-lucide="x"></i>' +
+            '</button>';
+    }
+
+    function wireHeaderActions(actionsContainer) {
+        var playPauseBtn = actionsContainer.querySelector(".header-playpause-btn");
+        if (playPauseBtn) {
+            playPauseBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                var action = this.getAttribute("data-action");
+                if (action === "pause") {
+                    window.pauseAllUploads();
+                } else {
+                    window.resumeAllUploads();
+                }
+            });
+        }
+        var expandBtn = actionsContainer.querySelector(".header-expand-btn");
+        if (expandBtn) {
+            expandBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                window.uploadManagerExpanded = !window.uploadManagerExpanded;
+                renderUploadTray();
+            });
+        }
+        var closeBtn = actionsContainer.querySelector(".close-panel-btn");
+        if (closeBtn) {
+            closeBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                if (typeof window.cancelAllUploads === "function") {
+                    window.cancelAllUploads();
+                }
+            });
+        }
+    }
+
     function renderUploadTray() {
         var stack = document.getElementById("uploadToastStack");
         if (!stack) return;
@@ -2285,49 +2343,55 @@
             return item.status === "uploading" || item.status === "queued" || item.status === "processing" || item.status === "paused" || item.status === "completed";
         });
 
-        activeUploads.sort(function (a, b) {
-            if (a.status === "completed" && b.status !== "completed") return 1;
-            if (a.status !== "completed" && b.status === "completed") return -1;
-            return 0;
-        });
-
-        if (activeUploads.length === 0) {
-            stack.classList.remove("active");
-            stack.innerHTML = "";
-            return;
-        }
-
+        // Make sure stack is always active/visible
         stack.classList.add("active");
 
-        // Auto-expand panel if any item is paused
-        var hasPaused = activeUploads.some(function (item) {
-            return item.status === "paused";
+        // Sort priority: active/processing -> paused -> queued -> completed (bottom)
+        activeUploads.sort(function (a, b) {
+            var scoreA = (a.status === 'uploading' || a.status === 'processing') ? 1 : (a.status === 'paused' ? 2 : (a.status === 'queued' ? 3 : 4));
+            var scoreB = (b.status === 'uploading' || b.status === 'processing') ? 1 : (b.status === 'paused' ? 2 : (b.status === 'queued' ? 3 : 4));
+            return scoreA - scoreB;
         });
-        if (hasPaused) {
-            window.uploadManagerExpanded = true;
+
+        // Record old positions of existing elements for FLIP transition
+        var bodyEl = stack.querySelector(".upload-toast-body");
+        var oldRects = {};
+        if (bodyEl) {
+            var children = bodyEl.children;
+            for (var n = 0; n < children.length; n++) {
+                var child = children[n];
+                var idAttr = child.getAttribute("id");
+                if (idAttr) {
+                    oldRects[idAttr] = child.getBoundingClientRect();
+                }
+            }
         }
 
         // Calculations
         var totalCount = activeUploads.length;
         var pausedCount = activeUploads.filter(function (item) { return item.status === "paused"; }).length;
-        var avgPct = Math.round(activeUploads.reduce(function (sum, item) { return sum + (item.progress || 0); }, 0) / totalCount);
+        var completedCount = activeUploads.filter(function (item) { return item.status === "completed"; }).length;
+        var isAllCompleted = totalCount > 0 ? (completedCount === totalCount) : true;
+
+        var avgPct = totalCount > 0 ? Math.round(activeUploads.reduce(function (sum, item) { return sum + (item.progress || 0); }, 0) / totalCount) : 0;
         var totalSpeedBytes = activeUploads.reduce(function (sum, item) { return sum + (item.speed || 0); }, 0);
         var totalSpeedMB = (totalSpeedBytes / (1024 * 1024)).toFixed(1) + " MB/s";
 
         // Calculate summary header title
         var headerTitle = "";
-        if (pausedCount === totalCount) {
+        if (totalCount === 0) {
+            headerTitle = "No pending uploads";
+        } else if (isAllCompleted) {
+            headerTitle = "Uploads completed (" + totalCount + ")";
+        } else if (pausedCount === totalCount) {
             headerTitle = "Uploads paused (" + totalCount + ")";
         } else {
             headerTitle = "Uploading " + totalCount + " " + (totalCount === 1 ? "file" : "files") + " • " + totalSpeedMB;
         }
 
-        // We check if the widget base is already rendered.
-        // If not, we do a full render once, then update in-place thereafter.
         var headerTitleEl = stack.querySelector(".upload-toast-header-title");
         var headerProgressBar = stack.querySelector(".header-progress-bar");
-        var headerPlayPauseBtn = stack.querySelector(".header-playpause-btn");
-        var bodyEl = stack.querySelector(".upload-toast-body");
+        bodyEl = stack.querySelector(".upload-toast-body");
 
         if (!headerTitleEl || !bodyEl) {
             // Full initial render
@@ -2337,16 +2401,14 @@
             }
 
             var bodyClass = window.uploadManagerExpanded ? "upload-toast-body" : "upload-toast-body collapsed";
+            var headerActionsHtml = buildHeaderActionsHtml(isAllCompleted, pausedCount, window.uploadManagerExpanded, totalCount);
 
-            var widgetHtml =
+            var widgetHtml = 
                 '<div class="upload-toast-header" style="position: relative; overflow: hidden;">' +
                 '<div class="header-progress-bar" style="position: absolute; top:0; left:0; bottom:0; background: rgba(59, 130, 246, 0.08); z-index: 1; transition: width 0.2s ease-out; width: ' + avgPct + '%;"></div>' +
                 '<span class="upload-toast-header-title" style="position: relative; z-index: 2;">' + headerTitle + '</span>' +
                 '<div class="upload-toast-header-actions" style="position: relative; z-index: 2; display: flex; align-items: center;">' +
-                '<button type="button" class="upload-toast-header-btn header-playpause-btn" title="Pause all uploads"></button>' +
-                '<button type="button" class="upload-toast-header-btn close-panel-btn" title="Cancel all uploads and close">' +
-                '<i data-lucide="x"></i>' +
-                '</button>' +
+                headerActionsHtml +
                 '</div>' +
                 '</div>' +
                 '<div class="' + bodyClass + '">' +
@@ -2355,26 +2417,8 @@
 
             stack.innerHTML = widgetHtml;
 
-            // Wire static event listeners once
-            // Wire header play/pause toggle
-            stack.querySelector(".header-playpause-btn").addEventListener("click", function (e) {
-                e.stopPropagation();
-                var queue = window.uploadQueue || [];
-                var currentPaused = queue.filter(function (item) { return item.status === "paused"; }).length;
-                if (currentPaused > 0) {
-                    window.resumeAllUploads();
-                } else {
-                    window.pauseAllUploads();
-                }
-            });
-
-            // Wire header close button
-            stack.querySelector(".close-panel-btn").addEventListener("click", function (e) {
-                e.stopPropagation();
-                if (typeof window.cancelAllUploads === "function") {
-                    window.cancelAllUploads();
-                }
-            });
+            // Wire header actions
+            wireHeaderActions(stack.querySelector(".upload-toast-header-actions"));
 
             // Wire header panel manual toggle
             stack.querySelector(".upload-toast-header").addEventListener("click", function (e) {
@@ -2394,7 +2438,6 @@
             // Re-query newly created elements
             headerTitleEl = stack.querySelector(".upload-toast-header-title");
             headerProgressBar = stack.querySelector(".header-progress-bar");
-            headerPlayPauseBtn = stack.querySelector(".header-playpause-btn");
             bodyEl = stack.querySelector(".upload-toast-body");
 
             // Wire listeners for initially rendered items
@@ -2414,17 +2457,11 @@
             headerProgressBar.style.width = avgPct + "%";
         }
 
-        // 2. Header Play/Pause Icon
-        if (headerPlayPauseBtn) {
-            var isAnyPaused = pausedCount > 0;
-            var currentAction = headerPlayPauseBtn.getAttribute("data-action");
-            var targetAction = isAnyPaused ? "resume" : "pause";
-            if (currentAction !== targetAction) {
-                headerPlayPauseBtn.setAttribute("data-action", targetAction);
-                headerPlayPauseBtn.setAttribute("title", isAnyPaused ? "Resume all uploads" : "Pause all uploads");
-                headerPlayPauseBtn.innerHTML = isAnyPaused ? '<i data-lucide="play" style="fill: currentColor;"></i>' : '<i data-lucide="pause"></i>';
-                if (window.lucide) lucide.createIcons();
-            }
+        // 2. Header Actions Toggle Swap
+        var actionsContainer = stack.querySelector(".upload-toast-header-actions");
+        if (actionsContainer) {
+            actionsContainer.innerHTML = buildHeaderActionsHtml(isAllCompleted, pausedCount, window.uploadManagerExpanded, totalCount);
+            wireHeaderActions(actionsContainer);
         }
 
         // 3. Body Collapsed State
@@ -2451,7 +2488,7 @@
             } else {
                 var pct = Math.round(item.progress || 0);
                 var sizeStr = formatSize(item.fileSize);
-
+                
                 var metaText = "";
                 var fillStyle = "";
                 var actionHtml = "";
@@ -2488,7 +2525,7 @@
                     }
                 }
 
-                // Sink completed items to the bottom in the DOM
+                // Sink items based on sort order
                 bodyEl.appendChild(itemEl);
             }
         }
@@ -2504,6 +2541,29 @@
                     itemEl.remove();
                 }
             }
+        }
+
+        // 5. Trigger FLIP animation for smooth sliding position transitions
+        if (bodyEl) {
+            var children = bodyEl.children;
+            requestAnimationFrame(function () {
+                for (var n = 0; n < children.length; n++) {
+                    var child = children[n];
+                    var idAttr = child.getAttribute("id");
+                    if (idAttr && oldRects[idAttr]) {
+                        var oldRect = oldRects[idAttr];
+                        var newRect = child.getBoundingClientRect();
+                        var deltaY = oldRect.top - newRect.top;
+                        if (deltaY !== 0) {
+                            child.style.transition = 'none';
+                            child.style.transform = 'translateY(' + deltaY + 'px)';
+                            child.offsetHeight; // Force reflow
+                            child.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                            child.style.transform = 'translateY(0)';
+                        }
+                    }
+                }
+            });
         }
 
         if (window.lucide) lucide.createIcons();
@@ -2932,6 +2992,9 @@
                 });
             }
         }, 300);
+
+        // Render empty manager on load so it is visible by default
+        renderUploadTray();
 
         console.log("[app-init] Prototype UI adapter initialized. " +
             "Wrapped updateFileDisplay=" + (typeof updateFileDisplay === "function") +
