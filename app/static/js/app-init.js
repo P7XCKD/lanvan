@@ -246,10 +246,24 @@
      * Render files in prototype #nasFileList from the same data production uses.
      * @param {string[]} files - Array of filenames from production API
      */
-    // Store last files_data for metadata access (name, size, mtime)
     var lastFilesData = [];
+    var lastRenderedFiles = [];
+    window.activeTab = "file";
+
+    function formatSize(bytes) {
+        if (typeof formatFileSize === 'function') {
+            return formatFileSize(bytes);
+        }
+        if (!bytes) return '--';
+        if (bytes === 0) return '0 Bytes';
+        var k = 1024;
+        var sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        var i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
 
     function renderPrototypeFileList(files) {
+        lastRenderedFiles = files;
         var container = document.getElementById("nasFileList");
         var filePanelMeta = document.getElementById("filePanelMeta");
         if (!container) return;
@@ -271,20 +285,57 @@
         var normalizedFiles = [];
         if (files && files.length > 0) {
             for (var i = 0; i < files.length; i++) {
-                if (typeof files[i] === "string") {
-                    // Find metadata from lastFilesData
-                    var meta = lastFilesData.find(function (f) { return f.name === files[i]; });
+                var item = files[i];
+                if (!item) continue;
+                if (typeof item === "string") {
+                    var meta = lastFilesData.find(function (f) { return f && f.name === item; });
                     normalizedFiles.push({
-                        name: files[i],
+                        name: item,
                         size: meta ? meta.size : "--",
                         mtime: meta ? meta.mtime : 0,
                         isFolder: meta ? !!meta.isFolder : false
                     });
-                } else {
-                    normalizedFiles.push(files[i]);
+                } else if (item.name) {
+                    normalizedFiles.push({
+                        name: item.name,
+                        size: item.size || "--",
+                        mtime: item.mtime || 0,
+                        isFolder: !!item.isFolder
+                    });
                 }
             }
         }
+
+        // Retrieve active uploads from global window.uploadQueue
+        var activeUploads = [];
+        if (window.uploadQueue && window.uploadQueue.length > 0) {
+            window.uploadQueue.forEach(function (item) {
+                if (item && item.fileName && (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused')) {
+                    // Check if the file is already in normalizedFiles (e.g. overwriting)
+                    var existingItem = normalizedFiles.find(function (f) { return f && f.name === item.fileName; });
+                    if (existingItem) {
+                        existingItem.uploading = true;
+                        existingItem.uploadProgress = Math.round(item.progress || 0);
+                        existingItem.uploadStatus = item.status;
+                        existingItem.uploadId = item.id;
+                    } else {
+                        activeUploads.push({
+                            name: item.fileName,
+                            size: formatSize(item.fileSize),
+                            mtime: Math.floor(Date.now() / 1000),
+                            isFolder: false,
+                            uploading: true,
+                            uploadProgress: Math.round(item.progress || 0),
+                            uploadStatus: item.status,
+                            uploadId: item.id
+                        });
+                    }
+                }
+            });
+        }
+
+        // Merge active uploads
+        normalizedFiles = activeUploads.concat(normalizedFiles);
 
         var originalFilesForQuickAccess = normalizedFiles.slice();
 
@@ -295,8 +346,26 @@
             });
         }
 
+        // Apply Tab-level Filtering (Recent vs Starred)
+        var tab = window.activeTab || "file";
+        if (tab === "recent") {
+            // Show only files (excluding folders) for Recents
+            normalizedFiles = normalizedFiles.filter(function (f) {
+                return !f.isFolder;
+            });
+        } else if (tab === "starred") {
+            // Show only starred files/folders
+            normalizedFiles = normalizedFiles.filter(function (f) {
+                return isStarred(f.name);
+            });
+        }
+
         // Apply client-side Sorting
         normalizedFiles.sort(function (a, b) {
+            // Keep uploading items at the very top
+            if (a.uploading && !b.uploading) return -1;
+            if (!a.uploading && b.uploading) return 1;
+
             // Folders top / mixed logic
             if (sortFolders === "top") {
                 if (a.isFolder && !b.isFolder) return -1;
@@ -333,15 +402,15 @@
         if (!normalizedFiles || normalizedFiles.length === 0) {
             // Check if uploads are active — show different message
             var queue = window.uploadQueue || [];
-            var activeUploads = queue.filter(function (item) {
+            var activeUploadsCount = queue.filter(function (item) {
                 return item.status === "uploading" || item.status === "queued" || item.status === "processing";
-            });
-            if (activeUploads.length > 0) {
+            }).length;
+            if (activeUploadsCount > 0) {
                 container.innerHTML =
                     '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; width:100%;">' +
                     '<div class="avatar-icon avatar-folder" style="width:72px;height:72px;border-radius:18px;margin-bottom:1rem;">' +
                     '<i data-lucide="upload-cloud" style="width:34px;height:34px;"></i></div>' +
-                    '<div style="font-size:1.05rem; font-weight:500; color:var(--text-color); margin-bottom:0.25rem;">Uploading ' + activeUploads.length + ' file' + (activeUploads.length === 1 ? '' : 's') + '...</div>' +
+                    '<div style="font-size:1.05rem; font-weight:500; color:var(--text-color); margin-bottom:0.25rem;">Uploading ' + activeUploadsCount + ' file' + (activeUploadsCount === 1 ? '' : 's') + '...</div>' +
                     '<div style="font-size:0.8rem; color:var(--text-muted);">Files will appear here when upload completes.</div>' +
                     "</div>";
             } else {
@@ -372,7 +441,18 @@
                 var d = new Date(fileData.mtime * 1000);
                 dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
             }
-            html += buildListItem(name, info, size, dateStr, subtitle, !!fileData.isFolder);
+            html += buildListItem(
+                name,
+                info,
+                size,
+                dateStr,
+                subtitle,
+                !!fileData.isFolder,
+                !!fileData.uploading,
+                fileData.uploadProgress || 0,
+                fileData.uploadId,
+                fileData.uploadStatus
+            );
         }
         container.innerHTML = html;
 
@@ -381,7 +461,7 @@
 
         // Also render quick access cards (only non-folders)
         renderQuickAccess(originalFilesForQuickAccess
-            .filter(function (f) { return !f.isFolder; })
+            .filter(function (f) { return !f.isFolder && !f.uploading; })
             .map(function (f) { return f.name; }));
 
         if (window.lucide) lucide.createIcons();
@@ -414,42 +494,73 @@
      * @param {string} subtitle - "File" or "Folder"
      * @param {boolean} isFolder - Whether item is a folder
      */
-    function buildListItem(name, info, size, date, subtitle, isFolder) {
+    function buildListItem(name, info, size, date, subtitle, isFolder, isUploading, uploadProgress, uploadId, uploadStatus) {
         var escName = escapeHtml(name);
         var sizeStr = size || "--";
         var dateStr = date || "--";
         var subtitleText = subtitle || (isFolder ? "Folder" : "File");
+        if (isUploading) {
+            subtitleText = uploadProgress + "% • " + (uploadStatus === 'paused' ? 'Paused' : 'Uploading');
+        }
         var starred = isStarred(name);
         var starFill = starred ? "var(--yellow, #f59e0b)" : "none";
         var starColor = starred ? "var(--yellow, #f59e0b)" : "";
-        // Folders show "--" for size column; files show size
+        
         var displaySize = isFolder ? "-" : sizeStr;
+        var progressBarHtml = isUploading
+            ? '<div class="row-progress-bar" style="position:absolute; top:0; bottom:0; left:0; background:rgba(59, 130, 246, 0.08); width:' + uploadProgress + '%; transition:width 0.25s ease-out; pointer-events:none; z-index:1;"></div>'
+            : '';
+
+        var actionsHtml = '';
+        if (isUploading) {
+            var playPauseBtn = '';
+            if (uploadStatus === 'paused') {
+                playPauseBtn = '<button class="btn-icon" title="Resume upload" data-action="resume-upload" data-upload-id="' + uploadId + '">' +
+                    '<i data-lucide="play" style="width:16px;height:16px;"></i>' +
+                    '</button>';
+            } else {
+                playPauseBtn = '<button class="btn-icon" title="Pause upload" data-action="pause-upload" data-upload-id="' + uploadId + '">' +
+                    '<i data-lucide="pause" style="width:16px;height:16px;"></i>' +
+                    '</button>';
+            }
+            actionsHtml = playPauseBtn +
+                '<button class="btn-icon" title="Cancel upload" data-action="cancel-upload" data-upload-id="' + uploadId + '">' +
+                '<i data-lucide="x" style="width:16px;height:16px;"></i>' +
+                '</button>';
+        } else {
+            actionsHtml = 
+                '<button class="btn-icon hover-btn" title="Download" data-action="download" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '">' +
+                '<i data-lucide="download" style="width:16px;height:16px;"></i>' +
+                '</button>' +
+                (isFolder ? '' :
+                    '<button class="btn-icon hover-btn" title="Rename" data-action="rename" data-filename="' + escName + '">' +
+                    '<i data-lucide="edit-2" style="width:16px;height:16px;"></i>' +
+                    '</button>' +
+                    '<button class="btn-icon hover-btn" title="Star" data-action="star" data-filename="' + escName + '" style="color:' + starColor + ';">' +
+                    '<i data-lucide="star" style="width:16px;height:16px;fill:' + starFill + ';"></i>' +
+                    '</button>'
+                ) +
+                '<button class="btn-icon" title="More actions" data-action="menu" data-filename="' + escName + '">' +
+                '<i data-lucide="more-vertical" style="width:16px;height:16px;"></i>' +
+                '</button>';
+        }
+
+        var displayDate = isUploading ? (uploadStatus === 'paused' ? 'Paused' : 'Uploading') : dateStr;
+
         return (
-            '<div class="m3-list-item" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '">' +
-            '<div class="file-name-cell">' +
+            '<div class="m3-list-item' + (isUploading ? ' uploading' : '') + '" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '" style="' + (isUploading ? 'position:relative; overflow:hidden;' : '') + '">' +
+            progressBarHtml +
+            '<div class="file-name-cell" style="position:relative; z-index:2;">' +
             '<div class="avatar-icon ' + info.avatarClass + '"><i data-lucide="' + info.iconName + '"></i></div>' +
             '<div class="item-main">' +
             '<div class="item-title">' + escName + '</div>' +
             '<div class="item-subtitle">' + subtitleText + '</div>' +
             '</div>' +
             '</div>' +
-            '<div class="item-date">' + dateStr + '</div>' +
-            '<div class="item-size">' + displaySize + '</div>' +
-            '<div class="row-actions">' +
-            '<button class="btn-icon hover-btn" title="Download" data-action="download" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '">' +
-            '<i data-lucide="download" style="width:16px;height:16px;"></i>' +
-            '</button>' +
-            (isFolder ? '' :
-                '<button class="btn-icon hover-btn" title="Rename" data-action="rename" data-filename="' + escName + '">' +
-                '<i data-lucide="edit-2" style="width:16px;height:16px;"></i>' +
-                '</button>' +
-                '<button class="btn-icon hover-btn" title="Star" data-action="star" data-filename="' + escName + '" style="color:' + starColor + ';">' +
-                '<i data-lucide="star" style="width:16px;height:16px;fill:' + starFill + ';"></i>' +
-                '</button>'
-            ) +
-            '<button class="btn-icon" title="More actions" data-action="menu" data-filename="' + escName + '">' +
-            '<i data-lucide="more-vertical" style="width:16px;height:16px;"></i>' +
-            '</button>' +
+            '<div class="item-date" style="position:relative; z-index:2;">' + displayDate + '</div>' +
+            '<div class="item-size" style="position:relative; z-index:2;">' + displaySize + '</div>' +
+            '<div class="row-actions" style="position:relative; z-index:2;">' +
+            actionsHtml +
             '</div>' +
             '</div>'
         );
@@ -472,6 +583,7 @@
                 // Single click: select (and navigate into folder on mobile)
                 item.addEventListener("click", function (e) {
                     if (e.target.closest("button")) return;
+                    if (itemData.uploading) return; // Prevent selection/navigation if uploading
                     var isMobile = window.innerWidth < 768;
                     if (folderFlag && isMobile) {
                         // Mobile: single-click navigates into folder
@@ -484,10 +596,41 @@
                 // Double-click: navigate into folder (desktop)
                 item.addEventListener("dblclick", function (e) {
                     if (e.target.closest("button")) return;
+                    if (itemData.uploading) return; // Prevent navigation if uploading
                     if (folderFlag) {
                         navigateIntoFolder(name);
                     }
                 });
+
+                // Cancel upload button
+                var cancelBtn = item.querySelector('[data-action="cancel-upload"]');
+                if (cancelBtn) {
+                    cancelBtn.addEventListener("click", function (e) {
+                        e.stopPropagation();
+                        var uploadId = cancelBtn.getAttribute("data-upload-id");
+                        if (uploadId && typeof window.cancelUpload === "function") {
+                            window.cancelUpload(parseInt(uploadId));
+                        }
+                    });
+                }
+
+                // Play/Pause toggle button click listener
+                var playPauseBtn = item.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
+                if (playPauseBtn) {
+                    playPauseBtn.addEventListener("click", function (e) {
+                        e.stopPropagation();
+                        var uploadId = playPauseBtn.getAttribute("data-upload-id");
+                        var action = playPauseBtn.getAttribute("data-action");
+                        if (uploadId) {
+                            var parsedId = parseInt(uploadId);
+                            if (action === "pause-upload" && typeof window.pauseUpload === "function") {
+                                window.pauseUpload(parsedId);
+                            } else if (action === "resume-upload" && typeof window.resumeUpload === "function") {
+                                window.resumeUpload(parsedId);
+                            }
+                        }
+                    });
+                }
 
                 // Download button
                 var dlBtn = item.querySelector('[data-action="download"]');
@@ -675,6 +818,7 @@
 
     // --- View Switching ---
     window.switchView = function (tab) {
+        window.activeTab = tab;
         var fileView = document.getElementById("fileView");
         var clipView = document.getElementById("clipboardView");
 
@@ -727,6 +871,11 @@
                 // Default: Files
                 if (sideFile) sideFile.classList.add("active");
                 if (navFile) navFile.classList.add("active");
+            }
+
+            // Re-render prototype list to apply correct tab filters
+            if (typeof lastRenderedFiles !== "undefined") {
+                renderPrototypeFileList(lastRenderedFiles);
             }
         }
     };
@@ -1839,6 +1988,16 @@
                 menu.style.top = top + "px";
                 menu.style.display = "block";
             });
+
+            // Hide context menu when a menu item is clicked
+            var contextMenu = document.getElementById("contextMenu");
+            if (contextMenu) {
+                contextMenu.addEventListener("click", function (e) {
+                    if (e.target.closest(".context-item")) {
+                        contextMenu.style.display = "none";
+                    }
+                });
+            }
         }
 
         var dropzone = document.getElementById("nasDropzone");
@@ -1985,13 +2144,125 @@
     // 4.5 UPLOAD TOAST TRAY — Mirror production uploadQueue to prototype tray
     // =========================================================================
 
+    if (typeof window.uploadManagerExpanded === "undefined") {
+        window.uploadManagerExpanded = false;
+    }
+
+    window.triggerInstantUIUpdate = function () {
+        if (typeof renderUploadTray === "function") {
+            renderUploadTray();
+        }
+        var container = document.getElementById("nasFileList");
+        if (container && window.uploadQueue) {
+            window.uploadQueue.forEach(function (item) {
+                if (item && item.fileName) {
+                    var escName = escapeHtml(item.fileName);
+                    var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
+                    if (row) {
+                        if (item.status === 'cancelled') {
+                            row.remove();
+                        } else if (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused') {
+                            var progress = Math.round(item.progress || 0);
+                            var subtitleCell = row.querySelector('.item-subtitle');
+                            if (subtitleCell) {
+                                subtitleCell.textContent = progress + "% • " + (item.status === 'paused' ? 'Paused' : 'Uploading');
+                            }
+                            var dateCell = row.querySelector('.item-date');
+                            if (dateCell) {
+                                dateCell.textContent = item.status === 'paused' ? 'Paused' : 'Uploading';
+                            }
+                            var bar = row.querySelector('.row-progress-bar');
+                            if (bar) {
+                                bar.style.width = progress + "%";
+                            }
+                            var playPauseBtn = row.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
+                            if (playPauseBtn) {
+                                var currentAction = playPauseBtn.getAttribute("data-action");
+                                if (item.status === 'paused' && currentAction === 'pause-upload') {
+                                    playPauseBtn.setAttribute("data-action", "resume-upload");
+                                    playPauseBtn.setAttribute("title", "Resume upload");
+                                    playPauseBtn.innerHTML = '<i data-lucide="play" style="width:16px;height:16px;"></i>';
+                                    if (window.lucide) lucide.createIcons();
+                                } else if (item.status !== 'paused' && currentAction === 'resume-upload') {
+                                    playPauseBtn.setAttribute("data-action", "pause-upload");
+                                    playPauseBtn.setAttribute("title", "Pause upload");
+                                    playPauseBtn.innerHTML = '<i data-lucide="pause" style="width:16px;height:16px;"></i>';
+                                    if (window.lucide) lucide.createIcons();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    };
+
+    window.pauseAllUploads = function () {
+        var queue = window.uploadQueue || [];
+        queue.forEach(function (item) {
+            if (item.status === "uploading" || item.status === "queued") {
+                if (typeof window.pauseUpload === "function") {
+                    window.pauseUpload(item.id);
+                }
+            }
+        });
+        window.uploadManagerExpanded = true;
+        window.triggerInstantUIUpdate();
+    };
+
+    window.resumeAllUploads = function () {
+        var queue = window.uploadQueue || [];
+        queue.forEach(function (item) {
+            if (item.status === "paused") {
+                if (typeof window.resumeUpload === "function") {
+                    window.resumeUpload(item.id);
+                }
+            }
+        });
+        window.triggerInstantUIUpdate();
+    };
+
+    function buildTrayItemHtml(item) {
+        var pct = Math.round(item.progress || 0);
+        var name = escapeHtml(item.fileName || "Unknown");
+        var sizeStr = formatSize(item.fileSize);
+        var metaText = sizeStr + " • " + pct + "%";
+
+        return '<div class="upload-toast" id="toast-item-' + item.id + '" style="position:relative; overflow:hidden;">' +
+            '<div class="toast-progress-bar" style="position:absolute; top:0; bottom:0; left:0; background:rgba(59, 130, 246, 0.08); width:' + pct + '%; transition:width 0.2s ease-out; pointer-events:none; z-index:1;"></div>' +
+            '<div class="upload-toast-top" style="position:relative; z-index:2; width:100%;">' +
+            '<div class="upload-toast-title">' +
+            '<span class="upload-toast-filename" title="' + name + '">' + name + "</span>" +
+            '<span class="upload-toast-meta">' + metaText + "</span>" +
+            "</div>" +
+            '<div class="upload-toast-actions">' +
+            '<button type="button" class="upload-toast-cancel-text" data-upload-id="' + item.id + '" title="Cancel upload">' +
+            '<span>Cancel</span>' +
+            "</button>" +
+            "</div>" +
+            "</div>" +
+            "</div>";
+    }
+
+    function wireTrayItemListeners(el, item) {
+        var cancelBtn = el.querySelector(".upload-toast-cancel-text");
+        if (cancelBtn) {
+            cancelBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                if (typeof window.cancelUpload === "function") {
+                    window.cancelUpload(item.id);
+                }
+            });
+        }
+    }
+
     function renderUploadTray() {
         var stack = document.getElementById("uploadToastStack");
         if (!stack) return;
 
         var queue = window.uploadQueue || [];
         var activeUploads = queue.filter(function (item) {
-            return item.status === "uploading" || item.status === "queued" || item.status === "processing";
+            return item.status === "uploading" || item.status === "queued" || item.status === "processing" || item.status === "paused";
         });
 
         if (activeUploads.length === 0) {
@@ -2001,49 +2272,179 @@
         }
 
         stack.classList.add("active");
-        var html = "";
 
-        for (var i = 0; i < activeUploads.length; i++) {
-            var item = activeUploads[i];
-            var pct = Math.round(item.progress || 0);
-            var name = escapeHtml(item.fileName || "Unknown");
-            var speed = item.speed ? (item.speed / (1024 * 1024)).toFixed(1) + " MB/s" : "";
-            var statusText = item.status === "processing" ? "Processing..." : "Uploading";
-
-            html +=
-                '<div class="upload-toast">' +
-                '<div class="upload-toast-top">' +
-                '<div class="upload-toast-title">' +
-                '<span class="upload-toast-filename" title="' + name + '">' + name + "</span>" +
-                '<span class="upload-toast-meta">' + speed + "</span>" +
-                "</div>" +
-                '<div class="upload-toast-actions">' +
-                '<button type="button" class="upload-toast-cancel-pill" data-upload-id="' + item.id + '" title="Cancel upload">' +
-                '<i data-lucide="x"></i><span>Cancel</span>' +
-                "</button>" +
-                "</div>" +
-                "</div>" +
-                '<div class="upload-toast-bottom">' +
-                "<span>" + statusText + "</span>" +
-                '<span class="upload-toast-status">' + pct + "%</span>" +
-                "</div>" +
-                '<div class="upload-toast-progress">' +
-                '<div class="upload-toast-progress-fill" style="width:' + pct + '%"></div>' +
-                "</div>" +
-                "</div>";
+        // Auto-expand panel if any item is paused
+        var hasPaused = activeUploads.some(function (item) {
+            return item.status === "paused";
+        });
+        if (hasPaused) {
+            window.uploadManagerExpanded = true;
         }
 
-        stack.innerHTML = html;
+        // Calculations
+        var totalCount = activeUploads.length;
+        var pausedCount = activeUploads.filter(function (item) { return item.status === "paused"; }).length;
+        var avgPct = Math.round(activeUploads.reduce(function (sum, item) { return sum + (item.progress || 0); }, 0) / totalCount);
+        var totalSpeedBytes = activeUploads.reduce(function (sum, item) { return sum + (item.speed || 0); }, 0);
+        var totalSpeedMB = (totalSpeedBytes / (1024 * 1024)).toFixed(1) + " MB/s";
 
-        // Wire cancel buttons
-        var cancelBtns = stack.querySelectorAll(".upload-toast-cancel-pill");
-        for (var j = 0; j < cancelBtns.length; j++) {
-            cancelBtns[j].addEventListener("click", function (e) {
-                var uploadId = this.getAttribute("data-upload-id");
-                if (uploadId && typeof cancelUpload === "function") {
-                    cancelUpload(parseInt(uploadId));
+        // Calculate summary header title
+        var headerTitle = "";
+        if (pausedCount === totalCount) {
+            headerTitle = "Uploads paused (" + totalCount + ")";
+        } else {
+            headerTitle = "Uploading " + totalCount + " " + (totalCount === 1 ? "file" : "files") + " • " + totalSpeedMB;
+        }
+
+        // We check if the widget base is already rendered.
+        // If not, we do a full render once, then update in-place thereafter.
+        var headerTitleEl = stack.querySelector(".upload-toast-header-title");
+        var headerProgressBar = stack.querySelector(".header-progress-bar");
+        var headerPlayPauseBtn = stack.querySelector(".header-playpause-btn");
+        var bodyEl = stack.querySelector(".upload-toast-body");
+
+        if (!headerTitleEl || !bodyEl) {
+            // Full initial render
+            var itemsHtml = "";
+            for (var i = 0; i < activeUploads.length; i++) {
+                itemsHtml += buildTrayItemHtml(activeUploads[i]);
+            }
+
+            var bodyClass = window.uploadManagerExpanded ? "upload-toast-body" : "upload-toast-body collapsed";
+
+            var widgetHtml = 
+                '<div class="upload-toast-header" style="position: relative; overflow: hidden;">' +
+                '<div class="header-progress-bar" style="position: absolute; top:0; left:0; bottom:0; background: rgba(59, 130, 246, 0.08); z-index: 1; transition: width 0.2s ease-out; width: ' + avgPct + '%;"></div>' +
+                '<span class="upload-toast-header-title" style="position: relative; z-index: 2;">' + headerTitle + '</span>' +
+                '<div class="upload-toast-header-actions" style="position: relative; z-index: 2; display: flex; align-items: center;">' +
+                '<button type="button" class="upload-toast-header-btn header-playpause-btn" title="Pause all uploads"></button>' +
+                '<button type="button" class="upload-toast-header-btn close-panel-btn" title="Cancel all uploads and close">' +
+                '<i data-lucide="x"></i>' +
+                '</button>' +
+                '</div>' +
+                '</div>' +
+                '<div class="' + bodyClass + '">' +
+                itemsHtml +
+                '</div>';
+
+            stack.innerHTML = widgetHtml;
+
+            // Wire static event listeners once
+            // Wire header play/pause toggle
+            stack.querySelector(".header-playpause-btn").addEventListener("click", function (e) {
+                e.stopPropagation();
+                var currentPaused = activeUploads.filter(function (item) { return item.status === "paused"; }).length;
+                if (currentPaused > 0) {
+                    window.resumeAllUploads();
+                } else {
+                    window.pauseAllUploads();
                 }
             });
+
+            // Wire header close button
+            stack.querySelector(".close-panel-btn").addEventListener("click", function (e) {
+                e.stopPropagation();
+                if (typeof window.cancelAllUploads === "function") {
+                    window.cancelAllUploads();
+                }
+            });
+
+            // Wire header panel manual toggle
+            stack.querySelector(".upload-toast-header").addEventListener("click", function (e) {
+                if (!e.target.closest(".upload-toast-header-actions")) {
+                    window.uploadManagerExpanded = !window.uploadManagerExpanded;
+                    var body = stack.querySelector(".upload-toast-body");
+                    if (body) {
+                        if (window.uploadManagerExpanded) {
+                            body.classList.remove("collapsed");
+                        } else {
+                            body.classList.add("collapsed");
+                        }
+                    }
+                }
+            });
+
+            // Re-query newly created elements
+            headerTitleEl = stack.querySelector(".upload-toast-header-title");
+            headerProgressBar = stack.querySelector(".header-progress-bar");
+            headerPlayPauseBtn = stack.querySelector(".header-playpause-btn");
+            bodyEl = stack.querySelector(".upload-toast-body");
+
+            // Wire listeners for initially rendered items
+            for (var i = 0; i < activeUploads.length; i++) {
+                var item = activeUploads[i];
+                var itemEl = stack.querySelector("#toast-item-" + item.id);
+                if (itemEl) {
+                    wireTrayItemListeners(itemEl, item);
+                }
+            }
+        }
+
+        // In-place updates:
+        // 1. Header Title & Progress Fill
+        if (headerTitleEl) headerTitleEl.textContent = headerTitle;
+        if (headerProgressBar) {
+            headerProgressBar.style.width = avgPct + "%";
+        }
+
+        // 2. Header Play/Pause Icon
+        if (headerPlayPauseBtn) {
+            var isAnyPaused = pausedCount > 0;
+            var currentAction = headerPlayPauseBtn.getAttribute("data-action");
+            var targetAction = isAnyPaused ? "resume" : "pause";
+            if (currentAction !== targetAction) {
+                headerPlayPauseBtn.setAttribute("data-action", targetAction);
+                headerPlayPauseBtn.setAttribute("title", isAnyPaused ? "Resume all uploads" : "Pause all uploads");
+                headerPlayPauseBtn.innerHTML = isAnyPaused ? '<i data-lucide="play" style="fill: currentColor;"></i>' : '<i data-lucide="pause"></i>';
+                if (window.lucide) lucide.createIcons();
+            }
+        }
+
+        // 3. Body Collapsed State
+        if (bodyEl) {
+            if (window.uploadManagerExpanded) {
+                bodyEl.classList.remove("collapsed");
+            } else {
+                bodyEl.classList.add("collapsed");
+            }
+        }
+
+        // 4. Update File List In-Place
+        var activeIds = {};
+        for (var i = 0; i < activeUploads.length; i++) {
+            var item = activeUploads[i];
+            activeIds[item.id] = true;
+            var itemEl = bodyEl.querySelector("#toast-item-" + item.id);
+            if (!itemEl) {
+                var tempDiv = document.createElement("div");
+                tempDiv.innerHTML = buildTrayItemHtml(item);
+                var newItemEl = tempDiv.firstChild;
+                bodyEl.appendChild(newItemEl);
+                wireTrayItemListeners(newItemEl, item);
+            } else {
+                var pct = Math.round(item.progress || 0);
+                var sizeStr = formatSize(item.fileSize);
+                var metaText = sizeStr + " • " + pct + "%";
+
+                var metaEl = itemEl.querySelector(".upload-toast-meta");
+                if (metaEl) metaEl.textContent = metaText;
+
+                var progressFill = itemEl.querySelector(".toast-progress-bar");
+                if (progressFill) progressFill.style.width = pct + "%";
+            }
+        }
+
+        // Remove completed/removed items
+        var existingItems = bodyEl.querySelectorAll(".upload-toast");
+        for (var j = 0; j < existingItems.length; j++) {
+            var itemEl = existingItems[j];
+            var idAttr = itemEl.getAttribute("id");
+            if (idAttr) {
+                var itemId = parseInt(idAttr.replace("toast-item-", ""));
+                if (!activeIds[itemId]) {
+                    itemEl.remove();
+                }
+            }
         }
 
         if (window.lucide) lucide.createIcons();
@@ -2056,7 +2457,7 @@
         uploadTrayInterval = setInterval(function () {
             var queue = window.uploadQueue || [];
             var activeCount = queue.filter(function (item) {
-                return item.status === "uploading" || item.status === "queued" || item.status === "processing";
+                return item.status === "uploading" || item.status === "queued" || item.status === "processing" || item.status === "paused";
             }).length;
             if (activeCount === 0) {
                 renderUploadTray(); // One final render to show completion
@@ -2089,8 +2490,9 @@
         var container = document.getElementById("quickAccessContainer");
         if (!container) return;
 
-        // Hide Recents (Quick Access) if inside a subfolder
-        if (currentFolderPath && currentFolderPath !== "Home" && currentFolderPath !== "") {
+        // Hide Recents (Quick Access) if inside a subfolder OR on Recent/Starred views
+        var tab = window.activeTab || "file";
+        if ((currentFolderPath && currentFolderPath !== "Home" && currentFolderPath !== "") || tab === "recent" || tab === "starred") {
             container.style.display = "none";
             return;
         }
@@ -2406,7 +2808,7 @@
                 var checkInterval = setInterval(function () {
                     var queue = window.uploadQueue || [];
                     var activeCount = queue.filter(function (item) {
-                        return item.status === "uploading" || item.status === "queued" || item.status === "processing";
+                        return item.status === "uploading" || item.status === "queued" || item.status === "processing" || item.status === "paused";
                     }).length;
                     if (activeCount === 0) {
                         clearInterval(checkInterval);
@@ -2416,6 +2818,61 @@
             };
             window.addToUploadQueue.__refreshWrapped = true;
         }
+
+        // Periodically update the progress in the DOM in-place to prevent hover flickering
+        setInterval(function () {
+            if (window.uploadQueue && window.uploadQueue.length > 0) {
+                var container = document.getElementById("nasFileList");
+                if (!container) return;
+
+                window.uploadQueue.forEach(function (item) {
+                    if (item && item.fileName && (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused')) {
+                        var progress = Math.round(item.progress || 0);
+                        var escName = escapeHtml(item.fileName);
+                        var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
+                        if (row) {
+                            // Update progress text in filename subtitle
+                            var subtitleCell = row.querySelector('.item-subtitle');
+                            if (subtitleCell) {
+                                subtitleCell.textContent = progress + "% • " + (item.status === 'paused' ? 'Paused' : 'Uploading');
+                            }
+                            // Update date cell text
+                            var dateCell = row.querySelector('.item-date');
+                            if (dateCell) {
+                                dateCell.textContent = item.status === 'paused' ? 'Paused' : 'Uploading';
+                            }
+                            // Update progress bar width
+                            var bar = row.querySelector('.row-progress-bar');
+                            if (bar) {
+                                bar.style.width = progress + "%";
+                            }
+                            
+                            // Dynamically swap play/pause buttons
+                            var playPauseBtn = row.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
+                            if (playPauseBtn) {
+                                var currentAction = playPauseBtn.getAttribute("data-action");
+                                if (item.status === 'paused' && currentAction === 'pause-upload') {
+                                    playPauseBtn.setAttribute("data-action", "resume-upload");
+                                    playPauseBtn.setAttribute("title", "Resume upload");
+                                    playPauseBtn.innerHTML = '<i data-lucide="play" style="width:16px;height:16px;"></i>';
+                                    if (window.lucide) lucide.createIcons();
+                                } else if (item.status !== 'paused' && currentAction === 'resume-upload') {
+                                    playPauseBtn.setAttribute("data-action", "pause-upload");
+                                    playPauseBtn.setAttribute("title", "Pause upload");
+                                    playPauseBtn.innerHTML = '<i data-lucide="pause" style="width:16px;height:16px;"></i>';
+                                    if (window.lucide) lucide.createIcons();
+                                }
+                            }
+                        } else {
+                            // Row doesn't exist yet (new upload started) -> trigger full render once
+                            if (typeof lastRenderedFiles !== 'undefined') {
+                                renderPrototypeFileList(lastRenderedFiles);
+                            }
+                        }
+                    }
+                });
+            }
+        }, 300);
 
         console.log("[app-init] Prototype UI adapter initialized. " +
             "Wrapped updateFileDisplay=" + (typeof updateFileDisplay === "function") +

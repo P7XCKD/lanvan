@@ -1449,6 +1449,35 @@ class QuickTest:
                             
                 except Exception as e:
                     self.log(f"UI template test: {str(e)}", "WARN")
+
+            # Test 8: Pause/Resume upload feature implementation (NEW)
+            pause_resume_working = False
+            try:
+                # Check for pauseUpload and resumeUpload implementations in main-app.js
+                main_app_js = project_root / "app" / "static" / "js" / "main-app.js"
+                if main_app_js.exists():
+                    with open(main_app_js, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        if 'window.pauseUpload' in content and 'window.resumeUpload' in content:
+                            self.log("Pause/Resume: Exposed uploader controls on window object", "PASS")
+                            pause_resume_working = True
+                        if 'currentChunkIndex' in content and 'startChunk' in content:
+                            self.log("Pause/Resume: Adaptive uploader loop resume capability found", "PASS")
+                
+                # Check for UI controls in app-init.js
+                app_init_js = project_root / "app" / "static" / "js" / "app-init.js"
+                if app_init_js.exists():
+                    with open(app_init_js, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        if 'data-action="pause-upload"' in content and 'data-action="resume-upload"' in content:
+                            self.log("Pause/Resume: UI list buttons defined", "PASS")
+                        if 'pauseBtn.addEventListener' in content and 'resumeBtn.addEventListener' in content:
+                            self.log("Pause/Resume: Event listeners successfully wired up", "PASS")
+            except Exception as e:
+                self.log(f"Pause/Resume test: {str(e)}", "WARN")
+
+            if pause_resume_working:
+                self.components['pause_resume_upload'] = True
             
         except Exception as e:
             self.log(f"Recent implementations test: {str(e)}", "WARN")

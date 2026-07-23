@@ -67,6 +67,14 @@
 /* ==========================================================================
    RESET & SMOOTH THEME TRANSITIONS
    ========================================================================== */
+html, body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+button, input, textarea, select {
+    font-family: inherit;
+}
+
 * {
     box-sizing: border-box;
     margin: 0;
@@ -1315,31 +1323,90 @@ body {
    ========================================================================== */
 .upload-toast-stack {
     position: fixed;
-    right: 1rem;
-    bottom: 1rem;
+    right: 1.5rem;
+    bottom: 1.5rem;
     display: none;
     flex-direction: column;
-    gap: 0.55rem;
-    width: min(100%, 320px);
+    width: 360px;
+    max-width: calc(100vw - 3rem);
     z-index: 1200;
-    pointer-events: none;
+    pointer-events: auto;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
 }
 
 .upload-toast-stack.active {
     display: flex;
 }
 
-.upload-toast {
-    pointer-events: auto;
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    background: color-mix(in srgb, var(--card-bg) 90%, transparent);
-    backdrop-filter: blur(12px);
-    box-shadow: var(--shadow-soft);
-    padding: 0.8rem 0.85rem 0.75rem;
+.upload-toast-header {
+    background: var(--toggle-bg, #f1f3f4);
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--text-color);
+}
+
+.upload-toast-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.upload-toast-header-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    border-radius: 4px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.upload-toast-header-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text-color);
+}
+
+[data-theme="dark"] .upload-toast-header-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.upload-toast-body {
+    max-height: 280px;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    transition: max-height 0.2s ease-out;
+}
+
+.upload-toast-body.collapsed {
+    max-height: 0;
+    overflow: hidden;
+    border-bottom: none;
+}
+
+.upload-toast {
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.upload-toast:last-child {
+    border-bottom: none;
 }
 
 .upload-toast-top {
@@ -2950,4 +3017,65 @@ body {
 
 #themeSystem:checked~.segmented-control-slider {
     transform: translateX(200%);
+}
+
+.upload-toast-playpause-pill {
+    border: 1px solid rgba(59, 130, 246, 0.22);
+    background: rgba(59, 130, 246, 0.08);
+    color: var(--primary, #3b82f6);
+    border-radius: 999px;
+    padding: 0.4rem 0.7rem;
+    font-size: 0.7rem;
+    font-weight: 750;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+}
+
+.upload-toast-playpause-pill:hover {
+    background: rgba(59, 130, 246, 0.14);
+}
+
+.upload-toast-playpause-circle {
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    background: rgba(59, 130, 246, 0.08);
+    color: var(--primary, #3b82f6);
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    flex-shrink: 0;
+}
+
+.upload-toast-playpause-circle:hover {
+    background: rgba(59, 130, 246, 0.16);
+}
+
+.upload-toast-cancel-text {
+    border: 1px solid rgba(217, 48, 37, 0.2);
+    background: rgba(217, 48, 37, 0.06);
+    color: var(--danger, #dc3545);
+    border-radius: 14px;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    flex-shrink: 0;
+}
+
+.upload-toast-cancel-text:hover {
+    background: rgba(217, 48, 37, 0.12);
+}
+
+.upload-toast-stack:has(.upload-toast-body.collapsed) .upload-toast-header {
+    border-bottom: none;
 }

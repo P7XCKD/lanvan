@@ -472,10 +472,11 @@
 
       function getStatusDisplay(status) {
         const statusMap = {
-          'queued': '⏳ Queued',
+          'queued': ' Queued',
           'uploading': ' Uploading',
+          'paused': ' Paused',
           'completed': ' Completed',
-          'error': ' Error',
+          'error': ' Failed',
           'cancelled': ' Cancelled'
         };
         return statusMap[status] || status;
@@ -483,7 +484,15 @@
 
       function getControlButtons(uploadItem) {
         if (uploadItem.status === 'uploading') {
-          return `<button onclick="cancelUpload(${uploadItem.id})" class="upload-cancel-btn"></button>`;
+          return `
+            <button onclick="pauseUpload(${uploadItem.id})" class="upload-control-btn pause" style="background:none; border:none; cursor:pointer; font-size:1.1rem; padding:4px 8px; color:var(--text-color, #1f2937); opacity:0.8;" title="Pause">⏸</button>
+            <button onclick="cancelUpload(${uploadItem.id})" class="upload-cancel-btn" title="Cancel"></button>
+          `;
+        } else if (uploadItem.status === 'paused') {
+          return `
+            <button onclick="resumeUpload(${uploadItem.id})" class="upload-control-btn resume" style="background:none; border:none; cursor:pointer; font-size:1.1rem; padding:4px 8px; color:var(--text-color, #1f2937); opacity:0.8;" title="Resume">▶</button>
+            <button onclick="cancelUpload(${uploadItem.id})" class="upload-cancel-btn" title="Cancel"></button>
+          `;
         } else if (uploadItem.status === 'completed') {
           return `<button onclick="removeUpload(${uploadItem.id})" class="upload-remove-btn"></button>`;
         } else if (uploadItem.status === 'error') {
@@ -1171,7 +1180,7 @@ Device Session will reset when browser is closed
         const uploadQueue_element = document.getElementById('uploadQueue');
 
         const activeUploads = uploadQueue.filter(item =>
-          ['queued', 'uploading'].includes(item.status)
+          ['queued', 'uploading', 'paused'].includes(item.status)
         ).length;
 
         const completedUploads = uploadQueue.filter(item =>
@@ -1204,14 +1213,15 @@ Device Session will reset when browser is closed
         const queue = document.getElementById('uploadQueue');
         if (!queue) return;
 
-        // Sort upload queue: uploading > queued > completed > error > cancelled
+        // Sort upload queue: uploading > paused > queued > completed > error > cancelled
         const sortedQueue = [...uploadQueue].sort((a, b) => {
           const statusPriority = {
             'uploading': 1,
-            'queued': 2,
-            'completed': 3,
-            'error': 4,
-            'cancelled': 5
+            'paused': 2,
+            'queued': 3,
+            'completed': 4,
+            'error': 5,
+            'cancelled': 6
           };
 
           const aPriority = statusPriority[a.status] || 999;
@@ -1222,7 +1232,7 @@ Device Session will reset when browser is closed
           }
 
           // Within same status, sort by creation time (newest first for active, oldest first for completed)
-          if (['uploading', 'queued'].includes(a.status)) {
+          if (['uploading', 'paused', 'queued'].includes(a.status)) {
             return b.uploadId - a.uploadId; // Newer active uploads first
           } else {
             return a.uploadId - b.uploadId; // Older completed uploads first
@@ -1512,7 +1522,7 @@ Device Session will reset when browser is closed
         //  Check if we should show clear button after cancellation
         // Check if all uploads are now finished (no more active uploads)
         const hasActiveUploads = uploadQueue.some(item =>
-          item.status === 'uploading' || item.status === 'queued'
+          item.status === 'uploading' || item.status === 'queued' || item.status === 'paused'
         );
 
         if (!hasActiveUploads) {
@@ -1521,18 +1531,60 @@ Device Session will reset when browser is closed
           updateUploadManager(); // Update the display to show completed/cancelled count
         }
 
+        if (typeof window.triggerInstantUIUpdate === 'function') {
+          window.triggerInstantUIUpdate();
+        }
+
         // DON'T remove from queue - keep it visible with red mark until user clears manually
+      }
+
+      function pauseUpload(uploadId) {
+        const uploadItem = uploadQueue.find(item => item.id === uploadId);
+        if (uploadItem && uploadItem.status === 'uploading') {
+          uploadItem.status = 'paused';
+          window.uploadManagerExpanded = true;
+          if (uploadItem.xhr) {
+            uploadItem.xhr.abort();
+          }
+          updateUploadItem(uploadItem);
+          endUpload();
+          setTimeout(() => {
+            startNextUpload();
+          }, 100);
+          console.log(`Paused upload ${uploadId}`);
+          if (typeof window.triggerInstantUIUpdate === 'function') {
+            window.triggerInstantUIUpdate();
+          }
+        }
+      }
+
+      function resumeUpload(uploadId) {
+        const uploadItem = uploadQueue.find(item => item.id === uploadId);
+        if (uploadItem && uploadItem.status === 'paused') {
+          uploadItem.status = 'uploading';
+          // Auto-collapse panel if no other paused files remain in the queue
+          const otherPaused = uploadQueue.some(item => item.status === 'paused' && item.id !== uploadId);
+          if (!otherPaused) {
+            window.uploadManagerExpanded = false;
+          }
+          updateUploadItem(uploadItem);
+          console.log(`Resuming upload ${uploadId}`);
+          uploadLargeFileChunked(uploadItem);
+          if (typeof window.triggerInstantUIUpdate === 'function') {
+            window.triggerInstantUIUpdate();
+          }
+        }
       }
 
       function cancelAllUploads() {
         const itemsBeingCancelled = uploadQueue.filter(item =>
-          ['queued', 'uploading'].includes(item.status)
+          ['queued', 'uploading', 'paused'].includes(item.status)
         );
 
         console.log(` Cancelling ${itemsBeingCancelled.length} active uploads...`);
 
         uploadQueue.forEach(item => {
-          if (['queued', 'uploading'].includes(item.status)) {
+          if (['queued', 'uploading', 'paused'].includes(item.status)) {
             cancelUpload(item.id);
           }
         });
@@ -1541,7 +1593,7 @@ Device Session will reset when browser is closed
         // Use a slight delay to ensure all individual cancel operations complete
         setTimeout(() => {
           const hasActiveUploads = uploadQueue.some(item =>
-            item.status === 'uploading' || item.status === 'queued'
+            item.status === 'uploading' || item.status === 'queued' || item.status === 'paused'
           );
 
           if (!hasActiveUploads) {
@@ -1882,7 +1934,7 @@ Device Session will reset when browser is closed
 
             // Check if all uploads are complete before updating file list
             const hasActiveUploads = uploadQueue.some(item =>
-              item.status === 'uploading' || item.status === 'queued'
+              item.status === 'uploading' || item.status === 'queued' || item.status === 'paused'
             );
 
             if (!hasActiveUploads) {
@@ -1916,7 +1968,7 @@ Device Session will reset when browser is closed
             // Don't auto-remove completed items - let user control with clear button
             // Check if all uploads are finished to show clear button
             const allUploadsFinished = uploadQueue.some(item =>
-              item.status === 'uploading' || item.status === 'queued'
+              item.status === 'uploading' || item.status === 'queued' || item.status === 'paused'
             );
 
             if (!allUploadsFinished) {
@@ -1964,7 +2016,7 @@ Device Session will reset when browser is closed
 
             // Check if all uploads are complete (including failed ones)
             const allUploadsFinished = uploadQueue.some(item =>
-              item.status === 'uploading' || item.status === 'queued'
+              item.status === 'uploading' || item.status === 'queued' || item.status === 'paused'
             );
 
             if (!allUploadsFinished) {
@@ -2073,16 +2125,25 @@ Device Session will reset when browser is closed
           const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
           uploadItem.totalChunks = totalChunks;
-          uploadItem.uploadedChunks = 0;
+          if (uploadItem.uploadedChunks === undefined || uploadItem.status === 'paused') {
+              uploadItem.uploadedChunks = uploadItem.uploadedChunks || 0;
+          } else {
+              uploadItem.uploadedChunks = 0;
+          }
           uploadItem.status = 'uploading';
-          uploadItem.currentChunkIndex = 0;
+          
+          var startChunk = 0;
+          if (uploadItem.currentChunkIndex !== undefined && uploadItem.currentChunkIndex > 0) {
+              startChunk = uploadItem.currentChunkIndex;
+          }
+          uploadItem.currentChunkIndex = startChunk;
           uploadItem.adaptiveChunkSize = CHUNK_SIZE;
           uploadItem.systemOptimized = chunkData.status === 'success';
 
           window.log.debug(`Starting adaptive chunked upload: ${totalChunks} chunks of ${(CHUNK_SIZE / 1024 / 1024).toFixed(2)}MB each`);
 
           // Upload chunks sequentially
-          for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+          for (let chunkIndex = startChunk; chunkIndex < totalChunks; chunkIndex++) {
             // Update current chunk index
             uploadItem.currentChunkIndex = chunkIndex;
 
@@ -2311,7 +2372,7 @@ Device Session will reset when browser is closed
               // Don't auto-refresh file list, let clear button handle it
               // Check if all uploads are finished to show clear button
               const allUploadsComplete = !uploadQueue.some(item =>
-                item.status === 'uploading' || item.status === 'queued'
+                item.status === 'uploading' || item.status === 'queued' || item.status === 'paused'
               );
 
               if (allUploadsComplete) {
@@ -2467,9 +2528,22 @@ Device Session will reset when browser is closed
       }
 
       function handleUploadEnd() {
+        // Only resume auto-refresh if there are no active, queued, or paused uploads
+        const hasUploadsInProgress = uploadQueue.some(item =>
+          ['uploading', 'queued', 'paused'].includes(item.status)
+        );
+        if (hasUploadsInProgress) {
+          console.log('Skipping auto-refresh resume: paused or active uploads exist in queue');
+          return;
+        }
         // Resume auto-refresh after a short delay to allow current upload to complete
         setTimeout(() => {
-          resumeAutoRefresh();
+          const hasUploadsInProgress2 = uploadQueue.some(item =>
+            ['uploading', 'queued', 'paused'].includes(item.status)
+          );
+          if (!hasUploadsInProgress2) {
+            resumeAutoRefresh();
+          }
         }, 2000);
       }
 
@@ -5543,6 +5617,8 @@ Device Session will reset when browser is closed
       window.showAccessControlSettings = showAccessControlSettings;
       window.downloadAsZip = downloadAsZip;
       window.cancelUpload = cancelUpload;
+      window.pauseUpload = pauseUpload;
+      window.resumeUpload = resumeUpload;
       window.downloadDeviceLogs = downloadDeviceLogs;
       window.clearDeviceLogs = clearDeviceLogs;
       window.closeDeviceLogsModal = closeDeviceLogsModal;
