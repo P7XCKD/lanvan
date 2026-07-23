@@ -2238,9 +2238,14 @@ async def create_folder(folder_name: str = Form(...)):
     if '/' in safe_name or '\\' in safe_name or '..' in safe_name:
         return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid characters in folder name"})
     
+    # Auto-increment if folder already exists: "Folder" -> "Folder (1)" -> "Folder (2)"
+    original_name = safe_name
+    counter = 1
     folder_path = UPLOAD_FOLDER / safe_name
-    if folder_path.exists():
-        return JSONResponse(status_code=409, content={"status": "error", "msg": f"Folder '{safe_name}' already exists"})
+    while folder_path.exists():
+        safe_name = f"{original_name} ({counter})"
+        folder_path = UPLOAD_FOLDER / safe_name
+        counter += 1
     
     try:
         folder_path.mkdir(parents=True, exist_ok=False)

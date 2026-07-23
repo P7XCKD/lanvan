@@ -1596,29 +1596,27 @@ function renderUploadTray() {
 function deleteSelected() {
   if (selectedItems.length === 0) return;
   console.log("[DELETE] Attempting to delete items:", selectedItems);
-  if (confirm(`Delete ${selectedItems.length} selected item(s)?`)) {
-    selectedItems.forEach(name => {
-      for (const [folderPath, itemsList] of Object.entries(db)) {
-        if (!Array.isArray(itemsList)) continue;
-        const idx = itemsList.findIndex(entry => entry && entry.name === name);
-        if (idx !== -1) {
-          const [deleted] = itemsList.splice(idx, 1);
-          console.log(`[DELETE] Deleted item '${name}' from '${folderPath}'`);
-          if (deleted && deleted.type === "folder") {
-            const oldFolderPath = folderPath + "/" + name;
-            Object.keys(db).forEach(k => {
-              if (k === oldFolderPath || k.startsWith(oldFolderPath + "/")) {
-                delete db[k];
-                console.log(`[DELETE] Cleaned up folder sub-key: '${k}'`);
-              }
-            });
-          }
+  selectedItems.forEach(name => {
+    for (const [folderPath, itemsList] of Object.entries(db)) {
+      if (!Array.isArray(itemsList)) continue;
+      const idx = itemsList.findIndex(entry => entry && entry.name === name);
+      if (idx !== -1) {
+        const [deleted] = itemsList.splice(idx, 1);
+        console.log(`[DELETE] Deleted item '${name}' from '${folderPath}'`);
+        if (deleted && deleted.type === "folder") {
+          const oldFolderPath = folderPath + "/" + name;
+          Object.keys(db).forEach(k => {
+            if (k === oldFolderPath || k.startsWith(oldFolderPath + "/")) {
+              delete db[k];
+              console.log(`[DELETE] Cleaned up folder sub-key: '${k}'`);
+            }
+          });
         }
       }
-    });
-    clearSelection();
-    console.log("[DELETE] Delete operation completed successfully.");
-  }
+    }
+  });
+  clearSelection();
+  console.log("[DELETE] Delete operation completed successfully.");
 }
 
 function downloadSelected() {

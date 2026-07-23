@@ -32,7 +32,19 @@
         const _originalUpdateFileDisplay = updateFileDisplay;
         updateFileDisplay = function (files) {
             _originalUpdateFileDisplay(files);
-            renderPrototypeFileList(files);
+            // Also fetch folders so they don't disappear during auto-refresh
+            fetch("/api/folders")
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var folderItems = (data.folders || []).map(function (f) {
+                        return { name: f.name, size: f.size_formatted || "--", mtime: f.created || 0, isFolder: true };
+                    });
+                    // Folders first, then files
+                    renderPrototypeFileList(folderItems.concat(files || []));
+                })
+                .catch(function () {
+                    renderPrototypeFileList(files);
+                });
         };
         updateFileDisplay.__prototypeWrapped = true;
     }
@@ -123,9 +135,12 @@
             var fileData = normalizedFiles[i];
             var name = fileData.name;
             var ext = name.split(".").pop().toLowerCase();
-            var info = getFileTypeInfo(name, ext);
+            var info = fileData.isFolder 
+                ? { avatarClass: "avatar-folder", iconName: "folder" }
+                : getFileTypeInfo(name, ext);
             var size = fileData.size || "--";
             var dateStr = "--";
+            var subtitle = fileData.isFolder ? "Folder" : "File";
             if (fileData.mtime) {
                 var d = new Date(fileData.mtime * 1000);
                 dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -519,7 +534,6 @@
 
     window.deleteSelected = function () {
         if (prototypeSelectedItems.length === 0) return;
-        if (!confirm("Delete " + prototypeSelectedItems.length + " selected item(s)? This cannot be undone.")) return;
 
         var itemsToDelete = prototypeSelectedItems.slice();
         var completed = 0;
@@ -589,23 +603,40 @@
         // Set context menu target
         window._contextMenuTarget = filename;
 
+        // Position at cursor, only reposition if menu won't fit
+        var top = event.clientY;
+        var left = event.clientX;
+        if (top + 100 > window.innerHeight) top = window.innerHeight - 105;
+        if (left + 190 > window.innerWidth) left = window.innerWidth - 200;
+        menu.style.left = left + "px";
+        menu.style.top = top + "px";
         menu.style.display = "block";
-        menu.style.left = Math.min(event.clientX, window.innerWidth - 200) + "px";
-        menu.style.top = Math.min(event.clientY, window.innerHeight - 250) + "px";
     };
 
-    // Close context menu on any click outside
-    document.addEventListener("click", function (e) {
-        var menu = document.getElementById("contextMenu");
-        if (menu && !menu.contains(e.target)) {
-            menu.style.display = "none";
+    // Close context menu on mousedown (before click fires on menu items)
+    var menuCloseTimer = null;
+    document.addEventListener("mousedown", function (e) {
+        // Clear any pending close timer
+        if (menuCloseTimer) {
+            clearTimeout(menuCloseTimer);
+            menuCloseTimer = null;
         }
+        
+        var menu = document.getElementById("contextMenu");
+        if (menu && menu.style.display === "block") {
+            // If clicking outside the menu, close it immediately
+            if (!menu.contains(e.target)) {
+                menu.style.display = "none";
+            }
+            // If clicking inside the menu, let the click through
+        }
+        
         var sortMenu = document.getElementById("sortDropdownMenu");
-        if (sortMenu && !sortMenu.contains(e.target)) {
+        if (sortMenu && sortMenu.style.display === "block" && !sortMenu.contains(e.target)) {
             sortMenu.style.display = "none";
         }
         var typeMenu = document.getElementById("typeDropdownMenu");
-        if (typeMenu && !typeMenu.contains(e.target)) {
+        if (typeMenu && typeMenu.style.display === "block" && !typeMenu.contains(e.target)) {
             typeMenu.style.display = "none";
         }
     });
@@ -765,10 +796,11 @@
             .then(function (data) {
                 if (data.status === "success") {
                     if (typeof showToast === "function") showToast("Folder '" + name + "' created.", 3000);
-                    if (typeof refreshFileList === "function") refreshFileList();
                 } else {
                     if (typeof showToast === "function") showToast(data.msg || "Failed to create folder.", 4000);
                 }
+                // Always refresh file list (folder may have been created on retry, or already exists)
+                if (typeof refreshFileList === "function") refreshFileList();
             })
             .catch(function () {
                 if (typeof showToast === "function") showToast("Network error creating folder.", 4000);
@@ -996,10 +1028,11 @@
                     window.clearSelection();
                 }
 
-                // Position at cursor with overflow protection (matches prototype)
+                // Position at cursor, only move if truly overflows
                 var top = e.clientY;
                 var left = e.clientX;
-                if (top + 220 > window.innerHeight) top = window.innerHeight - 230;
+                // Generic menu is ~96px (3 items), item menu ~144px (4 items)
+                if (top + 144 > window.innerHeight) top = window.innerHeight - 150;
                 if (left + 190 > window.innerWidth) left = window.innerWidth - 200;
                 menu.style.left = left + "px";
                 menu.style.top = top + "px";
@@ -1038,11 +1071,8 @@
             }
         });
 
-        // Click to trigger file input
-        dropzone.addEventListener("click", function () {
-            var fileInput = document.getElementById("fileInput");
-            if (fileInput) fileInput.click();
-        });
+        // Click on empty "Drop files here" area triggers file input
+        // (production #drop-zone already handles its own click separately)
     }
 
     // =========================================================================
@@ -1303,9 +1333,9 @@
     // 6. INITIALIZATION — Kick off on DOM ready
     // =========================================================================
 
-    // Fetch full file data with metadata from API
+    // Fetch full file data with metadata from API (includes folders)
     function fetchFilesData() {
-        return fetch("/api/files")
+        var filePromise = fetch("/api/files")
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.files_data) {
@@ -1316,6 +1346,28 @@
             .catch(function () {
                 return [];
             });
+
+        var folderPromise = fetch("/api/folders")
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.folders) {
+                    // Convert folder objects to file-like format
+                    return data.folders.map(function (f) {
+                        return { name: f.name, size: f.size_formatted || "--", mtime: f.created || 0, isFolder: true };
+                    });
+                }
+                return [];
+            })
+            .catch(function () {
+                return [];
+            });
+
+        return Promise.all([filePromise, folderPromise]).then(function (results) {
+            var files = results[0];
+            var folders = results[1];
+            // Folders first, then files (matching prototype)
+            return folders.concat(files);
+        });
     }
 
     // Render QR code in sidebar using production QR generation

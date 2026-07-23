@@ -1317,10 +1317,6 @@ function displayFolders(folders) {
 }
 
 async function deleteFolder(folderName) {
-  if (!confirm(`Are you sure you want to delete the folder "${folderName}"?`)) {
-    return;
-  }
-
   try {
     const response = await fetch(`/delete-folder/${encodeURIComponent(folderName)}`, { method: 'POST' });
     const result = await response.json();
@@ -1343,10 +1339,6 @@ async function refreshFolderList() {
 }
 
 async function clearAllFolders() {
-  if (!confirm('Are you sure you want to delete ALL folders? This cannot be undone!')) {
-    return;
-  }
-
   try {
     const response = await fetch('/api/folders');
     const result = await response.json();
