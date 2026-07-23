@@ -357,29 +357,57 @@
     window.switchView = function (tab) {
         var fileView = document.getElementById("fileView");
         var clipView = document.getElementById("clipboardView");
+        
+        // Sidebar items
         var sideFile = document.getElementById("sideItemFile");
         var sideClip = document.getElementById("sideItemClipboard");
+        var sideRecent = document.getElementById("sideItemRecent");
+        var sideStarred = document.getElementById("sideItemStarred");
+        
+        // Bottom nav items
         var navFile = document.getElementById("navItemFile");
         var navClip = document.getElementById("navItemClipboard");
+        var navRecent = document.getElementById("navItemRecent");
+        var navStarred = document.getElementById("navItemStarred");
 
-        // Clear selection when switching views — selection shouldn't survive tab changes
+        // Clear selection when switching views
         window.clearSelection();
+
+        // Deactivate all sidebar items
+        var allSideItems = [sideFile, sideClip, sideRecent, sideStarred];
+        for (var i = 0; i < allSideItems.length; i++) {
+            if (allSideItems[i]) allSideItems[i].classList.remove("active");
+        }
+        
+        // Deactivate all nav items
+        var allNavItems = [navFile, navClip, navRecent, navStarred];
+        for (var j = 0; j < allNavItems.length; j++) {
+            if (allNavItems[j]) allNavItems[j].classList.remove("active");
+        }
 
         if (tab === "clipboard") {
             if (fileView) fileView.style.display = "none";
             if (clipView) clipView.style.display = "flex";
-            if (sideFile) sideFile.classList.remove("active");
             if (sideClip) sideClip.classList.add("active");
-            if (navFile) navFile.classList.remove("active");
             if (navClip) navClip.classList.add("active");
             if (typeof refreshClipboardHistory === "function") refreshClipboardHistory();
         } else {
+            // file, recent, starred — all show file view
             if (fileView) fileView.style.display = "flex";
             if (clipView) clipView.style.display = "none";
-            if (sideFile) sideFile.classList.add("active");
-            if (sideClip) sideClip.classList.remove("active");
-            if (navFile) navFile.classList.add("active");
-            if (navClip) navClip.classList.remove("active");
+            
+            // Highlight correct sidebar item based on tab
+            if (tab === "recent" && sideRecent) {
+                sideRecent.classList.add("active");
+                if (navRecent) navRecent.classList.add("active");
+            } else if (tab === "starred" && sideStarred) {
+                sideStarred.classList.add("active");
+                if (navStarred) navStarred.classList.add("active");
+            } else {
+                // Default: Files
+                if (sideFile) sideFile.classList.add("active");
+                if (navFile) navFile.classList.add("active");
+            }
         }
     };
 
@@ -590,8 +618,15 @@
         if (!dialog || !input) return;
         input.value = name;
         dialog.style.display = "flex";
-        input.focus();
-        input.select();
+        // Delay to ensure dialog is visible before selecting text
+        setTimeout(function () {
+            input.focus();
+            if (input.setSelectionRange) {
+                input.setSelectionRange(0, input.value.length);
+            } else {
+                input.select();
+            }
+        }, 10);
     };
 
     window.closeRenameDialog = function () {
@@ -908,54 +943,72 @@
     // =========================================================================
 
     function setupDropzone() {
+        // Match prototype: context menu on the entire app container (.android-app)
+        var appContainer = document.querySelector(".android-app");
+        if (appContainer) {
+            appContainer.addEventListener("contextmenu", function (e) {
+                e.preventDefault();
+                
+                var menu = document.getElementById("contextMenu");
+                if (!menu) return;
+                
+                // Hide menu first (close if already open)
+                menu.style.display = "none";
+
+                var genericOps = document.getElementById("genericMenuOptions");
+                var itemOps = document.getElementById("itemMenuOptions");
+                var clipboardOps = document.getElementById("clipboardMenuOptions");
+
+                // Check if right-clicking on a file item or quick card
+                var itemRow = e.target.closest(".m3-list-item");
+                var quickCard = e.target.closest(".quick-card");
+                var targetItem = itemRow || quickCard;
+
+                if (targetItem) {
+                    var filename = targetItem.getAttribute("data-filename") || "";
+                    var nameEl = targetItem.querySelector(".item-title, .quick-title");
+                    var itemName = nameEl ? nameEl.textContent.trim() : filename;
+                    
+                    // Select this item if not already selected
+                    if (prototypeSelectedItems.indexOf(itemName) === -1) {
+                        prototypeSelectedItems = [itemName];
+                        var allItems = document.querySelectorAll("#nasFileList .m3-list-item");
+                        for (var i = 0; i < allItems.length; i++) {
+                            var curName = allItems[i].getAttribute("data-filename");
+                            if (curName === itemName) {
+                                allItems[i].classList.add("selected");
+                            } else {
+                                allItems[i].classList.remove("selected");
+                            }
+                        }
+                        updateSelectionToolbar();
+                    }
+                    
+                    if (genericOps) genericOps.style.display = "none";
+                    if (itemOps) itemOps.style.display = "block";
+                    if (clipboardOps) clipboardOps.style.display = "none";
+                    window._contextMenuTarget = filename;
+                } else {
+                    // Right-clicked on empty space — show generic menu
+                    if (genericOps) genericOps.style.display = "block";
+                    if (itemOps) itemOps.style.display = "none";
+                    if (clipboardOps) clipboardOps.style.display = "none";
+                    window.clearSelection();
+                }
+
+                // Position at cursor with overflow protection (matches prototype)
+                var top = e.clientY;
+                var left = e.clientX;
+                if (top + 220 > window.innerHeight) top = window.innerHeight - 230;
+                if (left + 190 > window.innerWidth) left = window.innerWidth - 200;
+                menu.style.left = left + "px";
+                menu.style.top = top + "px";
+                menu.style.display = "block";
+            });
+        }
+
         var dropzone = document.getElementById("nasDropzone");
         if (!dropzone) return;
-
-        // Right-click context menu on file list area
-        dropzone.addEventListener("contextmenu", function (e) {
-            e.preventDefault();
-            var menu = document.getElementById("contextMenu");
-            var genericOps = document.getElementById("genericMenuOptions");
-            var itemOps = document.getElementById("itemMenuOptions");
-            var clipboardOps = document.getElementById("clipboardMenuOptions");
-            if (!menu) return;
-
-            // Check if right-clicking on a file item
-            var clickedItem = e.target.closest(".m3-list-item");
-            if (clickedItem) {
-                var filename = clickedItem.getAttribute("data-filename") || "";
-                if (genericOps) genericOps.style.display = "none";
-                if (itemOps) itemOps.style.display = "block";
-                if (clipboardOps) clipboardOps.style.display = "none";
-                window._contextMenuTarget = filename;
-
-                // If not already selected, select this item
-                if (prototypeSelectedItems.indexOf(filename) === -1) {
-                    prototypeSelectedItems = [filename];
-                    // Update visual selection
-                    var allItems = dropzone.querySelectorAll(".m3-list-item");
-                    for (var i = 0; i < allItems.length; i++) {
-                        var itemName = allItems[i].getAttribute("data-filename");
-                        if (itemName === filename) {
-                            allItems[i].classList.add("selected");
-                        } else {
-                            allItems[i].classList.remove("selected");
-                        }
-                    }
-                    updateSelectionToolbar();
-                }
-            } else {
-                // Right-clicked on empty space — show generic menu
-                if (genericOps) genericOps.style.display = "block";
-                if (itemOps) itemOps.style.display = "none";
-                if (clipboardOps) clipboardOps.style.display = "none";
-                window.clearSelection();
-            }
-
-            menu.style.display = "block";
-            menu.style.left = Math.min(e.clientX, window.innerWidth - 200) + "px";
-            menu.style.top = Math.min(e.clientY, window.innerHeight - 250) + "px";
-        });
 
         // Wire drag events to production drop-zone handlers
         dropzone.addEventListener("dragenter", function (e) {
