@@ -185,6 +185,8 @@
             }
         }
 
+        var originalFilesForQuickAccess = normalizedFiles.slice();
+
         // Apply client-side Type Filtering
         if (typeFilter !== "all") {
             normalizedFiles = normalizedFiles.filter(function (f) {
@@ -277,7 +279,7 @@
         attachListItemHandlers(container, normalizedFiles.map(function (f) { return f.name; }), normalizedFiles);
 
         // Also render quick access cards (only non-folders)
-        renderQuickAccess(normalizedFiles
+        renderQuickAccess(originalFilesForQuickAccess
             .filter(function (f) { return !f.isFolder; })
             .map(function (f) { return f.name; }));
 
@@ -824,6 +826,18 @@
         // Set context menu target
         window._contextMenuTarget = filename;
 
+        // Sync star status in menu
+        var starText = document.getElementById("menuStarText");
+        var starIcon = document.getElementById("menuStarIcon");
+        var starred = isStarred(filename);
+        if (starText) {
+            starText.textContent = starred ? "Remove Star" : "Add to Starred";
+        }
+        if (starIcon) {
+            starIcon.style.fill = starred ? "var(--yellow, #f59e0b)" : "none";
+            starIcon.style.color = starred ? "var(--yellow, #f59e0b)" : "currentColor";
+        }
+
         // Position at cursor, only reposition if menu won't fit
         var top = event.clientY;
         var left = event.clientX;
@@ -832,6 +846,18 @@
         menu.style.left = left + "px";
         menu.style.top = top + "px";
         menu.style.display = "block";
+    };
+
+    window.handleMenuStarToggle = function () {
+        var name = window._contextMenuTarget || "";
+        if (name) {
+            toggleStar(name);
+            fetchFilesData().then(function (fd) {
+                renderPrototypeFileList(fd);
+            });
+        }
+        var menu = document.getElementById("contextMenu");
+        if (menu) menu.style.display = "none";
     };
 
     // Close context menu on mousedown (before click fires on menu items)
@@ -1243,7 +1269,27 @@
         event.stopPropagation();
         var menu = document.getElementById("sortDropdownMenu");
         if (!menu) return;
-        menu.style.display = menu.style.display === "block" ? "none" : "block";
+        var isVisible = menu.style.display === "block";
+
+        // Hide context menu if open
+        var contextMenu = document.getElementById("contextMenu");
+        if (contextMenu) contextMenu.style.display = "none";
+
+        if (!isVisible) {
+            updateSortCheckmarks();
+            var rect = event.currentTarget.getBoundingClientRect();
+            menu.style.display = "block";
+            var menuHeight = 280;
+            var top = rect.bottom + 6;
+            if (top + menuHeight > window.innerHeight) {
+                top = Math.max(10, rect.top - menuHeight - 4);
+            }
+            var left = Math.max(10, rect.right - 180);
+            menu.style.left = left + "px";
+            menu.style.top = top + "px";
+        } else {
+            menu.style.display = "none";
+        }
     };
 
     window.toggleTypeDropdown = function (event) {

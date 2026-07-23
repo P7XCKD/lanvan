@@ -403,6 +403,12 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         <span>Download</span>
       </div>
     </div>
+    <div class="context-item" onclick="handleMenuStarToggle()">
+      <div class="context-item-left">
+        <i data-lucide="star" id="menuStarIcon" style="width:16px;height:16px;"></i>
+        <span id="menuStarText">Add to Starred</span>
+      </div>
+    </div>
     <div class="context-item" onclick="openMoveModal()">
       <div class="context-item-left">
         <i data-lucide="folder-input"></i>
