@@ -2333,7 +2333,8 @@
             // Wire header play/pause toggle
             stack.querySelector(".header-playpause-btn").addEventListener("click", function (e) {
                 e.stopPropagation();
-                var currentPaused = activeUploads.filter(function (item) { return item.status === "paused"; }).length;
+                var queue = window.uploadQueue || [];
+                var currentPaused = queue.filter(function (item) { return item.status === "paused"; }).length;
                 if (currentPaused > 0) {
                     window.resumeAllUploads();
                 } else {
