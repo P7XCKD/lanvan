@@ -2139,19 +2139,22 @@ body {
     }
 }
 
-/* 550px-699px: Hide date and size columns */
+/* 550px-699px: Hide date column, keep name + size + actions */
 @media (max-width: 699px) and (min-width: 550px) {
 
     body .file-table-head,
     .m3-list:not(.grid-mode) .m3-list-item {
-        grid-template-columns: minmax(0, 1fr) 40px !important;
+        grid-template-columns: minmax(0, 1fr) 110px 40px !important;
     }
 
     body .file-table-head>span:nth-child(2),
-    body .file-table-head>span:nth-child(3),
-    body .item-date,
-    body .item-size {
+    body .item-date {
         display: none !important;
+    }
+
+    body .file-table-head>span:nth-child(3),
+    body .item-size {
+        display: inline-block !important;
     }
 }
 
@@ -2916,75 +2919,17 @@ body {
     color: var(--text-color);
 }
 
-/* Added missing prototype selector (responsive helper) */
-@media (max-width: 767px) {
-
-    .file-table-head,
-    .item-date,
-    .item-size {
-        display: none !important;
-    }
-}
-
-/* Added missing prototype selector (responsive helper) */
-@media (max-width: 1150px) {
-
-    .file-table-head,
-    .m3-list:not(.grid-mode) .m3-list-item {
-        grid-template-columns: minmax(0, 1fr) 140px 110px 40px;
-    }
-}
-
-/* Added missing prototype selector (responsive helper) */
-@media (max-width: 699px) and (min-width: 550px) {
-
-    .file-table-head>span:nth-child(2),
-    .file-table-head>span:nth-child(3),
-    .item-date,
-    .item-size {
-        display: none !important;
-    }
-}
-
-/* Added missing prototype selector (responsive helper) */
-@media (max-width: 1024px) and (min-width: 700px) {
-
-    .file-table-head>span:nth-child(2),
-    .item-date {
-        display: none !important;
-    }
-}
-
-/* Added missing prototype selector (responsive helper) */
-@media (max-width: 1024px) and (min-width: 700px) {
-
-    .file-table-head>span:nth-child(3),
-    .item-size {
-        display: inline-block !important;
-    }
-}
-
-/* Added missing prototype selector */
+/* Merge remaining prototype classes */
 .m3-fab {
     display: none !important;
 }
 
-/* Added missing prototype selector */
 .m3-list.grid-mode .m3-list-item .item-main {
     width: 100%;
     text-align: center;
     margin-top: 0.5rem;
 }
 
-/* Added missing prototype selector */
-.upload-toast-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    flex-shrink: 0;
-}
-
-/* Added missing prototype selector */
 .video-play-badge {
     width: 42px;
     height: 42px;
@@ -2998,7 +2943,6 @@ body {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-/* Added missing prototype selector */
 .video-preview-box {
     width: 100%;
     height: 100%;
@@ -3009,7 +2953,6 @@ body {
     position: relative;
 }
 
-/* Added missing prototype selector */
 [data-theme="dark"] .aes-card,
 [data-theme="dark"] .connection-card {
     background: #202124;
