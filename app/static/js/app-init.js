@@ -1752,35 +1752,28 @@
             connectAddress.textContent = url;
         }
 
-        // Try production QR API endpoint first (offline-capable)
-        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=140";
+        // Use production generateQRCode() from main-app.js (generates proper QR via API)
+        qrBox.innerHTML = "";
+        if (typeof generateQRCode === "function") {
+            try {
+                var qrResult = generateQRCode(url, 140);
+                if (qrResult && qrResult.primary) {
+                    var qrImg = document.createElement("img");
+                    qrImg.src = qrResult.primary;
+                    qrImg.alt = "QR Code";
+                    qrImg.style.cssText = "width:100%;height:100%;object-fit:contain;display:block;";
+                    qrBox.appendChild(qrImg);
+                    return;
+                }
+            } catch(e) {}
+        }
+        // Fallback: use API endpoint directly
+        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=200";
         var img = document.createElement("img");
         img.alt = "QR Code";
-        img.style.cssText = "width:100%;height:100%;object-fit:contain;border-radius:6px;";
+        img.style.cssText = "width:100%;height:100%;object-fit:contain;display:block;";
         img.src = qrApiUrl;
-        img.onerror = function() {
-            // Fallback: render mock QR grid like prototype
-            renderMockQr(qrBox, url);
-        };
-        qrBox.innerHTML = "";
         qrBox.appendChild(img);
-    }
-
-    function renderMockQr(box, value) {
-        // Render a simple pixel-grid mock QR (same as prototype)
-        box.innerHTML = "";
-        var chars = String(value);
-        for (var i = 0; i < 81; i++) {
-            var pixel = document.createElement("span");
-            pixel.className = "qr-pixel";
-            var row = Math.floor(i / 9);
-            var col = i % 9;
-            var finder = (row < 3 && col < 3) || (row < 3 && col > 5) || (row > 5 && col < 3);
-            var code = chars.charCodeAt(i % chars.length);
-            var on = finder || ((code + row * 7 + col * 11 + i) % 4 < 2);
-            if (on) pixel.classList.add("on");
-            box.appendChild(pixel);
-        }
     }
 
     // Trigger instant file list refresh after upload completes
