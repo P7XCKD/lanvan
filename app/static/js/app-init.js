@@ -1267,6 +1267,7 @@
             }
             window._currentNetworkInfo.fullUrl = url;
             renderSidebarQR();
+            renderDialogQR();
         }
 
         if (typeof updateMDNSStatus === "function") updateMDNSStatus();
@@ -1276,6 +1277,7 @@
         var dialog = document.getElementById("connectQrDialog");
         if (!dialog) return;
         dialog.style.display = "flex";
+        renderDialogQR();
         // Load QR from production
         if (typeof showConnectionInfo === "function") {
             // Populate address in prototype QR dialog
@@ -1763,6 +1765,33 @@
             qrBox.innerHTML = '<div style="font-size:0.6rem;color:var(--text-muted);text-align:center;padding:8px;">Scan to connect</div>';
         };
         qrBox.appendChild(img);
+    }
+
+    // Render QR code in Dialog using production QR API
+    function renderDialogQR() {
+        var dialogBox = document.getElementById("connectQrDialogBox");
+        var dialogAddress = document.getElementById("connectQrDialogAddress");
+        if (!dialogBox) return;
+
+        var url = window.location.origin;
+        if (window._currentNetworkInfo && window._currentNetworkInfo.fullUrl) {
+            url = window._currentNetworkInfo.fullUrl;
+        }
+
+        if (dialogAddress) {
+            dialogAddress.textContent = url;
+        }
+
+        dialogBox.innerHTML = "";
+        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=200&_=" + Math.random().toString(36).substr(2, 9);
+        var img = document.createElement("img");
+        img.alt = "QR Code";
+        img.style.cssText = "max-width:100%;max-height:100%;object-fit:contain;display:block;margin:0 auto;";
+        img.src = qrApiUrl;
+        img.onerror = function() {
+            dialogBox.innerHTML = '<div style="font-size:0.8rem;color:var(--text-muted);text-align:center;padding:12px;">Scan to connect</div>';
+        };
+        dialogBox.appendChild(img);
     }
 
     // Trigger instant file list refresh after upload completes
