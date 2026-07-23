@@ -1540,17 +1540,20 @@ Device Session will reset when browser is closed
 
       function pauseUpload(uploadId) {
         const uploadItem = uploadQueue.find(item => item.id === uploadId);
-        if (uploadItem && uploadItem.status === 'uploading') {
+        if (uploadItem && (uploadItem.status === 'uploading' || uploadItem.status === 'queued')) {
+          const wasUploading = uploadItem.status === 'uploading';
           uploadItem.status = 'paused';
           window.uploadManagerExpanded = true;
           if (uploadItem.xhr) {
             uploadItem.xhr.abort();
           }
           updateUploadItem(uploadItem);
-          endUpload();
-          setTimeout(() => {
-            startNextUpload();
-          }, 100);
+          if (wasUploading) {
+            endUpload();
+            setTimeout(() => {
+              startNextUpload();
+            }, 100);
+          }
           console.log(`Paused upload ${uploadId}`);
           if (typeof window.triggerInstantUIUpdate === 'function') {
             window.triggerInstantUIUpdate();
@@ -1882,6 +1885,7 @@ Device Session will reset when browser is closed
             //  Track network speed for adaptive concurrency
             const fileSize = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
             const uploadTime = ((Date.now() - uploadItem.startTime) / 1000).toFixed(1);
+            uploadItem.uploadTime = uploadTime;
             const avgSpeed = (fileSize / uploadTime).toFixed(1);
             const speedMBps = parseFloat(avgSpeed);
 
@@ -2325,6 +2329,7 @@ Device Session will reset when browser is closed
               // Show completion toast with smart refresh detection
               const fileSize = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
               const uploadTime = ((Date.now() - uploadItem.startTime) / 1000).toFixed(1);
+              uploadItem.uploadTime = uploadTime;
               const currentFileCount = document.querySelectorAll('.file-card').length;
               showToast(` ${uploadItem.fileName} uploaded successfully via chunked upload (${fileSize} MB, ${uploadItem.totalChunks} chunks)`, 5000);
 
