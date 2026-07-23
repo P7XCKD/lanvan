@@ -1890,13 +1890,22 @@ body {
     cursor: pointer;
     border-radius: 20px;
 }
-
 .dialog-btn-primary {
     color: var(--primary);
 }
 
 .dialog-btn-primary:hover {
     background-color: var(--primary-container);
+}
+
+.mobile-sheet-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
     z-index: 20000;
     display: flex;
     flex-direction: column;

@@ -739,9 +739,23 @@
     };
 
     window.deleteSelected = function () {
-        if (prototypeSelectedItems.length === 0) return;
+        var itemsToDelete = [];
+        var target = window._contextMenuTarget || "";
 
-        var itemsToDelete = prototypeSelectedItems.slice();
+        if (prototypeSelectedItems.length > 0) {
+            // If the targeted item is in the selected list, delete all selected items
+            if (target && prototypeSelectedItems.indexOf(target) !== -1) {
+                itemsToDelete = prototypeSelectedItems.slice();
+            } else {
+                // Otherwise, delete only the target item (or selected items if no target is active)
+                itemsToDelete = target ? [target] : prototypeSelectedItems.slice();
+            }
+        } else if (target) {
+            itemsToDelete = [target];
+        }
+
+        if (itemsToDelete.length === 0) return;
+
         var completed = 0;
         var failed = [];
 
@@ -760,9 +774,15 @@
 
             var filename = itemsToDelete[index];
 
-            // Check if this is a folder by looking at the rendered list
-            var listEl = document.querySelector('#nasFileList [data-filename="' + filename.replace(/"/g, '&quot;') + '"]');
-            var isFolder = listEl && listEl.getAttribute("data-is-folder") === "1";
+            // Check if this is a folder by looking at the rendered list (safe from special characters/quotes in filenames)
+            var isFolder = false;
+            var listItems = document.querySelectorAll('#nasFileList .m3-list-item');
+            for (var k = 0; k < listItems.length; k++) {
+                if (listItems[k].getAttribute("data-filename") === filename) {
+                    isFolder = listItems[k].getAttribute("data-is-folder") === "1";
+                    break;
+                }
+            }
 
             var url, method;
             if (isFolder) {
@@ -1072,6 +1092,10 @@
     }
 
     window.openNewFolderDialog = function () {
+        // Hide context menu immediately so it doesn't intercept clicks
+        var contextMenu = document.getElementById("contextMenu");
+        if (contextMenu) contextMenu.style.display = "none";
+
         var dialog = document.getElementById("newFolderDialog");
         var input = document.getElementById("newFolderNameInput");
         if (!dialog) return;
@@ -1374,16 +1398,33 @@
 
     // --- Stub Operations (no production equivalent yet) ---
     window.submitNewFolder = function () {
+        console.log("[submitNewFolder] Start");
         var input = document.getElementById("newFolderNameInput");
         var name = (input && input.value.trim()) || "Untitled folder";
+        console.log("[submitNewFolder] Folder name:", name);
         if (!name) return;
 
         var formData = new FormData();
         formData.append("folder_name", name);
+
+        var parentPath = "";
         if (isCreatingFolderInMove) {
-            var destination = moveCurrentPath.length > 1 ? moveCurrentPath.slice(1).join("/") : "";
-            formData.append("parent_path", destination);
+            parentPath = moveCurrentPath.length > 1 ? moveCurrentPath.slice(1).join("/") : "";
+        } else {
+            if (currentFolderPath && currentFolderPath !== "Home") {
+                if (currentFolderPath.indexOf("Home/") === 0) {
+                    parentPath = currentFolderPath.substring(5);
+                } else if (currentFolderPath !== "Home") {
+                    parentPath = currentFolderPath;
+                }
+            }
         }
+        console.log("[submitNewFolder] parentPath resolved to:", parentPath);
+        if (parentPath) {
+            formData.append("parent_path", parentPath);
+        }
+
+        console.log("[submitNewFolder] Sending fetch request...");
 
         fetch("/api/files/mkdir", { method: "POST", body: formData })
             .then(function (r) { return r.json(); })
@@ -2053,6 +2094,16 @@
     function init() {
         setupDropzone();
         setupSearch();
+
+        var folderInput = document.getElementById("newFolderNameInput");
+        if (folderInput) {
+            folderInput.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    submitNewFolder();
+                }
+            });
+        }
 
         // Show loading state immediately
         var container = document.getElementById("nasFileList");

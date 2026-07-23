@@ -2282,7 +2282,7 @@ async def move_file(filename: str = Form(...), destination: str = Form(...)):
 
 
 @router.post("/api/files/mkdir", name="create_folder")
-async def create_folder(folder_name: str = Form(...)):
+async def create_folder(folder_name: str = Form(...), parent_path: Optional[str] = Form(None)):
     """Create a new folder"""
     safe_name = secure_filename(folder_name)
     if not safe_name:
@@ -2292,18 +2292,33 @@ async def create_folder(folder_name: str = Form(...)):
     if '/' in safe_name or '\\' in safe_name or '..' in safe_name:
         return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid characters in folder name"})
     
+    # Resolve target directory based on parent_path
+    target_dir = UPLOAD_FOLDER
+    if parent_path:
+        parts = [p for p in parent_path.split("/") if p and p != ".."]
+        for part in parts:
+            safe_part = secure_filename(part)
+            if safe_part:
+                target_dir = target_dir / safe_part
+                
+        # Path traversal check
+        try:
+            target_dir.resolve().relative_to(UPLOAD_FOLDER.resolve())
+        except ValueError:
+            return JSONResponse(status_code=403, content={"status": "error", "msg": "Access denied"})
+
     # Auto-increment if folder already exists: "Folder" -> "Folder (1)" -> "Folder (2)"
     original_name = safe_name
     counter = 1
-    folder_path = UPLOAD_FOLDER / safe_name
+    folder_path = target_dir / safe_name
     while folder_path.exists():
         safe_name = f"{original_name} ({counter})"
-        folder_path = UPLOAD_FOLDER / safe_name
+        folder_path = target_dir / safe_name
         counter += 1
     
     try:
         folder_path.mkdir(parents=True, exist_ok=False)
-        print(f"[MKDIR] Created folder '{safe_name}'")
+        print(f"[MKDIR] Created folder '{safe_name}' in '{parent_path or ''}'")
         return JSONResponse(content={
             "status": "success",
             "msg": f"Folder '{safe_name}' created",
