@@ -666,7 +666,8 @@ async def upload_files(
     request: Request,
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
-    encrypt: bool = Query(False, description="Encrypt files with AES-256 if true")
+    encrypt: bool = Query(False, description="Encrypt files with AES-256 if true"),
+    parent_path: Optional[str] = Form(None)
 ):
     """Main file upload endpoint - handles multiple files with optional encryption"""
     if not files:
@@ -687,22 +688,32 @@ async def upload_files(
             from concurrent_upload_manager import ConcurrentUploadManager
         upload_manager = ConcurrentUploadManager()
         
+        # Resolve target directory based on parent_path
+        target_dir = UPLOAD_FOLDER
+        if parent_path:
+            parts = [p for p in parent_path.split("/") if p and p != ".."]
+            for part in parts:
+                safe_part = secure_filename(part)
+                if safe_part:
+                    target_dir = target_dir / safe_part
+            target_dir.mkdir(parents=True, exist_ok=True)
+
         # Create destinations for uploaded files
         destinations = []
         for file in files:
             if file.filename:
-                file_path = UPLOAD_FOLDER / file.filename
+                file_path = target_dir / file.filename
                 # Ensure unique filename
                 counter = 1
                 original_path = file_path
                 while file_path.exists():
                     stem = original_path.stem
                     suffix = original_path.suffix
-                    file_path = UPLOAD_FOLDER / f"{stem}_{counter}{suffix}"
+                    file_path = target_dir / f"{stem}_{counter}{suffix}"
                     counter += 1
                 destinations.append(file_path)
             else:
-                destinations.append(UPLOAD_FOLDER / "unnamed_file")
+                destinations.append(target_dir / "unnamed_file")
         
         # Process uploads
         results = await upload_manager.upload_files_concurrently(
@@ -790,7 +801,8 @@ async def upload_auto_file(
     request: Request,
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
-    encrypt: bool = Query(False, description="Encrypt files with AES-256 if true")
+    encrypt: bool = Query(False, description="Encrypt files with AES-256 if true"),
+    parent_path: Optional[str] = Form(None)
 ):
     if not files:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
@@ -801,7 +813,7 @@ async def upload_auto_file(
     # [AUTH] Protocol detection
     is_https = request.url.scheme == "https"
     
-    # � ULRA-FAST VALIDATION: Start uploads immediately with lightweight validation
+    #  ULRA-FAST VALIDATION: Start uploads immediately with lightweight validation
     is_valid, error_messages, validated_files, security_warnings = await validate_upload_files_enhanced_fast(files, encrypt, is_https)
     if not is_valid:
         # [!] LOG VALIDATION FAILURES for debugging
@@ -875,8 +887,18 @@ async def upload_auto_file(
                 if not validation['valid']:
                     return {"error": f"File {i+1} failed AES validation: {validation['error']}"}
 
+            # Resolve target directory based on parent_path
+            target_dir = UPLOAD_FOLDER
+            if parent_path:
+                parts = [p for p in parent_path.split("/") if p and p != ".."]
+                for part in parts:
+                    safe_part = secure_filename(part)
+                    if safe_part:
+                        target_dir = target_dir / safe_part
+                target_dir.mkdir(parents=True, exist_ok=True)
+
             save_name = filename + ".enc" if encrypt else filename
-            filepath = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, save_name)
+            filepath = target_dir / get_unique_filename(target_dir, save_name)
 
             print(f"[SAVE] Will save file {i+1} as: {filepath.name}")
             
@@ -982,11 +1004,19 @@ async def download_file(filename: str, request: Request):
     safe_name = secure_filename(filename)
     file_path = UPLOAD_FOLDER / safe_name
     
-    print(f"[DIR] Looking for file at: {file_path}")
-
     if not file_path.is_file():
-        print(f"[ERR] File not found: {file_path}")
-        return Response("File not found", status_code=404)
+        # Fallback: search subdirectories recursively
+        found = False
+        for subdir_file in UPLOAD_FOLDER.rglob(safe_name):
+            if subdir_file.is_file():
+                file_path = subdir_file
+                found = True
+                break
+        if not found:
+            print(f"[ERR] File not found: {safe_name}")
+            return Response("File not found", status_code=404)
+            
+    print(f"[DIR] Looking for file at: {file_path}")
 
     mime_type, _ = guess_type(str(file_path))
     file_size = file_path.stat().st_size
@@ -1368,10 +1398,18 @@ async def delete_file(filename: str):
         file_path = UPLOAD_FOLDER / safe_name
         
         if not file_path.exists():
-            return JSONResponse(
-                status_code=404,
-                content={"status": "error", "msg": "File not found"}
-            )
+            # Fallback: search subdirectories recursively
+            found = False
+            for subdir_file in UPLOAD_FOLDER.rglob(safe_name):
+                if subdir_file.is_file():
+                    file_path = subdir_file
+                    found = True
+                    break
+            if not found:
+                return JSONResponse(
+                    status_code=404,
+                    content={"status": "error", "msg": "File not found"}
+                )
             
         if file_path.is_file():
             file_path.unlink()
@@ -1611,7 +1649,8 @@ async def finalize_upload(
     background_tasks: BackgroundTasks,
     filename: str = Form(...),
     total_parts: int = Form(...),
-    encrypt: bool = Form(False)
+    encrypt: bool = Form(False),
+    parent_path: Optional[str] = Form(None)
 ):
     """Combine all chunks into final file - supports streaming assembly with failsafe fallback"""
     try:
@@ -1803,6 +1842,22 @@ async def finalize_upload(
                         status_code=HTTP_400_BAD_REQUEST,
                         content={"status": "error", "msg": f"AES encryption failed: {encrypt_error}"}
                     )
+
+        # Resolve target directory based on parent_path
+        target_dir = UPLOAD_FOLDER
+        if parent_path:
+            parts = [p for p in parent_path.split("/") if p and p != ".."]
+            for part in parts:
+                safe_part = secure_filename(part)
+                if safe_part:
+                    target_dir = target_dir / safe_part
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+        if final_path and final_path.exists() and final_path.parent != target_dir:
+            import shutil
+            new_final_path = target_dir / get_unique_filename(target_dir, final_path.name)
+            shutil.move(str(final_path), str(new_final_path))
+            final_path = new_final_path
 
         # Check if encryption is requested and validate using centralized config
         if encrypt and final_path and final_path.exists():
@@ -2171,47 +2226,45 @@ async def list_folder_contents(folder_path: str):
 
 @router.post("/api/files/rename", name="rename_file")
 async def rename_file(filename: str = Form(...), new_name: str = Form(...)):
-    """Rename a file with validation and path traversal prevention"""
-    # Validate source filename
+    """Rename a file or folder with validation and path traversal prevention"""
+    # Validate source name
     safe_filename = secure_filename(filename)
     if not safe_filename:
-        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid source filename"})
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid source name"})
     
-    # Search for the file in root and all subdirectories
+    # Search for the file or folder in root and all subdirectories
     src_path = UPLOAD_FOLDER / safe_filename
     if not src_path.exists():
         # Search subdirectories
         found = False
-        for subdir_file in UPLOAD_FOLDER.rglob(safe_filename):
-            if subdir_file.is_file():
-                src_path = subdir_file
+        for subdir_item in UPLOAD_FOLDER.rglob(safe_filename):
+            if subdir_item.is_file() or subdir_item.is_dir():
+                src_path = subdir_item
                 found = True
                 break
         if not found:
-            return JSONResponse(status_code=404, content={"status": "error", "msg": "Source file not found"})
-    elif not src_path.is_file():
-        return JSONResponse(status_code=404, content={"status": "error", "msg": "Source file not found"})
+            return JSONResponse(status_code=404, content={"status": "error", "msg": "Source not found"})
     
-    # Validate destination filename
+    # Validate destination name
     safe_new = secure_filename(new_name)
     if not safe_new:
-        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid target filename"})
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid target name"})
     
     # Prevent path traversal
     if '/' in safe_new or '\\' in safe_new or '..' in safe_new:
         return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid characters in filename"})
     
-    # Check for duplicates
-    dst_path = UPLOAD_FOLDER / safe_new
+    # Check for duplicates in the same parent directory
+    dst_path = src_path.parent / safe_new
     if dst_path.exists():
         return JSONResponse(status_code=409, content={"status": "error", "msg": f"'{safe_new}' already exists"})
     
     try:
         os.rename(src_path, dst_path)
-        print(f"[RENAME] Renamed '{safe_filename}' to '{safe_new}'")
+        print(f"[RENAME] Renamed '{safe_filename}' to '{safe_new}' in '{src_path.parent}'")
         return JSONResponse(content={
             "status": "success",
-            "msg": f"File renamed to '{safe_new}'",
+            "msg": f"Renamed to '{safe_new}'",
             "old_name": safe_filename,
             "new_name": safe_new
         })
@@ -2219,7 +2272,7 @@ async def rename_file(filename: str = Form(...), new_name: str = Form(...)):
         print(f"[ERR] Rename error: {e}")
         return JSONResponse(status_code=500, content={
             "status": "error",
-            "msg": f"Failed to rename file: {e}"
+            "msg": f"Failed to rename: {e}"
         })
 
 

@@ -32,19 +32,28 @@
         const _originalUpdateFileDisplay = updateFileDisplay;
         updateFileDisplay = function (files) {
             _originalUpdateFileDisplay(files);
-            // Also fetch folders so they don't disappear during auto-refresh
-            fetch("/api/folders")
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    var folderItems = (data.folders || []).map(function (f) {
-                        return { name: f.name, size: f.size_formatted || "--", mtime: f.created || 0, isFolder: true };
-                    });
-                    // Folders first, then files
-                    renderPrototypeFileList(folderItems.concat(files || []));
-                })
-                .catch(function () {
-                    renderPrototypeFileList(files);
+            
+            var isSubfolder = currentFolderPath && currentFolderPath !== "Home" && currentFolderPath !== "";
+            if (isSubfolder) {
+                // Fetch subfolder files and folders during updates/refresh
+                fetchFilesData().then(function (fd) {
+                    renderPrototypeFileList(fd);
                 });
+            } else {
+                // Also fetch folders so they don't disappear during auto-refresh
+                fetch("/api/folders")
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        var folderItems = (data.folders || []).map(function (f) {
+                            return { name: f.name, size: f.size_formatted || "--", mtime: f.created || 0, isFolder: true };
+                        });
+                        // Folders first, then files
+                        renderPrototypeFileList(folderItems.concat(files || []));
+                    })
+                    .catch(function () {
+                        renderPrototypeFileList(files);
+                    });
+            }
         };
         updateFileDisplay.__prototypeWrapped = true;
     }
@@ -65,8 +74,88 @@
     // 2. PROTOTYPE RENDERERS — Consume production data, output prototype DOM
     // =========================================================================
 
-    // Current folder path for breadcrumb navigation (e.g. "Home" or "Home/FolderName")
     var currentFolderPath = "Home";
+    Object.defineProperty(window, 'currentFolderPath', {
+        get: function () { return currentFolderPath; },
+        set: function (val) { currentFolderPath = val; },
+        configurable: true
+    });
+
+    // Intercept network requests to automatically append parent_path to upload FormData
+    // and log detailed error info to the console if requests fail.
+    (function () {
+        const _originalOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function (method, url) {
+            this._url = url;
+            return _originalOpen.apply(this, arguments);
+        };
+
+        const _originalSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function (body) {
+            if (body instanceof FormData) {
+                if (window.currentFolderPath && window.currentFolderPath !== "Home") {
+                    var parentPath = window.currentFolderPath;
+                    if (parentPath.indexOf("Home/") === 0) {
+                        parentPath = parentPath.substring(5);
+                    } else if (parentPath === "Home") {
+                        parentPath = "";
+                    }
+                    if (parentPath && !body.has("parent_path")) {
+                        body.append("parent_path", parentPath);
+                    }
+                }
+            }
+            
+            // Log response errors
+            var self = this;
+            var originalOnLoad = this.onload;
+            this.onload = function () {
+                if (self.status >= 400) {
+                    console.error("[Network Error] XHR failed with status " + self.status + " for URL: " + self._url + "\nResponse: ", self.responseText);
+                }
+                if (originalOnLoad) {
+                    originalOnLoad.apply(this, arguments);
+                }
+            };
+            var originalOnError = this.onerror;
+            this.onerror = function () {
+                console.error("[Network Error] XHR connection failed for URL: " + self._url);
+                if (originalOnError) {
+                    originalOnError.apply(this, arguments);
+                }
+            };
+
+            return _originalSend.apply(this, arguments);
+        };
+
+        const _originalFetch = window.fetch;
+        window.fetch = function (url, options) {
+            if (options && options.body instanceof FormData) {
+                if (window.currentFolderPath && window.currentFolderPath !== "Home") {
+                    var parentPath = window.currentFolderPath;
+                    if (parentPath.indexOf("Home/") === 0) {
+                        parentPath = parentPath.substring(5);
+                    } else if (parentPath === "Home") {
+                        parentPath = "";
+                    }
+                    if (parentPath && !options.body.has("parent_path")) {
+                        options.body.append("parent_path", parentPath);
+                    }
+                }
+            }
+            return _originalFetch.apply(this, arguments)
+                .then(function (response) {
+                    if (!response.ok) {
+                        console.error("[Network Error] Fetch failed with status " + response.status + " for URL: " + url);
+                    }
+                    return response;
+                })
+                .catch(function (error) {
+                    console.error("[Network Error] Fetch connection failed for URL: " + url + ". Error: ", error);
+                    throw error;
+                });
+        };
+    })();
 
     // Client-side sort and filter state
     var typeFilter = "all";
@@ -164,6 +253,16 @@
         var container = document.getElementById("nasFileList");
         var filePanelMeta = document.getElementById("filePanelMeta");
         if (!container) return;
+
+        // Hide Recents (Quick Access) if inside a subfolder
+        var quickContainer = document.getElementById("quickAccessContainer");
+        if (quickContainer) {
+            if (currentFolderPath && currentFolderPath !== "Home" && currentFolderPath !== "") {
+                quickContainer.style.display = "none";
+            } else {
+                quickContainer.style.display = ""; // Reset
+            }
+        }
 
         renderBreadcrumbs();
 
@@ -1451,33 +1550,106 @@
     };
 
     window.submitRename = function () {
-        var oldName = prototypeSelectedItems[0] || (window._contextMenuTarget || "");
-        var newName = (document.getElementById("renameInput") || {}).value;
-        if (!oldName || !newName || newName === oldName) {
+        var itemsToRename = prototypeSelectedItems.slice();
+        if (itemsToRename.length === 0 && window._contextMenuTarget) {
+            itemsToRename = [window._contextMenuTarget];
+        }
+        if (itemsToRename.length === 0) {
             window.closeRenameDialog();
             return;
         }
 
-        var formData = new FormData();
-        formData.append("filename", oldName);
-        formData.append("new_name", newName);
+        var newBaseName = (document.getElementById("renameInput") || {}).value;
+        if (!newBaseName) {
+            window.closeRenameDialog();
+            return;
+        }
 
-        fetch("/api/files/rename", { method: "POST", body: formData })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (data.status === "success") {
-                    if (typeof showToast === "function") showToast("Renamed to '" + newName + "'.", 3000);
-                    if (typeof refreshFileList === "function") refreshFileList();
+        var completed = 0;
+        var failed = [];
+
+        function renameNext(index) {
+            if (index >= itemsToRename.length) {
+                if (failed.length > 0) {
+                    if (typeof showToast === "function") showToast("Renamed " + completed + " item(s). " + failed.length + " failed.", 4000);
                 } else {
-                    if (typeof showToast === "function") showToast(data.msg || "Rename failed.", 4000);
+                    if (typeof showToast === "function") showToast("Successfully renamed " + completed + " item(s).", 3000);
                 }
-            })
-            .catch(function () {
-                if (typeof showToast === "function") showToast("Network error renaming file.", 4000);
-            });
+                window.clearSelection();
+                if (typeof refreshFileList === "function") refreshFileList();
+                return;
+            }
 
+            var oldName = itemsToRename[index];
+            
+            // Build the new name
+            var nameToUse = newBaseName;
+            
+            // For multiple items, append index suffix: test, test (1), test (2)...
+            if (itemsToRename.length > 1) {
+                if (index > 0) {
+                    nameToUse = newBaseName + " (" + index + ")";
+                }
+            }
+
+            // Determine if the item is a folder
+            var isFolder = false;
+            var listEl = document.querySelector('#nasFileList [data-filename="' + oldName.replace(/"/g, '&quot;') + '"]');
+            if (listEl) {
+                isFolder = listEl.getAttribute("data-is-folder") === "1";
+            } else {
+                var meta = lastFilesData.find(function (f) { return f.name === oldName; });
+                if (meta) isFolder = !!meta.isFolder;
+            }
+
+            // If it's a file, preserve the extension
+            if (!isFolder) {
+                var dotIdx = oldName.lastIndexOf(".");
+                if (dotIdx > 0) {
+                    var ext = oldName.substring(dotIdx);
+                    // Check if newBaseName already has an extension
+                    var targetDot = newBaseName.lastIndexOf(".");
+                    if (targetDot > 0) {
+                        var userBase = newBaseName.substring(0, targetDot);
+                        if (itemsToRename.length > 1 && index > 0) {
+                            nameToUse = userBase + " (" + index + ")" + ext;
+                        } else {
+                            nameToUse = userBase + ext;
+                        }
+                    } else {
+                        nameToUse = nameToUse + ext;
+                    }
+                }
+            }
+
+            if (nameToUse === oldName) {
+                completed++;
+                renameNext(index + 1);
+                return;
+            }
+
+            var formData = new FormData();
+            formData.append("filename", oldName);
+            formData.append("new_name", nameToUse);
+
+            fetch("/api/files/rename", { method: "POST", body: formData })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.status === "success") {
+                        completed++;
+                    } else {
+                        failed.push(oldName);
+                    }
+                    renameNext(index + 1);
+                })
+                .catch(function () {
+                    failed.push(oldName);
+                    renameNext(index + 1);
+                });
+        }
+
+        renameNext(0);
         window.closeRenameDialog();
-        window.clearSelection();
     };
 
     window.submitMove = function () {
@@ -1915,8 +2087,17 @@
 
     function renderQuickAccess(files) {
         var container = document.getElementById("quickAccessContainer");
-        if (!container || !files || files.length === 0) {
-            if (container) container.innerHTML = "";
+        if (!container) return;
+
+        // Hide Recents (Quick Access) if inside a subfolder
+        if (currentFolderPath && currentFolderPath !== "Home" && currentFolderPath !== "") {
+            container.style.display = "none";
+            return;
+        }
+        container.style.display = ""; // Reset display
+
+        if (!files || files.length === 0) {
+            container.innerHTML = "";
             return;
         }
 
@@ -2094,6 +2275,49 @@
     function init() {
         setupDropzone();
         setupSearch();
+
+        // Keyboard Shortcuts: Ctrl+A, Delete, F2
+        document.addEventListener("keydown", function (e) {
+            var active = document.activeElement;
+            var isInputActive = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable);
+
+            // Ctrl+A Select All Files/Folders
+            if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
+                if (isInputActive) return; // Let standard input selection work
+                e.preventDefault();
+                var items = document.querySelectorAll("#nasFileList .m3-list-item");
+                if (items.length === 0) return;
+                
+                prototypeSelectedItems = [];
+                for (var i = 0; i < items.length; i++) {
+                    var item = items[i];
+                    var name = item.getAttribute("data-filename");
+                    if (name) {
+                        prototypeSelectedItems.push(name);
+                        item.classList.add("selected");
+                    }
+                }
+                updateSelectionToolbar();
+            }
+
+            // Delete Key to Delete Selected Items
+            if (e.key === "Delete" || e.key === "Del") {
+                if (isInputActive) return;
+                e.preventDefault();
+                if (typeof deleteSelected === "function") {
+                    deleteSelected();
+                }
+            }
+
+            // F2 Key to Rename Selected Items
+            if (e.key === "F2") {
+                if (isInputActive) return;
+                e.preventDefault();
+                if (prototypeSelectedItems.length > 0 && typeof openRenameModal === "function") {
+                    openRenameModal();
+                }
+            }
+        });
 
         var folderInput = document.getElementById("newFolderNameInput");
         if (folderInput) {
