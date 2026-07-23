@@ -1752,27 +1752,17 @@
             connectAddress.textContent = url;
         }
 
-        // Use production generateQRCode() from main-app.js (generates proper QR via API)
+        // Use the production QR API endpoint directly (same as main-app.js)
         qrBox.innerHTML = "";
-        if (typeof generateQRCode === "function") {
-            try {
-                var qrResult = generateQRCode(url, 140);
-                if (qrResult && qrResult.primary) {
-                    var qrImg = document.createElement("img");
-                    qrImg.src = qrResult.primary;
-                    qrImg.alt = "QR Code";
-                    qrImg.style.cssText = "width:100%;height:100%;object-fit:contain;display:block;";
-                    qrBox.appendChild(qrImg);
-                    return;
-                }
-            } catch(e) {}
-        }
-        // Fallback: use API endpoint directly
-        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=200";
+        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=140";
         var img = document.createElement("img");
         img.alt = "QR Code";
-        img.style.cssText = "width:100%;height:100%;object-fit:contain;display:block;";
+        img.style.cssText = "width:102px;height:102px;object-fit:contain;display:block;margin:0 auto;";
         img.src = qrApiUrl;
+        img.onerror = function() {
+            // QR API failed — show text fallback
+            qrBox.innerHTML = '<div style="font-size:0.6rem;color:var(--text-muted);text-align:center;padding:8px;">Scan to connect</div>';
+        };
         qrBox.appendChild(img);
     }
 
