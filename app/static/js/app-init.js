@@ -1752,15 +1752,14 @@
             connectAddress.textContent = url;
         }
 
-        // Use the production QR API endpoint directly (same as main-app.js)
+        // Generate fresh QR each time via cache-busting random string
         qrBox.innerHTML = "";
-        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=140";
+        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=140&_=" + Math.random().toString(36).substr(2, 9);
         var img = document.createElement("img");
         img.alt = "QR Code";
         img.style.cssText = "width:102px;height:102px;object-fit:contain;display:block;margin:0 auto;";
         img.src = qrApiUrl;
         img.onerror = function() {
-            // QR API failed — show text fallback
             qrBox.innerHTML = '<div style="font-size:0.6rem;color:var(--text-muted);text-align:center;padding:8px;">Scan to connect</div>';
         };
         qrBox.appendChild(img);
