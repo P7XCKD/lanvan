@@ -165,6 +165,8 @@
         var filePanelMeta = document.getElementById("filePanelMeta");
         if (!container) return;
 
+        renderBreadcrumbs();
+
         // files can be either string[] (names only) or object[] (with metadata)
         // Normalize to always have name, size, mtime, isFolder
         var normalizedFiles = [];
