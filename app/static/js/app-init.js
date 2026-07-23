@@ -911,6 +911,52 @@
         var dropzone = document.getElementById("nasDropzone");
         if (!dropzone) return;
 
+        // Right-click context menu on file list area
+        dropzone.addEventListener("contextmenu", function (e) {
+            e.preventDefault();
+            var menu = document.getElementById("contextMenu");
+            var genericOps = document.getElementById("genericMenuOptions");
+            var itemOps = document.getElementById("itemMenuOptions");
+            var clipboardOps = document.getElementById("clipboardMenuOptions");
+            if (!menu) return;
+
+            // Check if right-clicking on a file item
+            var clickedItem = e.target.closest(".m3-list-item");
+            if (clickedItem) {
+                var filename = clickedItem.getAttribute("data-filename") || "";
+                if (genericOps) genericOps.style.display = "none";
+                if (itemOps) itemOps.style.display = "block";
+                if (clipboardOps) clipboardOps.style.display = "none";
+                window._contextMenuTarget = filename;
+
+                // If not already selected, select this item
+                if (prototypeSelectedItems.indexOf(filename) === -1) {
+                    prototypeSelectedItems = [filename];
+                    // Update visual selection
+                    var allItems = dropzone.querySelectorAll(".m3-list-item");
+                    for (var i = 0; i < allItems.length; i++) {
+                        var itemName = allItems[i].getAttribute("data-filename");
+                        if (itemName === filename) {
+                            allItems[i].classList.add("selected");
+                        } else {
+                            allItems[i].classList.remove("selected");
+                        }
+                    }
+                    updateSelectionToolbar();
+                }
+            } else {
+                // Right-clicked on empty space — show generic menu
+                if (genericOps) genericOps.style.display = "block";
+                if (itemOps) itemOps.style.display = "none";
+                if (clipboardOps) clipboardOps.style.display = "none";
+                window.clearSelection();
+            }
+
+            menu.style.display = "block";
+            menu.style.left = Math.min(e.clientX, window.innerWidth - 200) + "px";
+            menu.style.top = Math.min(e.clientY, window.innerHeight - 250) + "px";
+        });
+
         // Wire drag events to production drop-zone handlers
         dropzone.addEventListener("dragenter", function (e) {
             e.preventDefault();

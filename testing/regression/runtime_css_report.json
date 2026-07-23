@@ -1,0 +1,1116 @@
+{
+  "prototype": {
+    "label": "PROTOTYPE",
+    "url": "file:///C:\\Users\\Public\\Probz\\Code\\lanvan/prototype/prototype.html",
+    "stylesheets": [
+      {
+        "href": "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap",
+        "disabled": false,
+        "rulesCount": 0
+      },
+      {
+        "href": "file:///C:/Users/Public/Probz/Code/lanvan/prototype/prototype.css",
+        "disabled": false,
+        "rulesCount": 0
+      }
+    ],
+    "computed": {
+      "body": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(232, 234, 237)",
+        "background-color": "rgb(19, 19, 20)",
+        "padding": "0px",
+        "margin": "0px",
+        "border-radius": "0px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "1440px",
+        "height": "900px",
+        "display": "flex",
+        "gap": "normal",
+        "overflow": "hidden"
+      },
+      "root": {
+        "font-family": "\"Times New Roman\"",
+        "color": "rgb(0, 0, 0)",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "margin": "0px",
+        "border-radius": "0px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "1440px",
+        "height": "900px",
+        "display": "block",
+        "gap": "normal",
+        "overflow": "visible"
+      },
+      ".app-sidebar": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(232, 234, 237)",
+        "background-color": "rgb(27, 28, 31)",
+        "padding": "20px 12px",
+        "margin": "0px",
+        "border-radius": "0px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "256px",
+        "height": "900px",
+        "display": "flex",
+        "gap": "16px",
+        "overflow": "visible"
+      },
+      ".search-shell": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(189, 193, 198)",
+        "background-color": "rgb(43, 44, 48)",
+        "padding": "0px 16px",
+        "margin": "0px",
+        "border-radius": "24px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "720px",
+        "height": "48px",
+        "display": "flex",
+        "gap": "12px",
+        "overflow": "visible"
+      },
+      ".app-bar": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(232, 234, 237)",
+        "background-color": "rgb(19, 19, 20)",
+        "padding": "13.6px 24px 12px 12px",
+        "margin": "0px",
+        "border-radius": "0px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "1184px",
+        "height": "73.5938px",
+        "display": "flex",
+        "gap": "16px",
+        "overflow": "visible"
+      },
+      ".m3-card": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(232, 234, 237)",
+        "background-color": "rgb(19, 19, 20)",
+        "padding": "12px",
+        "margin": "0px",
+        "border-radius": "8px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "1148px",
+        "height": "600.406px",
+        "display": "flex",
+        "gap": "8px",
+        "overflow": "hidden"
+      },
+      ".m3-list-item": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(232, 234, 237)",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "padding": "8.8px 12px",
+        "margin": "0px",
+        "border-radius": "0px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "1118px",
+        "height": "58px",
+        "display": "grid",
+        "gap": "12px",
+        "overflow": "visible"
+      },
+      ".quick-card": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(232, 234, 237)",
+        "background-color": "rgb(27, 28, 31)",
+        "padding": "13.6px",
+        "margin": "0px",
+        "border-radius": "8px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "278px",
+        "height": "86px",
+        "display": "flex",
+        "gap": "12px",
+        "overflow": "visible"
+      },
+      ".btn-icon": {
+        "font-family": "Arial",
+        "color": "rgb(232, 234, 237)",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "margin": "0px",
+        "border-radius": "50%",
+        "font-size": "13.3333px",
+        "font-weight": "400",
+        "width": "38px",
+        "height": "38px",
+        "display": "flex",
+        "gap": "normal",
+        "overflow": "visible"
+      },
+      ".file-toolbar": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(232, 234, 237)",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "margin": "0px",
+        "border-radius": "0px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "1148px",
+        "height": "40px",
+        "display": "flex",
+        "gap": "16px",
+        "overflow": "visible"
+      },
+      ".bottom-nav": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(232, 234, 237)",
+        "background-color": "rgb(27, 28, 31)",
+        "padding": "0px",
+        "margin": "0px",
+        "border-radius": "0px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "auto",
+        "height": "64px",
+        "display": "none",
+        "gap": "normal",
+        "overflow": "visible"
+      },
+      ".m3-primary-btn": {
+        "font-family": "Arial",
+        "color": "rgb(0, 29, 53)",
+        "background-color": "rgb(138, 180, 248)",
+        "padding": "0px 20px",
+        "margin": "0px",
+        "border-radius": "999px",
+        "font-size": "13.6px",
+        "font-weight": "700",
+        "width": "auto",
+        "height": "36px",
+        "display": "flex",
+        "gap": "6.4px",
+        "overflow": "visible"
+      },
+      ".sidebar-item": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(194, 231, 255)",
+        "background-color": "rgb(0, 74, 119)",
+        "padding": "9.92px 14.4px",
+        "margin": "0px",
+        "border-radius": "999px",
+        "font-size": "13.6px",
+        "font-weight": "650",
+        "width": "232px",
+        "height": "43.8125px",
+        "display": "flex",
+        "gap": "12px",
+        "overflow": "visible"
+      }
+    },
+    "css_vars": {
+      "--scrollbar-thumb-hover": "#5f6368",
+      "--yellow": "#f9ab00",
+      "--primary-container-text": "#d3e3fd",
+      "--hover-bg": "#2f3033",
+      "--green": "#188038",
+      "--radius-sm": "8px",
+      "--primary-container": "#004a77",
+      "--shadow-soft": "none",
+      "--sidebar-bg": "#1b1c1f",
+      "--shadow-lift": "0 8px 24px rgba(0, 0, 0, 0.35)",
+      "--border-color": "#3c4043",
+      "--secondary-container": "#0b57d0",
+      "--primary-hover": "#aecbfa",
+      "--scrollbar-track": "transparent",
+      "--radius-md": "8px",
+      "--primary": "#8ab4f8",
+      "--scrollbar-thumb": "#3c4043",
+      "--surface-variant-text": "#bdc1c6",
+      "--radius-lg": "8px",
+      "--danger": "#f2b8b5",
+      "--bg-color": "#131314",
+      "--toggle-bg": "#2b2c30",
+      "--text-muted": "#bdc1c6",
+      "--danger-text": "#fce8e6",
+      "--red": "#d93025",
+      "--surface-variant": "#242528",
+      "--danger-container": "#601410",
+      "--card-bg": "#1b1c1f",
+      "--secondary-container-text": "#c2e7ff",
+      "--text-color": "#e8eaed"
+    },
+    "console": [],
+    "layout": {
+      ".app-sidebar": {
+        "width": 256,
+        "height": 900,
+        "top": 0,
+        "left": 0
+      },
+      ".search-shell": {
+        "width": 720,
+        "height": 48,
+        "top": 14,
+        "left": 268
+      },
+      ".app-bar": {
+        "width": 1184,
+        "height": 74,
+        "top": 0,
+        "left": 256
+      },
+      ".app-content": {
+        "width": 1184,
+        "height": 826,
+        "top": 74,
+        "left": 256
+      },
+      ".bottom-nav": {
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "left": 0
+      }
+    },
+    "fonts": [
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "loaded",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "loaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "loaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Outfit",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Outfit",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Outfit",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Outfit",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Outfit",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Outfit",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      }
+    ]
+  },
+  "lanvan": {
+    "label": "LANVAN",
+    "url": "http://localhost",
+    "stylesheets": [
+      {
+        "href": "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap",
+        "disabled": false,
+        "rulesCount": 0
+      },
+      {
+        "href": "http://localhost/static/css/lanvan.css?v=1784746611",
+        "disabled": false,
+        "rulesCount": 350
+      },
+      {
+        "href": "(inline)",
+        "disabled": false,
+        "rulesCount": 1
+      }
+    ],
+    "computed": {
+      "body": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(31, 31, 31)",
+        "background-color": "rgb(248, 250, 253)",
+        "padding": "0px",
+        "margin": "0px",
+        "border-radius": "0px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "1440px",
+        "height": "900px",
+        "display": "block",
+        "gap": "normal",
+        "overflow": "hidden"
+      },
+      "root": {
+        "font-family": "\"Times New Roman\"",
+        "color": "rgb(0, 0, 0)",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "margin": "0px",
+        "border-radius": "0px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "1440px",
+        "height": "900px",
+        "display": "block",
+        "gap": "normal",
+        "overflow": "visible"
+      },
+      ".app-sidebar": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(31, 31, 31)",
+        "background-color": "rgb(248, 250, 253)",
+        "padding": "20px 12px",
+        "margin": "0px",
+        "border-radius": "0px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "256px",
+        "height": "900px",
+        "display": "flex",
+        "gap": "16px",
+        "overflow": "visible"
+      },
+      ".search-shell": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(95, 99, 104)",
+        "background-color": "rgb(237, 242, 250)",
+        "padding": "0px 16px",
+        "margin": "0px",
+        "border-radius": "24px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "720px",
+        "height": "48px",
+        "display": "flex",
+        "gap": "12px",
+        "overflow": "visible"
+      },
+      ".app-bar": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(31, 31, 31)",
+        "background-color": "rgb(248, 250, 253)",
+        "padding": "13.6px 24px 12px 12px",
+        "margin": "0px",
+        "border-radius": "0px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "1184px",
+        "height": "73.5938px",
+        "display": "flex",
+        "gap": "16px",
+        "overflow": "visible"
+      },
+      ".m3-card": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(31, 31, 31)",
+        "background-color": "rgb(255, 255, 255)",
+        "padding": "12px",
+        "margin": "0px",
+        "border-radius": "8px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "1148px",
+        "height": "600.406px",
+        "display": "flex",
+        "gap": "8px",
+        "overflow": "hidden"
+      },
+      ".m3-list-item": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(31, 31, 31)",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "padding": "8.8px 12px",
+        "margin": "0px",
+        "border-radius": "0px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "1118px",
+        "height": "58px",
+        "display": "grid",
+        "gap": "12px",
+        "overflow": "visible"
+      },
+      ".quick-card": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(31, 31, 31)",
+        "background-color": "rgb(255, 255, 255)",
+        "padding": "13.6px",
+        "margin": "0px",
+        "border-radius": "8px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "278px",
+        "height": "86px",
+        "display": "flex",
+        "gap": "12px",
+        "overflow": "visible"
+      },
+      ".btn-icon": {
+        "font-family": "Arial",
+        "color": "rgb(31, 31, 31)",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "margin": "0px",
+        "border-radius": "50%",
+        "font-size": "13.3333px",
+        "font-weight": "400",
+        "width": "38px",
+        "height": "38px",
+        "display": "flex",
+        "gap": "normal",
+        "overflow": "visible"
+      },
+      ".file-toolbar": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(31, 31, 31)",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "padding": "0px",
+        "margin": "0px",
+        "border-radius": "0px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "1148px",
+        "height": "40px",
+        "display": "flex",
+        "gap": "16px",
+        "overflow": "visible"
+      },
+      ".bottom-nav": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(31, 31, 31)",
+        "background-color": "rgb(255, 255, 255)",
+        "padding": "0px",
+        "margin": "0px",
+        "border-radius": "0px",
+        "font-size": "16px",
+        "font-weight": "400",
+        "width": "auto",
+        "height": "64px",
+        "display": "none",
+        "gap": "normal",
+        "overflow": "visible"
+      },
+      ".m3-primary-btn": {
+        "font-family": "Arial",
+        "color": "rgb(255, 255, 255)",
+        "background-color": "rgb(11, 87, 208)",
+        "padding": "0px 20px",
+        "margin": "0px",
+        "border-radius": "999px",
+        "font-size": "13.6px",
+        "font-weight": "650",
+        "width": "auto",
+        "height": "36px",
+        "display": "flex",
+        "gap": "6.4px",
+        "overflow": "visible"
+      },
+      ".sidebar-item": {
+        "font-family": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+        "color": "rgb(0, 29, 53)",
+        "background-color": "rgb(211, 227, 253)",
+        "padding": "9.92px 14.4px",
+        "margin": "0px",
+        "border-radius": "999px",
+        "font-size": "13.6px",
+        "font-weight": "650",
+        "width": "232px",
+        "height": "43.8125px",
+        "display": "flex",
+        "gap": "12px",
+        "overflow": "visible"
+      }
+    },
+    "css_vars": {
+      "--scrollbar-thumb-hover": "#a8adb3",
+      "--yellow": "#f9ab00",
+      "--primary-container-text": "#041e49",
+      "--hover-bg": "#f1f3f4",
+      "--green": "#188038",
+      "--primary-container": "#d3e3fd",
+      "--radius-sm": "8px",
+      "--shadow-soft": "0 1px 2px rgba(60, 64, 67, 0.18), 0 1px 3px rgba(60, 64, 67, 0.12)",
+      "--sidebar-bg": "#f8fafd",
+      "--shadow-lift": "0 6px 18px rgba(60, 64, 67, 0.16)",
+      "--border-color": "#dadce0",
+      "--secondary-container": "#c2e7ff",
+      "--primary-hover": "#0842a0",
+      "--radius-md": "8px",
+      "--scrollbar-track": "transparent",
+      "--primary": "#0b57d0",
+      "--scrollbar-thumb": "#c4c7c5",
+      "--surface-variant-text": "#444746",
+      "--radius-lg": "8px",
+      "--danger": "#b3261e",
+      "--bg-color": "#f8fafd",
+      "--toggle-bg": "#edf2fa",
+      "--text-muted": "#5f6368",
+      "--danger-text": "#410e0b",
+      "--red": "#d93025",
+      "--surface-variant": "#e9eef6",
+      "--danger-container": "#fce8e6",
+      "--card-bg": "#ffffff",
+      "--secondary-container-text": "#001d35",
+      "--text-color": "#1f1f1f"
+    },
+    "console": [],
+    "layout": {
+      ".app-sidebar": {
+        "width": 256,
+        "height": 900,
+        "top": 0,
+        "left": 0
+      },
+      ".search-shell": {
+        "width": 720,
+        "height": 48,
+        "top": 14,
+        "left": 268
+      },
+      ".app-bar": {
+        "width": 1184,
+        "height": 74,
+        "top": 0,
+        "left": 256
+      },
+      ".app-content": {
+        "width": 1184,
+        "height": 826,
+        "top": 74,
+        "left": 256
+      },
+      ".bottom-nav": {
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "left": 0
+      }
+    },
+    "fonts": [
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "loaded",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "loaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Inter",
+        "status": "loaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Outfit",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Outfit",
+        "status": "unloaded",
+        "weight": "500",
+        "style": "normal"
+      },
+      {
+        "family": "Outfit",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Outfit",
+        "status": "unloaded",
+        "weight": "600",
+        "style": "normal"
+      },
+      {
+        "family": "Outfit",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "Outfit",
+        "status": "unloaded",
+        "weight": "700",
+        "style": "normal"
+      }
+    ]
+  },
+  "diff_count": 23,
+  "diffs": [
+    {
+      "element": "body",
+      "property": "color",
+      "prototype": "rgb(232, 234, 237)",
+      "lanvan": "rgb(31, 31, 31)"
+    },
+    {
+      "element": "body",
+      "property": "background-color",
+      "prototype": "rgb(19, 19, 20)",
+      "lanvan": "rgb(248, 250, 253)"
+    },
+    {
+      "element": "body",
+      "property": "display",
+      "prototype": "flex",
+      "lanvan": "block"
+    },
+    {
+      "element": ".app-sidebar",
+      "property": "color",
+      "prototype": "rgb(232, 234, 237)",
+      "lanvan": "rgb(31, 31, 31)"
+    },
+    {
+      "element": ".app-sidebar",
+      "property": "background-color",
+      "prototype": "rgb(27, 28, 31)",
+      "lanvan": "rgb(248, 250, 253)"
+    },
+    {
+      "element": ".search-shell",
+      "property": "color",
+      "prototype": "rgb(189, 193, 198)",
+      "lanvan": "rgb(95, 99, 104)"
+    },
+    {
+      "element": ".search-shell",
+      "property": "background-color",
+      "prototype": "rgb(43, 44, 48)",
+      "lanvan": "rgb(237, 242, 250)"
+    },
+    {
+      "element": ".app-bar",
+      "property": "color",
+      "prototype": "rgb(232, 234, 237)",
+      "lanvan": "rgb(31, 31, 31)"
+    },
+    {
+      "element": ".app-bar",
+      "property": "background-color",
+      "prototype": "rgb(19, 19, 20)",
+      "lanvan": "rgb(248, 250, 253)"
+    },
+    {
+      "element": ".m3-card",
+      "property": "color",
+      "prototype": "rgb(232, 234, 237)",
+      "lanvan": "rgb(31, 31, 31)"
+    },
+    {
+      "element": ".m3-card",
+      "property": "background-color",
+      "prototype": "rgb(19, 19, 20)",
+      "lanvan": "rgb(255, 255, 255)"
+    },
+    {
+      "element": ".m3-list-item",
+      "property": "color",
+      "prototype": "rgb(232, 234, 237)",
+      "lanvan": "rgb(31, 31, 31)"
+    },
+    {
+      "element": ".quick-card",
+      "property": "color",
+      "prototype": "rgb(232, 234, 237)",
+      "lanvan": "rgb(31, 31, 31)"
+    },
+    {
+      "element": ".quick-card",
+      "property": "background-color",
+      "prototype": "rgb(27, 28, 31)",
+      "lanvan": "rgb(255, 255, 255)"
+    },
+    {
+      "element": ".btn-icon",
+      "property": "color",
+      "prototype": "rgb(232, 234, 237)",
+      "lanvan": "rgb(31, 31, 31)"
+    },
+    {
+      "element": ".file-toolbar",
+      "property": "color",
+      "prototype": "rgb(232, 234, 237)",
+      "lanvan": "rgb(31, 31, 31)"
+    },
+    {
+      "element": ".bottom-nav",
+      "property": "color",
+      "prototype": "rgb(232, 234, 237)",
+      "lanvan": "rgb(31, 31, 31)"
+    },
+    {
+      "element": ".bottom-nav",
+      "property": "background-color",
+      "prototype": "rgb(27, 28, 31)",
+      "lanvan": "rgb(255, 255, 255)"
+    },
+    {
+      "element": ".m3-primary-btn",
+      "property": "color",
+      "prototype": "rgb(0, 29, 53)",
+      "lanvan": "rgb(255, 255, 255)"
+    },
+    {
+      "element": ".m3-primary-btn",
+      "property": "background-color",
+      "prototype": "rgb(138, 180, 248)",
+      "lanvan": "rgb(11, 87, 208)"
+    },
+    {
+      "element": ".m3-primary-btn",
+      "property": "font-weight",
+      "prototype": "700",
+      "lanvan": "650"
+    },
+    {
+      "element": ".sidebar-item",
+      "property": "color",
+      "prototype": "rgb(194, 231, 255)",
+      "lanvan": "rgb(0, 29, 53)"
+    },
+    {
+      "element": ".sidebar-item",
+      "property": "background-color",
+      "prototype": "rgb(0, 74, 119)",
+      "lanvan": "rgb(211, 227, 253)"
+    }
+  ]
+}
