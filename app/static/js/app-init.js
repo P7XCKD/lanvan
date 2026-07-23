@@ -68,6 +68,12 @@
     // Current folder path for breadcrumb navigation (e.g. "Home" or "Home/FolderName")
     var currentFolderPath = "Home";
 
+    // Client-side sort and filter state
+    var typeFilter = "all";
+    var sortBy = "name";
+    var sortDirection = "asc";
+    var sortFolders = "top";
+
     // Move dialog state
     var moveCurrentPath = ["Home"];
     var moveTargetFolder = "Home";
@@ -160,7 +166,7 @@
         if (!container) return;
 
         // files can be either string[] (names only) or object[] (with metadata)
-        // Normalize to always have name, size, mtime
+        // Normalize to always have name, size, mtime, isFolder
         var normalizedFiles = [];
         if (files && files.length > 0) {
             for (var i = 0; i < files.length; i++) {
@@ -170,13 +176,49 @@
                     normalizedFiles.push({
                         name: files[i],
                         size: meta ? meta.size : "--",
-                        mtime: meta ? meta.mtime : 0
+                        mtime: meta ? meta.mtime : 0,
+                        isFolder: meta ? !!meta.isFolder : false
                     });
                 } else {
                     normalizedFiles.push(files[i]);
                 }
             }
         }
+
+        // Apply client-side Type Filtering
+        if (typeFilter !== "all") {
+            normalizedFiles = normalizedFiles.filter(function (f) {
+                return getFileItemType(f) === typeFilter;
+            });
+        }
+
+        // Apply client-side Sorting
+        normalizedFiles.sort(function (a, b) {
+            // Folders top / mixed logic
+            if (sortFolders === "top") {
+                if (a.isFolder && !b.isFolder) return -1;
+                if (!a.isFolder && b.isFolder) return 1;
+            }
+
+            var comparison = 0;
+            if (sortBy === "name") {
+                comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+            } else if (sortBy === "date") {
+                var timeA = a.mtime || 0;
+                var timeB = b.mtime || 0;
+                comparison = timeA - timeB;
+            } else if (sortBy === "size") {
+                var bytesA = parseSizeToBytes(a.size, a.isFolder);
+                var bytesB = parseSizeToBytes(b.size, b.isFolder);
+                comparison = bytesA - bytesB;
+            }
+
+            return sortDirection === "asc" ? comparison : -comparison;
+        });
+
+        // Sync dropdown checkmarks and header arrows
+        updateSortCheckmarks();
+        updateSortHeaderArrows();
 
         // Update file count in prototype panel meta
         if (filePanelMeta) {
@@ -1019,14 +1061,160 @@
     };
 
     // --- Sort & Filter ---
+    function parseSizeToBytes(sizeStr, isFolder) {
+        if (isFolder) return -1;
+        if (!sizeStr) return 0;
+        var str = String(sizeStr).toUpperCase().trim();
+        var match = str.match(/^([\d.]+)\s*([KMG]?B)$/);
+        if (!match) return 0;
+        var val = parseFloat(match[1]);
+        var unit = match[2];
+        if (unit === "KB") return val * 1024;
+        if (unit === "MB") return val * 1024 * 1024;
+        if (unit === "GB") return val * 1024 * 1024 * 1024;
+        return val;
+    }
+
+    function getFileItemType(fileData) {
+        if (fileData.isFolder) return "folder";
+        var name = fileData.name || "";
+        var ext = name.split(".").pop().toLowerCase();
+
+        var imageExts = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"];
+        var videoExts = ["mp4", "mov", "avi", "mkv", "webm", "flv", "wmv"];
+        var audioExts = ["mp3", "wav", "ogg", "flac", "aac", "m4a"];
+        var archiveExts = ["zip", "rar", "7z", "tar", "gz", "bz2"];
+        var docExts = ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "md", "csv"];
+
+        if (imageExts.indexOf(ext) !== -1) return "image";
+        if (videoExts.indexOf(ext) !== -1) return "video";
+        if (audioExts.indexOf(ext) !== -1) return "audio";
+        if (archiveExts.indexOf(ext) !== -1) return "archive";
+        if (docExts.indexOf(ext) !== -1) return "doc";
+        return "doc";
+    }
+
+    function updateSortCheckmarks() {
+        var byName = document.getElementById("check-by-name");
+        var byDate = document.getElementById("check-by-date");
+        var bySize = document.getElementById("check-by-size");
+        if (byName) byName.style.visibility = sortBy === "name" ? "visible" : "hidden";
+        if (byDate) byDate.style.visibility = sortBy === "date" ? "visible" : "hidden";
+        if (bySize) bySize.style.visibility = sortBy === "size" ? "visible" : "hidden";
+
+        var dirAsc = document.getElementById("check-dir-asc");
+        var dirDesc = document.getElementById("check-dir-desc");
+        if (dirAsc) dirAsc.style.visibility = sortDirection === "asc" ? "visible" : "hidden";
+        if (dirDesc) dirDesc.style.visibility = sortDirection === "desc" ? "visible" : "hidden";
+
+        var foldTop = document.getElementById("check-folders-top");
+        var foldMixed = document.getElementById("check-folders-mixed");
+        if (foldTop) foldTop.style.visibility = sortFolders === "top" ? "visible" : "hidden";
+        if (foldMixed) foldMixed.style.visibility = sortFolders === "mixed" ? "visible" : "hidden";
+    }
+
+    function updateSortHeaderArrows() {
+        var arrowName = document.getElementById("sortArrow-name");
+        var arrowDate = document.getElementById("sortArrow-date");
+        var arrowSize = document.getElementById("sortArrow-size");
+
+        var iconMarkup = sortDirection === "asc"
+            ? '<span style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:var(--secondary-container); color:var(--primary); margin-left:2px;" title="A to Z"><i data-lucide="arrow-down" style="width:12px;height:12px;"></i></span>'
+            : '<span style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:var(--secondary-container); color:var(--primary); margin-left:2px;" title="Z to A"><i data-lucide="arrow-up" style="width:12px;height:12px;"></i></span>';
+
+        if (arrowName) arrowName.innerHTML = sortBy === "name" ? iconMarkup : "";
+        if (arrowDate) arrowDate.innerHTML = sortBy === "date" ? iconMarkup : "";
+        if (arrowSize) arrowSize.innerHTML = sortBy === "size" ? iconMarkup : "";
+        if (window.lucide) lucide.createIcons();
+    }
+
     window.setSortOption = function (category, value) {
+        if (category === "by") sortBy = value;
+        else if (category === "direction") sortDirection = value;
+        else if (category === "folders") sortFolders = value;
+
         var el = document.getElementById("sortDropdownMenu");
         if (el) el.style.display = "none";
+
+        updateSortCheckmarks();
+        updateSortHeaderArrows();
+
+        fetchFilesData().then(function (fd) {
+            renderPrototypeFileList(fd);
+        });
     };
 
     window.setTypeFilter = function (type) {
-        var el = document.getElementById("typeDropdownMenu");
-        if (el) el.style.display = "none";
+        typeFilter = type;
+        var wrapper = document.getElementById("typeBtnWrapper");
+        if (wrapper) {
+            if (type === "all") {
+                wrapper.innerHTML = 
+                    '<button class="filter-chip" id="typeDropdownBtn" onclick="toggleTypeDropdown(event)" style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.76rem; font-weight: 700; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-color); border-radius: 999px; padding: 0.45rem 0.8rem; cursor: pointer;">' +
+                    '<span>Type</span>' +
+                    '<i data-lucide="chevron-down" style="width: 12px; height: 12px;"></i>' +
+                    '</button>';
+            } else {
+                var labelMap = {
+                    folder: "Folder",
+                    image: "Photos",
+                    video: "Videos",
+                    audio: "Audio",
+                    doc: "Documents",
+                    archive: "Archives"
+                };
+                var text = labelMap[type] || "Type";
+                wrapper.innerHTML = 
+                    '<div class="filter-chip active" id="typeDropdownBtn" style="display: flex; align-items: center; padding: 0; border: none; background: var(--primary-container); border-radius: 999px; overflow: hidden; height: 30px;">' +
+                    '<button onclick="toggleTypeDropdown(event)" style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.76rem; font-weight: 700; background: transparent; border: none; color: var(--primary); padding: 0.45rem 0.55rem 0.45rem 0.85rem; cursor: pointer; height: 100%;">' +
+                    '<span>Type: ' + text + '</span>' +
+                    '<i data-lucide="chevron-down" style="width: 12px; height: 12px;"></i>' +
+                    '</button>' +
+                    '<span style="width: 1px; height: 14px; background: rgba(11, 87, 208, 0.25); display: inline-block;"></span>' +
+                    '<button onclick="clearTypeFilter(event)" style="display: flex; align-items: center; justify-content: center; background: transparent; border: none; color: var(--primary); width: 28px; height: 100%; padding: 0; cursor: pointer;" title="Clear filter">' +
+                    '<i data-lucide="x" style="width: 13px; height: 13px;"></i>' +
+                    '</button>' +
+                    '</div>';
+            }
+        }
+
+        var menu = document.getElementById("typeDropdownMenu");
+        if (menu) {
+            menu.style.display = "none";
+            var checkmarks = {
+                all: "check",
+                image: "image",
+                video: "video",
+                audio: "music",
+                doc: "file-text",
+                folder: "folder",
+                archive: "archive"
+            };
+
+            var items = menu.querySelectorAll(".context-item");
+            var keys = Object.keys(checkmarks);
+            for (var idx = 0; idx < items.length; idx++) {
+                var item = items[idx];
+                var icon = item.querySelector("i");
+                if (icon) {
+                    var itemType = keys[idx];
+                    if (itemType === type) {
+                        icon.setAttribute("data-lucide", "check");
+                        icon.style.color = "var(--primary)";
+                    } else {
+                        icon.setAttribute("data-lucide", checkmarks[itemType]);
+                        icon.style.color = "";
+                    }
+                }
+            }
+        }
+
+        if (window.lucide) lucide.createIcons();
+        window.clearSelection();
+
+        fetchFilesData().then(function (fd) {
+            renderPrototypeFileList(fd);
+        });
     };
 
     window.clearTypeFilter = function (event) {
@@ -1066,7 +1254,17 @@
     };
 
     window.handleHeaderSortClick = function (column) {
-        console.log("Header sort:", column);
+        if (sortBy === column) {
+            sortDirection = sortDirection === "asc" ? "desc" : "asc";
+        } else {
+            sortBy = column;
+            sortDirection = "asc";
+        }
+        updateSortHeaderArrows();
+        updateSortCheckmarks();
+        fetchFilesData().then(function (fd) {
+            renderPrototypeFileList(fd);
+        });
     };
 
     // --- View Mode ---

@@ -225,8 +225,8 @@
       "--border-color": "#3c4043",
       "--secondary-container": "#0b57d0",
       "--primary-hover": "#aecbfa",
-      "--scrollbar-track": "transparent",
       "--radius-md": "8px",
+      "--scrollbar-track": "transparent",
       "--primary": "#8ab4f8",
       "--scrollbar-thumb": "#3c4043",
       "--surface-variant-text": "#bdc1c6",
@@ -493,9 +493,9 @@
         "rulesCount": 0
       },
       {
-        "href": "http://localhost/static/css/lanvan.css?v=1784746611",
+        "href": "http://localhost/static/css/lanvan.css?v=1784804093",
         "disabled": false,
-        "rulesCount": 350
+        "rulesCount": 335
       },
       {
         "href": "(inline)",
@@ -714,8 +714,8 @@
       "--border-color": "#dadce0",
       "--secondary-container": "#c2e7ff",
       "--primary-hover": "#0842a0",
-      "--radius-md": "8px",
       "--scrollbar-track": "transparent",
+      "--radius-md": "8px",
       "--primary": "#0b57d0",
       "--scrollbar-thumb": "#c4c7c5",
       "--surface-variant-text": "#444746",
