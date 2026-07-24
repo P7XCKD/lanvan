@@ -4294,7 +4294,9 @@ function showDownloadOptions(event) {
 
   const dialog = document.createElement('div');
   dialog.style.cssText = `
-    background: white;
+    background: var(--section-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
     border-radius: 15px;
     padding: 2rem;
     max-width: 500px;
@@ -4304,7 +4306,7 @@ function showDownloadOptions(event) {
   `;
 
   dialog.innerHTML = `
-    <h3 style="margin-top: 0; color: #333;">Choose Download Method</h3>
+    <h3 style="margin-top: 0; color: var(--text-color);">Choose Download Method</h3>
     <p style="color: var(--text-color); opacity: 0.7; margin-bottom: 2rem;">How would you like to download all files?</p>
     
     <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">

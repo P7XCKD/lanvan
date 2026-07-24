@@ -694,8 +694,9 @@ function switchToPage(page) {
   }
 }
 
-// Handle browser back/forward buttons to preserve upload state
-window.addEventListener('popstate', function (event) {
+if (!window.__popstateWired) {
+  window.__popstateWired = true;
+  window.addEventListener('popstate', function (event) {
   if (event.state && event.state.page) {
     // Switch to the page without updating history (since we're handling popstate)
     const targetPage = event.state.page;
@@ -736,13 +737,13 @@ window.addEventListener('popstate', function (event) {
 
       document.title = 'Lanvan - File Transfer';
 
-      // When navigating back to file section, refresh file list to show any new files
       if (typeof refreshFileList === 'function') {
         setTimeout(() => refreshFileList(), 100);
       }
     }
   }
 });
+}
 
 //  Save toggle state when user changes it
 document.addEventListener('DOMContentLoaded', () => {

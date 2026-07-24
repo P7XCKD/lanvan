@@ -131,6 +131,13 @@
     return deviceId;
   }
 
+  window.LANVAN_DEBUG = false;
+  function logDebug() {
+    if (window.LANVAN_DEBUG && typeof console !== 'undefined' && console.log) {
+      console.log.apply(console, arguments);
+    }
+  }
+
   // Export helpers globally if not already defined
   window.getItemSize = window.getItemSize || getItemSize;
   window.getItemName = window.getItemName || getItemName;
@@ -142,5 +149,6 @@
   window.formatSpeed = window.formatSpeed || formatSpeed;
   window.getDeviceInfo = window.getDeviceInfo || getDeviceInfo;
   window.getCurrentDeviceId = window.getCurrentDeviceId || getCurrentDeviceId;
+  window.logDebug = window.logDebug || logDebug;
 
 })(typeof window !== 'undefined' ? window : this);
