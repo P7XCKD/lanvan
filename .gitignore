@@ -187,6 +187,9 @@ test_workspace/certs/*.cert
 # Documentation builds
 docs/_build/
 
+# Playwright browser test downloads
+test downloads/
+
 # Local configuration overrides
 config.local.py
 settings.local.py
