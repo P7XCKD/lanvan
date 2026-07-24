@@ -77,9 +77,42 @@
 
 <body>
     <script>
+        // Clean up noisy console output on page start
+        console.clear();
+
         window.LanvanConfig = {
             fileUtilsUrl: "{{ request.url_for('static', path='js/file-utils.js') }}",
             {% block extra_config %} {% endblock %}
+        };
+
+        // --- Automated Click & UI State Interaction Logger ---
+        document.addEventListener('click', function (e) {
+            const target = e.target.closest('button, a, input, [onclick], .file-card, .context-item, .sheet-action-item, .view-switcher-btn, .drop-zone, .tab-btn');
+            if (!target) return;
+
+            const label = target.getAttribute('aria-label') || target.getAttribute('title') || target.innerText || target.id || target.className || target.tagName;
+            const cleanLabel = (label || '').toString().trim().replace(/\s+/g, ' ').substring(0, 40);
+            
+            console.log(
+                '%c[USER CLICK] %c"%s" %c(Element: %s)',
+                'color: #3b82f6; font-weight: bold;',
+                'color: #10b981; font-weight: 600;',
+                cleanLabel,
+                'color: #64748b; font-size: 0.85em;',
+                target.tagName.toLowerCase() + (target.id ? '#' + target.id : '')
+            );
+        }, true);
+
+        // --- UI Display & Toast Logger ---
+        window.logUIDisplay = function (featureName, details) {
+            console.log(
+                '%c[SYSTEM UI DISPLAY] %c%s %c- %s',
+                'color: #8b5cf6; font-weight: bold;',
+                'color: #f59e0b; font-weight: 600;',
+                featureName,
+                'color: #475569;',
+                typeof details === 'object' ? JSON.stringify(details) : details
+            );
         };
     </script>
 

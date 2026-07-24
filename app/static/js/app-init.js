@@ -3265,16 +3265,34 @@
             });
         }
 
-        // Click outside uploader notification widget to collapse expanded list
+        // Global document click listener for outside selection clearing and uploader tray collapse
         document.addEventListener("click", function (e) {
-            if (!window.uploadManagerExpanded) return;
-            var stack = document.getElementById("uploadToastStack");
-            if (stack && !stack.contains(e.target)) {
-                window.uploadManagerExpanded = false;
-                if (typeof scheduleUploadTrayRender === "function") {
-                    scheduleUploadTrayRender();
-                } else if (typeof renderUploadTray === "function") {
-                    renderUploadTray();
+            // 1. Unselect items when clicking outside list items, cards, or control elements
+            if (typeof prototypeSelectedItems !== "undefined" && prototypeSelectedItems.length > 0) {
+                var isListItem = e.target.closest(".m3-list-item");
+                var isQuickCard = e.target.closest(".quick-card");
+                var isSelectionToolbar = e.target.closest("#selectionContent");
+                var isContextMenu = e.target.closest("#contextMenu");
+                var isModal = e.target.closest(".modal") || e.target.closest(".modal-overlay") || e.target.closest("[role='dialog']");
+                var isControlBtn = e.target.closest("button") || e.target.closest("input");
+
+                if (!isListItem && !isQuickCard && !isSelectionToolbar && !isContextMenu && !isModal && !isControlBtn) {
+                    if (typeof window.clearSelection === "function") {
+                        window.clearSelection();
+                    }
+                }
+            }
+
+            // 2. Click outside uploader notification widget to collapse expanded list
+            if (window.uploadManagerExpanded) {
+                var stack = document.getElementById("uploadToastStack");
+                if (stack && !stack.contains(e.target)) {
+                    window.uploadManagerExpanded = false;
+                    if (typeof scheduleUploadTrayRender === "function") {
+                        scheduleUploadTrayRender();
+                    } else if (typeof renderUploadTray === "function") {
+                        renderUploadTray();
+                    }
                 }
             }
         });

@@ -551,6 +551,26 @@ function getControlButtons(uploadItem) {
 }
 
 function createUploadItem(file, uploadId) {
+  let baseFolder = (function () {
+    if (typeof window.getCurrentFolderPath === "function") {
+      return window.getCurrentFolderPath();
+    }
+    let p = window.currentFolderPath || "";
+    try { p = decodeURIComponent(p); } catch (e) { }
+    if (p.startsWith("Home/")) p = p.substring(5);
+    else if (p === "Home") p = "";
+    return p.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  })();
+
+  // If file came from a directory upload (has webkitRelativePath), append subfolder path to targetDir
+  let finalTargetDir = baseFolder;
+  if (file.webkitRelativePath && file.webkitRelativePath.includes('/')) {
+    const relParts = file.webkitRelativePath.replace(/\\/g, '/').split('/');
+    // Extract parent directory path inside relative path (everything except the filename)
+    const relDir = relParts.slice(0, -1).join('/');
+    finalTargetDir = baseFolder ? `${baseFolder}/${relDir}` : relDir;
+  }
+
   return {
     id: uploadId,
     fileName: file.name,
@@ -563,16 +583,7 @@ function createUploadItem(file, uploadId) {
     endTime: null,
     bytesUploaded: 0,
     speed: 0,
-    targetDir: (function () {
-      if (typeof window.getCurrentFolderPath === "function") {
-        return window.getCurrentFolderPath();
-      }
-      let p = window.currentFolderPath || "";
-      try { p = decodeURIComponent(p); } catch (e) { }
-      if (p.startsWith("Home/")) p = p.substring(5);
-      else if (p === "Home") p = "";
-      return p.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
-    })()
+    targetDir: finalTargetDir
   };
 }
 
@@ -3401,21 +3412,63 @@ function setupEventListeners() {
     })
   );
 
-  DOM_CACHE.dropZone.addEventListener('drop', e => {
-    const mode = window.currentUploadMode || currentUploadMode;
-    console.log(' Drop event triggered, mode:', mode);
-    const files = e.dataTransfer.files;
-    console.log(' Files from drop:', files.length);
+  DOM_CACHE.dropZone.addEventListener('drop', async e => {
+    e.preventDefault();
+    e.stopPropagation();
+    DOM_CACHE.dropZone.classList.remove('dragover');
 
-    const hasRelativePaths = Array.from(files).some(file => file.webkitRelativePath);
+    const dtItems = e.dataTransfer ? e.dataTransfer.items : null;
+    const dtFiles = e.dataTransfer ? e.dataTransfer.files : null;
 
-    if (mode === 'folder' || hasRelativePaths) {
-      if (typeof window.handleFileSelection === 'function') {
-        window.handleFileSelection(files, 'folder');
+    async function scanEntry(entry, path = '') {
+      if (entry.isFile) {
+        return new Promise(resolve => {
+          entry.file(file => {
+            const relPath = path ? path + file.name : file.name;
+            try {
+              Object.defineProperty(file, 'webkitRelativePath', {
+                value: relPath,
+                writable: false,
+                configurable: true
+              });
+            } catch (err) {}
+            resolve([file]);
+          }, () => resolve([]));
+        });
+      } else if (entry.isDirectory) {
+        const dirReader = entry.createReader();
+        const entries = await new Promise(resolve => {
+          dirReader.readEntries(results => resolve(results || []), () => resolve([]));
+        });
+        const nestedPromises = entries.map(childEntry => scanEntry(childEntry, path + entry.name + '/'));
+        const nestedResults = await Promise.all(nestedPromises);
+        return nestedResults.flat();
       }
-    } else {
+      return [];
+    }
+
+    let collectedFiles = [];
+
+    if (dtItems && dtItems.length > 0 && dtItems[0].webkitGetAsEntry) {
+      const entryPromises = [];
+      for (let i = 0; i < dtItems.length; i++) {
+        const entry = dtItems[i].webkitGetAsEntry();
+        if (entry) {
+          entryPromises.push(scanEntry(entry));
+        }
+      }
+      const results = await Promise.all(entryPromises);
+      collectedFiles = results.flat();
+    }
+
+    if (collectedFiles.length === 0 && dtFiles && dtFiles.length > 0) {
+      collectedFiles = Array.from(dtFiles);
+    }
+
+    if (collectedFiles.length > 0) {
+      console.log(' DropZone drop detected:', collectedFiles.length, 'file(s) extracted');
       if (typeof window.handleFiles === 'function') {
-        window.handleFiles(files);
+        window.handleFiles(collectedFiles);
       }
     }
   });
@@ -3449,8 +3502,6 @@ function setupEventListeners() {
     const files = DOM_CACHE.folderInput.files;
     console.log(' Folder input changed, files:', files.length);
     if (files.length > 0) {
-      // Route through the upload manager queue — same path as drag & drop folder uploads
-      // window.handleFiles queues files, shows upload manager, and handles chunked uploads
       if (typeof window.handleFiles === 'function') {
         window.handleFiles(files);
       }
@@ -4574,6 +4625,12 @@ let lastToastMessage = '';
 let isPersistentToast = false;
 
 function showToast(message, duration = 3000, transferData = null, type = 'default') {
+  if (typeof window.logUIDisplay === 'function') {
+    window.logUIDisplay('Toast Notification', message);
+  } else {
+    console.log(' Toast: ', message);
+  }
+
   const toast = DOM_CACHE.toast;
   if (!toast) {
     console.warn(' Toast element not found');

@@ -46,6 +46,7 @@ from app.core.validation import (
     FileValidator,
     AdvancedFileValidator
 )
+from app.core.upload_path_resolver import UploadPathResolver
 from app.core.file_locking import get_file_lock_manager
 from app.utils.termux_compat import is_android, is_termux
 from app.core.concurrent_upload_manager import concurrent_upload_manager, ConcurrentUploadManager
@@ -783,33 +784,19 @@ async def upload_files(
             from concurrent_upload_manager import ConcurrentUploadManager
         upload_manager = ConcurrentUploadManager()
         
-        # Resolve target directory based on parent_path
-        target_dir = UPLOAD_FOLDER
-        if parent_path:
-            clean_parent = urllib.parse.unquote(parent_path)
-            parts = [p for p in clean_parent.split("/") if p and p != ".."]
-            for part in parts:
-                safe_part = secure_filename(part)
-                if safe_part:
-                    target_dir = target_dir / safe_part
-            target_dir.mkdir(parents=True, exist_ok=True)
-
-        # Create destinations for uploaded files
+        # Create destinations for uploaded files using UploadPathResolver
         destinations = []
         for file in files:
             if file.filename:
-                file_path = target_dir / file.filename
-                # Ensure unique filename
-                counter = 1
-                original_path = file_path
-                while file_path.exists():
-                    stem = original_path.stem
-                    suffix = original_path.suffix
-                    file_path = target_dir / f"{stem}_{counter}{suffix}"
-                    counter += 1
-                destinations.append(file_path)
+                resolved = UploadPathResolver.resolve(parent_path, file.filename, UPLOAD_FOLDER)
+                target_dir = resolved.target_directory
+                target_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Ensure unique filename if collision exists
+                file_path = get_unique_filename(target_dir, resolved.filename)
+                destinations.append(target_dir / file_path)
             else:
-                destinations.append(target_dir / "unnamed_file")
+                destinations.append(UPLOAD_FOLDER / "unnamed_file")
         
         # Process uploads
         results = await upload_manager.upload_files_concurrently(
@@ -983,18 +970,12 @@ async def upload_auto_file(
                 if not validation['valid']:
                     return {"error": f"File {i+1} failed AES validation: {validation['error']}"}
 
-            # Resolve target directory based on parent_path
-            target_dir = UPLOAD_FOLDER
-            if parent_path:
-                clean_parent = urllib.parse.unquote(parent_path)
-                parts = [p for p in clean_parent.split("/") if p and p != ".."]
-                for part in parts:
-                    safe_part = secure_filename(part)
-                    if safe_part:
-                        target_dir = target_dir / safe_part
-                target_dir.mkdir(parents=True, exist_ok=True)
+            # Resolve target directory and path using UploadPathResolver
+            resolved = UploadPathResolver.resolve(parent_path, file.filename, UPLOAD_FOLDER)
+            target_dir = resolved.target_directory
+            target_dir.mkdir(parents=True, exist_ok=True)
 
-            save_name = filename + ".enc" if encrypt else filename
+            save_name = resolved.filename + ".enc" if encrypt else resolved.filename
             filepath = target_dir / get_unique_filename(target_dir, save_name)
 
             print(f"[SAVE] Will save file {i+1} as: {filepath.name}")
@@ -2200,14 +2181,31 @@ async def upload_folder(
     # Target base folder directory
     base_folder = UPLOAD_FOLDER
     if parent_path:
-        rel_parent = parent_path.strip("/\\")
-        if rel_parent and rel_parent != "Home":
-            target_parent = (UPLOAD_FOLDER / rel_parent).resolve()
-            if str(target_parent).startswith(str(UPLOAD_FOLDER.resolve())):
-                base_folder = target_parent
+        clean_parent = urllib.parse.unquote(parent_path).strip("/\\")
+        parts = [p for p in clean_parent.split("/") if p and p != ".." and p != "Home"]
+        for part in parts:
+            safe_part = secure_filename(part)
+            if safe_part:
+                base_folder = base_folder / safe_part
 
-    # Create folder directory
-    folder_path = base_folder / folder_name
+        # Path traversal check
+        try:
+            base_folder.resolve().relative_to(UPLOAD_FOLDER.resolve())
+        except ValueError:
+            return JSONResponse(status_code=403, content={"status": "error", "msg": "Access denied"})
+
+        base_folder.mkdir(parents=True, exist_ok=True)
+
+    # Auto-increment folder name if duplicate exists in target location
+    safe_folder_name = secure_filename(folder_name) or "uploaded_folder"
+    original_folder_name = safe_folder_name
+    counter = 1
+    folder_path = base_folder / safe_folder_name
+    while folder_path.exists():
+        safe_folder_name = f"{original_folder_name} ({counter})"
+        folder_path = base_folder / safe_folder_name
+        counter += 1
+
     folder_path.mkdir(parents=True, exist_ok=True)
     
     # Process each file and maintain folder structure
