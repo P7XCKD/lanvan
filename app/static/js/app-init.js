@@ -1292,8 +1292,25 @@
         var dlg = document.getElementById("newFolderDialog");
         var inp = document.getElementById("newFolderNameInput");
         if (!dlg) return;
-        if (inp) { inp.value = "Untitled folder"; inp.focus(); inp.select(); }
         dlg.style.display = "flex";
+        if (inp) {
+            inp.value = "Untitled folder";
+            function doFocusAndSelect() {
+                try {
+                    inp.focus({ preventScroll: true });
+                    if (typeof inp.setSelectionRange === "function") {
+                        inp.setSelectionRange(0, inp.value.length);
+                    } else if (typeof inp.select === "function") {
+                        inp.select();
+                    }
+                } catch (e) {}
+            }
+            requestAnimationFrame(function () {
+                requestAnimationFrame(doFocusAndSelect);
+            });
+            setTimeout(doFocusAndSelect, 50);
+            setTimeout(doFocusAndSelect, 150);
+        }
     };
 
     function renderMoveFolderContents() {
@@ -1401,12 +1418,32 @@
         var dialog = document.getElementById("newFolderDialog");
         var input = document.getElementById("newFolderNameInput");
         if (!dialog) return;
+
+        dialog.style.display = "flex";
+
         if (input) {
             input.value = "Untitled folder";
-            input.focus();
-            input.select();
+
+            function doFocusAndSelect() {
+                try {
+                    input.focus({ preventScroll: true });
+                    if (typeof input.setSelectionRange === "function") {
+                        input.setSelectionRange(0, input.value.length);
+                    } else if (typeof input.select === "function") {
+                        input.select();
+                    }
+                } catch (e) {}
+            }
+
+            // Industry-standard dual RAF + timeout fallback for modal animation / layout engine readiness
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                    doFocusAndSelect();
+                });
+            });
+            setTimeout(doFocusAndSelect, 50);
+            setTimeout(doFocusAndSelect, 150);
         }
-        dialog.style.display = "flex";
     };
 
     window.closeNewFolderDialog = function () {

@@ -505,7 +505,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
   <div class="m3-dialog">
     <span class="dialog-title">New folder</span>
     <input type="text" id="newFolderNameInput" class="dialog-input" placeholder="Untitled folder"
-      value="Untitled folder">
+      value="Untitled folder" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other">
     <div class="dialog-actions">
       <button class="dialog-btn" onclick="closeNewFolderDialog()" style="color:var(--text-muted);">Cancel</button>
       <button class="dialog-btn dialog-btn-primary" onclick="submitNewFolder()">Create</button>
@@ -554,7 +554,8 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
 <div id="renameDialog" class="m3-dialog-overlay" style="z-index: 21000;">
   <div class="m3-dialog">
     <span class="dialog-title">Rename</span>
-    <input type="text" id="renameInput" class="dialog-input" placeholder="Enter new name">
+    <input type="text" id="renameInput" class="dialog-input" placeholder="Enter new name"
+      autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other">
     <div class="dialog-actions">
       <button class="dialog-btn" onclick="closeRenameDialog()" style="color:var(--text-muted);">Cancel</button>
       <button class="dialog-btn dialog-btn-primary" onclick="submitRename()">Rename</button>
