@@ -538,6 +538,29 @@ class Suite:
             finally:
                 os.environ["QT_PORT"] = "9876"
 
+        # ═══════ FINAL CLEANUP ═══════
+        HEAD("FINAL CLEANUP")
+        import shutil
+        data_dir = ROOT / "data"
+        if data_dir.exists():
+            for item in data_dir.iterdir():
+                try:
+                    if item.is_file() or item.is_symlink():
+                        item.unlink(missing_ok=True)
+                    elif item.is_dir():
+                        shutil.rmtree(item, ignore_errors=True)
+                except Exception as e:
+                    pass
+            # Recreate uploads & temp dirs for clean state
+            (data_dir / "uploads").mkdir(parents=True, exist_ok=True)
+            (data_dir / "temp_chunks").mkdir(parents=True, exist_ok=True)
+            print(OK("Cleared all uploaded files and data folders"))
+
+        test_dl = ROOT / "test downloads"
+        if test_dl.exists():
+            shutil.rmtree(test_dl, ignore_errors=True)
+            print(OK("Removed test downloads directory"))
+
         elapsed = time.time()-start
         tot = self.r["pass"]+self.r["fail"]
         pct = (self.r["pass"]/tot*100) if tot else 0
