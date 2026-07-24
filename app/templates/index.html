@@ -498,7 +498,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
 
 <!-- Hidden File/Folder Inputs -->
 <input type="file" id="hiddenFileInput" style="display:none;" multiple>
-<input type="file" id="hiddenFolderInput" style="display:none;" webkitdirectory>
+<input type="file" id="hiddenFolderInput" style="display:none;" webkitdirectory directory mozdirectory>
 
 <!-- New Folder Dialog -->
 <div id="newFolderDialog" class="m3-dialog-overlay" style="z-index: 21000;">
@@ -749,7 +749,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         <p id="dropZoneText"><i data-lucide="folder" style="width:1em;height:1em;vertical-align:-0.125em;"></i> Drag &
           Drop files or folders here or click to select</p>
         <input type="file" id="fileInput" name="files" multiple required style="display: none;">
-        <input type="file" id="folderInput" name="folder" webkitdirectory multiple style="display: none;">
+        <input type="file" id="folderInput" name="folder" webkitdirectory directory mozdirectory multiple style="display: none;">
         <div class="file-preview" id="file-preview"></div>
       </div>
       <progress id="uploadProgress" value="0" max="100"></progress>

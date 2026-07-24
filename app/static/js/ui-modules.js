@@ -910,7 +910,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Update protocol status hover colors for dark mode
-    updateProtocolStatusHover(isDarkMode);
+    // Guard with typeof in case another DOMContentLoaded fires first
+    if (typeof updateProtocolStatusHover === 'function') {
+      updateProtocolStatusHover(isDarkMode);
+    }
 
     // Fix any remaining hardcoded colors dynamically
     fixRemainingColors(isDarkMode);
@@ -986,13 +989,16 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   }
+});
 
   //  HTTP-Safe mode is now automatic - no toggle management needed
 
 
 
 //  FOLDER UPLOAD FUNCTIONALITY
-let currentUploadMode = 'files';
+// Expose on window so all scripts (main-app.js, app-init.js) share the same state
+window.currentUploadMode = 'files';
+var currentUploadMode = window.currentUploadMode;
 
 // Modern toggle function for single button mode switching
 function toggleUploadMode() {
@@ -1000,6 +1006,7 @@ function toggleUploadMode() {
   const dropZoneText = document.getElementById('dropZoneText');
 
   if (currentUploadMode === 'files') {
+    window.currentUploadMode = 'folder';
     currentUploadMode = 'folder';
     if (toggleBtn) {
       toggleBtn.innerHTML = ' Folders';
@@ -1007,6 +1014,7 @@ function toggleUploadMode() {
     }
     if (dropZoneText) dropZoneText.textContent = ' Drag & Drop folders here or click to select';
   } else {
+    window.currentUploadMode = 'files';
     currentUploadMode = 'files';
     if (toggleBtn) {
       toggleBtn.innerHTML = ' Files';
@@ -1021,6 +1029,7 @@ function switchUploadMode(mode) {
   const toggleBtn = document.getElementById('uploadModeToggle');
   const dropZoneText = document.getElementById('dropZoneText');
 
+  window.currentUploadMode = mode;
   currentUploadMode = mode;
 
   if (mode === 'files') {
@@ -1036,8 +1045,6 @@ function switchUploadMode(mode) {
     }
     if (dropZoneText) dropZoneText.textContent = ' Drag & Drop folders here or click to select';
   }
-} folders here or click to select';
-  }
 }
 
 // NEW: Beautiful Sliding Toggle Function
@@ -1048,11 +1055,13 @@ function toggleUploadModeNew() {
   const dropZoneText = document.getElementById('dropZoneText');
 
   if (slider && slider.checked) {
+    window.currentUploadMode = 'folder';
     currentUploadMode = 'folder';
     if (filesLabel) filesLabel.classList.remove('active');
     if (foldersLabel) foldersLabel.classList.add('active');
     if (dropZoneText) dropZoneText.textContent = ' Drag & Drop folders here or click to select';
   } else {
+    window.currentUploadMode = 'files';
     currentUploadMode = 'files';
     if (foldersLabel) foldersLabel.classList.remove('active');
     if (filesLabel) filesLabel.classList.add('active');
@@ -1074,12 +1083,28 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 function handleDropZoneClick() {
-  if (typeof currentUploadMode !== 'undefined' && currentUploadMode === 'folder') {
+  // Check the slider DOM state as primary source of truth
+  const slider = document.getElementById('uploadModeSlider');
+  const isFolder = (slider && slider.checked) ||
+    window.currentUploadMode === 'folder' ||
+    (typeof currentUploadMode !== 'undefined' && currentUploadMode === 'folder');
+
+  if (isFolder) {
     const folderInput = document.getElementById('folderInput') || document.getElementById('hiddenFolderInput');
-    if (folderInput) folderInput.click();
+    if (folderInput) {
+      // Re-assert folder attributes to ensure browser opens folder picker
+      folderInput.setAttribute('webkitdirectory', '');
+      folderInput.setAttribute('directory', '');
+      folderInput.setAttribute('mozdirectory', '');
+      folderInput.value = '';
+      folderInput.click();
+    }
   } else {
     const fileInput = document.getElementById('fileInput');
-    if (fileInput) fileInput.click();
+    if (fileInput) {
+      fileInput.value = '';
+      fileInput.click();
+    }
   }
 }
 window.handleDropZoneClick = handleDropZoneClick;
@@ -1127,6 +1152,9 @@ function handleFileSelection(files, type) {
     }
   }
 }
+
+// Export to window so main-app.js and other scripts can call it directly
+window.handleFileSelection = handleFileSelection;
 
 async function uploadFolder(files) {
   if (files.length === 0) {

@@ -22,8 +22,12 @@ from app.utils.universal_optimizer import get_adaptive_chunk_size
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
-import time
-templates.env.globals["cache_version"] = str(int(time.time()))
+
+class _DynamicCacheVersion:
+    def __str__(self):
+        return str(int(time.time()))
+
+templates.env.globals["cache_version"] = _DynamicCacheVersion()
 
 # State & Persistence Configurations
 CLIPBOARD_FOLDER = Path("data/clipboard")

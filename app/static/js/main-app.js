@@ -3307,16 +3307,19 @@ function setupEventListeners() {
   );
 
   DOM_CACHE.dropZone.addEventListener('drop', e => {
-    console.log(' Drop event triggered, mode:', currentUploadMode);
+    const mode = window.currentUploadMode || currentUploadMode;
+    console.log(' Drop event triggered, mode:', mode);
     const files = e.dataTransfer.files;
     console.log(' Files from drop:', files.length);
 
     // Auto-detect if this is a folder drop (files have webkitRelativePath)
     const hasRelativePaths = Array.from(files).some(file => file.webkitRelativePath);
 
-    if (currentUploadMode === 'folder' || hasRelativePaths) {
-      // Handle as folder upload (no browser dialog needed for drag & drop!)
-      handleFileSelection(files, 'folder');
+    if (mode === 'folder' || hasRelativePaths) {
+      // Handle as folder upload (no browser dialog needed for drag & drop)
+      if (typeof window.handleFileSelection === 'function') {
+        window.handleFileSelection(files, 'folder');
+      }
     } else {
       // Handle as regular file upload
       DOM_CACHE.fileInput.files = files;
@@ -3325,24 +3328,45 @@ function setupEventListeners() {
     }
   });
 
-  DOM_CACHE.dropZone.addEventListener('click', () => {
-    console.log(' Drop zone clicked, mode:', currentUploadMode);
-    handleDropZoneClick();
+  DOM_CACHE.dropZone.addEventListener('click', (e) => {
+    // Ignore clicks that originated from the hidden file/folder inputs themselves
+    // (programmatic .click() on them bubbles up here and would re-open fileInput)
+    if (e.target === DOM_CACHE.fileInput || e.target === DOM_CACHE.folderInput) return;
+    console.log(' Drop zone clicked - opening file picker');
+    if (DOM_CACHE.fileInput) {
+      DOM_CACHE.fileInput.value = '';
+      DOM_CACHE.fileInput.click();
+    }
   });
 
   DOM_CACHE.fileInput.addEventListener('change', () => {
-    console.log(' File input changed, files:', DOM_CACHE.fileInput.files.length);
-    if (DOM_CACHE.fileInput.files.length > 0) {
-      handleFileSelection(DOM_CACHE.fileInput.files, 'file');
+    const files = DOM_CACHE.fileInput.files;
+    console.log(' File input changed, files:', files.length);
+    if (files.length > 0) {
+      // Route directly to handleFiles — this is what handleFileSelection('file') does internally
+      if (typeof window.handleFiles === 'function') {
+        window.handleFiles(files);
+      }
     }
   });
 
+  // Stop fileInput click from bubbling to the drop zone's click handler
+  DOM_CACHE.fileInput.addEventListener('click', (e) => e.stopPropagation());
+
   DOM_CACHE.folderInput.addEventListener('change', () => {
-    console.log(' Folder input changed, files:', DOM_CACHE.folderInput.files.length);
-    if (DOM_CACHE.folderInput.files.length > 0) {
-      handleFileSelection(DOM_CACHE.folderInput.files, 'folder');
+    const files = DOM_CACHE.folderInput.files;
+    console.log(' Folder input changed, files:', files.length);
+    if (files.length > 0) {
+      // Route through the upload manager queue — same path as drag & drop folder uploads
+      // window.handleFiles queues files, shows upload manager, and handles chunked uploads
+      if (typeof window.handleFiles === 'function') {
+        window.handleFiles(files);
+      }
     }
   });
+
+  // Stop folderInput click from bubbling to the drop zone's click handler
+  DOM_CACHE.folderInput.addEventListener('click', (e) => e.stopPropagation());
 
   // Set up toast click handler
   if (DOM_CACHE.toast) {
@@ -5599,6 +5623,9 @@ async function updateMDNSStatus() {
           showToast(` mDNS service is now active! Accessible via ${domain}${conflictInfo}`, 4000);
 
           // Refresh connection info to update QR codes
+          if (typeof setConnectMode === 'function') {
+            setConnectMode('mdns');
+          }
           refreshConnectionInfo();
         }
       } else if (qrHintText && qrHintText.innerHTML.includes('mDNS:')) {
@@ -5606,6 +5633,10 @@ async function updateMDNSStatus() {
         qrHintText.innerHTML = '• Click for QR code';
         qrHintText.style.color = 'var(--protocol-text)';
         qrHintText.title = '';
+
+        if (typeof setConnectMode === 'function') {
+          setConnectMode('ip');
+        }
 
         // Show info toast
         showToast('ℹ mDNS service is not active - using IP address', 3000);

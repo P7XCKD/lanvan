@@ -15,7 +15,14 @@ import time
 # Initialize router and Jinja2 templates engine
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
-templates.env.globals["cache_version"] = str(int(time.time()))
+
+
+# Dynamic cache buster — generates a fresh timestamp on every template render
+# so the browser always loads the latest JS/CSS without needing a server restart
+class _DynamicCacheVersion:
+    def __str__(self):
+        return str(int(time.time()))
+templates.env.globals["cache_version"] = _DynamicCacheVersion()
 
 def safe_template_response(templates, request, name, context):
     context = dict(context)
