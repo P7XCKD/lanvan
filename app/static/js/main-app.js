@@ -1548,18 +1548,18 @@ function performUIUpdate(uploadItem, forceUpdate = false) {
 }
 
 function cancelUpload(uploadId) {
-  const uploadItem = uploadQueue.find(item => item.id === uploadId);
+  const uploadItem = uploadQueue.find(item => item && item.id === uploadId);
   if (!uploadItem) return;
 
   // Abort the upload if in progress
   if (uploadItem.xhr) {
-    uploadItem.xhr.abort();
+    try { uploadItem.xhr.abort(); } catch (err) {}
   }
 
   // Trigger server-side cleanup of .tmp files & chunks
-  let fileName = uploadItem.fileName || (uploadItem.file ? uploadItem.file.name : "");
-  let targetDir = uploadItem.targetDir || "";
-  if (fileName) {
+  const fileName = window.getItemName(uploadItem);
+  const targetDir = window.getItemFolder(uploadItem);
+  if (fileName && fileName !== 'Unknown') {
     const formData = new FormData();
     formData.append("filename", fileName);
     if (targetDir) formData.append("parent_path", targetDir);
@@ -1573,35 +1573,14 @@ function cancelUpload(uploadId) {
   // Force immediate UI update to show cancel status
   updateUploadItem(uploadItem);
 
-  // Also force update the progress text and button visibility with immediate styling
-  const statusText = document.getElementById(`status-${uploadItem.id}`);
-  const speedText = document.getElementById(`speed-${uploadItem.id}`);
-  const remainingText = document.getElementById(`remaining-${uploadItem.id}`);
-  const cancelBtn = document.querySelector(`#upload-${uploadItem.id} .upload-control-btn.cancel`);
-  const itemDiv = document.getElementById(`upload-${uploadItem.id}`);
-
-  if (statusText) statusText.textContent = ' Cancelled';
-  if (speedText) speedText.textContent = 'Cancelled';
-  if (remainingText) remainingText.textContent = '';
-  if (cancelBtn) cancelBtn.style.display = 'none';
-
-  // Force immediate red styling application
-  if (itemDiv) {
-    itemDiv.className = 'upload-item cancelled';
-    // Force CSS update by triggering reflow
-    itemDiv.offsetHeight;
-  }
-
-  // Keep the current progress - don't reset it to show how much was uploaded
-  console.log(` Upload cancelled: ${uploadItem.fileName} at ${uploadItem.progress.toFixed(1)}%`);
+  const itemSize = window.getItemSize(uploadItem);
+  const itemProg = window.getItemProgress(uploadItem);
+  console.log(` Upload cancelled: ${fileName} at ${itemProg.toFixed(1)}%`);
 
   // Log cancelled upload with detailed stats safely
-  const itemSize = uploadItem.fileSize || (uploadItem.file ? uploadItem.file.size : 0);
-  const itemName = uploadItem.fileName || (uploadItem.file ? uploadItem.file.name : "Unknown");
-  const itemProg = typeof uploadItem.progress === 'number' ? uploadItem.progress : 0;
   const cancelledStats = {
     type: 'Cancelled Upload',
-    filename: itemName,
+    filename: fileName,
     size: `${(itemSize / (1024 * 1024)).toFixed(1)} MB`,
     sizeBytes: itemSize,
     progress: `${itemProg.toFixed(1)}%`,
@@ -1616,7 +1595,7 @@ function cancelUpload(uploadId) {
     encrypted: uploadItem.isAESEnabled || false,
     uploadId: uploadItem.id,
     sessionId: getCurrentDeviceId(),
-    fileExtension: itemName.split('.').pop()?.toLowerCase() || 'unknown',
+    fileExtension: fileName.split('.').pop()?.toLowerCase() || 'unknown',
     uploadMethod: uploadItem.totalChunks ? 'Chunked (Cancelled)' : 'Direct (Cancelled)',
     supportsResume: uploadItem.totalChunks ? true : false,
     status: 'cancelled'
@@ -1631,36 +1610,32 @@ function cancelUpload(uploadId) {
     startNextUpload();
   }, 100);
 
-  //  Check if we should show clear button after cancellation
-  // Check if all uploads are now finished (no more active uploads)
   const hasActiveUploads = uploadQueue.some(item =>
-    item.status === 'uploading' || item.status === 'queued' || item.status === 'paused'
+    item && (item.status === 'uploading' || item.status === 'queued' || item.status === 'paused')
   );
 
   if (!hasActiveUploads) {
-    // All uploads finished (including this cancellation) - show clear button
     showClearCompletedButton();
-    updateUploadManager(); // Update the display to show completed/cancelled count
+    updateUploadManager();
   }
 
   if (typeof window.triggerInstantUIUpdate === 'function') {
     window.triggerInstantUIUpdate();
   }
-
-  // DON'T remove from queue - keep it visible with red mark until user clears manually
 }
 
 function pauseUpload(uploadId) {
-  const uploadItem = uploadQueue.find(item => item.id === uploadId);
+  const uploadItem = uploadQueue.find(item => item && item.id === uploadId);
   if (!uploadItem) return;
 
-  const folderName = uploadItem.targetDir || uploadItem.parent_path || uploadItem.folder || "";
-  const isFolderUpload = folderName && folderName !== "Home" && folderName !== "Home/";
+  const folderName = window.getItemFolder(uploadItem);
+  const isFolderUpload = folderName !== "";
 
   if (isFolderUpload) {
     let wasAnyUploading = false;
     uploadQueue.forEach(item => {
-      const fName = item.targetDir || item.parent_path || item.folder || "";
+      if (!item) return;
+      const fName = window.getItemFolder(item);
       if (fName === folderName && (item.status === 'uploading' || item.status === 'queued')) {
         if (item.status === 'uploading') wasAnyUploading = true;
         item.status = 'paused';
@@ -1696,15 +1671,16 @@ function pauseUpload(uploadId) {
 }
 
 function resumeUpload(uploadId) {
-  const uploadItem = uploadQueue.find(item => item.id === uploadId);
+  const uploadItem = uploadQueue.find(item => item && item.id === uploadId);
   if (!uploadItem) return;
 
-  const folderName = uploadItem.targetDir || uploadItem.parent_path || uploadItem.folder || "";
-  const isFolderUpload = folderName && folderName !== "Home" && folderName !== "Home/";
+  const folderName = window.getItemFolder(uploadItem);
+  const isFolderUpload = folderName !== "";
 
   if (isFolderUpload) {
     uploadQueue.forEach(item => {
-      const fName = item.targetDir || item.parent_path || item.folder || "";
+      if (!item) return;
+      const fName = window.getItemFolder(item);
       if (fName === folderName && item.status === 'paused') {
         item.status = 'uploading';
         updateUploadItem(item);
@@ -1717,7 +1693,7 @@ function resumeUpload(uploadId) {
     uploadLargeFileChunked(uploadItem);
   }
 
-  const otherPaused = uploadQueue.some(item => item.status === 'paused');
+  const otherPaused = uploadQueue.some(item => item && item.status === 'paused');
   if (!otherPaused) {
     window.uploadManagerExpanded = false;
   }

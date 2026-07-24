@@ -2469,9 +2469,11 @@
     };
 
     function buildTrayItemHtml(item) {
-        var pct = Math.round(item.progress || 0);
-        var name = escapeHtml(item.fileName || "Unknown");
-        var sizeStr = formatSize(item.fileSize);
+        var pct = Math.round(typeof window.getItemProgress === "function" ? window.getItemProgress(item) : (item.progress || 0));
+        var rawName = typeof window.getItemName === "function" ? window.getItemName(item) : (item.fileName || "Unknown");
+        var name = escapeHtml(rawName);
+        var rawSize = typeof window.getItemSize === "function" ? window.getItemSize(item) : (item.fileSize || 0);
+        var sizeStr = formatSize(rawSize);
 
         var metaText = "";
         var fillStyle = "";
