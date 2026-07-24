@@ -3292,6 +3292,101 @@ function setupEventListeners() {
     return;
   }
 
+  // Window-level Drag & Drop detection (activates overlay instantly anywhere on screen)
+  let windowDragCounter = 0;
+  const globalOverlay = document.getElementById('globalDragOverlay');
+
+  window.addEventListener('dragenter', e => {
+    // Only activate for file drags
+    if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+      e.preventDefault();
+      windowDragCounter++;
+      if (globalOverlay) globalOverlay.classList.add('active');
+    }
+  });
+
+  window.addEventListener('dragover', e => {
+    if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  });
+
+  window.addEventListener('dragleave', e => {
+    if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+      e.preventDefault();
+      windowDragCounter--;
+      if (windowDragCounter <= 0) {
+        windowDragCounter = 0;
+        if (globalOverlay) globalOverlay.classList.remove('active');
+      }
+    }
+  });
+
+  window.addEventListener('drop', async e => {
+    e.preventDefault();
+    windowDragCounter = 0;
+    if (globalOverlay) globalOverlay.classList.remove('active');
+
+    const dtItems = e.dataTransfer ? e.dataTransfer.items : null;
+    const dtFiles = e.dataTransfer ? e.dataTransfer.files : null;
+
+    // Async recursive directory scanner via HTML5 FileSystem API
+    async function scanEntry(entry, path = '') {
+      if (entry.isFile) {
+        return new Promise(resolve => {
+          entry.file(file => {
+            // Define webkitRelativePath property on File object
+            const relPath = path ? path + file.name : file.name;
+            try {
+              Object.defineProperty(file, 'webkitRelativePath', {
+                value: relPath,
+                writable: false,
+                configurable: true
+              });
+            } catch (err) {}
+            resolve([file]);
+          }, () => resolve([]));
+        });
+      } else if (entry.isDirectory) {
+        const dirReader = entry.createReader();
+        const entries = await new Promise(resolve => {
+          dirReader.readEntries(results => resolve(results || []), () => resolve([]));
+        });
+        const nestedPromises = entries.map(childEntry => scanEntry(childEntry, path + entry.name + '/'));
+        const nestedResults = await Promise.all(nestedPromises);
+        return nestedResults.flat();
+      }
+      return [];
+    }
+
+    let collectedFiles = [];
+
+    if (dtItems && dtItems.length > 0 && dtItems[0].webkitGetAsEntry) {
+      const entryPromises = [];
+      for (let i = 0; i < dtItems.length; i++) {
+        const entry = dtItems[i].webkitGetAsEntry();
+        if (entry) {
+          entryPromises.push(scanEntry(entry));
+        }
+      }
+      const results = await Promise.all(entryPromises);
+      collectedFiles = results.flat();
+    }
+
+    // Fallback if FileSystem API yields no files or is unsupported
+    if (collectedFiles.length === 0 && dtFiles && dtFiles.length > 0) {
+      collectedFiles = Array.from(dtFiles);
+    }
+
+    if (collectedFiles.length > 0) {
+      console.log(' Global window drop detected:', collectedFiles.length, 'file(s) extracted');
+      if (typeof window.handleFiles === 'function') {
+        window.handleFiles(collectedFiles);
+      }
+    }
+  });
+
   ['dragenter', 'dragover'].forEach(evt =>
     DOM_CACHE.dropZone.addEventListener(evt, e => {
       e.preventDefault();
@@ -3312,19 +3407,16 @@ function setupEventListeners() {
     const files = e.dataTransfer.files;
     console.log(' Files from drop:', files.length);
 
-    // Auto-detect if this is a folder drop (files have webkitRelativePath)
     const hasRelativePaths = Array.from(files).some(file => file.webkitRelativePath);
 
     if (mode === 'folder' || hasRelativePaths) {
-      // Handle as folder upload (no browser dialog needed for drag & drop)
       if (typeof window.handleFileSelection === 'function') {
         window.handleFileSelection(files, 'folder');
       }
     } else {
-      // Handle as regular file upload
-      DOM_CACHE.fileInput.files = files;
-      updatePreview(DOM_CACHE.fileInput.files);
-      autoUpload(DOM_CACHE.fileInput.files);
+      if (typeof window.handleFiles === 'function') {
+        window.handleFiles(files);
+      }
     }
   });
 

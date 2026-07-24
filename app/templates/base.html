@@ -85,6 +85,15 @@
 
     {% block content %}{% endblock %}
 
+    <!-- Global Window Drag-and-Drop Active Overlay -->
+    <div id="globalDragOverlay" class="global-drag-overlay">
+      <div class="global-drag-card">
+        <i data-lucide="upload-cloud" class="global-drag-icon"></i>
+        <h2 class="global-drag-title">Drop files or folders to upload</h2>
+        <p class="global-drag-subtitle">Release anywhere to start transfer instantly</p>
+      </div>
+    </div>
+
     <!-- Status Toaster and Help Info -->
     <!--  Toast Notification with Progress Bar Support -->
     <div id="toast" style="
