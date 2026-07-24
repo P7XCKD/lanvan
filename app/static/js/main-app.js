@@ -1595,13 +1595,16 @@ function cancelUpload(uploadId) {
   // Keep the current progress - don't reset it to show how much was uploaded
   console.log(` Upload cancelled: ${uploadItem.fileName} at ${uploadItem.progress.toFixed(1)}%`);
 
-  //  Log cancelled upload with detailed stats
+  // Log cancelled upload with detailed stats safely
+  const itemSize = uploadItem.fileSize || (uploadItem.file ? uploadItem.file.size : 0);
+  const itemName = uploadItem.fileName || (uploadItem.file ? uploadItem.file.name : "Unknown");
+  const itemProg = typeof uploadItem.progress === 'number' ? uploadItem.progress : 0;
   const cancelledStats = {
     type: 'Cancelled Upload',
-    filename: uploadItem.fileName,
-    size: `${(uploadItem.file.size / (1024 * 1024)).toFixed(1)} MB`,
-    sizeBytes: uploadItem.file.size,
-    progress: `${uploadItem.progress.toFixed(1)}%`,
+    filename: itemName,
+    size: `${(itemSize / (1024 * 1024)).toFixed(1)} MB`,
+    sizeBytes: itemSize,
+    progress: `${itemProg.toFixed(1)}%`,
     uploadedBytes: uploadItem.uploadedBytes || 0,
     cancelledAt: new Date().toLocaleString(),
     cancelledAtISO: new Date().toISOString(),
@@ -1613,7 +1616,7 @@ function cancelUpload(uploadId) {
     encrypted: uploadItem.isAESEnabled || false,
     uploadId: uploadItem.id,
     sessionId: getCurrentDeviceId(),
-    fileExtension: uploadItem.fileName.split('.').pop()?.toLowerCase() || 'unknown',
+    fileExtension: itemName.split('.').pop()?.toLowerCase() || 'unknown',
     uploadMethod: uploadItem.totalChunks ? 'Chunked (Cancelled)' : 'Direct (Cancelled)',
     supportsResume: uploadItem.totalChunks ? true : false,
     status: 'cancelled'
@@ -1649,42 +1652,79 @@ function cancelUpload(uploadId) {
 
 function pauseUpload(uploadId) {
   const uploadItem = uploadQueue.find(item => item.id === uploadId);
-  if (uploadItem && (uploadItem.status === 'uploading' || uploadItem.status === 'queued')) {
+  if (!uploadItem) return;
+
+  const folderName = uploadItem.targetDir || uploadItem.parent_path || uploadItem.folder || "";
+  const isFolderUpload = folderName && folderName !== "Home" && folderName !== "Home/";
+
+  if (isFolderUpload) {
+    let wasAnyUploading = false;
+    uploadQueue.forEach(item => {
+      const fName = item.targetDir || item.parent_path || item.folder || "";
+      if (fName === folderName && (item.status === 'uploading' || item.status === 'queued')) {
+        if (item.status === 'uploading') wasAnyUploading = true;
+        item.status = 'paused';
+        if (item.xhr) {
+          try { item.xhr.abort(); } catch (err) {}
+        }
+        updateUploadItem(item);
+      }
+    });
+    window.uploadManagerExpanded = true;
+    if (wasAnyUploading) {
+      endUpload();
+      setTimeout(() => { startNextUpload(); }, 100);
+    }
+  } else if (uploadItem.status === 'uploading' || uploadItem.status === 'queued') {
     const wasUploading = uploadItem.status === 'uploading';
     uploadItem.status = 'paused';
     window.uploadManagerExpanded = true;
     if (uploadItem.xhr) {
-      uploadItem.xhr.abort();
+      try { uploadItem.xhr.abort(); } catch (err) {}
     }
     updateUploadItem(uploadItem);
     if (wasUploading) {
       endUpload();
-      setTimeout(() => {
-        startNextUpload();
-      }, 100);
+      setTimeout(() => { startNextUpload(); }, 100);
     }
-    console.log(`Paused upload ${uploadId}`);
-    if (typeof window.triggerInstantUIUpdate === 'function') {
-      window.triggerInstantUIUpdate();
-    }
+  }
+
+  console.log(`Paused upload ${uploadId}`);
+  if (typeof window.triggerInstantUIUpdate === 'function') {
+    window.triggerInstantUIUpdate();
   }
 }
 
 function resumeUpload(uploadId) {
   const uploadItem = uploadQueue.find(item => item.id === uploadId);
-  if (uploadItem && uploadItem.status === 'paused') {
+  if (!uploadItem) return;
+
+  const folderName = uploadItem.targetDir || uploadItem.parent_path || uploadItem.folder || "";
+  const isFolderUpload = folderName && folderName !== "Home" && folderName !== "Home/";
+
+  if (isFolderUpload) {
+    uploadQueue.forEach(item => {
+      const fName = item.targetDir || item.parent_path || item.folder || "";
+      if (fName === folderName && item.status === 'paused') {
+        item.status = 'uploading';
+        updateUploadItem(item);
+        uploadLargeFileChunked(item);
+      }
+    });
+  } else if (uploadItem.status === 'paused') {
     uploadItem.status = 'uploading';
-    // Auto-collapse panel if no other paused files remain in the queue
-    const otherPaused = uploadQueue.some(item => item.status === 'paused' && item.id !== uploadId);
-    if (!otherPaused) {
-      window.uploadManagerExpanded = false;
-    }
     updateUploadItem(uploadItem);
-    console.log(`Resuming upload ${uploadId}`);
     uploadLargeFileChunked(uploadItem);
-    if (typeof window.triggerInstantUIUpdate === 'function') {
-      window.triggerInstantUIUpdate();
-    }
+  }
+
+  const otherPaused = uploadQueue.some(item => item.status === 'paused');
+  if (!otherPaused) {
+    window.uploadManagerExpanded = false;
+  }
+
+  console.log(`Resuming upload ${uploadId}`);
+  if (typeof window.triggerInstantUIUpdate === 'function') {
+    window.triggerInstantUIUpdate();
   }
 }
 
@@ -2104,16 +2144,17 @@ function uploadSingleFileWithProgress(uploadItem) {
       updateUploadItem(uploadItem);
       endUpload();
 
-      //  Show toast notification for upload error
-      showToast(` Upload failed: ${uploadItem.file.name} (Error ${xhr.status})`, 5000);
+      const fSize = uploadItem.fileSize || (uploadItem.file ? uploadItem.file.size : 0);
+      const fName = uploadItem.fileName || (uploadItem.file ? uploadItem.file.name : "File");
+      showToast(` Upload failed: ${fName} (Error ${xhr.status})`, 5000);
 
       //  Log failed upload with detailed stats
       const failedStats = {
         type: 'Failed Upload',
-        filename: uploadItem.fileName,
-        size: `${(uploadItem.file.size / (1024 * 1024)).toFixed(1)} MB`,
-        sizeBytes: uploadItem.file.size,
-        progress: `${uploadItem.progress.toFixed(1)}%`,
+        filename: fName,
+        size: `${(fSize / (1024 * 1024)).toFixed(1)} MB`,
+        sizeBytes: fSize,
+        progress: `${(uploadItem.progress || 0).toFixed(1)}%`,
         uploadedBytes: uploadItem.uploadedBytes || 0,
         failedAt: new Date().toLocaleString(),
         failedAtISO: new Date().toISOString(),
@@ -2129,7 +2170,7 @@ function uploadSingleFileWithProgress(uploadItem) {
         encrypted: uploadItem.isAESEnabled || false,
         uploadId: uploadItem.id,
         sessionId: getCurrentDeviceId(),
-        fileExtension: uploadItem.fileName.split('.').pop()?.toLowerCase() || 'unknown',
+        fileExtension: fName.split('.').pop()?.toLowerCase() || 'unknown',
         uploadMethod: uploadItem.totalChunks ? 'Chunked (Failed)' : 'Direct (Failed)',
         supportsResume: uploadItem.totalChunks ? true : false,
         status: 'failed' // Add status field for failed uploads
@@ -2166,12 +2207,14 @@ function uploadSingleFileWithProgress(uploadItem) {
     endUpload();
 
     //  Log network error upload with detailed stats
+    const netSize = uploadItem.fileSize || (uploadItem.file ? uploadItem.file.size : 0);
+    const netName = uploadItem.fileName || (uploadItem.file ? uploadItem.file.name : "File");
     const networkErrorStats = {
       type: 'Network Error Upload',
-      filename: uploadItem.fileName,
-      size: `${(uploadItem.file.size / (1024 * 1024)).toFixed(1)} MB`,
-      sizeBytes: uploadItem.file.size,
-      progress: `${uploadItem.progress.toFixed(1)}%`,
+      filename: netName,
+      size: `${(netSize / (1024 * 1024)).toFixed(1)} MB`,
+      sizeBytes: netSize,
+      progress: `${(uploadItem.progress || 0).toFixed(1)}%`,
       uploadedBytes: uploadItem.uploadedBytes || 0,
       failedAt: new Date().toLocaleString(),
       failedAtISO: new Date().toISOString(),

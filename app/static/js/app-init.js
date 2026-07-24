@@ -291,20 +291,32 @@
             }
         }
 
-        // Retrieve active uploads from global window.uploadQueue for the current folder
+        // Retrieve active uploads from global window.uploadQueue for the current folder view
         var activeUploads = [];
         var normCurrentDir = (currentFolderPath === "Home" || currentFolderPath === "Home/" || !currentFolderPath) ? "" : currentFolderPath;
 
         if (window.uploadQueue && window.uploadQueue.length > 0) {
-            window.uploadQueue.forEach(function (item) {
-                if (item && item.fileName && (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused')) {
-                    var itemDir = item.targetDir || item.parent_path || item.folder || "";
-                    if (itemDir === "Home" || itemDir === "Home/") itemDir = "";
+            var activeFolderMap = {};
 
-                    // Only display active upload row if it belongs to the folder currently being viewed
-                    if (itemDir === normCurrentDir) {
-                        // Check if the file is already in normalizedFiles (e.g. overwriting)
-                        var existingItem = normalizedFiles.find(function (f) { return f && f.name === item.fileName; });
+            window.uploadQueue.forEach(function (item) {
+                if (!item || !item.fileName) return;
+                var itemDir = item.targetDir || item.parent_path || item.folder || "";
+                if (itemDir === "Home" || itemDir === "Home/") itemDir = "";
+
+                // Calculate path relative to current folder view
+                var relDir = itemDir;
+                if (normCurrentDir) {
+                    if (relDir.startsWith(normCurrentDir + "/")) {
+                        relDir = relDir.substring(normCurrentDir.length + 1);
+                    } else if (relDir === normCurrentDir) {
+                        relDir = "";
+                    }
+                }
+
+                if (relDir === "") {
+                    // Direct file in current view
+                    var existingItem = normalizedFiles.find(function (f) { return f && f.name === item.fileName; });
+                    if (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused') {
                         if (existingItem) {
                             existingItem.uploading = true;
                             existingItem.uploadProgress = Math.round(item.progress || 0);
@@ -320,6 +332,85 @@
                                 uploadProgress: Math.round(item.progress || 0),
                                 uploadStatus: item.status,
                                 uploadId: item.id
+                            });
+                        }
+                    } else if (item.status === 'completed' && !existingItem) {
+                        // Include completed upload in file list if not yet returned by backend disk scan
+                        var alreadyAdded = activeUploads.find(function (f) { return f.name === item.fileName; });
+                        if (!alreadyAdded) {
+                            activeUploads.push({
+                                name: item.fileName,
+                                size: formatSize(item.fileSize),
+                                mtime: Math.floor(Date.now() / 1000),
+                                isFolder: false
+                            });
+                        }
+                    }
+                } else if (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused' || item.status === 'completed') {
+                    // Subfolder upload in current view
+                    var rootFolder = relDir.split("/")[0];
+                    if (rootFolder) {
+                        if (!activeFolderMap[rootFolder]) {
+                            activeFolderMap[rootFolder] = {
+                                totalBytes: 0,
+                                uploadedBytes: 0,
+                                hasUploading: false,
+                                hasPaused: false,
+                                allCompleted: true,
+                                items: []
+                            };
+                        }
+                        var fileSize = item.fileSize || (item.file && item.file.size) || 0;
+                        var bytesDone = 0;
+                        if (item.status === 'completed') {
+                            bytesDone = fileSize;
+                        } else {
+                            bytesDone = item.bytesUploaded || 0;
+                            if (!bytesDone && item.progress && fileSize) {
+                                bytesDone = (fileSize * item.progress) / 100;
+                            }
+                        }
+                        activeFolderMap[rootFolder].totalBytes += fileSize;
+                        activeFolderMap[rootFolder].uploadedBytes += bytesDone;
+                        if (item.status === 'uploading' || item.status === 'processing') {
+                            activeFolderMap[rootFolder].hasUploading = true;
+                            activeFolderMap[rootFolder].allCompleted = false;
+                        } else if (item.status === 'paused') {
+                            activeFolderMap[rootFolder].hasPaused = true;
+                            activeFolderMap[rootFolder].allCompleted = false;
+                        } else if (item.status === 'queued') {
+                            activeFolderMap[rootFolder].allCompleted = false;
+                        }
+                        activeFolderMap[rootFolder].items.push(item);
+                    }
+                }
+            });
+
+            // Synthesize folder rows for any active or paused folder uploads in current view
+            Object.keys(activeFolderMap).forEach(function (folderName) {
+                var finfo = activeFolderMap[folderName];
+                if (!finfo.allCompleted) {
+                    var folderPct = finfo.totalBytes > 0 ? Math.min(99, Math.round((finfo.uploadedBytes / finfo.totalBytes) * 100)) : 0;
+                    var folderStatus = finfo.hasUploading ? 'uploading' : (finfo.hasPaused ? 'paused' : 'queued');
+
+                    var existingFolder = normalizedFiles.find(function (f) { return f && f.name === folderName && f.isFolder; });
+                    if (existingFolder) {
+                        existingFolder.uploading = true;
+                        existingFolder.uploadProgress = folderPct;
+                        existingFolder.uploadStatus = folderStatus;
+                        existingFolder.uploadId = finfo.items[0] ? finfo.items[0].id : null;
+                    } else {
+                        var alreadyInActive = activeUploads.find(function (f) { return f.name === folderName && f.isFolder; });
+                        if (!alreadyInActive) {
+                            activeUploads.push({
+                                name: folderName,
+                                size: formatSize(finfo.uploadedBytes) + " / " + formatSize(finfo.totalBytes),
+                                mtime: Math.floor(Date.now() / 1000),
+                                isFolder: true,
+                                uploading: true,
+                                uploadProgress: folderPct,
+                                uploadStatus: folderStatus,
+                                uploadId: finfo.items[0] ? finfo.items[0].id : null
                             });
                         }
                     }
@@ -397,7 +488,7 @@
             // Check if uploads are active — show different message
             var queue = window.uploadQueue || [];
             var activeUploadsCount = queue.filter(function (item) {
-                return item.status === "uploading" || item.status === "queued" || item.status === "processing";
+                return item.status === "uploading" || item.status === "queued" || item.status === "processing" || item.status === "paused";
             }).length;
             if (activeUploadsCount > 0) {
                 container.innerHTML =
@@ -2282,46 +2373,73 @@
         }
         var container = document.getElementById("nasFileList");
         if (container && window.uploadQueue) {
+            var normCurrentDir = (currentFolderPath === "Home" || currentFolderPath === "Home/" || !currentFolderPath) ? "" : currentFolderPath;
+            var missingRow = false;
+
             window.uploadQueue.forEach(function (item) {
-                if (item && item.fileName) {
-                    var escName = escapeHtml(item.fileName);
-                    var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
-                    if (row) {
-                        if (item.status === 'cancelled') {
-                            row.remove();
-                        } else if (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused') {
-                            var progress = Math.round(item.progress || 0);
-                            var subtitleCell = row.querySelector('.item-subtitle');
-                            if (subtitleCell) {
-                                subtitleCell.textContent = progress + "% • " + (item.status === 'paused' ? 'Paused' : 'Uploading');
-                            }
-                            var dateCell = row.querySelector('.item-date');
-                            if (dateCell) {
-                                dateCell.textContent = item.status === 'paused' ? 'Paused' : 'Uploading';
-                            }
-                            var bar = row.querySelector('.row-progress-bar');
-                            if (bar) {
-                                bar.style.width = progress + "%";
-                            }
-                            var playPauseBtn = row.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
-                            if (playPauseBtn) {
-                                var currentAction = playPauseBtn.getAttribute("data-action");
-                                if (item.status === 'paused' && currentAction === 'pause-upload') {
-                                    playPauseBtn.setAttribute("data-action", "resume-upload");
-                                    playPauseBtn.setAttribute("title", "Resume upload");
-                                    playPauseBtn.innerHTML = '<i data-lucide="play" style="width:16px;height:16px;"></i>';
-                                    if (window.lucide) lucide.createIcons();
-                                } else if (item.status !== 'paused' && currentAction === 'resume-upload') {
-                                    playPauseBtn.setAttribute("data-action", "pause-upload");
-                                    playPauseBtn.setAttribute("title", "Pause upload");
-                                    playPauseBtn.innerHTML = '<i data-lucide="pause" style="width:16px;height:16px;"></i>';
-                                    if (window.lucide) lucide.createIcons();
+                if (item && item.fileName && (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused')) {
+                    var itemDir = item.targetDir || item.parent_path || item.folder || "";
+                    if (itemDir === "Home" || itemDir === "Home/") itemDir = "";
+                    var relDir = itemDir;
+                    if (normCurrentDir) {
+                        if (relDir.startsWith(normCurrentDir + "/")) relDir = relDir.substring(normCurrentDir.length + 1);
+                        else if (relDir === normCurrentDir) relDir = "";
+                    }
+                    var checkName = relDir === "" ? item.fileName : relDir.split("/")[0];
+                    if (checkName) {
+                        var escCheck = escapeHtml(checkName);
+                        var existingRow = container.querySelector('.m3-list-item[data-filename="' + escCheck + '"]');
+                        if (!existingRow) missingRow = true;
+                    }
+                }
+            });
+
+            var hasCancelled = window.uploadQueue.some(function(i) { return i && i.status === 'cancelled'; });
+
+            if ((missingRow || hasCancelled) && typeof lastRenderedFiles !== "undefined") {
+                renderPrototypeFileList(lastRenderedFiles);
+            } else {
+                window.uploadQueue.forEach(function (item) {
+                    if (item && item.fileName) {
+                        var escName = escapeHtml(item.fileName);
+                        var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
+                        if (row) {
+                            if (item.status === 'cancelled') {
+                                row.remove();
+                            } else if (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused') {
+                                var progress = Math.round(item.progress || 0);
+                                var subtitleCell = row.querySelector('.item-subtitle');
+                                if (subtitleCell) {
+                                    subtitleCell.textContent = progress + "% • " + (item.status === 'paused' ? 'Paused' : 'Uploading');
+                                }
+                                var dateCell = row.querySelector('.item-date');
+                                if (dateCell) {
+                                    dateCell.textContent = item.status === 'paused' ? 'Paused' : 'Uploading';
+                                }
+                                var bar = row.querySelector('.row-progress-bar');
+                                if (bar) {
+                                    bar.style.width = progress + "%";
+                                }
+                                var playPauseBtn = row.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
+                                if (playPauseBtn) {
+                                    var currentAction = playPauseBtn.getAttribute("data-action");
+                                    if (item.status === 'paused' && currentAction === 'pause-upload') {
+                                        playPauseBtn.setAttribute("data-action", "resume-upload");
+                                        playPauseBtn.setAttribute("title", "Resume upload");
+                                        playPauseBtn.innerHTML = '<i data-lucide="play" style="width:16px;height:16px;"></i>';
+                                        if (window.lucide) lucide.createIcons();
+                                    } else if (item.status !== 'paused' && currentAction === 'resume-upload') {
+                                        playPauseBtn.setAttribute("data-action", "pause-upload");
+                                        playPauseBtn.setAttribute("title", "Pause upload");
+                                        playPauseBtn.innerHTML = '<i data-lucide="pause" style="width:16px;height:16px;"></i>';
+                                        if (window.lucide) lucide.createIcons();
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            });
+                });
+            }
         }
     };
 
@@ -2368,6 +2486,15 @@
             metaText = sizeStr + " • Completed (" + timeStr + ")";
             fillStyle = 'background: rgba(24, 128, 56, 0.08); width: 100%;';
             actionHtml = '<span style="color: var(--green); display: flex; align-items: center; margin-right: 8px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>';
+        } else if (item.status === 'paused') {
+            metaText = sizeStr + " • " + pct + "% (Paused)";
+            fillStyle = 'background: rgba(234, 179, 8, 0.12); width: ' + pct + '%;';
+            actionHtml = '<button type="button" class="upload-toast-resume-text" data-upload-id="' + item.id + '" title="Resume upload" style="background:none; border:none; color:var(--primary, #3b82f6); cursor:pointer; font-weight:500; font-size:0.8rem; margin-right:8px; padding:2px 4px;">' +
+                '<span>Resume</span>' +
+                '</button>' +
+                '<button type="button" class="upload-toast-cancel-text" data-upload-id="' + item.id + '" title="Cancel upload">' +
+                '<span>Cancel</span>' +
+                '</button>';
         } else if (item.status === 'queued') {
             metaText = sizeStr + " • Queued";
             fillStyle = 'background: transparent; width: 0%;';
@@ -2408,6 +2535,16 @@
                 e.stopPropagation();
                 if (typeof window.cancelUpload === "function") {
                     window.cancelUpload(item.id);
+                }
+            });
+        }
+        var resumeBtn = el.querySelector(".upload-toast-resume-text");
+        if (resumeBtn && !resumeBtn.__resumeWired) {
+            resumeBtn.__resumeWired = true;
+            resumeBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                if (typeof window.resumeUpload === "function") {
+                    window.resumeUpload(item.id);
                 }
             });
         }
@@ -2456,22 +2593,6 @@
         var toggleHtml = "";
         var actionBtnHtml = "";
 
-        if (docked) {
-            // Left button: Chevron toggle (^ / v) when items exist
-            if (totalCount > 0) {
-                var chevronIcon = expanded ? "chevron-down" : "chevron-up";
-                toggleHtml = '<button type="button" class="upload-toast-header-btn header-expand-dock-btn" title="Toggle detailed list">' +
-                    '<i data-lucide="' + chevronIcon + '"></i>' +
-                    '</button>';
-            }
-            // Right button: Plus (+) button
-            actionBtnHtml = '<button type="button" class="upload-toast-header-btn open-menu-btn" title="Upload or Create">' +
-                '<i data-lucide="plus"></i>' +
-                '</button>';
-            return toggleHtml + actionBtnHtml;
-        }
-
-        // Standard actions when NOT docked (bottom-right overlay)
         if (totalCount > 0) {
             if (isAllCompleted) {
                 var chevronIcon = expanded ? "chevron-down" : "chevron-up";
@@ -2489,7 +2610,7 @@
                         '</button>';
                 }
             }
-            actionBtnHtml += '<button type="button" class="upload-toast-header-btn close-panel-btn" title="Cancel all uploads and close">' +
+            actionBtnHtml = '<button type="button" class="upload-toast-header-btn close-panel-btn" title="Cancel all uploads and close">' +
                 '<i data-lucide="x"></i>' +
                 '</button>';
         } else {
@@ -2710,7 +2831,7 @@
         var activePendingCount = activeUploads.filter(function (item) { return item.status === "uploading" || item.status === "processing" || item.status === "queued"; }).length;
         var pausedCount = activeUploads.filter(function (item) { return item.status === "paused"; }).length;
         var completedOrDeletedCount = activeUploads.filter(function (item) { return item.status === "completed" || item.status === "deleted"; }).length;
-        var isAllCompleted = totalCount > 0 ? (completedOrDeletedCount === totalCount) : true;
+        var isAllCompleted = totalCount > 0 && completedOrDeletedCount === totalCount && pausedCount === 0 && activePendingCount === 0;
 
         saveUploadQueueToStorage();
 
@@ -2728,10 +2849,12 @@
         var headerTitle = "";
         if (totalCount === 0) {
             headerTitle = "No pending uploads";
-        } else if (isAllCompleted || activePendingCount === 0) {
+        } else if (isAllCompleted) {
             headerTitle = "Uploads completed (" + totalCount + ")";
-        } else if (pausedCount === totalCount) {
-            headerTitle = "Uploads paused (" + totalCount + ")";
+        } else if (pausedCount > 0 && activePendingCount === 0) {
+            headerTitle = "Uploads paused (" + pausedCount + " of " + totalCount + ")";
+        } else if (pausedCount > 0 && activePendingCount > 0) {
+            headerTitle = "Uploading " + activePendingCount + " file" + (activePendingCount === 1 ? "" : "s") + " (" + pausedCount + " paused) • " + totalSpeedMB;
         } else {
             headerTitle = "Uploading " + activePendingCount + " " + (activePendingCount === 1 ? "file" : "files") + " • " + totalSpeedMB;
         }
@@ -3421,8 +3544,7 @@
                             refreshLucideIcons(playPauseBtn);
                         }
                     }
-                } else if (!item._rowRendered) {
-                    item._rowRendered = true;
+                } else {
                     if (typeof lastRenderedFiles !== 'undefined') {
                         renderPrototypeFileList(lastRenderedFiles);
                     }
