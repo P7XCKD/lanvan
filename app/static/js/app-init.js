@@ -31,30 +31,9 @@
     if (typeof updateFileDisplay === "function" && !updateFileDisplay.__prototypeWrapped) {
         const _originalUpdateFileDisplay = updateFileDisplay;
         updateFileDisplay = function (files) {
-            var isSubfolder = currentFolderPath && currentFolderPath !== "Home" && currentFolderPath !== "";
-            if (isSubfolder) {
-                // When inside a subfolder, do NOT call _originalUpdateFileDisplay
-                // because that resets the file grid with root-level files and kicks the user back to Home.
-                fetchFilesData().then(function (fd) {
-                    renderPrototypeFileList(fd);
-                });
-            } else {
-                // At root: run original update then also render folders
-                _originalUpdateFileDisplay(files);
-                // Also fetch folders so they don't disappear during auto-refresh
-                fetch("/api/folders")
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        var folderItems = (data.folders || []).map(function (f) {
-                            return { name: f.name, size: f.size_formatted || "--", mtime: f.created || 0, isFolder: true };
-                        });
-                        // Folders first, then files
-                        renderPrototypeFileList(folderItems.concat(files || []));
-                    })
-                    .catch(function () {
-                        renderPrototypeFileList(files);
-                    });
-            }
+            fetchFilesData().then(function (fd) {
+                renderPrototypeFileList(fd);
+            });
         };
         updateFileDisplay.__prototypeWrapped = true;
     }
@@ -83,11 +62,8 @@
     });
 
     window.getCurrentFolderPath = function () {
-        var p = currentFolderPath || "Home";
-        try { p = decodeURIComponent(p); } catch (e) {}
-        if (p.indexOf("Home/") === 0) p = p.substring(5);
-        else if (p === "Home") p = "";
-        return p.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+        var p = currentFolderPath || "";
+        return (p === "Home" || p === "Home/") ? "" : p;
     };
 
     // Intercept network requests to automatically append parent_path to upload FormData
@@ -271,15 +247,6 @@
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    function normalizePathStr(p) {
-        if (!p) return "";
-        var s = String(p).trim();
-        try { s = decodeURIComponent(s); } catch (e) {}
-        if (s.indexOf("Home/") === 0) s = s.substring(5);
-        else if (s === "Home") s = "";
-        return s.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
-    }
-
     function renderPrototypeFileList(files) {
         lastRenderedFiles = files;
         var container = document.getElementById("nasFileList");
@@ -324,47 +291,37 @@
             }
         }
 
-        // Determine clean current folder path
-        var curDir = normalizePathStr(currentFolderPath);
-
-        // Retrieve active uploads from global window.uploadQueue matching current directory
+        // Retrieve active uploads from global window.uploadQueue for the current folder
         var activeUploads = [];
+        var normCurrentDir = (currentFolderPath === "Home" || currentFolderPath === "Home/" || !currentFolderPath) ? "" : currentFolderPath;
+
         if (window.uploadQueue && window.uploadQueue.length > 0) {
             window.uploadQueue.forEach(function (item) {
-                if (item && (item.fileName || item.name)) {
-                    var fName = item.fileName || item.name;
-                    var isCompleted = item.status === 'completed';
-                    var isActive = (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused');
+                if (item && item.fileName && (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused')) {
+                    var itemDir = item.targetDir || item.parent_path || item.folder || "";
+                    if (itemDir === "Home" || itemDir === "Home/") itemDir = "";
 
-                    // If neither active nor completed (e.g. deleted/cancelled), skip
-                    if (!isActive && !isCompleted) return;
-
-                    var itemTargetDir = normalizePathStr(item.targetDir);
-
-                    if (itemTargetDir !== curDir) {
-                        return; // Skip active uploads belonging to other folders
-                    }
-
-                    var existingItem = normalizedFiles.find(function (f) { return f && f.name === fName; });
-                    if (existingItem) {
-                        if (isActive) {
+                    // Only display active upload row if it belongs to the folder currently being viewed
+                    if (itemDir === normCurrentDir) {
+                        // Check if the file is already in normalizedFiles (e.g. overwriting)
+                        var existingItem = normalizedFiles.find(function (f) { return f && f.name === item.fileName; });
+                        if (existingItem) {
                             existingItem.uploading = true;
                             existingItem.uploadProgress = Math.round(item.progress || 0);
                             existingItem.uploadStatus = item.status;
                             existingItem.uploadId = item.id;
+                        } else {
+                            activeUploads.push({
+                                name: item.fileName,
+                                size: formatSize(item.fileSize),
+                                mtime: Math.floor(Date.now() / 1000),
+                                isFolder: false,
+                                uploading: true,
+                                uploadProgress: Math.round(item.progress || 0),
+                                uploadStatus: item.status,
+                                uploadId: item.id
+                            });
                         }
-                    } else {
-                        // If file is not yet in normalizedFiles, render it so it never vanishes
-                        activeUploads.push({
-                            name: fName,
-                            size: formatSize(item.fileSize),
-                            mtime: Math.floor(Date.now() / 1000),
-                            isFolder: false,
-                            uploading: isActive,
-                            uploadProgress: Math.round(item.progress || 0),
-                            uploadStatus: item.status,
-                            uploadId: item.id
-                        });
                     }
                 }
             });
@@ -373,21 +330,7 @@
         // Merge active uploads
         normalizedFiles = activeUploads.concat(normalizedFiles);
 
-        console.log("%c[LANVAN RENDER] 🎨 Folder: '%s' | Files on Disk: %d | Active Uploads Matched: %d", "color:#10b981; font-weight:bold; font-size:12px;", curDir || "Home (Root)", normalizedFiles.length - activeUploads.length, activeUploads.length);
-
-        // Exclude deleted/cancelled upload queue items from Quick Access snapshot
-        var uploadDeletedNames = {};
-        if (window.uploadQueue) {
-            window.uploadQueue.forEach(function (qi) {
-                var qName = qi.fileName || qi.name;
-                if (qName && (qi.status === 'deleted' || qi.status === 'cancelled')) {
-                    uploadDeletedNames[qName] = true;
-                }
-            });
-        }
-        var originalFilesForQuickAccess = normalizedFiles.filter(function (f) {
-            return !uploadDeletedNames[f.name];
-        });
+        var originalFilesForQuickAccess = normalizedFiles.slice();
 
         // Apply client-side Type Filtering
         if (typeFilter !== "all") {
@@ -446,10 +389,15 @@
         }
 
         if (!normalizedFiles || normalizedFiles.length === 0) {
+            // Render quick access cards (empty when normalizedFiles is 0)
+            renderQuickAccess(originalFilesForQuickAccess
+                .filter(function (f) { return !f.isFolder && !f.uploading; })
+                .map(function (f) { return f.name; }));
+
             // Check if uploads are active — show different message
             var queue = window.uploadQueue || [];
             var activeUploadsCount = queue.filter(function (item) {
-                return item && (item.status === "uploading" || item.status === "queued" || item.status === "processing");
+                return item.status === "uploading" || item.status === "queued" || item.status === "processing";
             }).length;
             if (activeUploadsCount > 0) {
                 container.innerHTML =
@@ -468,7 +416,7 @@
                     '<div style="font-size:0.8rem; color:var(--text-muted);">or right-click to upload / create folders.</div>' +
                     "</div>";
             }
-            if (window.lucide) lucide.createIcons();
+            refreshLucideIcons(container);
             return;
         }
 
@@ -510,16 +458,7 @@
             .filter(function (f) { return !f.isFolder && !f.uploading; })
             .map(function (f) { return f.name; }));
 
-        // Clear selection when clicking on empty space in the file list
-        if (!container.__emptyClickWired) {
-            container.__emptyClickWired = true;
-            container.addEventListener("click", function (e) {
-                if (e.target.closest(".m3-list-item") || e.target.closest("button") || e.target.closest(".quick-card")) return;
-                window.clearSelection();
-            });
-        }
-
-        if (window.lucide) lucide.createIcons();
+        refreshLucideIcons(container);
     }
 
     /**
@@ -750,7 +689,7 @@
 
         var base = currentFolderPath;
         if (base === "Home") base = "";
-        
+
         // Guard: check if currentFolderPath already ends with this folderName
         var parts = base ? base.split("/") : [];
         if (parts.length > 0 && parts[parts.length - 1] === folderName) {
@@ -758,7 +697,6 @@
         }
 
         currentFolderPath = base ? (base + "/" + folderName) : folderName;
-        console.log("%c[LANVAN NAV] 📂 Navigated to: '%s' | Active Folder Path: '%s'", "color:#3b82f6; font-weight:bold; font-size:12px;", folderName, currentFolderPath);
         prototypeSelectedItems = [];
         updateSelectionToolbar();
         renderBreadcrumbs();
@@ -1009,11 +947,20 @@
     // --- Upload Triggers ---
     window.triggerFileInput = function (type) {
         if (type === "folder") {
-            var prodFolderInput = document.getElementById("folderInput");
-            if (prodFolderInput) prodFolderInput.click();
+            var prodFolderInput = document.getElementById("folderInput") || document.getElementById("hiddenFolderInput");
+            if (prodFolderInput) {
+                prodFolderInput.setAttribute("webkitdirectory", "");
+                prodFolderInput.setAttribute("directory", "");
+                prodFolderInput.setAttribute("mozdirectory", "");
+                prodFolderInput.value = "";
+                prodFolderInput.click();
+            }
         } else {
             var prodFileInput = document.getElementById("fileInput");
-            if (prodFileInput) prodFileInput.click();
+            if (prodFileInput) {
+                prodFileInput.value = "";
+                prodFileInput.click();
+            }
         }
     };
 
@@ -1058,16 +1005,21 @@
         var target = window._contextMenuTarget || "";
 
         if (prototypeSelectedItems.length > 0) {
-            // If the targeted item is in the selected list, delete all selected items
+            // If targeted item is in the selected list or target was not explicitly set for another item, delete all selected items
             if (target && prototypeSelectedItems.indexOf(target) !== -1) {
                 itemsToDelete = prototypeSelectedItems.slice();
+            } else if (!target) {
+                itemsToDelete = prototypeSelectedItems.slice();
             } else {
-                // Otherwise, delete only the target item (or selected items if no target is active)
-                itemsToDelete = target ? [target] : prototypeSelectedItems.slice();
+                // Targeted single item outside active multi-selection
+                itemsToDelete = [target];
             }
         } else if (target) {
             itemsToDelete = [target];
         }
+
+        // Always clear context menu target after reading
+        window._contextMenuTarget = "";
 
         if (itemsToDelete.length === 0) return;
 
@@ -1081,6 +1033,7 @@
                 } else {
                     if (typeof showToast === "function") showToast("Deleted " + completed + " item(s) successfully.", 3000);
                 }
+                window._contextMenuTarget = "";
                 window.clearSelection();
                 if (typeof refreshFileList === "function") refreshFileList();
                 fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
@@ -1089,14 +1042,19 @@
 
             var filename = itemsToDelete[index];
 
-            // Check if this is a folder by looking at the rendered list (safe from special characters/quotes in filenames)
+            // Check if this is a folder by looking at rendered list and stored metadata
             var isFolder = false;
             var listItems = document.querySelectorAll('#nasFileList .m3-list-item');
             for (var k = 0; k < listItems.length; k++) {
-                if (listItems[k].getAttribute("data-filename") === filename) {
+                var itemFn = listItems[k].getAttribute("data-filename");
+                if (itemFn === filename || (typeof escapeHtml === "function" && itemFn === escapeHtml(filename))) {
                     isFolder = listItems[k].getAttribute("data-is-folder") === "1";
                     break;
                 }
+            }
+            if (!isFolder && Array.isArray(lastFilesData)) {
+                var foundData = lastFilesData.find(function (f) { return f && f.name === filename; });
+                if (foundData) isFolder = !!foundData.isFolder;
             }
 
             var url, method;
@@ -1246,6 +1204,22 @@
         if (!dialog || !input) return;
         input.value = name;
         dialog.style.display = "flex";
+
+        if (!input.__keyListenerWired) {
+            input.__keyListenerWired = true;
+            input.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.submitRename();
+                } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.closeRenameDialog();
+                }
+            });
+        }
+
         // Pre-select only the filename part, NOT the extension
         setTimeout(function () {
             input.focus();
@@ -1804,8 +1778,9 @@
                 } else {
                     if (typeof showToast === "function") showToast("Successfully renamed " + completed + " item(s).", 3000);
                 }
+                window._contextMenuTarget = "";
                 window.clearSelection();
-                if (typeof refreshFileList === "function") refreshFileList();
+                fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
                 return;
             }
 
@@ -2421,7 +2396,7 @@
         var genericOps = document.getElementById("genericMenuOptions");
         var itemOps = document.getElementById("itemMenuOptions");
         var clipboardOps = document.getElementById("clipboardMenuOptions");
-        
+
         if (genericOps) genericOps.style.display = "block";
         if (itemOps) itemOps.style.display = "none";
         if (clipboardOps) clipboardOps.style.display = "none";
@@ -2440,7 +2415,7 @@
     function buildHeaderActionsHtml(isAllCompleted, pausedCount, expanded, totalCount, docked) {
         var toggleHtml = "";
         var actionBtnHtml = "";
-        
+
         if (docked) {
             // Left button: Chevron toggle (^ / v) when items exist
             if (totalCount > 0) {
@@ -2482,7 +2457,7 @@
                 '<i data-lucide="plus"></i>' +
                 '</button>';
         }
-        
+
         return toggleHtml + actionBtnHtml;
     }
 
@@ -2536,106 +2511,62 @@
         }
     }
     window.navigateToPathAndSelect = function (targetPath, filename) {
-        var cleanPath = targetPath || "";
-        if (cleanPath.indexOf("Home/") === 0) cleanPath = cleanPath.substring(5);
-        else if (cleanPath === "Home") cleanPath = "";
+        currentFolderPath = targetPath || "";
+        prototypeSelectedItems = [];
+        updateSelectionToolbar();
+        renderBreadcrumbs();
+        fetchFilesData().then(function (fd) {
+            renderPrototypeFileList(fd);
+            setTimeout(function () {
+                var allItems = document.querySelectorAll("#nasFileList .m3-list-item");
+                var matchedEl = null;
+                var matchedName = null;
 
-        function trySelectInPath(path, callback) {
-            currentFolderPath = path || "Home";
-            prototypeSelectedItems = [];
-            updateSelectionToolbar();
-            renderBreadcrumbs();
-            fetchFilesData().then(function (fd) {
-                renderPrototypeFileList(fd);
-                setTimeout(function () {
-                    var allItems = document.querySelectorAll("#nasFileList .m3-list-item");
-                    var matchedEl = null;
-                    var matchedName = null;
-
-                    // 1. Exact match
-                    for (var i = 0; i < allItems.length; i++) {
-                        var curName = allItems[i].getAttribute("data-filename");
-                        if (curName === filename) {
-                            matchedEl = allItems[i];
-                            matchedName = curName;
-                            break;
-                        }
+                // 1. Try exact match
+                for (var i = 0; i < allItems.length; i++) {
+                    var curName = allItems[i].getAttribute("data-filename");
+                    if (curName === filename) {
+                        matchedEl = allItems[i];
+                        matchedName = curName;
+                        break;
                     }
+                }
 
-                    // 2. Base name + extension match fallback
-                    if (!matchedEl && filename) {
-                        var dotIdx = filename.lastIndexOf(".");
-                        var base = dotIdx > 0 ? filename.substring(0, dotIdx) : filename;
-                        var ext = dotIdx > 0 ? filename.substring(dotIdx) : "";
+                // 2. If no exact match (e.g. server auto-renamed duplicate "60mb file.pdf" -> "60mb file_1.pdf"), match base name & extension
+                if (!matchedEl && filename) {
+                    var dotIdx = filename.lastIndexOf(".");
+                    var base = dotIdx > 0 ? filename.substring(0, dotIdx) : filename;
+                    var ext = dotIdx > 0 ? filename.substring(dotIdx) : "";
 
-                        for (var j = 0; j < allItems.length; j++) {
-                            var cName = allItems[j].getAttribute("data-filename") || "";
-                            if (ext ? (cName.startsWith(base) && cName.endsWith(ext)) : cName.startsWith(base)) {
+                    for (var j = 0; j < allItems.length; j++) {
+                        var cName = allItems[j].getAttribute("data-filename") || "";
+                        if (ext) {
+                            if (cName.startsWith(base) && cName.endsWith(ext)) {
                                 matchedEl = allItems[j];
                                 matchedName = cName;
                                 break;
                             }
+                        } else if (cName.startsWith(base)) {
+                            matchedEl = allItems[j];
+                            matchedName = cName;
+                            break;
                         }
                     }
+                }
 
-                    if (matchedEl && matchedName) {
-                        prototypeSelectedItems = [matchedName];
-                        matchedEl.classList.add("selected");
-                        updateSelectionToolbar();
-                        matchedEl.scrollIntoView({ behavior: "smooth", block: "center" });
-                        if (callback) callback(true);
-                    } else {
-                        if (callback) callback(false);
-                    }
-                }, 120);
-            });
-        }
-
-        trySelectInPath(cleanPath, function (found) {
-            if (!found && filename) {
-                // Smart fallback: search subfolders if file not found in specified targetPath
-                fetch("/api/folders")
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        var folders = (data && data.folders) ? data.folders : [];
-                        var searchIndex = 0;
-
-                        function checkNextFolder() {
-                            if (searchIndex >= folders.length) return;
-                            var folderObj = folders[searchIndex++];
-                            var folderName = folderObj.name;
-                            fetch("/api/folders/" + encodeURIComponent(folderName) + "/files")
-                                .then(function (fr) { return fr.json(); })
-                                .then(function (fdata) {
-                                    var filesInFolder = (fdata && fdata.files) ? fdata.files : [];
-                                    var dotIdx = filename.lastIndexOf(".");
-                                    var baseName = dotIdx > 0 ? filename.substring(0, dotIdx) : filename;
-                                    var hasFile = filesInFolder.some(function (sf) {
-                                        return sf.name === filename || sf.name.startsWith(baseName);
-                                    });
-                                    if (hasFile) {
-                                        trySelectInPath(folderName, null);
-                                    } else {
-                                        checkNextFolder();
-                                    }
-                                })
-                                .catch(function () { checkNextFolder(); });
-                        }
-
-                        checkNextFolder();
-                    })
-                    .catch(function () {});
-            }
+                if (matchedEl && matchedName) {
+                    prototypeSelectedItems = [matchedName];
+                    matchedEl.classList.add("selected");
+                    updateSelectionToolbar();
+                    matchedEl.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+            }, 100);
         });
     };
 
     function saveUploadQueueToStorage() {
         if (!window.uploadQueue) return;
         var serialized = window.uploadQueue.map(function (item) {
-            var dir = item.targetDir;
-            if (dir === undefined || dir === null) {
-                dir = (currentFolderPath && currentFolderPath !== "Home") ? currentFolderPath : "";
-            }
             return {
                 id: item.id,
                 fileName: item.fileName || item.name,
@@ -2644,7 +2575,7 @@
                 status: item.status,
                 uploadTime: item.uploadTime,
                 isFolder: item.isFolder,
-                targetDir: dir
+                targetDir: item.targetDir || currentFolderPath || ""
             };
         });
         // Persist to server (cleared on every server restart)
@@ -2652,9 +2583,9 @@
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(serialized)
-        }).catch(function () {});
+        }).catch(function () { });
         // Also keep in localStorage as in-tab fast cache
-        try { localStorage.setItem("lanvan_upload_queue", JSON.stringify(serialized)); } catch (e) {}
+        try { localStorage.setItem("lanvan_upload_queue", JSON.stringify(serialized)); } catch (e) { }
     }
 
     // Debounced tray render — collapses rapid calls into one per animation frame
@@ -2673,6 +2604,7 @@
             window.lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: el ? [el] : undefined });
         }
     }
+    window.refreshLucideIcons = refreshLucideIcons;
 
     function renderUploadTray() {
         window.renderUploadTray = renderUploadTray;
@@ -2754,8 +2686,10 @@
 
         // Calculate summary header title
         var headerTitle = "";
-        if (totalCount === 0 || isAllCompleted || activePendingCount === 0) {
+        if (totalCount === 0) {
             headerTitle = "No pending uploads";
+        } else if (isAllCompleted || activePendingCount === 0) {
+            headerTitle = "Uploads completed (" + totalCount + ")";
         } else if (pausedCount === totalCount) {
             headerTitle = "Uploads paused (" + totalCount + ")";
         } else {
@@ -2777,7 +2711,7 @@
             var bodyClass = isBodyCollapsed ? "upload-toast-body collapsed" : "upload-toast-body";
             var headerActionsHtml = buildHeaderActionsHtml(isAllCompleted, pausedCount, window.uploadManagerExpanded, totalCount, window.uploadTrayDocked);
 
-            var widgetHtml = 
+            var widgetHtml =
                 '<div class="upload-toast-header" style="position: relative; overflow: hidden;">' +
                 '<div class="header-progress-bar" style="position: absolute; top:0; left:0; bottom:0; background: rgba(59, 130, 246, 0.08); z-index: 1; transition: width 0.2s ease-out; width: ' + avgPct + '%;"></div>' +
                 '<span class="upload-toast-header-title" style="position: relative; z-index: 2;">' + headerTitle + '</span>' +
@@ -2876,7 +2810,7 @@
             } else {
                 var pct = Math.round(item.progress || 0);
                 var sizeStr = formatSize(item.fileSize);
-                
+
                 var metaText = "";
                 var fillStyle = "";
                 var actionHtml = "";
@@ -2914,7 +2848,7 @@
                     var actionsContainer = itemEl.querySelector(".upload-toast-actions");
                     if (actionsContainer && actionsContainer.querySelector(".upload-toast-cancel-text")) {
                         actionsContainer.innerHTML = actionHtml;
-                        if (window.lucide) lucide.createIcons();
+                        refreshLucideIcons(actionsContainer);
                     }
                     wireTrayItemListeners(itemEl, item);
                 }
@@ -2960,7 +2894,7 @@
             });
         }
 
-        if (window.lucide) lucide.createIcons();
+        refreshLucideIcons(stack);
     }
 
     // Poll uploadQueue for changes every 500ms while uploads are active
@@ -3051,7 +2985,7 @@
             });
         }
 
-        if (window.lucide) lucide.createIcons();
+        refreshLucideIcons(container);
     }
 
     // =========================================================================
@@ -3210,12 +3144,12 @@
                     });
                     window.uploadQueue = restoredQueue;
                     // Also sync localStorage to match server
-                    try { localStorage.setItem("lanvan_upload_queue", JSON.stringify(restoredQueue)); } catch (e) {}
+                    try { localStorage.setItem("lanvan_upload_queue", JSON.stringify(restoredQueue)); } catch (e) { }
                     startUploadTrayPolling();
                     renderUploadTray();
                 } else {
                     // Server returned empty - clear localStorage too
-                    try { localStorage.removeItem("lanvan_upload_queue"); } catch (e) {}
+                    try { localStorage.removeItem("lanvan_upload_queue"); } catch (e) { }
                     window.uploadQueue = window.uploadQueue || [];
                     renderUploadTray();
                 }
@@ -3231,7 +3165,7 @@
                             startUploadTrayPolling();
                         }
                     }
-                } catch (e) {}
+                } catch (e) { }
                 renderUploadTray();
             });
 
@@ -3373,69 +3307,63 @@
             }, 500);
         }
 
-        // Periodically update the progress in the DOM in-place to prevent hover flickering
-        setInterval(function () {
-            if (window.uploadQueue && window.uploadQueue.length > 0) {
-                var container = document.getElementById("nasFileList");
-                if (!container) return;
+        // Clean event-driven DOM progress updater (no setInterval polling)
+        window.updatePrototypeRowProgress = function (item) {
+            if (!item || !item.fileName) return;
+            var container = document.getElementById("nasFileList");
+            if (!container) return;
 
-                window.uploadQueue.forEach(function (item) {
-                    if (item && item.fileName && (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused')) {
-                        var progress = Math.round(item.progress || 0);
-                        var escName = escapeHtml(item.fileName);
-                        var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
-                        if (row) {
-                            // Update progress text in filename subtitle
-                            var subtitleCell = row.querySelector('.item-subtitle');
-                            if (subtitleCell) {
-                                subtitleCell.textContent = progress + "% • " + (item.status === 'paused' ? 'Paused' : 'Uploading');
-                            }
-                            // Update date cell text
-                            var dateCell = row.querySelector('.item-date');
-                            if (dateCell) {
-                                dateCell.textContent = item.status === 'paused' ? 'Paused' : 'Uploading';
-                            }
-                            // Update progress bar width
-                            var bar = row.querySelector('.row-progress-bar');
-                            if (bar) {
-                                bar.style.width = progress + "%";
-                            }
+            var normCurrentDir = (currentFolderPath === "Home" || currentFolderPath === "Home/" || !currentFolderPath) ? "" : currentFolderPath;
+            var itemDir = item.targetDir || item.parent_path || item.folder || "";
+            if (itemDir === "Home" || itemDir === "Home/") itemDir = "";
 
-                            // Dynamically swap play/pause buttons
-                            var playPauseBtn = row.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
-                            if (playPauseBtn) {
-                                var currentAction = playPauseBtn.getAttribute("data-action");
-                                if (item.status === 'paused' && currentAction === 'pause-upload') {
-                                    playPauseBtn.setAttribute("data-action", "resume-upload");
-                                    playPauseBtn.setAttribute("title", "Resume upload");
-                                    playPauseBtn.innerHTML = '<i data-lucide="play" style="width:16px;height:16px;"></i>';
-                                    if (window.lucide) lucide.createIcons();
-                                } else if (item.status !== 'paused' && currentAction === 'resume-upload') {
-                                    playPauseBtn.setAttribute("data-action", "pause-upload");
-                                    playPauseBtn.setAttribute("title", "Pause upload");
-                                    playPauseBtn.innerHTML = '<i data-lucide="pause" style="width:16px;height:16px;"></i>';
-                                    if (window.lucide) lucide.createIcons();
-                                }
-                            }
-                        } else {
-                            // Row doesn't exist yet (new upload started) -> trigger full render once
-                            if (typeof lastRenderedFiles !== 'undefined') {
-                                renderPrototypeFileList(lastRenderedFiles);
-                            }
+            if (itemDir === normCurrentDir) {
+                var progress = Math.round(item.progress || 0);
+                var escName = escapeHtml(item.fileName);
+                var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
+                if (row) {
+                    var subtitleCell = row.querySelector('.item-subtitle');
+                    if (subtitleCell) {
+                        subtitleCell.textContent = progress + "% • " + (item.status === 'paused' ? 'Paused' : 'Uploading');
+                    }
+                    var dateCell = row.querySelector('.item-date');
+                    if (dateCell) {
+                        dateCell.textContent = item.status === 'paused' ? 'Paused' : 'Uploading';
+                    }
+                    var bar = row.querySelector('.row-progress-bar');
+                    if (bar) {
+                        bar.style.width = progress + "%";
+                    }
+
+                    var playPauseBtn = row.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
+                    if (playPauseBtn) {
+                        var currentAction = playPauseBtn.getAttribute("data-action");
+                        if (item.status === 'paused' && currentAction === 'pause-upload') {
+                            playPauseBtn.setAttribute("data-action", "resume-upload");
+                            playPauseBtn.setAttribute("title", "Resume upload");
+                            playPauseBtn.innerHTML = '<i data-lucide="play" style="width:16px;height:16px;"></i>';
+                            refreshLucideIcons(playPauseBtn);
+                        } else if (item.status !== 'paused' && currentAction === 'resume-upload') {
+                            playPauseBtn.setAttribute("data-action", "pause-upload");
+                            playPauseBtn.setAttribute("title", "Pause upload");
+                            playPauseBtn.innerHTML = '<i data-lucide="pause" style="width:16px;height:16px;"></i>';
+                            refreshLucideIcons(playPauseBtn);
                         }
                     }
-                });
+                } else if (!item._rowRendered) {
+                    item._rowRendered = true;
+                    if (typeof lastRenderedFiles !== 'undefined') {
+                        renderPrototypeFileList(lastRenderedFiles);
+                    }
+                }
             }
-        }, 300);
+        };
 
         window.onUploadQueueAdded = function (files) {
             console.log("[app-init] onUploadQueueAdded hook fired!", files);
             window.uploadTrayDocked = false;
             if (typeof renderUploadTray === "function") {
                 renderUploadTray();
-            }
-            if (typeof lastRenderedFiles !== 'undefined') {
-                renderPrototypeFileList(lastRenderedFiles);
             }
             startUploadTrayPolling();
             var checkInterval = setInterval(function () {

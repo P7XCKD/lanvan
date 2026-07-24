@@ -2184,6 +2184,7 @@ async def upload_folder(
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
     folder_name: str = Form(...),
+    parent_path: Optional[str] = Form(None),
     encrypt: bool = Query(False, description="Encrypt folder contents with AES-256 if true")
 ):
     """Upload multiple files as a folder structure"""
@@ -2196,9 +2197,18 @@ async def upload_folder(
     # [AUTH] Protocol detection
     is_https = request.url.scheme == "https"
     
+    # Target base folder directory
+    base_folder = UPLOAD_FOLDER
+    if parent_path:
+        rel_parent = parent_path.strip("/\\")
+        if rel_parent and rel_parent != "Home":
+            target_parent = (UPLOAD_FOLDER / rel_parent).resolve()
+            if str(target_parent).startswith(str(UPLOAD_FOLDER.resolve())):
+                base_folder = target_parent
+
     # Create folder directory
-    folder_path = UPLOAD_FOLDER / folder_name
-    folder_path.mkdir(exist_ok=True)
+    folder_path = base_folder / folder_name
+    folder_path.mkdir(parents=True, exist_ok=True)
     
     # Process each file and maintain folder structure
     uploaded_files = []

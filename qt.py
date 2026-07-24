@@ -114,25 +114,55 @@ class Suite:
         self._ck(len(missing)==0, f"Critical IDs: {'ALL' if not missing else f'missing={missing[:5]}'}", "html")
 
     # ═══════ SERVER ═══════
-    async def start_server(self):
+    async def start_server(self, use_https=False):
         from app.main import app; import uvicorn
         port = int(os.getenv("QT_PORT","9876"))
-        c = uvicorn.Config(app=app,host="127.0.0.1",port=port,log_level="critical")
+        kw = {"app": app, "host": "127.0.0.1", "port": port, "log_level": "critical"}
+        
+        if use_https:
+            certs_dir = ROOT / "certs"
+            cert_file = certs_dir / "cert.pem"
+            key_file = certs_dir / "key.pem"
+            if not (cert_file.exists() and key_file.exists()):
+                try:
+                    from certs.generate_certs_python import generate_certificates_python
+                    generate_certificates_python(force=True)
+                except Exception as e:
+                    print(WARN(f"Could not generate SSL certs: {e}"))
+            if cert_file.exists() and key_file.exists():
+                kw["ssl_keyfile"] = str(key_file)
+                kw["ssl_certfile"] = str(cert_file)
+                self.base_url = f"https://127.0.0.1:{port}"
+            else:
+                self.base_url = f"http://127.0.0.1:{port}"
+        else:
+            self.base_url = f"http://127.0.0.1:{port}"
+
+        c = uvicorn.Config(**kw)
         s = uvicorn.Server(c)
         self.server = s; self.task = asyncio.create_task(s.serve())
-        await asyncio.sleep(0.5)
-        self.base_url = f"http://127.0.0.1:{port}"
-        print(INFO(f"Server on {self.base_url}"))
+        # Wait for server to become ready (up to 5s)
+        for _ in range(50):
+            await asyncio.sleep(0.1)
+            if s.started:
+                break
+        proto = "HTTPS" if self.base_url.startswith("https") else "HTTP"
+        if s.started:
+            print(INFO(f"Server on {self.base_url} ({proto})"))
+        else:
+            print(WARN(f"Server failed to start on {self.base_url} ({proto}) - port may be in use"))
+            raise RuntimeError(f"Server failed to bind port {port}")
 
     async def stop_server(self):
         if self.task: self.task.cancel()
         try: await self.task
         except asyncio.CancelledError: pass
-        self.task = None; await asyncio.sleep(0.1)
+        self.task = None; await asyncio.sleep(0.3)  # Give OS time to release port
 
     async def _api(self,method,path,**kw):
         timeout = aiohttp.ClientTimeout(total=15)
-        async with aiohttp.ClientSession(timeout=timeout) as s:
+        conn = aiohttp.TCPConnector(ssl=False)
+        async with aiohttp.ClientSession(timeout=timeout, connector=conn) as s:
             async with s.request(method,f"{self.base_url}{path}",**kw) as resp:
                 ct = resp.headers.get("content-type","")
                 if "json" in ct: body = await resp.json()
@@ -289,6 +319,25 @@ class Suite:
         await self._api("POST",f"/delete-folder/{root}")
         self._ck(True,"Folders deleted","folder-ops")
 
+    async def test_folder_upload_api(self):
+        HEAD("FOLDER UPLOAD VIA /upload-folder (PLAIN & AES)")
+        folder_name = f"qt_fup_{secrets.token_hex(3)}"
+        d1 = aiohttp.FormData()
+        d1.add_field("folder_name", folder_name)
+        d1.add_field("files", b"hello file 1 in folder", filename="file1.txt")
+        d1.add_field("files", b"hello file 2 in subfolder", filename="sub/file2.txt")
+        st, body = await self._api("POST", "/upload-folder", data=d1)
+        self._ck(st == 200 and body.get("status") == "success", f"Folder upload plain -> {st}", "folder-ops")
+        await self._api("POST", f"/delete-folder/{folder_name}")
+
+        enc_folder = f"qt_fup_enc_{secrets.token_hex(3)}"
+        d2 = aiohttp.FormData()
+        d2.add_field("folder_name", enc_folder)
+        d2.add_field("files", b"secret encrypted data", filename="secret.txt")
+        st, body = await self._api("POST", "/upload-folder?encrypt=true", data=d2)
+        self._ck(st == 200 and body.get("status") == "success", f"Folder upload AES -> {st}", "folder-ops")
+        await self._api("POST", f"/delete-folder/{enc_folder}")
+
     async def test_folder_auto_increment(self):
         HEAD("FOLDER AUTO-INC")
         base = f"qt_i_{secrets.token_hex(3)}"
@@ -421,16 +470,18 @@ class Suite:
 
     async def run(self, args):
         print(f"\n{C.BOLD}{C.BLUE}Lanvan Regression Suite v6.0{C.RESET}")
-        print(f"Mode: {args.mode} | {time.strftime('%Y-%m-%d %H:%M:%S')}")
-        if args.mode=="all": print("  API + Security + JS/CSS/HTML + File/Folder Ops + Browser UI")
+        print(f"Mode: {args.mode} | HTTPS testing: {'Enabled' if args.use_https or args.mode=='all' else 'Disabled'} | {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        if args.mode=="all": print("  API + Security + JS/CSS/HTML + File/Folder Ops (HTTP & HTTPS) + Browser UI")
 
         run_all = args.mode=="all"; start = time.time()
 
         if run_all or args.mode in ("security","fast"): self.test_security()
         if run_all or args.mode in ("js","fast"): self.test_static_integrity()
 
-        if run_all or args.mode in ("api","file-ops","fast"):
-            await self.start_server()
+        async def _run_suite(use_https=False):
+            proto_str = "HTTPS" if use_https else "HTTP"
+            HEAD(f"SERVER TESTS ({proto_str} PROTOCOL)")
+            await self.start_server(use_https=use_https)
             try:
                 await self._api("POST","/clear")
                 if run_all or args.mode in ("api","fast"):
@@ -447,14 +498,45 @@ class Suite:
                     await self.test_concurrent_uploads()
                     await self.test_special_chars_upload()
                     await self.test_folder_operations()
+                    await self.test_folder_upload_api()
                     await self.test_folder_auto_increment()
                     await self.test_folder_invalid_chars()
                     await self.test_chunked_upload()
                     await self.test_move_operations()
                     await self.test_clear_files()
-            finally: await self.stop_server()
+            finally:
+                try: await self._api("POST","/clear")
+                except: pass
+                await self.stop_server()
 
-        if run_all: await self._browser_ui()
+        if run_all or args.mode in ("api","file-ops","fast"):
+            # Test HTTP mode (port 9876)
+            await _run_suite(use_https=False)
+
+            # Test HTTPS mode on a different port to avoid Windows port-release delay
+            if run_all or args.use_https:
+                try:
+                    os.environ["QT_PORT"] = "9877"
+                    await asyncio.sleep(1.0)
+                    await _run_suite(use_https=True)
+                except Exception as e:
+                    print(WARN(f"HTTPS suite skipped: {e}"))
+                finally:
+                    os.environ["QT_PORT"] = "9876"
+
+        if run_all or args.mode == "ui":
+            try:
+                os.environ["QT_PORT"] = "9878"  # Separate port for UI tests
+                await asyncio.sleep(1.0)
+                await self.start_server(use_https=False)
+                try:
+                    await self._browser_ui()
+                finally:
+                    await self.stop_server()
+            except Exception as e:
+                print(WARN(f"Browser UI suite skipped: {e}"))
+            finally:
+                os.environ["QT_PORT"] = "9876"
 
         elapsed = time.time()-start
         tot = self.r["pass"]+self.r["fail"]
@@ -482,7 +564,8 @@ def main():
     p.add_argument("--security",dest="mode",action="store_const",const="security")
     p.add_argument("--file-ops",dest="mode",action="store_const",const="file-ops")
     p.add_argument("--ui",dest="mode",action="store_const",const="ui")
-    p.set_defaults(mode="all")
+    p.add_argument("--https",dest="use_https",action="store_true",help="Run server tests with HTTPS protocol")
+    p.set_defaults(mode="all", use_https=False)
     args = p.parse_args()
     s = Suite()
     ok = asyncio.run(s.run(args))

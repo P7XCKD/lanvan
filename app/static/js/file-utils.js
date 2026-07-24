@@ -28,40 +28,40 @@ function generateOfflineQR(text, canvas) {
     console.log('⏸ QR computation blocked during upload');
     return false;
   }
-  
+
   // This is the FALLBACK when the server /api/qr-code endpoint is unavailable.
   // Instead of drawing a fake unscannable pattern, show the URL text clearly
   // so users can type it manually on their device.
   const ctx = canvas.getContext('2d');
   canvas.width = 200;
   canvas.height = 200;
-  
+
   // White background
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  
+
   // Border
   ctx.strokeStyle = '#cccccc';
   ctx.lineWidth = 2;
   ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
-  
+
   // Icon area
   ctx.fillStyle = '#666666';
   ctx.font = '36px Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('📱', 100, 60);
-  
+
   // "Scan QR at:" label
   ctx.fillStyle = '#333333';
   ctx.font = 'bold 13px Arial, sans-serif';
   ctx.fillText('Open in browser:', 100, 90);
-  
+
   // URL text (word-wrap if needed)
   ctx.fillStyle = '#0066cc';
   ctx.font = '12px monospace';
   const maxWidth = 180;
   const url = text || 'URL unavailable';
-  
+
   // Simple word wrap for the URL
   if (ctx.measureText(url).width <= maxWidth) {
     ctx.fillText(url, 100, 115);
@@ -71,13 +71,13 @@ function generateOfflineQR(text, canvas) {
     ctx.fillText(url.substring(0, mid), 100, 110);
     ctx.fillText(url.substring(mid), 100, 128);
   }
-  
+
   // Helper text
   ctx.fillStyle = '#999999';
   ctx.font = '10px Arial, sans-serif';
   ctx.fillText('Type this URL on your device', 100, 155);
   ctx.fillText('QR will appear when server is ready', 100, 170);
-  
+
   return canvas.toDataURL();
 }
 
@@ -90,14 +90,14 @@ function getSystemResourceUsage() {
     memory: 50, // Default fallback
     connection: 'unknown'
   };
-  
+
   try {
     // Check memory if available
     if (navigator.deviceMemory) {
       const totalMemory = navigator.deviceMemory * 1024; // Convert to MB
       usage.memory = Math.min(100, (4096 / totalMemory) * 100); // Estimate usage
     }
-    
+
     // Check connection type if available
     if (navigator.connection) {
       usage.connection = navigator.connection.effectiveType || 'unknown';
@@ -106,7 +106,7 @@ function getSystemResourceUsage() {
   } catch (e) {
     console.log('Resource monitoring not available');
   }
-  
+
   return usage;
 }
 
@@ -184,7 +184,7 @@ function getStatusDisplay(status) {
     'queued': 'Queued',
     'uploading': 'Uploading',
     'completed': ' Complete',
-    'error': ' Error', 
+    'error': ' Error',
     'cancelled': '⏸ Cancelled'
   };
   return statusMap[status] || status;
@@ -296,14 +296,14 @@ function shouldInsertBefore(newItem, existingItem) {
   // Priority 1: Incomplete/Failed uploads first
   const newIncomplete = ['failed', 'paused'].includes(newItem.status);
   const existingIncomplete = ['failed', 'paused'].includes(existingItem.status);
-  
+
   if (newIncomplete && !existingIncomplete) return true;
   if (!newIncomplete && existingIncomplete) return false;
-  
+
   // Priority 2: AES files get priority within same completion status
   if (newItem.isAESEnabled && !existingItem.isAESEnabled) return true;
   if (!newItem.isAESEnabled && existingItem.isAESEnabled) return false;
-  
+
   // Priority 3: Smaller files first
   return newItem.fileSize < existingItem.fileSize;
 }
@@ -366,8 +366,8 @@ function startProgressUpdateSafetyNet() {
 
   progressUpdateInterval = setInterval(() => {
     // Include ALL uploads that should show progress (uploading OR processing)
-    const activeUploads = uploadQueue.filter(item => 
-      (item.status === 'uploading' || item.status === 'processing') && 
+    const activeUploads = uploadQueue.filter(item =>
+      (item.status === 'uploading' || item.status === 'processing') &&
       item.progress !== undefined && item.progress < 100
     );
 
@@ -378,14 +378,14 @@ function startProgressUpdateSafetyNet() {
       if (timeSinceUpdate > 800) {
         // Only log if critically stuck for more than 30 seconds to reduce spam
         if (timeSinceUpdate > 30000) {
-          console.warn(` Upload critically stuck for ${uploadItem.fileName} (${(timeSinceUpdate/1000).toFixed(1)}s), forcing update`);
+          console.warn(` Upload critically stuck for ${uploadItem.fileName} (${(timeSinceUpdate / 1000).toFixed(1)}s), forcing update`);
         }
         updateUploadItem(uploadItem, true); // Force update flag
       }
     });
 
     // Keep safety net running if ANY uploads exist (not just active ones)
-    const anyUploads = uploadQueue.filter(item => 
+    const anyUploads = uploadQueue.filter(item =>
       !['completed', 'cancelled', 'error'].includes(item.status)
     );
 
@@ -766,7 +766,7 @@ function displayDeviceLogsWithPagination(logs, contentElement, paginationElement
 
   // Create global pagination controller
   window.uploadHistoryPagination = {
-    goToPage: function(page) {
+    goToPage: function (page) {
       if (page >= 1 && page <= totalPages) {
         currentPage = page;
         renderPage(currentPage);

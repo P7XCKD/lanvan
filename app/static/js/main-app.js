@@ -1432,6 +1432,22 @@ function performUIUpdate(uploadItem, forceUpdate = false) {
   // Keep window.uploadQueue in sync but do NOT re-render the whole tray
   // on every chunk (that causes flicker). updateUploadManager handles tray refresh.
   window.uploadQueue = uploadQueue;
+
+  // Event-driven DOM update for prototype list row on upload progress
+  if (typeof window.updatePrototypeRowProgress === 'function') {
+    window.updatePrototypeRowProgress(uploadItem);
+  }
+
+  // Immediately and smoothly refresh recent cards & file list upon individual file completion
+  if (uploadItem.status === 'completed' && !uploadItem._prototypeRefreshed) {
+    uploadItem._prototypeRefreshed = true;
+    if (typeof fetchFilesData === 'function' && typeof renderPrototypeFileList === 'function') {
+      fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+    } else if (typeof refreshFileList === 'function') {
+      refreshFileList();
+    }
+  }
+
   const now = Date.now();
   lastUIUpdate[uploadItem.id] = now;
 
@@ -2679,9 +2695,10 @@ function updateFileCount(fileCount) {
 
 // Helper to build the correct listing endpoint for the current folder
 function getCurrentFileListEndpoint() {
-  const folder = (typeof window.getCurrentFolderPath === 'function')
+  const rawFolder = (typeof window.getCurrentFolderPath === 'function')
     ? window.getCurrentFolderPath()
     : (window.currentFolderPath || '');
+  const folder = (rawFolder === 'Home' || rawFolder === 'Home/') ? '' : rawFolder;
   if (folder) {
     return '/api/folders/' + encodeURIComponent(folder) + '/files';
   }

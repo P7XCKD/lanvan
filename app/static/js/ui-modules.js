@@ -853,7 +853,9 @@ document.addEventListener('DOMContentLoaded', () => {
         themeTitle.textContent = 'System Theme';
         themeDesc.textContent = "Follow device's theme settings";
       }
-      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      if (window.refreshLucideIcons) {
+        window.refreshLucideIcons(themeIcon ? themeIcon.parentElement : null);
+      } else if (window.lucide && typeof window.lucide.createIcons === 'function') {
         window.lucide.createIcons();
       }
     }
@@ -867,7 +869,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (themePref === 'light') iconName = 'sun';
         else if (themePref === 'dark') iconName = 'moon';
         iconEl.setAttribute('data-lucide', iconName);
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        if (window.refreshLucideIcons) {
+          window.refreshLucideIcons(headerToggleBtn);
+        } else if (window.lucide && typeof window.lucide.createIcons === 'function') {
           window.lucide.createIcons();
         }
       }
@@ -983,30 +987,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  //  Auto-load clipboard history for clipboard-only pages
-  if (typeof show_clipboard_only !== 'undefined' && show_clipboard_only) {
-    // Load clipboard history immediately after page loads
-    setTimeout(() => {
-      if (typeof refreshClipboardHistory === 'function') {
-        refreshClipboardHistory();
-        console.log(' Auto-loaded clipboard history after page refresh');
-      }
-    }, 500);
-  }
+  //  HTTP-Safe mode is now automatic - no toggle management needed
 
-  // Show welcome message based on protocol (only once per session)
-  if (!sessionStorage.getItem('welcome_shown')) {
-    setTimeout(() => {
-      const isHTTP = location.protocol === 'http:';
-      if (isHTTP) {
-        showToast(' Lanvan is ready for file transfers.', 4000);
-      } else {
-        showToast(' HTTPS mode active - Enhanced security enabled.', 4000);
-      }
-      sessionStorage.setItem('welcome_shown', '1');
-    }, 2000);
-  }
-});
+
 
 //  FOLDER UPLOAD FUNCTIONALITY
 let currentUploadMode = 'files';
@@ -1016,17 +999,20 @@ function toggleUploadMode() {
   const toggleBtn = document.getElementById('uploadModeToggle');
   const dropZoneText = document.getElementById('dropZoneText');
 
-  // Toggle between files and folder modes
   if (currentUploadMode === 'files') {
     currentUploadMode = 'folder';
-    toggleBtn.innerHTML = ' Folders';
-    toggleBtn.title = 'Currently in Folders mode - Click to switch to Files';
-    dropZoneText.textContent = ' Drag & Drop folders here or click to select';
+    if (toggleBtn) {
+      toggleBtn.innerHTML = ' Folders';
+      toggleBtn.title = 'Currently in Folders mode - Click to switch to Files';
+    }
+    if (dropZoneText) dropZoneText.textContent = ' Drag & Drop folders here or click to select';
   } else {
     currentUploadMode = 'files';
-    toggleBtn.innerHTML = ' Files';
-    toggleBtn.title = 'Currently in Files mode - Click to switch to Folders';
-    dropZoneText.textContent = ' Drag & Drop files here or click to select';
+    if (toggleBtn) {
+      toggleBtn.innerHTML = ' Files';
+      toggleBtn.title = 'Currently in Files mode - Click to switch to Folders';
+    }
+    if (dropZoneText) dropZoneText.textContent = ' Drag & Drop files here or click to select';
   }
 }
 
@@ -1038,71 +1024,67 @@ function switchUploadMode(mode) {
   currentUploadMode = mode;
 
   if (mode === 'files') {
-    toggleBtn.innerHTML = ' Files';
-    toggleBtn.title = 'Currently in Files mode - Click to switch to Folders';
-    dropZoneText.textContent = ' Drag & Drop files here or click to select';
+    if (toggleBtn) {
+      toggleBtn.innerHTML = ' Files';
+      toggleBtn.title = 'Currently in Files mode - Click to switch to Folders';
+    }
+    if (dropZoneText) dropZoneText.textContent = ' Drag & Drop files here or click to select';
   } else {
-    toggleBtn.innerHTML = ' Folders';
-    toggleBtn.title = 'Currently in Folders mode - Click to switch to Files';
-    dropZoneText.textContent = ' Drag & Drop folders here or click to select';
+    if (toggleBtn) {
+      toggleBtn.innerHTML = ' Folders';
+      toggleBtn.title = 'Currently in Folders mode - Click to switch to Files';
+    }
+    if (dropZoneText) dropZoneText.textContent = ' Drag & Drop folders here or click to select';
+  }
+} folders here or click to select';
   }
 }
 
-//  NEW: Beautiful Sliding Toggle Function
+// NEW: Beautiful Sliding Toggle Function
 function toggleUploadModeNew() {
   const slider = document.getElementById('uploadModeSlider');
   const filesLabel = document.getElementById('filesLabel');
   const foldersLabel = document.getElementById('foldersLabel');
   const dropZoneText = document.getElementById('dropZoneText');
 
-  // Toggle based on checkbox state
-  if (slider.checked) {
-    // Switched to Folders mode
+  if (slider && slider.checked) {
     currentUploadMode = 'folder';
-    filesLabel.classList.remove('active');
-    foldersLabel.classList.add('active');
-    dropZoneText.textContent = ' Drag & Drop folders here or click to select';
+    if (filesLabel) filesLabel.classList.remove('active');
+    if (foldersLabel) foldersLabel.classList.add('active');
+    if (dropZoneText) dropZoneText.textContent = ' Drag & Drop folders here or click to select';
   } else {
-    // Switched to Files mode
     currentUploadMode = 'files';
-    foldersLabel.classList.remove('active');
-    filesLabel.classList.add('active');
-    dropZoneText.textContent = ' Drag & Drop files here or click to select';
+    if (foldersLabel) foldersLabel.classList.remove('active');
+    if (filesLabel) filesLabel.classList.add('active');
+    if (dropZoneText) dropZoneText.textContent = ' Drag & Drop files here or click to select';
   }
-
-  console.log(' Upload mode switched to:', currentUploadMode);
 }
 
 // Initialize the toggle on page load
 document.addEventListener('DOMContentLoaded', function () {
-  // Hide old button immediately
   const oldButton = document.getElementById('uploadModeToggle');
-  if (oldButton) {
-    // Hide the entire parent container of the old button
+  if (oldButton && oldButton.parentElement) {
     oldButton.parentElement.style.display = 'none';
-    console.log(' Old button hidden successfully!');
   }
 
-  // Ensure new slider is visible
   const newSliderContainer = document.getElementById('newSliderContainer');
   if (newSliderContainer) {
     newSliderContainer.style.display = 'flex';
-    console.log(' Sliding toggle activated!');
   }
 });
 
 function handleDropZoneClick() {
-  if (currentUploadMode === 'files') {
-    document.getElementById('fileInput').click();
+  if (typeof currentUploadMode !== 'undefined' && currentUploadMode === 'folder') {
+    const folderInput = document.getElementById('folderInput') || document.getElementById('hiddenFolderInput');
+    if (folderInput) folderInput.click();
   } else {
-    // For folder mode, directly open folder selection dialog
-    document.getElementById('folderInput').click();
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) fileInput.click();
   }
 }
+window.handleDropZoneClick = handleDropZoneClick;
 
-// Folder input handler will be added to the main DOM setup
-
-//  Main file upload handler - fixed to use upload manager!
+// Main file upload handler
 window.handleFiles = function (files) {
   console.log(' handleFiles called with:', files.length, 'files');
 
@@ -1111,22 +1093,15 @@ window.handleFiles = function (files) {
     return;
   }
 
-  // Use the upload queue system for real-time progress tracking
   console.log(' Adding files to upload queue...');
   addToUploadQueue(Array.from(files));
 
-  // Show upload manager
-  console.log(' Showing upload manager...');
   showUploadManager();
-
-  // Start processing uploads
-  console.log('▶ Starting upload process...');
   startNextUpload();
 };
 
 function handleFileSelection(files, type) {
   if (type === 'folder') {
-    // Count unique folders for better user feedback
     const folderSet = new Set();
     Array.from(files).forEach(file => {
       if (file.webkitRelativePath) {
@@ -1140,7 +1115,6 @@ function handleFileSelection(files, type) {
 
     if (folderCount > 1) {
       showToast(` Processing ${folderCount} folders with ${fileCount} files...`, 3000);
-      console.log(` Multiple folders detected: ${Array.from(folderSet).join(', ')}`);
     } else if (folderCount === 1) {
       const folderName = Array.from(folderSet)[0];
       showToast(` Processing folder "${folderName}" with ${fileCount} files...`, 3000);
@@ -1148,11 +1122,8 @@ function handleFileSelection(files, type) {
 
     uploadFolder(files);
   } else {
-    // Use existing file upload logic
     if (typeof window.handleFiles === 'function') {
       window.handleFiles(files);
-    } else {
-      console.log('File upload handler not found');
     }
   }
 }
@@ -1163,7 +1134,6 @@ async function uploadFolder(files) {
     return;
   }
 
-  // Group files by their root folder (multiple folders support)
   const folderGroups = new Map();
   const standaloneFiles = [];
 
@@ -1179,19 +1149,15 @@ async function uploadFolder(files) {
     }
   }
 
-  // Handle multiple folders upload
   if (folderGroups.size > 1) {
-    // Multiple folders detected - upload each separately
     const uploadPromises = [];
-
     for (let [folderName, folderFiles] of folderGroups) {
-      const promise = uploadSingleFolder(folderName, folderFiles);
-      uploadPromises.push(promise);
+      uploadPromises.push(uploadSingleFolder(folderName, folderFiles));
     }
 
     try {
       const results = await Promise.all(uploadPromises);
-      const successCount = results.filter(r => r.success).length;
+      const successCount = results.filter(r => r && r.success).length;
       const totalFolders = folderGroups.size;
 
       if (successCount === totalFolders) {
@@ -1200,11 +1166,12 @@ async function uploadFolder(files) {
         showToast(` ${successCount}/${totalFolders} folders uploaded successfully`, 4000);
       }
 
-      // Refresh file list
       if (typeof refreshFileListManually === 'function') {
         refreshFileListManually();
       }
-      loadFolders();
+      if (typeof fetchFilesData === 'function' && typeof renderPrototypeFileList === 'function') {
+        fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+      }
     } catch (error) {
       console.error('Multiple folder upload error:', error);
       showToast(' Multiple folder upload failed!', 4000);
@@ -1212,7 +1179,6 @@ async function uploadFolder(files) {
     return;
   }
 
-  // Single folder upload (existing functionality)
   const folderName = folderGroups.size === 1 ?
     Array.from(folderGroups.keys())[0] : 'uploaded_folder';
   const folderFiles = folderGroups.size === 1 ?
@@ -1221,15 +1187,17 @@ async function uploadFolder(files) {
   await uploadSingleFolder(folderName, folderFiles);
 }
 
-// Helper function for single folder upload
 async function uploadSingleFolder(folderName, files) {
   const formData = new FormData();
   formData.append('folder_name', folderName);
 
-  // Add all files with their relative paths (strip the root folder name to avoid duplication)
+  const currentDir = (typeof window.getCurrentFolderPath === 'function') ? window.getCurrentFolderPath() : '';
+  if (currentDir) {
+    formData.append('parent_path', currentDir);
+  }
+
   for (let file of files) {
     const relativePath = file.webkitRelativePath || file.name;
-    // Remove the root folder name from the path to avoid duplication
     const pathWithoutRoot = relativePath.includes('/') ? relativePath.substring(relativePath.indexOf('/') + 1) : file.name;
     formData.append('files', file, pathWithoutRoot);
   }
@@ -1244,11 +1212,13 @@ async function uploadSingleFolder(folderName, files) {
 
     if (result.status === 'success') {
       showToast(` Folder "${folderName}" uploaded successfully! (${result.files_uploaded.length} files)`, 4000);
-      // Refresh file list to show new folder
       if (typeof refreshFileListManually === 'function') {
         refreshFileListManually();
       }
-      loadFolders(); // Refresh folder list
+      if (typeof fetchFilesData === 'function' && typeof renderPrototypeFileList === 'function') {
+        fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+      }
+      if (typeof loadFolders === 'function') loadFolders();
       return { success: true, folderName, fileCount: result.files_uploaded.length };
     } else {
       showToast(` Upload failed: ${result.msg}`, 4000);
