@@ -375,7 +375,19 @@
 
         console.log("%c[LANVAN RENDER] 🎨 Folder: '%s' | Files on Disk: %d | Active Uploads Matched: %d", "color:#10b981; font-weight:bold; font-size:12px;", curDir || "Home (Root)", normalizedFiles.length - activeUploads.length, activeUploads.length);
 
-        var originalFilesForQuickAccess = normalizedFiles.slice();
+        // Exclude deleted/cancelled upload queue items from Quick Access snapshot
+        var uploadDeletedNames = {};
+        if (window.uploadQueue) {
+            window.uploadQueue.forEach(function (qi) {
+                var qName = qi.fileName || qi.name;
+                if (qName && (qi.status === 'deleted' || qi.status === 'cancelled')) {
+                    uploadDeletedNames[qName] = true;
+                }
+            });
+        }
+        var originalFilesForQuickAccess = normalizedFiles.filter(function (f) {
+            return !uploadDeletedNames[f.name];
+        });
 
         // Apply client-side Type Filtering
         if (typeFilter !== "all") {
@@ -497,6 +509,15 @@
         renderQuickAccess(originalFilesForQuickAccess
             .filter(function (f) { return !f.isFolder && !f.uploading; })
             .map(function (f) { return f.name; }));
+
+        // Clear selection when clicking on empty space in the file list
+        if (!container.__emptyClickWired) {
+            container.__emptyClickWired = true;
+            container.addEventListener("click", function (e) {
+                if (e.target.closest(".m3-list-item") || e.target.closest("button") || e.target.closest(".quick-card")) return;
+                window.clearSelection();
+            });
+        }
 
         if (window.lucide) lucide.createIcons();
     }
