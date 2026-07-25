@@ -518,9 +518,46 @@ class BrowserSuite:
         await self.test_empty_dropzone_rendering()
         await self.test_folder_upload_no_duplicate_rows()
         await self.test_notification_tray_dom_stability()
+        await self.test_same_name_subfolder_browser_navigation()
         await self.test_connect_qr()
         await self.test_no_js_errors()
         await self.test_after_reload_state()
+
+    async def test_same_name_subfolder_browser_navigation(self):
+        HEAD("SAME-NAME SUBFOLDER BROWSER NAVIGATION")
+        try:
+            await self.page.evaluate("()=>{if(typeof window.openNewFolderDialog==='function')window.openNewFolderDialog()}")
+            await self.page.wait_for_timeout(300)
+            inp = await self.page.query_selector("#newFolderNameInput")
+            if inp:
+                await inp.fill("SameTest")
+                btn = await self.page.query_selector("#newFolderDialog button.dialog-btn-primary")
+                if btn: await btn.click()
+                await self.page.wait_for_timeout(500)
+            
+            item = await self.page.query_selector(".m3-list-item[data-filename='SameTest']")
+            if item:
+                await item.click()
+                await self.page.wait_for_timeout(500)
+
+            await self.page.evaluate("()=>{if(typeof window.openNewFolderDialog==='function')window.openNewFolderDialog()}")
+            await self.page.wait_for_timeout(300)
+            inp2 = await self.page.query_selector("#newFolderNameInput")
+            if inp2:
+                await inp2.fill("SameTest")
+                btn2 = await self.page.query_selector("#newFolderDialog button.dialog-btn-primary")
+                if btn2: await btn2.click()
+                await self.page.wait_for_timeout(500)
+
+            inner_item = await self.page.query_selector(".m3-list-item[data-filename='SameTest']")
+            if inner_item:
+                await inner_item.click()
+                await self.page.wait_for_timeout(500)
+
+            bc = await self.page.text_content("#breadcrumbsContainer")
+            self._check("SameTest" in (bc or ""), "Same-name subfolder navigated cleanly in browser")
+        except Exception as e:
+            self._check(False, f"Browser same-name folder navigation error: {e}")
 
     async def test_view_mode_instant_switch(self):
         HEAD("VIEW MODE INSTANT SWITCH")

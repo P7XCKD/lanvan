@@ -103,5 +103,12 @@ When rendering file lists (`renderPrototypeFileList`), subfolder uploads (e.g. `
 
 ---
 
-## 8. Mandatory Test Suite Sync & QA Regression Gate (`qt.py`)
-Whenever adding new UI behavior, folder navigation rules, or resolving user bug reports (e.g. folder clicking vs checkbox selection, same-name subfolder loops, mobile layout changes), you MUST update `qt.py` with corresponding assertions and test cases. Always run `python qt.py --fast` (and full suite) to ensure 100% pass rate before declaring completion.
+## 8. Mandatory Test Suite Sync & QA Regression Gate (`qt.py` & `ui_test.py`)
+Whenever adding new UI behavior, folder navigation rules, responsive layouts, or resolving user bug reports (e.g. folder clicking vs checkbox selection, same-name subfolder loops, mobile layout changes, dialog placement), you MUST update BOTH `qt.py` (server API & static integrity tests) AND `ui_test.py` (Playwright browser UI end-to-end tests) with corresponding test cases. Always run `python qt.py --fast` (and full suite) to ensure 100% pass rate before declaring completion.
+
+---
+
+## 9. Bug Report Stress Testing & Exploratory Combination Verification (Mandatory Standard)
+Whenever the user reports a bug:
+- You MUST create temporary scratch test scripts (in scratch directory or exploratory combination runs) to stress test all edge-case variations, nested combinations, and race conditions related to that bug before declaring completion.
+- Test multiple combinations of operations (e.g. create same-name folders $\rightarrow$ upload files $\rightarrow$ move files $\rightarrow$ delete nested folders $\rightarrow$ verify 404 recovery) to discover any hidden side effects and guarantee the bug is 100% permanently eliminated.

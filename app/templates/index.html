@@ -107,7 +107,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
 
       <!-- ======= FILE BROWSER VIEW ======= -->
       <div id="fileView" class="view-content"
-        style="display: flex; flex-direction: column; gap: 0.75rem; width:100%; flex: 1; min-height: 0; overflow: hidden;">
+        style="display: flex; flex-direction: column; gap: 0.35rem; width:100%; flex: 1; min-height: 0; overflow: hidden;">
 
         <!-- Desktop Panel Header -->
         <div class="desktop-panel-header">
@@ -119,6 +119,9 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
             <span class="panel-meta" id="filePanelMeta"></span>
             <button class="btn-icon qr-launch-btn" onclick="openConnectQrDialog()" title="Show QR" aria-label="Show QR">
               <i data-lucide="qr-code" style="width:15px;height:15px;"></i>
+            </button>
+            <button class="btn-icon header-settings-btn" onclick="openSettingsDialog()" title="Settings" aria-label="Settings">
+              <i data-lucide="settings" style="width:18px;height:18px;"></i>
             </button>
           </div>
         </div>
@@ -183,11 +186,13 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
                   </div>
                 </div>
               </div>
+              <button class="filter-chip mobile-search-btn" onclick="toggleMobileSearch()" title="Search" aria-label="Search"
+                style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.76rem; font-weight: 700; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-color); border-radius: 999px; padding: 0.45rem 0.8rem; cursor: pointer;">
+                <i data-lucide="search" style="width:12px;height:12px;"></i>
+                <span>Search</span>
+              </button>
             </div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
-              <button class="btn-icon mobile-search-btn" onclick="toggleMobileSearch()" title="Search" aria-label="Search">
-                <i data-lucide="search" style="width:15px;height:15px;"></i>
-              </button>
               <button class="btn-icon mobile-qr-btn" onclick="openConnectQrDialog()" title="Show QR" aria-label="Show QR">
                 <i data-lucide="qr-code" style="width:15px;height:15px;"></i>
               </button>

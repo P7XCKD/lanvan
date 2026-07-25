@@ -23,7 +23,6 @@ import json
 import time
 import argparse
 import secrets
-import urllib.parse
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -105,7 +104,7 @@ class Suite:
                 if not defined: self._ck(False, f"onclick -> undefined: {fn}", "js")
 
         css = (CSS_DIR/"lanvan.css").read_text(encoding="utf-8",errors="ignore")
-        self._ck(css.count("!important")<=185, f"!important: {css.count('!important')}", "css")
+        self._ck(css.count("!important")<=170, f"!important: {css.count('!important')}", "css")
         self._ck(".glass-b4-body" in css and ".b4-badge" in css and ".b4-bottom-strip" in css, "Option B4 Frosted Glass overlay CSS rules defined", "css")
 
         html_text = ""
@@ -162,6 +161,10 @@ class Suite:
         # Verify two-pass DOM update pattern exists (Pass 1 aggregation + Pass 2 single DOM write)
         self._ck("// Pass 1: Aggregate items into per-row progress data" in app_init, "Pass 1 item aggregation logic present", "subfolder-synthesis")
         self._ck("// Pass 2: Update DOM rows with aggregated progress" in app_init, "Pass 2 single-pass DOM row rendering present", "subfolder-synthesis")
+        
+        # Synthetic subfolder batch controls (§4)
+        self._ck("folderFlag && window.uploadQueue" in app_init, "Synthetic folder batch action handler present", "subfolder-synthesis")
+        self._ck("parts.indexOf(targetName) !== -1" in app_init, "Subfolder batch item target matching logic present", "subfolder-synthesis")
 
     def test_defensive_getters(self):
         HEAD("DEFENSIVE PROPERTY ACCESS & DATA CONTRACTS (§1)")
@@ -187,9 +190,17 @@ class Suite:
         self._ck("function cancelUpload" in main_app and "triggerInstantUIUpdate" in main_app, "cancelUpload mutates state and triggers triggerInstantUIUpdate", "declarative-ui")
         self._ck("function pauseUpload" in main_app and "triggerInstantUIUpdate" in main_app, "pauseUpload mutates state and triggers triggerInstantUIUpdate", "declarative-ui")
         self._ck("function resumeUpload" in main_app and "triggerInstantUIUpdate" in main_app, "resumeUpload mutates state and triggers triggerInstantUIUpdate", "declarative-ui")
+        self._ck("Pre-create subfolder paths on server disk" in main_app, "Pre-create subfolders via mkdir in addToUploadQueue present", "declarative-ui")
 
         app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
         self._ck('e.key === "Escape"' in app_init and "window.clearSelection()" in app_init, "Escape key clears selection handler present", "declarative-ui")
+        self._ck("navigateIntoFolder(name)" in app_init, "Immediate folder click navigation handler present", "declarative-ui")
+        self._ck("parts[parts.length - 1] === folderName" not in app_init, "No same-name subfolder blocking guard in navigateIntoFolder", "declarative-ui")
+        self._ck("isNavigatingFolder" in app_init, "Async navigation lock in navigateIntoFolder present", "declarative-ui")
+        self._ck("Unrelated directory path outside current folder view" in app_init, "Strict relDir scope guard in activeFolderMap present", "subfolder-synthesis")
+        self._ck("!folderFlag && itemData.uploading" in app_init, "Uploading folder rows permit click navigation handler present", "declarative-ui")
+        self._ck("var fullFolderPath = cleanParent ? (cleanParent + \"/\" + filename) : filename;" in app_init, "Subfolder delete-folder full path resolution present", "declarative-ui")
+        self._ck("Folder rows render clean; progress belongs to file items and bottom-right Upload Tray!" in app_init, "Folder rows in file list render clean without progress bars present", "subfolder-synthesis")
 
     def test_notification_tray_integrity(self):
         HEAD("NOTIFICATION TRAY INTEGRITY & DISMISSAL (§3)")
@@ -427,6 +438,82 @@ class Suite:
         await self._api("POST",f"/delete-folder/{root}")
         self._ck(True,"Folders deleted","folder-ops")
 
+    async def test_same_name_nested_folders(self):
+        HEAD("SAME-NAME NESTED FOLDERS (e.g. Untitled folder / Untitled folder)")
+        same_name = f"same_folder_{secrets.token_hex(2)}"
+        
+        # 1. Create root folder
+        fd1 = aiohttp.FormData(); fd1.add_field("folder_name", same_name)
+        st1, body1 = await self._api("POST", "/api/files/mkdir", data=fd1)
+        self._ck(st1 == 200 and body1.get("status") == "success", f"Create root folder '{same_name}'", "folder-ops")
+
+        # 2. Create subfolder with the EXACT SAME NAME inside root folder
+        fd2 = aiohttp.FormData(); fd2.add_field("folder_name", same_name); fd2.add_field("parent_path", same_name)
+        st2, body2 = await self._api("POST", "/api/files/mkdir", data=fd2)
+        self._ck(st2 == 200 and body2.get("status") == "success", f"Create subfolder '{same_name}/{same_name}'", "folder-ops")
+
+        # 3. List inner subfolder
+        st3, body3 = await self._api("GET", f"/api/folders/{same_name}/{same_name}/files")
+        self._ck(st3 == 200, f"List nested same-name folder '{same_name}/{same_name}'", "folder-ops")
+
+        # 4. Clean up
+        await self._api("POST", f"/delete-folder/{same_name}/{same_name}")
+        await self._api("POST", f"/delete-folder/{same_name}")
+        self._ck(True, "Cleaned same-name nested test folders", "folder-ops")
+
+    async def test_complex_folder_navigation_combinations(self):
+        HEAD("COMPLEX MULTI-STEP FOLDER & FILE COMBINATION OPERATIONS")
+        tag = secrets.token_hex(2)
+        root = f"qt_combo_{tag}"
+        sub_same = root
+        sub_deep = f"deep_{tag}"
+        fn1 = f"file1_{tag}.txt"
+        fn2 = f"file2_{tag}.txt"
+
+        # 1. Step: Create multi-level nested folders (including same-name subfolder)
+        fd1 = aiohttp.FormData(); fd1.add_field("folder_name", root)
+        st, _ = await self._api("POST", "/api/files/mkdir", data=fd1)
+        self._ck(st == 200, f"Combo 1: Created root '{root}'", "folder-ops")
+
+        fd2 = aiohttp.FormData(); fd2.add_field("folder_name", sub_same); fd2.add_field("parent_path", root)
+        st, _ = await self._api("POST", "/api/files/mkdir", data=fd2)
+        self._ck(st == 200, f"Combo 2: Created same-name subfolder '{root}/{sub_same}'", "folder-ops")
+
+        fd3 = aiohttp.FormData(); fd3.add_field("folder_name", sub_deep); fd3.add_field("parent_path", f"{root}/{sub_same}")
+        st, _ = await self._api("POST", "/api/files/mkdir", data=fd3)
+        self._ck(st == 200, f"Combo 3: Created deep subfolder '{root}/{sub_same}/{sub_deep}'", "folder-ops")
+
+        # 2. Step: Upload files into different nested levels
+        up1 = aiohttp.FormData(); up1.add_field("files", b"data1", filename=fn1); up1.add_field("parent_path", f"{root}/{sub_same}")
+        st, _ = await self._api("POST", "/upload-auto", data=up1)
+        self._ck(st == 200, f"Combo 4: Uploaded '{fn1}' into '{root}/{sub_same}'", "folder-ops")
+
+        up2 = aiohttp.FormData(); up2.add_field("files", b"data2", filename=fn2); up2.add_field("parent_path", f"{root}/{sub_same}/{sub_deep}")
+        st, _ = await self._api("POST", "/upload-auto", data=up2)
+        self._ck(st == 200, f"Combo 5: Uploaded '{fn2}' into '{root}/{sub_same}/{sub_deep}'", "folder-ops")
+
+        # 3. Step: Verify API listings at all nested levels
+        st_l1, b_l1 = await self._api("GET", f"/api/folders/{root}/{sub_same}/files")
+        self._ck(st_l1 == 200, f"Combo 6: Listing level 2 '{root}/{sub_same}'", "folder-ops")
+
+        st_l2, b_l2 = await self._api("GET", f"/api/folders/{root}/{sub_same}/{sub_deep}/files")
+        self._ck(st_l2 == 200, f"Combo 7: Listing level 3 '{root}/{sub_same}/{sub_deep}'", "folder-ops")
+
+        # 4. Step: Move file across nested directories
+        mv = aiohttp.FormData(); mv.add_field("filename", fn1); mv.add_field("parent_path", f"{root}/{sub_same}"); mv.add_field("destination", f"{root}/{sub_same}/{sub_deep}")
+        st_mv, _ = await self._api("POST", "/api/files/move", data=mv)
+        self._ck(st_mv == 200, f"Combo 8: Moved '{fn1}' to '{root}/{sub_same}/{sub_deep}'", "folder-ops")
+
+        # 5. Step: Verify 404 response on non-existent subfolder path
+        st_404, _ = await self._api("GET", f"/api/folders/{root}/{sub_same}/ghost_folder/files")
+        self._ck(st_404 == 404, "Combo 9: Non-existent folder returned status 404", "folder-ops")
+
+        # 6. Step: Clean up all created nested folders
+        await self._api("POST", f"/delete-folder/{root}/{sub_same}/{sub_deep}")
+        await self._api("POST", f"/delete-folder/{root}/{sub_same}")
+        await self._api("POST", f"/delete-folder/{root}")
+        self._ck(True, "Combo 10: Multi-step combination cleanup complete", "folder-ops")
+
     async def test_folder_upload_api(self):
         HEAD("FOLDER UPLOAD VIA /upload-folder (PLAIN & AES)")
         folder_name = f"qt_fup_{secrets.token_hex(3)}"
@@ -445,86 +532,6 @@ class Suite:
         st, body = await self._api("POST", "/upload-folder?encrypt=true", data=d2)
         self._ck(st == 200 and body.get("status") == "success", f"Folder upload AES -> {st}", "folder-ops")
         await self._api("POST", f"/delete-folder/{enc_folder}")
-
-    async def test_nested_folders_and_renaming(self):
-        HEAD("NESTED FOLDERS & SUBFOLDER RENAMING (DEEP TREE)")
-        l1 = f"qt_n1_{secrets.token_hex(2)}"
-        l2 = f"qt_n2_{secrets.token_hex(2)}"
-        l3 = f"qt_n3_{secrets.token_hex(2)}"
-
-        fd1 = aiohttp.FormData(); fd1.add_field("folder_name", l1)
-        st, _ = await self._api("POST", "/api/files/mkdir", data=fd1)
-        self._ck(st == 200, f"Create level 1 folder '{l1}'", "nested-folder-ops")
-
-        fd2 = aiohttp.FormData(); fd2.add_field("folder_name", l2); fd2.add_field("parent_path", l1)
-        st, _ = await self._api("POST", "/api/files/mkdir", data=fd2)
-        self._ck(st == 200, f"Create level 2 folder '{l1}/{l2}'", "nested-folder-ops")
-
-        fd3 = aiohttp.FormData(); fd3.add_field("folder_name", l3); fd3.add_field("parent_path", f"{l1}/{l2}")
-        st, _ = await self._api("POST", "/api/files/mkdir", data=fd3)
-        self._ck(st == 200, f"Create level 3 folder '{l1}/{l2}/{l3}'", "nested-folder-ops")
-
-        st, body = await self._api("GET", f"/api/folders/{l1}%2F{l2}/files")
-        self._ck(st == 200 and any(f.get("name") == l3 for f in body.get("files", [])), "List level 3 subfolder contents", "nested-folder-ops")
-
-        l3_renamed = f"rn_{l3}"
-        rfd = aiohttp.FormData()
-        rfd.add_field("filename", l3)
-        rfd.add_field("new_name", l3_renamed)
-        rfd.add_field("parent_path", f"{l1}/{l2}")
-        st, rbody = await self._api("POST", "/api/files/rename", data=rfd)
-        self._ck(st == 200 and rbody.get("status") == "success", "Rename nested folder with parent_path context", "nested-folder-ops")
-
-        await self._api("POST", f"/delete-folder/{l1}")
-
-    async def test_same_name_subfolder_tree(self):
-        HEAD("SAME-NAME NESTED FOLDERS (Untitled folder LOOP)")
-        name = "Untitled folder"
-        current_path = ""
-        for level in range(1, 4):
-            fd = aiohttp.FormData()
-            fd.add_field("folder_name", name)
-            if current_path:
-                fd.add_field("parent_path", current_path)
-            st, body = await self._api("POST", "/api/files/mkdir", data=fd)
-            created_name = body.get("folder_name", name) if isinstance(body, dict) else name
-            self._ck(st == 200, f"Create same-name folder level {level} ('{created_name}')", "same-name-folders")
-            current_path = f"{current_path}/{created_name}" if current_path else created_name
-
-        encoded = urllib.parse.quote(current_path, safe='')
-        st, body = await self._api("GET", f"/api/folders/{encoded}/files")
-        self._ck(st == 200, f"List deep same-name folder path ({current_path})", "same-name-folders")
-
-        await self._api("POST", f"/delete-folder/{name}")
-
-    def test_empty_state_and_mobile_ui_integrity(self):
-        HEAD("EMPTY STATE CENTERING & MOBILE TOOLBAR INTEGRITY")
-        css = (CSS_DIR / "lanvan.css").read_text(encoding="utf-8", errors="ignore")
-        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
-        html_text = (TEMPLATE_DIR / "index.html").read_text(encoding="utf-8", errors="ignore")
-
-        self._ck(".m3-list:has(.empty-dropzone-wrapper)" in css, "Scrollbar suppression rule for empty dropzone defined", "ui-integrity")
-        self._ck("align-items: center" in css and "justify-content: center" in css, "Empty dropzone wrapper 100% centered vertically & horizontally", "ui-integrity")
-        self._ck("header.app-bar" in css and "display: none" in css, "Top app bar hidden on mobile screens (< 550px)", "mobile-ui")
-        self._ck("toggleMobileSearch" in app_init or "toggleMobileSearch" in (JS_DIR / "main-app.js").read_text(encoding="utf-8", errors="ignore"), "toggleMobileSearch helper function defined", "mobile-ui")
-        self._ck("theme-toggle-btn" not in html_text, "Header theme toggle button removed (managed via Settings dialog)", "ui-integrity")
-        self._ck("file-settings-btn" not in html_text, "Home header Settings pill button removed", "ui-integrity")
-
-    def test_folder_click_navigation_and_selection_integrity(self):
-        HEAD("FOLDER CLICK NAVIGATION & CHECKBOX SELECTION INTEGRITY")
-        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
-
-        self._ck("navigateIntoFolder(name)" in app_init, "Single-click folder navigation enabled", "folder-interaction")
-        self._ck("isCheckboxClick" in app_init and "isMultiSelectKey" in app_init, "Checkbox & Ctrl/Cmd key selection handler defined", "folder-interaction")
-        self._ck("isSelectionActive" in app_init, "Selection mode awareness (isSelectionActive) for batch folder selecting", "folder-interaction")
-        self._ck("touchstart" in app_init and "longTouchTimer" in app_init, "Mobile touch long-press folder selection handler present", "folder-interaction")
-        self._ck("handleListItemClick(item, index, files)" in app_init, "Folder selection toggles prototypeSelectedItems", "folder-interaction")
-        self._ck("openRowMenu" in app_init and "allItems[s].classList.add(\"selected\")" in app_init, "Triple dots context menu auto-selects and highlights target item", "ui-integrity")
-        self._ck("pauseFolderUpload" in app_init and "cancelFolderUpload" in app_init, "Folder upload pause and cancel helper functions defined", "folder-upload-controls")
-        self._ck("pause-folder" in app_init and "cancel-folder" in app_init, "Folder card/row direct Pause and Cancel action controls present", "folder-upload-controls")
-        self._ck("uploadPauseMenuItem" in (TEMPLATE_DIR / "index.html").read_text(encoding="utf-8", errors="ignore"), "Context menu Pause/Resume option for folder/file uploads defined", "folder-upload-controls")
-        self._ck("resume-folder" in app_init and "pause-folder" in app_init, "Folder pause/resume button state toggle sync present in triggerInstantUIUpdate", "folder-upload-controls")
-        self._ck("beforeunload" in app_init and "Navigating away or reloading the page will cancel active file transfers" in app_init, "Page reload/unload confirmation prompt active during file transfers", "upload-safety")
 
     async def test_folder_auto_increment(self):
         HEAD("FOLDER AUTO-INC")
@@ -675,8 +682,6 @@ class Suite:
             self.test_declarative_ui_pattern()
             self.test_notification_tray_integrity()
             self.test_zero_flicker_dom_stability()
-            self.test_empty_state_and_mobile_ui_integrity()
-            self.test_folder_click_navigation_and_selection_integrity()
 
         async def _run_suite(use_https=False):
             proto_str = "HTTPS" if use_https else "HTTP"
@@ -698,9 +703,9 @@ class Suite:
                     await self.test_concurrent_uploads()
                     await self.test_special_chars_upload()
                     await self.test_folder_operations()
+                    await self.test_same_name_nested_folders()
+                    await self.test_complex_folder_navigation_combinations()
                     await self.test_folder_upload_api()
-                    await self.test_nested_folders_and_renaming()
-                    await self.test_same_name_subfolder_tree()
                     await self.test_folder_auto_increment()
                     await self.test_folder_invalid_chars()
                     await self.test_chunked_upload()

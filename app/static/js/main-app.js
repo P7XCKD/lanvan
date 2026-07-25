@@ -668,6 +668,32 @@ function createUploadItem(file, uploadId) {
 function addToUploadQueue(files) {
   console.log("%c[LANVAN UPLOAD] 📥 Queued %d file(s) | Active Folder: '%s'", "color:#8b5cf6; font-weight:bold; font-size:12px;", files.length, window.currentFolderPath || "Home (Root)");
 
+  // Pre-create subfolder paths on server disk for directory uploads
+  const createdFolderPaths = new Set();
+  for (let file of files) {
+    if (file && file.webkitRelativePath && file.webkitRelativePath.includes('/')) {
+      const relParts = file.webkitRelativePath.replace(/\\/g, '/').split('/');
+      let currAccum = "";
+      for (let i = 0; i < relParts.length - 1; i++) {
+        const folderName = relParts[i];
+        const baseCur = (window.currentFolderPath && window.currentFolderPath !== "Home" && window.currentFolderPath !== "Home (Root)") ? window.currentFolderPath : "";
+        const parentPath = i === 0 ? baseCur : (baseCur ? `${baseCur}/${currAccum}` : currAccum);
+        currAccum = currAccum ? `${currAccum}/${folderName}` : folderName;
+        const fullFolderKey = baseCur ? `${baseCur}/${currAccum}` : currAccum;
+
+        if (!createdFolderPaths.has(fullFolderKey)) {
+          createdFolderPaths.add(fullFolderKey);
+          const formData = new FormData();
+          formData.append("folder_name", folderName);
+          if (parentPath) {
+            formData.append("parent_path", parentPath);
+          }
+          fetch("/api/files/mkdir", { method: "POST", body: formData }).catch(() => {});
+        }
+      }
+    }
+  }
+
   for (let file of files) {
     const uploadId = ++uploadIdCounter;
     const uploadItem = createUploadItem(file, uploadId);
