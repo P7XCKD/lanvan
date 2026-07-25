@@ -94,6 +94,9 @@ When rendering file lists (`renderPrototypeFileList`), subfolder uploads (e.g. `
 
 ---
 
-## 6. Self-Documenting Code & Clear Comments
-- Write clean, modular, self-documenting code with descriptive function and variable names.
-- Include clear, concise comments explaining key technical decisions (e.g., `// Retain completed queue items in list until backend disk scan updates to prevent UI flickers`) without adding redundant boilerplate text.
+## 7. Zero-Flicker Icon & UI Element Stability (Mandatory Standard)
+- **Inline SVGs over Dynamic Tag Parsing**: Never rely on asynchronous JS icon replacement loops (`lucide.createIcons()`) or raw placeholder tags (`<i data-lucide="...">`) during high-frequency update loops (e.g. progress ticks). Always use resilient, direct inline SVGs so control icons (Play, Pause, Chevron, Cancel X) render natively without showing broken characters (`00` / `ll`) or disappearing.
+- **Strict In-Place DOM Property Updates**: High-frequency progress handlers (`_doInstantUIUpdate`) MUST strictly mutate existing DOM element properties (`textContent`, `style.width`) in-place. NEVER wipe or re-create parent DOM containers (`container.innerHTML = html`) during active transfers, as destroying elements under the user's cursor drops CSS `:hover` states and causes card flickering.
+- **Loose ID Equality**: Event handlers and queue lookups MUST use loose type coercion (`item.id == uploadId` or `String(item.id) === String(uploadId)`). Never use strict number-to-string equality (`item.id === uploadId`), which fails when `uploadId` is read as a string from DOM attributes.
+- **Scrollbar Layout Shift Prevention**: Scrollable containers with dynamic content (`.upload-toast-body`) MUST specify `scrollbar-gutter: stable;` and `overflow-x: hidden;` in CSS. Action controls (`.upload-toast-actions`, `.upload-toast-cancel-text`) MUST have `flex-shrink: 0; margin-left: auto;` so scrollbar toggle states never cause horizontal button shifting.
+- **Guard DOM Element Re-ordering**: High-frequency list renderers (`renderUploadTray`) MUST verify if an element is already in position (`if (container.children[i] !== itemEl)`) before calling `appendChild(itemEl)`. Re-attaching existing DOM nodes continuously detaches them from the render tree, dropping CSS `:hover` states and causing button flickering on mouseover.

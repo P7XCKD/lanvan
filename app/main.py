@@ -476,6 +476,20 @@ class ShutdownMiddleware(BaseHTTPMiddleware):
         finally:
             await connection_manager.remove_connection(request)
 
+class EnsureDataDirMiddleware(BaseHTTPMiddleware):
+    """Automatically recreate data & data/uploads folders on demand if deleted during runtime"""
+    async def dispatch(self, request: Request, call_next):
+        try:
+            from app.routers.files import UPLOAD_FOLDER, TEMP_CHUNKS_FOLDER, UPLOAD_HISTORY_FILE
+            UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+            TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
+            if not UPLOAD_HISTORY_FILE.parent.exists():
+                UPLOAD_HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        return await call_next(request)
+
+app.add_middleware(EnsureDataDirMiddleware)
 app.add_middleware(IOSSafariMiddleware)
 app.add_middleware(ShutdownMiddleware)
 

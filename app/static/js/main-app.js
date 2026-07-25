@@ -1549,10 +1549,15 @@ function performUIUpdate(uploadItem, forceUpdate = false) {
   if (itemDiv.className !== newClassName) {
     itemDiv.className = newClassName;
   }
+
+  // Trigger main view (Grid cards & List rows) progress sync
+  if (typeof window.triggerInstantUIUpdate === 'function') {
+    window.triggerInstantUIUpdate();
+  }
 }
 
 function cancelUpload(uploadId) {
-  const uploadItem = uploadQueue.find(item => item && item.id === uploadId);
+  const uploadItem = uploadQueue.find(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
   if (!uploadItem) return;
 
   // Abort the upload if in progress
@@ -1645,19 +1650,17 @@ function cancelUpload(uploadId) {
 }
 
 function pauseUpload(uploadId) {
-  const uploadItem = uploadQueue.find(item => item && item.id === uploadId);
+  const uploadItem = uploadQueue.find(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
   if (!uploadItem) return;
 
-  const folderName = window.getItemFolder(uploadItem);
+  const folderName = window.getItemFolder ? window.getItemFolder(uploadItem) : "";
   const isFolderUpload = folderName !== "";
 
   if (isFolderUpload) {
-    let wasAnyUploading = false;
     uploadQueue.forEach(item => {
       if (!item) return;
-      const fName = window.getItemFolder(item);
-      if (fName === folderName && (item.status === 'uploading' || item.status === 'queued')) {
-        if (item.status === 'uploading') wasAnyUploading = true;
+      const fName = window.getItemFolder ? window.getItemFolder(item) : "";
+      if (fName === folderName && (item.status === 'uploading' || item.status === 'queued' || item.status === 'processing')) {
         item.status = 'paused';
         if (item.xhr) {
           try { item.xhr.abort(); } catch (err) {}
@@ -1666,22 +1669,13 @@ function pauseUpload(uploadId) {
       }
     });
     window.uploadManagerExpanded = true;
-    if (wasAnyUploading) {
-      endUpload();
-      setTimeout(() => { startNextUpload(); }, 100);
-    }
-  } else if (uploadItem.status === 'uploading' || uploadItem.status === 'queued') {
-    const wasUploading = uploadItem.status === 'uploading';
+  } else if (uploadItem.status === 'uploading' || uploadItem.status === 'queued' || uploadItem.status === 'processing') {
     uploadItem.status = 'paused';
     window.uploadManagerExpanded = true;
     if (uploadItem.xhr) {
       try { uploadItem.xhr.abort(); } catch (err) {}
     }
     updateUploadItem(uploadItem);
-    if (wasUploading) {
-      endUpload();
-      setTimeout(() => { startNextUpload(); }, 100);
-    }
   }
 
   console.log(`Paused upload ${uploadId}`);
@@ -1691,7 +1685,7 @@ function pauseUpload(uploadId) {
 }
 
 function resumeUpload(uploadId) {
-  const uploadItem = uploadQueue.find(item => item && item.id === uploadId);
+  const uploadItem = uploadQueue.find(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
   if (!uploadItem) return;
 
   const folderName = window.getItemFolder(uploadItem);
@@ -2108,9 +2102,14 @@ function uploadSingleFileWithProgress(uploadItem) {
         const totalFiles = completedUploads.length;
 
         if (totalFiles > 0) {
-          const totalSize = completedUploads.reduce((sum, item) => sum + item.file.size, 0);
+          const getItemSize = item => item ? (item.fileSize || item.size || (item.file ? item.file.size : 0)) : 0;
+          const getItemStartTime = item => item ? (item.startTime || Date.now()) : Date.now();
+
+          const totalSize = completedUploads.reduce((sum, item) => sum + getItemSize(item), 0);
           const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(1);
-          const sessionTime = ((Date.now() - Math.min(...completedUploads.map(item => item.startTime))) / 1000).toFixed(1);
+          const startTimes = completedUploads.map(getItemStartTime);
+          const minStartTime = startTimes.length > 0 ? Math.min(...startTimes) : Date.now();
+          const sessionTime = Math.max(0.1, ((Date.now() - minStartTime) / 1000)).toFixed(1);
           const sessionSpeed = (totalSizeMB / sessionTime).toFixed(1);
 
           // Only show completion toast with smart refresh detection - individual files are already logged separately

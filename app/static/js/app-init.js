@@ -311,11 +311,11 @@
 
             if (window.uploadQueue && window.uploadQueue.length > 0) {
                 var isCancelledOrDeleted = window.uploadQueue.some(function (item) {
-                    if (!item || (!item.fileName && !item.name)) return false;
+                    var itemName = typeof window.getItemName === "function" ? window.getItemName(item) : (item ? (item.fileName || (item.file && item.file.name) || item.name) : "");
+                    if (!item || !itemName) return false;
                     if (item.status !== 'cancelled' && item.status !== 'deleted') return false;
 
                     var itemDir = (item.targetDir || item.parent_path || item.folder || "").replace(/^Home\/?/, "");
-                    var itemName = item.fileName || item.name || "";
 
                     return itemDir === cleanDir && itemName === f.name;
                 });
@@ -329,9 +329,11 @@
             var activeFolderMap = {};
 
             window.uploadQueue.forEach(function (item) {
-                if (!item || !item.fileName) return;
-                var itemDir = item.targetDir || item.parent_path || item.folder || "";
-                if (itemDir === "Home" || itemDir === "Home/") itemDir = "";
+                var itemName = typeof window.getItemName === "function" ? window.getItemName(item) : (item ? (item.fileName || (item.file && item.file.name) || item.name) : "");
+                if (!item || !itemName) return;
+                var rawDir = item.targetDir || item.parent_path || item.folder || "";
+                var itemDir = rawDir.replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
+                if (itemDir === "Home (Root)" || itemDir === "Home" || itemDir === "Home/") itemDir = "";
 
                 // Calculate path relative to current folder view
                 var relDir = itemDir;
@@ -343,9 +345,11 @@
                     }
                 }
 
+                var fileSize = typeof window.getItemSize === "function" ? window.getItemSize(item) : (item.fileSize || (item.file && item.file.size) || 0);
+
                 if (relDir === "") {
                     // Direct file in current view
-                    var existingItem = normalizedFiles.find(function (f) { return f && f.name === item.fileName; });
+                    var existingItem = normalizedFiles.find(function (f) { return f && f.name === itemName; });
                     if (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused') {
                         if (existingItem) {
                             existingItem.uploading = true;
@@ -354,8 +358,8 @@
                             existingItem.uploadId = item.id;
                         } else {
                             activeUploads.push({
-                                name: item.fileName,
-                                size: formatSize(item.fileSize),
+                                name: itemName,
+                                size: formatSize(fileSize),
                                 mtime: Math.floor(Date.now() / 1000),
                                 isFolder: false,
                                 uploading: true,
@@ -366,11 +370,11 @@
                         }
                     } else if (item.status === 'completed' && !existingItem) {
                         // Include completed upload in file list if not yet returned by backend disk scan
-                        var alreadyAdded = activeUploads.find(function (f) { return f.name === item.fileName; });
+                        var alreadyAdded = activeUploads.find(function (f) { return f.name === itemName; });
                         if (!alreadyAdded) {
                             activeUploads.push({
-                                name: item.fileName,
-                                size: formatSize(item.fileSize),
+                                name: itemName,
+                                size: formatSize(fileSize),
                                 mtime: Math.floor(Date.now() / 1000),
                                 isFolder: false
                             });
@@ -508,7 +512,7 @@
             }).length;
             if (activeUploadsCount > 0) {
                 container.innerHTML =
-                    '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; width:100%;">' +
+                    '<div style="grid-column: 1 / -1; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:4rem 0;">' +
                     '<div class="avatar-icon avatar-folder" style="width:72px;height:72px;border-radius:18px;margin-bottom:1rem;">' +
                     '<i data-lucide="upload-cloud" style="width:34px;height:34px;"></i></div>' +
                     '<div style="font-size:1.05rem; font-weight:500; color:var(--text-color); margin-bottom:0.25rem;">Uploading ' + activeUploadsCount + ' file' + (activeUploadsCount === 1 ? '' : 's') + '...</div>' +
@@ -516,7 +520,7 @@
                     "</div>";
             } else {
                 container.innerHTML =
-                    '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; width:100%;">' +
+                    '<div style="grid-column: 1 / -1; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:4rem 0;">' +
                     '<div class="avatar-icon avatar-folder" style="width:72px;height:72px;border-radius:18px;margin-bottom:1rem;">' +
                     '<i data-lucide="folder-open" style="width:34px;height:34px;"></i></div>' +
                     '<div style="font-size:1.05rem; font-weight:500; color:var(--text-color); margin-bottom:0.25rem;">Drop files here</div>' +
@@ -527,6 +531,28 @@
             return;
         }
 
+        var savedViewMode = "grid";
+        try {
+            savedViewMode = localStorage.getItem("lanvan_view_mode") || "grid";
+        } catch (e) {}
+
+        var fileTableHead = document.getElementById("fileTableHead");
+        var listBtn = document.getElementById("listViewBtn");
+        var gridBtn = document.getElementById("gridViewBtn");
+
+        if (savedViewMode === "grid") {
+            container.classList.add("grid-mode");
+            if (fileTableHead) fileTableHead.style.display = "none";
+            if (gridBtn) gridBtn.classList.add("active");
+            if (listBtn) listBtn.classList.remove("active");
+        } else {
+            container.classList.remove("grid-mode");
+            if (fileTableHead) fileTableHead.style.display = "";
+            if (listBtn) listBtn.classList.add("active");
+            if (gridBtn) gridBtn.classList.remove("active");
+        }
+
+        var isGrid = container.classList.contains("grid-mode");
         var html = "";
         for (var i = 0; i < normalizedFiles.length; i++) {
             var fileData = normalizedFiles[i];
@@ -542,20 +568,64 @@
                 var d = new Date(fileData.mtime * 1000);
                 dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
             }
-            html += buildListItem(
-                name,
-                info,
-                size,
-                dateStr,
-                subtitle,
-                !!fileData.isFolder,
-                !!fileData.uploading,
-                fileData.uploadProgress || 0,
-                fileData.uploadId,
-                fileData.uploadStatus
-            );
+            if (isGrid) {
+                html += buildGridItem(
+                    name,
+                    info,
+                    size,
+                    dateStr,
+                    subtitle,
+                    !!fileData.isFolder,
+                    !!fileData.uploading,
+                    fileData.uploadProgress || 0,
+                    fileData.uploadId,
+                    fileData.uploadStatus
+                );
+            } else {
+                html += buildListItem(
+                    name,
+                    info,
+                    size,
+                    dateStr,
+                    subtitle,
+                    !!fileData.isFolder,
+                    !!fileData.uploading,
+                    fileData.uploadProgress || 0,
+                    fileData.uploadId,
+                    fileData.uploadStatus
+                );
+            }
         }
+        // Preserve existing ALREADY-LOADED video and image previews to eliminate blank flickers
+        var existingPreviews = {};
+        var existingItems = container.querySelectorAll(".m3-list-item");
+        for (var k = 0; k < existingItems.length; k++) {
+            var fn = existingItems[k].getAttribute("data-filename");
+            var prev = existingItems[k].querySelector(".grid-card-preview");
+            if (fn && prev) {
+                var vid = prev.querySelector("video");
+                var img = prev.querySelector("img");
+                // Only preserve if video has decoded frame (readyState >= 2) or image is loaded (naturalWidth > 0)
+                var isVidReady = vid && vid.readyState >= 2 && vid.networkState !== 3;
+                var isImgReady = img && img.complete && img.naturalWidth > 0;
+                if (isVidReady || isImgReady) {
+                    existingPreviews[fn] = prev;
+                }
+            }
+        }
+
         container.innerHTML = html;
+
+        // Re-insert loaded preview elements to keep video/image frames smooth without reloading
+        var newItems = container.querySelectorAll(".m3-list-item");
+        for (var n = 0; n < newItems.length; n++) {
+            var itemFn = newItems[n].getAttribute("data-filename");
+            var oldPrev = existingPreviews[itemFn];
+            var newPrev = newItems[n].querySelector(".grid-card-preview");
+            if (oldPrev && newPrev) {
+                newPrev.parentNode.replaceChild(oldPrev, newPrev);
+            }
+        }
 
         // Attach click handlers — pass full normalized data for folder detection
         attachListItemHandlers(container, normalizedFiles.map(function (f) { return f.name; }), normalizedFiles);
@@ -615,18 +685,22 @@
         var actionsHtml = '';
         if (isUploading) {
             var playPauseBtn = '';
+            var svgPlay = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+            var svgPause = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+            var svgClose = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+
             if (uploadStatus === 'paused') {
-                playPauseBtn = '<button class="btn-icon" title="Resume upload" data-action="resume-upload" data-upload-id="' + uploadId + '">' +
-                    '<i data-lucide="play" style="width:16px;height:16px;"></i>' +
+                playPauseBtn = '<button class="btn-icon" title="Resume upload" data-action="resume-upload" data-upload-id="' + uploadId + '" style="display:inline-flex;align-items:center;justify-content:center;">' +
+                    svgPlay +
                     '</button>';
             } else {
-                playPauseBtn = '<button class="btn-icon" title="Pause upload" data-action="pause-upload" data-upload-id="' + uploadId + '">' +
-                    '<i data-lucide="pause" style="width:16px;height:16px;"></i>' +
+                playPauseBtn = '<button class="btn-icon" title="Pause upload" data-action="pause-upload" data-upload-id="' + uploadId + '" style="display:inline-flex;align-items:center;justify-content:center;">' +
+                    svgPause +
                     '</button>';
             }
             actionsHtml = playPauseBtn +
-                '<button class="btn-icon" title="Cancel upload" data-action="cancel-upload" data-upload-id="' + uploadId + '">' +
-                '<i data-lucide="x" style="width:16px;height:16px;"></i>' +
+                '<button class="btn-icon" title="Cancel upload" data-action="cancel-upload" data-upload-id="' + uploadId + '" style="display:inline-flex;align-items:center;justify-content:center;">' +
+                svgClose +
                 '</button>';
         } else {
             actionsHtml =
@@ -665,6 +739,85 @@
     }
 
     /**
+     * Build a rich prototype grid card item HTML.
+     */
+    function buildGridItem(name, info, size, date, subtitle, isFolder, isUploading, uploadProgress, uploadId, uploadStatus) {
+        var escName = escapeHtml(name);
+        var ext = name.split(".").pop().toLowerCase();
+
+        var uploadStatusLabel = uploadStatus === 'paused' ? 'Paused' : 'Uploading';
+        var progressBarHtml = isUploading
+            ? '<div class="glass-b4-body">' +
+              '<div class="b4-badge">' +
+              '<div class="b4-num">' + Math.round(uploadProgress) + '%</div>' +
+              '<div class="b4-sub">' + uploadStatusLabel + '</div>' +
+              '</div>' +
+              '<div class="b4-bottom-strip" style="width:' + uploadProgress + '%;"></div>' +
+              '</div>'
+            : '';
+
+        var previewHtml = '';
+        if (isFolder) {
+            previewHtml = '<div class="grid-card-preview" style="background:#e8f0fe;">' +
+                '<i data-lucide="folder" style="width:52px;height:52px;color:#0b57d0;stroke-width:1.5;"></i>' +
+                '</div>';
+        } else if (info.avatarClass === 'avatar-archive') {
+            previewHtml = '<div class="grid-card-preview" style="background:#efebe9;">' +
+                '<i data-lucide="archive" style="width:48px;height:48px;color:#5d4037;stroke-width:1.5;"></i>' +
+                '</div>';
+        } else if (info.avatarClass === 'avatar-audio') {
+            previewHtml = '<div class="grid-card-preview" style="background:#f3e8ff;">' +
+                '<i data-lucide="music" style="width:48px;height:48px;color:#9333ea;stroke-width:1.5;"></i>' +
+                '</div>';
+        } else if (info.avatarClass === 'avatar-image') {
+            var downloadUrl = "/download/" + encodeURIComponent(name);
+            previewHtml = '<div class="grid-card-preview" style="background:#1e293b;padding:0;">' +
+                '<img src="' + downloadUrl + '" alt="' + escName + '" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.style.display=\'none\';if(this.nextElementSibling)this.nextElementSibling.style.display=\'flex\';" />' +
+                '<div style="display:none;width:100%;height:100%;align-items:center;justify-content:center;">' +
+                '<svg viewBox="0 0 100 60" style="width:75%;height:75%;" fill="none">' +
+                '<path d="M10 50 L35 20 L55 40 L70 25 L90 50 Z" fill="#38bdf8" opacity="0.85"/>' +
+                '<circle cx="75" cy="18" r="7" fill="#fbbf24"/>' +
+                '</svg>' +
+                '</div>' +
+                '</div>';
+        } else if (info.avatarClass === 'avatar-video') {
+            var downloadUrl = "/download/" + encodeURIComponent(name);
+            previewHtml = '<div class="grid-card-preview video-preview-box" style="padding:0;">' +
+                '<video src="' + downloadUrl + '#t=0.5" preload="metadata" style="width:100%;height:100%;object-fit:cover;display:block;" muted></video>' +
+                '<div class="video-play-badge" style="position:absolute;z-index:3;">' +
+                '<i data-lucide="play" style="width:20px;height:20px;fill:currentColor;"></i>' +
+                '</div>' +
+                '</div>';
+        } else {
+            previewHtml = '<div class="grid-card-preview" style="background:#f1f3f4;">' +
+                '<div class="doc-preview-sheet">' +
+                '<div class="doc-preview-line title"></div>' +
+                '<div class="doc-preview-line"></div>' +
+                '<div class="doc-preview-line short"></div>' +
+                '<div style="flex:1;"></div>' +
+                '<i data-lucide="file-text" style="width:24px;height:24px;color:#d93025;"></i>' +
+                '</div>' +
+                '</div>';
+        }
+
+        return (
+            '<div class="m3-list-item' + (isUploading ? ' uploading' : '') + '" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '" style="position:relative; overflow:hidden;">' +
+            '<div class="grid-card-head" style="position:relative; z-index:20; background:var(--card-bg, #ffffff);">' +
+            '<div class="avatar-icon ' + info.avatarClass + '"><i data-lucide="' + info.iconName + '"></i></div>' +
+            '<div class="item-title" title="' + escName + '">' + escName + '</div>' +
+            '<button class="btn-icon" title="More actions" data-action="menu" data-filename="' + escName + '" style="width:24px;height:24px;padding:0;flex-shrink:0;">' +
+            '<i data-lucide="more-vertical" style="width:14px;height:14px;"></i>' +
+            '</button>' +
+            '</div>' +
+            '<div style="position:relative; z-index:2; flex:1; display:flex; flex-direction:column; overflow:hidden;">' +
+            previewHtml +
+            '</div>' +
+            progressBarHtml +
+            '</div>'
+        );
+    }
+
+    /**
      * Attach click handlers to prototype list items after render.
      * @param {Element} container - The list container
      * @param {string[]} files - Array of file/folder names
@@ -678,7 +831,7 @@
                 var itemData = (filesData || [])[index] || {};
                 var folderFlag = item.getAttribute("data-is-folder") === "1" || !!itemData.isFolder;
 
-                // Click / Tap handler
+                // Click / Tap handler (Single click selects item or enters folder)
                 item.addEventListener("click", function (e) {
                     if (e.target.closest("button")) return;
                     if (itemData.uploading) return; // Prevent selection/navigation if uploading
@@ -688,15 +841,19 @@
                         navigateIntoFolder(name);
                         return;
                     }
+
+                    // Single click selects item in both List and Grid modes
                     handleListItemClick(item, index, files);
                 });
 
                 // Double-click handler for desktop mouse
                 item.addEventListener("dblclick", function (e) {
                     if (e.target.closest("button")) return;
-                    if (itemData.uploading) return; // Prevent navigation if uploading
+                    if (itemData.uploading) return;
                     if (folderFlag) {
                         navigateIntoFolder(name);
+                    } else {
+                        window.openFilePreview(name);
                     }
                 });
 
@@ -1198,12 +1355,11 @@
                 } else { failed.push(filename); }
                 deleteNext(index + 1);
             };
-            xhr.send(formData);
             xhr.onerror = function () {
                 failed.push(filename);
                 deleteNext(index + 1);
             };
-            xhr.send();
+            xhr.send(formData);
         }
 
         deleteNext(0);
@@ -1797,17 +1953,26 @@
         var listBtn = document.getElementById("listViewBtn");
         var gridBtn = document.getElementById("gridViewBtn");
 
+        try {
+            localStorage.setItem("lanvan_view_mode", mode);
+        } catch (e) {}
+
+        // Instant view mode toggle (< 1ms HTML template swap)
         if (fileList) {
             if (mode === "grid") {
                 fileList.classList.add("grid-mode");
                 if (fileTableHead) fileTableHead.style.display = "none";
             } else {
                 fileList.classList.remove("grid-mode");
-                if (fileTableHead) fileTableHead.style.display = "grid";
+                if (fileTableHead) fileTableHead.style.display = "";
             }
         }
         if (listBtn) listBtn.classList.toggle("active", mode === "list");
         if (gridBtn) gridBtn.classList.toggle("active", mode === "grid");
+
+        if (typeof lastRenderedFiles !== "undefined") {
+            renderPrototypeFileList(lastRenderedFiles);
+        }
     };
 
     // --- Clipboard Prototype Handlers ---
@@ -2149,8 +2314,455 @@
     // --- Preview ---
     window.closePreviewModal = function () {
         var modal = document.getElementById("previewModal");
-        if (modal) modal.style.display = "none";
+        if (modal) {
+            modal.style.display = "none";
+            var bodyEl = document.getElementById("previewBody");
+            if (bodyEl) bodyEl.innerHTML = "";
+            window.currentPreviewFilename = "";
+            var ctxMenu = document.getElementById("previewContextMenu");
+            if (ctxMenu) ctxMenu.style.display = "none";
+        }
     };
+
+    window.openFilePreview = function (filename) {
+        if (!filename) return;
+        window.currentPreviewFilename = filename;
+        var modal = document.getElementById("previewModal");
+        var titleEl = document.getElementById("previewTitle");
+        var bodyEl = document.getElementById("previewBody");
+        var dlBtn = document.getElementById("previewDownloadBtn");
+        if (!modal || !bodyEl) return;
+
+        var downloadUrl = "/download/" + encodeURIComponent(filename);
+        if (titleEl) titleEl.textContent = filename;
+        if (dlBtn) {
+            dlBtn.href = downloadUrl + "?download=1";
+            dlBtn.download = filename;
+        }
+
+        var ext = filename.split(".").pop().toLowerCase();
+        var escName = escapeHtml(filename);
+
+        var imageExts = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"];
+        var videoExts = ["mp4", "webm", "mov", "mkv", "avi"];
+        var audioExts = ["mp3", "wav", "ogg", "flac", "m4a", "aac"];
+        var textExts = ["txt", "json", "py", "js", "css", "html", "md", "csv", "log", "xml", "yaml", "yml"];
+
+        bodyEl.innerHTML = "";
+        bodyEl.style.padding = "";
+
+        var docExts = ["doc", "docx", "ppt", "pptx", "xls", "xlsx", "rtf", "odt"];
+
+        if (imageExts.indexOf(ext) !== -1) {
+            bodyEl.innerHTML = '<div class="image-preview-wrapper" style="position:relative; width:100%; height:100%; min-height:70vh; flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; background:rgba(18,20,26,0.5); border-radius:14px; padding:1.5rem;">' +
+                '<img id="lanvanZoomImage" src="' + downloadUrl + '" alt="' + escName + '" style="max-width:90vw; max-height:84vh; width:auto; height:auto; object-fit:contain; border-radius:8px; display:block; margin:auto; box-shadow:0 16px 48px rgba(0,0,0,0.6); transition:transform 0.15s ease-out; cursor:grab;" />' +
+                '<div class="zoom-controls-bar" style="position:absolute; bottom:1.2rem; display:flex; align-items:center; gap:0.5rem; background:rgba(18,20,26,0.85); padding:0.4rem 0.9rem; border-radius:24px; border:1px solid rgba(255,255,255,0.12); backdrop-filter:blur(8px); z-index:10;">' +
+                '<button class="gdrive-action-btn" onclick="zoomPreviewImage(-0.25)" title="Zoom Out" style="padding:0.35rem 0.65rem; font-size:0.85rem;"><i data-lucide="zoom-out" style="width:16px;height:16px;"></i></button>' +
+                '<span id="zoomPercentLabel" style="font-size:0.82rem; font-weight:600; color:#fff; min-width:44px; text-align:center;">100%</span>' +
+                '<button class="gdrive-action-btn" onclick="zoomPreviewImage(0.25)" title="Zoom In" style="padding:0.35rem 0.65rem; font-size:0.85rem;"><i data-lucide="zoom-in" style="width:16px;height:16px;"></i></button>' +
+                '<button class="gdrive-action-btn" onclick="resetPreviewImageZoom()" title="Reset Zoom" style="padding:0.35rem 0.65rem; font-size:0.8rem;"><i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Reset</button>' +
+                '</div>' +
+                '</div>';
+            modal.style.display = "flex";
+            refreshLucideIcons(bodyEl);
+            setupImageZoomAndPan();
+        } else if (videoExts.indexOf(ext) !== -1) {
+            bodyEl.innerHTML = '<div style="width:100%; height:100%; min-height:70vh; flex:1; display:flex; align-items:center; justify-content:center; background:rgba(18,20,26,0.5); border-radius:14px; padding:1.5rem;">' +
+                '<video src="' + downloadUrl + '" controls autoplay playsinline preload="auto" style="max-width:90vw; max-height:84vh; width:auto; height:auto; object-fit:contain; border-radius:8px; outline:none; background:transparent; box-shadow:0 16px 48px rgba(0,0,0,0.6);"></video>' +
+                '</div>';
+            modal.style.display = "flex";
+        } else if (audioExts.indexOf(ext) !== -1) {
+            bodyEl.innerHTML = '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.4rem; width:100%; height:100%; min-height:70vh; flex:1; padding:2.5rem; background:rgba(18,20,26,0.5); border-radius:14px; text-align:center;">' +
+                '<div class="avatar-icon avatar-audio" style="width:84px; height:84px; border-radius:24px; background:rgba(168, 85, 247, 0.15); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(168,85,247,0.2);">' +
+                '<i data-lucide="music" style="width:42px; height:42px; color:#c084fc;"></i>' +
+                '</div>' +
+                '<div style="font-weight:700; color:#ffffff; font-size:1.35rem; text-align:center; word-break:break-all; max-width:600px;">' + escName + '</div>' +
+                '<audio src="' + downloadUrl + '" controls autoplay style="width:100%; max-width:460px; outline:none; border-radius:30px;"></audio>' +
+                '</div>';
+            modal.style.display = "flex";
+            refreshLucideIcons(bodyEl);
+        } else if (ext === "pdf") {
+            bodyEl.style.padding = "0";
+            bodyEl.innerHTML = '<div style="width:100%; height:100%; min-height:70vh; flex:1; background:rgba(18,20,26,0.5); border-radius:14px; overflow:hidden;">' +
+                '<iframe src="' + downloadUrl + '" style="width:100%; height:100%; border:none; display:block;"></iframe>' +
+                '</div>';
+            modal.style.display = "flex";
+        } else if (docExts.indexOf(ext) !== -1) {
+            bodyEl.innerHTML = '<div style="width:100%; text-align:center; color:var(--text-color); padding:1rem;">Rendering Word document...</div>';
+            modal.style.display = "flex";
+
+            function renderDocCardFallback() {
+                bodyEl.innerHTML = '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.4rem; width:100%; height:100%; min-height:70vh; flex:1; padding:2.5rem; background:rgba(18, 20, 26, 0.5); border-radius:14px; color:#fff; text-align:center;">' +
+                    '<div class="avatar-icon avatar-doc" style="width:84px; height:84px; border-radius:24px; background:rgba(239, 68, 68, 0.14); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(239,68,68,0.15);">' +
+                    '<i data-lucide="file-text" style="width:42px; height:42px; color:#ef4444;"></i>' +
+                    '</div>' +
+                    '<div style="font-weight:700; font-size:1.4rem; color:#ffffff; text-align:center; word-break:break-all; max-width:600px;">' + escName + '</div>' +
+                    '<div style="font-size:0.95rem; color:rgba(255,255,255,0.75); text-align:center; max-width:440px;">No in-app preview available for this document format.</div>' +
+                    '<a href="' + downloadUrl + '?download=1" download class="gdrive-doc-fallback-btn">' +
+                    '<i data-lucide="download" style="width:18px; height:18px;"></i> Download File' +
+                    '</a>' +
+                    '</div>';
+                refreshLucideIcons(bodyEl);
+            }
+
+            fetch(downloadUrl)
+                .then(function (res) { return res.arrayBuffer(); })
+                .then(function (buffer) {
+                    if (window.docx && window.docx.renderAsync) {
+                        bodyEl.innerHTML = '<div id="docxRenderTarget" style="width:100%; max-height:85vh; overflow-y:auto; padding:1.5rem; display:flex; flex-direction:column; align-items:center; background:rgba(18,20,26,0.5); border-radius:14px;"></div>';
+                        var target = document.getElementById("docxRenderTarget");
+                        window.docx.renderAsync(buffer, target, null, {
+                            inBase64Output: false,
+                            className: "docx",
+                            ignoreWidth: false,
+                            ignoreHeight: false,
+                            ignoreMargins: false,
+                            breakPages: true
+                        })
+                            .then(function () {
+                                console.log("[DOCX-PREVIEW] Successfully rendered docx document!");
+                            })
+                            .catch(function (err) {
+                                console.error("[DOCX-PREVIEW] Render error:", err);
+                                renderDocCardFallback();
+                            });
+                    } else {
+                        renderDocCardFallback();
+                    }
+                })
+                .catch(renderDocCardFallback);
+        } else if (textExts.indexOf(ext) !== -1) {
+            bodyEl.innerHTML = '<div style="width:100%; text-align:center; color:var(--text-color); padding:1rem;">Loading content...</div>';
+            modal.style.display = "flex";
+            fetch(downloadUrl)
+                .then(function (res) { return res.text(); })
+                .then(function (text) {
+                    bodyEl.innerHTML = '<div style="width:100%; height:100%; min-height:70vh; flex:1; background:rgba(18,20,26,0.5); border-radius:14px; padding:1.5rem;">' +
+                        '<pre style="max-height:68vh; width:100%; overflow:auto; background:var(--card-bg); padding:1rem; border-radius:8px; white-space:pre-wrap; word-break:break-word; text-align:left; font-family:monospace; color:var(--text-color); font-size:0.85rem; margin:0; border:1px solid var(--border-color);"></pre>' +
+                        '</div>';
+                    var pre = bodyEl.querySelector("pre");
+                    if (pre) pre.textContent = text;
+                })
+                .catch(function () {
+                    bodyEl.innerHTML = '<div style="color:var(--danger); padding:1rem;">Failed to load text preview.</div>';
+                });
+        } else {
+            bodyEl.innerHTML = '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.4rem; width:100%; height:100%; min-height:70vh; flex:1; padding:2.5rem; background:rgba(18,20,26,0.5); border-radius:14px; color:#fff; text-align:center;">' +
+                '<div class="avatar-icon avatar-doc" style="width:84px; height:84px; border-radius:24px; background:rgba(239, 68, 68, 0.14); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(239,68,68,0.15);">' +
+                '<i data-lucide="file" style="width:42px; height:42px; color:#ef4444;"></i>' +
+                '</div>' +
+                '<div style="font-weight:700; color:#ffffff; font-size:1.4rem; text-align:center; word-break:break-all; max-width:600px;">' + escName + '</div>' +
+                '<div style="font-size:0.95rem; color:rgba(255,255,255,0.75); text-align:center; max-width:440px;">No in-app preview available for this file type.</div>' +
+                '<a href="' + downloadUrl + '?download=1" download class="gdrive-doc-fallback-btn">' +
+                '<i data-lucide="download" style="width:18px; height:18px;"></i> Download File' +
+                '</a>' +
+                '</div>';
+            modal.style.display = "flex";
+            refreshLucideIcons(bodyEl);
+        }
+    };
+
+    window.openFilePreviewTarget = function () {
+        var target = window._contextMenuTarget || (prototypeSelectedItems.length > 0 ? prototypeSelectedItems[0] : "");
+        window._contextMenuTarget = "";
+        if (target) {
+            window.openFilePreview(target);
+        }
+    };
+
+    // Keyboard Controls for Preview Modal (Escape to close, Arrow keys & Space for video controls)
+    document.addEventListener("keydown", function (e) {
+        var modal = document.getElementById("previewModal");
+        if (!modal || modal.style.display === "none") return;
+
+        if (e.key === "Escape" || e.key === "Esc") {
+            e.preventDefault();
+            window.closePreviewModal();
+            return;
+        }
+
+        if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA")) {
+            return;
+        }
+
+        var video = modal.querySelector("video");
+        if (!video) return;
+
+        if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            video.currentTime = Math.max(0, video.currentTime - 10);
+        } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            video.currentTime = Math.min(video.duration || 0, video.currentTime + 10);
+        } else if (e.key === " " || e.code === "Space") {
+            e.preventDefault();
+            if (video.paused) video.play(); else video.pause();
+        }
+    });
+
+    // --- Right-Click Context Menu for Preview Modal ---
+    window.downloadPreviewFile = function (filename) {
+        var menu = document.getElementById("previewContextMenu");
+        if (menu) menu.style.display = "none";
+        var fn = filename || window.currentPreviewFilename;
+        if (!fn) return;
+        var a = document.createElement("a");
+        a.href = "/download/" + encodeURIComponent(fn) + "?download=1";
+        a.download = fn;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    };
+
+    window.copyPreviewMediaToClipboard = function (filename) {
+        var menu = document.getElementById("previewContextMenu");
+        if (menu) menu.style.display = "none";
+        var fn = filename || window.currentPreviewFilename;
+        if (!fn) return;
+
+        var ext = fn.split(".").pop().toLowerCase();
+        var downloadUrl = "/download/" + encodeURIComponent(fn);
+        var imageExts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"];
+        var textExts = ["txt", "json", "py", "js", "css", "html", "md", "csv", "log", "xml", "yaml", "yml"];
+
+        if (imageExts.indexOf(ext) !== -1) {
+            fetch(downloadUrl)
+                .then(function (res) { return res.blob(); })
+                .then(function (blob) {
+                    if (navigator.clipboard && typeof navigator.clipboard.write === "function") {
+                        if (blob.type === "image/png") {
+                            return navigator.clipboard.write([
+                                new ClipboardItem({ "image/png": blob })
+                            ]);
+                        } else {
+                            var img = new Image();
+                            var url = URL.createObjectURL(blob);
+                            img.onload = function () {
+                                var canvas = document.createElement("canvas");
+                                canvas.width = img.naturalWidth || img.width;
+                                canvas.height = img.naturalHeight || img.height;
+                                var ctx = canvas.getContext("2d");
+                                ctx.drawImage(img, 0, 0);
+                                canvas.toBlob(function (pngBlob) {
+                                    URL.revokeObjectURL(url);
+                                    if (pngBlob && navigator.clipboard && typeof navigator.clipboard.write === "function") {
+                                        navigator.clipboard.write([
+                                            new ClipboardItem({ "image/png": pngBlob })
+                                        ]).then(function () {
+                                            if (typeof window.showToast === "function") window.showToast("Image copied to clipboard!");
+                                        }).catch(function (err) {
+                                            if (typeof window.copyTextToClipboard === "function") window.copyTextToClipboard(window.location.origin + downloadUrl);
+                                            if (typeof window.showToast === "function") window.showToast("Image link copied to clipboard!");
+                                        });
+                                    } else {
+                                        if (typeof window.copyTextToClipboard === "function") window.copyTextToClipboard(window.location.origin + downloadUrl);
+                                        if (typeof window.showToast === "function") window.showToast("Image link copied to clipboard!");
+                                    }
+                                }, "image/png");
+                            };
+                            img.src = url;
+                            return;
+                        }
+                    } else {
+                        if (typeof window.copyTextToClipboard === "function") window.copyTextToClipboard(window.location.origin + downloadUrl);
+                        if (typeof window.showToast === "function") window.showToast("Image link copied to clipboard!");
+                    }
+                })
+                .then(function () {
+                    if (typeof window.showToast === "function") window.showToast("Image copied to clipboard!");
+                })
+                .catch(function (err) {
+                    console.error("Image copy error:", err);
+                    if (typeof window.copyTextToClipboard === "function") window.copyTextToClipboard(window.location.origin + downloadUrl);
+                    if (typeof window.showToast === "function") window.showToast("File link copied to clipboard!");
+                });
+        } else if (textExts.indexOf(ext) !== -1) {
+            var pre = document.querySelector("#previewModal pre");
+            var textToCopy = pre && pre.textContent ? pre.textContent : "";
+            if (textToCopy) {
+                if (typeof window.copyTextToClipboard === "function") {
+                    window.copyTextToClipboard(textToCopy);
+                } else if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+                    navigator.clipboard.writeText(textToCopy);
+                }
+                if (typeof window.showToast === "function") window.showToast("Text copied to clipboard!");
+            } else {
+                fetch(downloadUrl)
+                    .then(function (res) { return res.text(); })
+                    .then(function (text) {
+                        if (typeof window.copyTextToClipboard === "function") {
+                            window.copyTextToClipboard(text);
+                        } else if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+                            navigator.clipboard.writeText(text);
+                        }
+                        if (typeof window.showToast === "function") window.showToast("Text copied to clipboard!");
+                    });
+            }
+        } else {
+            var fullUrl = window.location.origin + downloadUrl;
+            if (typeof window.copyTextToClipboard === "function") {
+                window.copyTextToClipboard(fullUrl);
+            } else if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+                navigator.clipboard.writeText(fullUrl);
+            }
+            if (typeof window.showToast === "function") window.showToast("File link copied to clipboard!");
+        }
+    };
+
+    function showPreviewContextMenu(x, y, filename) {
+        var menu = document.getElementById("previewContextMenu");
+        if (!menu) {
+            menu = document.createElement("div");
+            menu.id = "previewContextMenu";
+            menu.className = "context-menu";
+            menu.style.cssText = "position:fixed; z-index:20000; min-width:190px; padding:6px 0; border-radius:12px; background:var(--card-bg, #1e2026); border:1px solid var(--border-color, rgba(255,255,255,0.15)); box-shadow:0 12px 36px rgba(0,0,0,0.5); display:none;";
+            document.body.appendChild(menu);
+
+            document.addEventListener("click", function () {
+                menu.style.display = "none";
+            });
+        }
+
+        var escFn = escapeHtml(filename);
+        var ext = filename.split(".").pop().toLowerCase();
+        var imageExts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"];
+        var isImage = imageExts.indexOf(ext) !== -1;
+
+        var html = '<div class="menu-item" onclick="downloadPreviewFile(\'' + escFn + '\')" style="display:flex; align-items:center; gap:10px; padding:9px 16px; cursor:pointer; font-size:0.9rem; font-weight:500; color:var(--text-color, #fff); border-radius:6px; margin:0 4px; transition:background 0.15s ease;">' +
+            '<i data-lucide="download" style="width:16px; height:16px; color:var(--primary, #3b82f6);"></i> Download' +
+            '</div>';
+
+        if (isImage) {
+            html += '<div class="menu-item" onclick="copyPreviewMediaToClipboard(\'' + escFn + '\')" style="display:flex; align-items:center; gap:10px; padding:9px 16px; cursor:pointer; font-size:0.9rem; font-weight:500; color:var(--text-color, #fff); border-radius:6px; margin:0 4px; transition:background 0.15s ease;">' +
+                '<i data-lucide="copy" style="width:16px; height:16px; color:var(--primary, #3b82f6);"></i> Copy to Clipboard' +
+                '</div>';
+        }
+
+        menu.innerHTML = html;
+        menu.style.display = "block";
+
+        var menuWidth = menu.offsetWidth || 190;
+        var menuHeight = menu.offsetHeight || 100;
+        var posX = Math.min(x, window.innerWidth - menuWidth - 10);
+        var posY = Math.min(y, window.innerHeight - menuHeight - 10);
+
+        menu.style.left = posX + "px";
+        menu.style.top = posY + "px";
+
+        if (window.refreshLucideIcons) {
+            window.refreshLucideIcons(menu);
+        }
+    }
+
+    var previewModalEl = document.getElementById("previewModal");
+    if (previewModalEl) {
+        previewModalEl.addEventListener("dblclick", function (e) {
+            if (e.target.tagName !== "PRE" && e.target.tagName !== "CODE" && e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA") {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        });
+        previewModalEl.addEventListener("contextmenu", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var fn = window.currentPreviewFilename;
+            if (!fn) {
+                var titleEl = document.getElementById("previewTitle");
+                if (titleEl) fn = titleEl.textContent.trim();
+            }
+            if (fn) {
+                showPreviewContextMenu(e.clientX, e.clientY, fn);
+            }
+        });
+    }
+
+    // =========================================================================
+    // IMAGE ZOOM & PAN FUNCTIONALITY
+    // =========================================================================
+    var currentImageScale = 1;
+    var currentImageTransX = 0;
+    var currentImageTransY = 0;
+    var isDraggingImage = false;
+    var dragStartX = 0;
+    var dragStartY = 0;
+
+    window.updateImageTransform = function () {
+        var img = document.getElementById("lanvanZoomImage");
+        var label = document.getElementById("zoomPercentLabel");
+        if (!img) return;
+        img.style.transform = "translate(" + currentImageTransX + "px, " + currentImageTransY + "px) scale(" + currentImageScale + ")";
+        if (label) label.textContent = Math.round(currentImageScale * 100) + "%";
+        img.style.cursor = currentImageScale > 1 ? (isDraggingImage ? "grabbing" : "grab") : "grab";
+    };
+
+    window.zoomPreviewImage = function (delta) {
+        currentImageScale = Math.max(0.5, Math.min(4, currentImageScale + delta));
+        if (currentImageScale === 1) {
+            currentImageTransX = 0;
+            currentImageTransY = 0;
+        }
+        window.updateImageTransform();
+    };
+
+    window.resetPreviewImageZoom = function () {
+        currentImageScale = 1;
+        currentImageTransX = 0;
+        currentImageTransY = 0;
+        window.updateImageTransform();
+    };
+
+    function setupImageZoomAndPan() {
+        currentImageScale = 1;
+        currentImageTransX = 0;
+        currentImageTransY = 0;
+        isDraggingImage = false;
+
+        var img = document.getElementById("lanvanZoomImage");
+        var wrapper = img ? img.parentElement : null;
+        if (!img || !wrapper) return;
+
+        // Mouse Wheel Zoom
+        wrapper.addEventListener("wheel", function (e) {
+            e.preventDefault();
+            var zoomDelta = e.deltaY < 0 ? 0.2 : -0.2;
+            window.zoomPreviewImage(zoomDelta);
+        }, { passive: false });
+
+        // Double Click to Toggle 1x / 2x Zoom
+        img.addEventListener("dblclick", function (e) {
+            e.stopPropagation();
+            if (currentImageScale > 1.2) {
+                window.resetPreviewImageZoom();
+            } else {
+                currentImageScale = 2;
+                window.updateImageTransform();
+            }
+        });
+
+        // Mouse Drag to Pan Image
+        img.addEventListener("mousedown", function (e) {
+            if (e.button !== 0) return;
+            isDraggingImage = true;
+            dragStartX = e.clientX - currentImageTransX;
+            dragStartY = e.clientY - currentImageTransY;
+            img.style.cursor = "grabbing";
+            e.preventDefault();
+        });
+
+        document.addEventListener("mousemove", function (e) {
+            if (!isDraggingImage) return;
+            currentImageTransX = e.clientX - dragStartX;
+            currentImageTransY = e.clientY - dragStartY;
+            window.updateImageTransform();
+        });
+
+        document.addEventListener("mouseup", function () {
+            if (isDraggingImage) {
+                isDraggingImage = false;
+                window.updateImageTransform();
+            }
+        });
+    }
 
     window.copyToClipboard = function (text) {
         if (navigator.clipboard) {
@@ -2386,7 +2998,17 @@
         window.uploadManagerExpanded = false;
     }
 
+    var _instantUIUpdateScheduled = false;
     window.triggerInstantUIUpdate = function () {
+        if (_instantUIUpdateScheduled) return;
+        _instantUIUpdateScheduled = true;
+        requestAnimationFrame(function () {
+            _instantUIUpdateScheduled = false;
+            _doInstantUIUpdate();
+        });
+    };
+
+    function _doInstantUIUpdate() {
         if (typeof window.scheduleUploadTrayRender === "function") {
             window.scheduleUploadTrayRender();
         } else if (typeof renderUploadTray === "function") {
@@ -2398,7 +3020,8 @@
             var missingRow = false;
 
             window.uploadQueue.forEach(function (item) {
-                if (item && item.fileName && (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused')) {
+                if (item && (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused')) {
+                    var itemName = item.fileName || (item.file && item.file.name) || item.name;
                     var itemDir = item.targetDir || item.parent_path || item.folder || "";
                     if (itemDir === "Home" || itemDir === "Home/") itemDir = "";
                     var relDir = itemDir;
@@ -2406,54 +3029,93 @@
                         if (relDir.startsWith(normCurrentDir + "/")) relDir = relDir.substring(normCurrentDir.length + 1);
                         else if (relDir === normCurrentDir) relDir = "";
                     }
-                    var checkName = relDir === "" ? item.fileName : relDir.split("/")[0];
+                    var checkName = relDir === "" ? itemName : relDir.split("/")[0];
                     if (checkName) {
                         var escCheck = escapeHtml(checkName);
-                        var existingRow = container.querySelector('.m3-list-item[data-filename="' + escCheck + '"]');
+                        var existingRow = container.querySelector('.m3-list-item[data-filename="' + escCheck + '"]') ||
+                            container.querySelector('.m3-list-item[data-filename="' + checkName + '"]');
                         if (!existingRow) missingRow = true;
                     }
                 }
             });
 
-            var hasCancelled = window.uploadQueue.some(function(i) { return i && i.status === 'cancelled'; });
+            var hasCancelled = window.uploadQueue.some(function (i) { return i && i.status === 'cancelled'; });
 
-            if ((missingRow || hasCancelled) && typeof lastRenderedFiles !== "undefined") {
+            if (missingRow && typeof lastRenderedFiles !== "undefined" && !window._instantRenderInProgress) {
+                window._instantRenderInProgress = true;
                 renderPrototypeFileList(lastRenderedFiles);
+                setTimeout(function () { window._instantRenderInProgress = false; }, 200);
             } else {
                 window.uploadQueue.forEach(function (item) {
-                    if (item && item.fileName) {
-                        var escName = escapeHtml(item.fileName);
-                        var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
-                        if (row) {
-                            if (item.status === 'cancelled') {
-                                row.remove();
-                            } else if (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused') {
-                                var progress = Math.round(item.progress || 0);
-                                var subtitleCell = row.querySelector('.item-subtitle');
-                                if (subtitleCell) {
-                                    subtitleCell.textContent = progress + "% • " + (item.status === 'paused' ? 'Paused' : 'Uploading');
-                                }
-                                var dateCell = row.querySelector('.item-date');
-                                if (dateCell) {
-                                    dateCell.textContent = item.status === 'paused' ? 'Paused' : 'Uploading';
-                                }
-                                var bar = row.querySelector('.row-progress-bar');
-                                if (bar) {
-                                    bar.style.width = progress + "%";
-                                }
-                                var playPauseBtn = row.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
-                                if (playPauseBtn) {
-                                    var currentAction = playPauseBtn.getAttribute("data-action");
-                                    if (item.status === 'paused' && currentAction === 'pause-upload') {
-                                        playPauseBtn.setAttribute("data-action", "resume-upload");
-                                        playPauseBtn.setAttribute("title", "Resume upload");
-                                        playPauseBtn.innerHTML = '<i data-lucide="play" style="width:16px;height:16px;"></i>';
-                                        if (window.lucide) lucide.createIcons();
-                                    } else if (item.status !== 'paused' && currentAction === 'resume-upload') {
-                                        playPauseBtn.setAttribute("data-action", "pause-upload");
-                                        playPauseBtn.setAttribute("title", "Pause upload");
-                                        playPauseBtn.innerHTML = '<i data-lucide="pause" style="width:16px;height:16px;"></i>';
-                                        if (window.lucide) lucide.createIcons();
+                    if (item) {
+                        var itemName = item.fileName || (item.file && item.file.name) || item.name;
+                        if (itemName) {
+                            var rawDir = item.targetDir || item.parent_path || item.folder || "";
+                            var itemDir = rawDir.replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
+                            if (itemDir === "Home (Root)" || itemDir === "Home" || itemDir === "Home/") itemDir = "";
+                            var relDir = itemDir;
+                            if (normCurrentDir) {
+                                if (relDir.startsWith(normCurrentDir + "/")) relDir = relDir.substring(normCurrentDir.length + 1);
+                                else if (relDir === normCurrentDir) relDir = "";
+                            }
+                            var checkName = relDir === "" ? itemName : relDir.split("/")[0];
+                            var escName = escapeHtml(checkName);
+                            var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
+                            if (row) {
+                                if (item.status === 'cancelled') {
+                                    row.remove();
+                                } else if (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused') {
+                                    var progress = Math.round(item.progress || 0);
+
+                                    var subtitleCell = row.querySelector('.item-subtitle');
+                                    if (subtitleCell) {
+                                        var newSub = progress + "% • " + (item.status === 'paused' ? 'Paused' : 'Uploading');
+                                        if (subtitleCell.textContent !== newSub) subtitleCell.textContent = newSub;
+                                    }
+                                    var dateCell = row.querySelector('.item-date');
+                                    if (dateCell) {
+                                        var newDate = item.status === 'paused' ? 'Paused' : 'Uploading';
+                                        if (dateCell.textContent !== newDate) dateCell.textContent = newDate;
+                                    }
+                                    var bar = row.querySelector('.row-progress-bar');
+                                    if (bar) {
+                                        bar.style.width = progress + "%";
+                                    }
+
+                                    // Sync Grid Mode Option B4 overlay elements live with upload progress
+                                    var b4Num = row.querySelector('.b4-num');
+                                    if (b4Num) {
+                                        var newNum = progress + "%";
+                                        if (b4Num.textContent !== newNum) b4Num.textContent = newNum;
+                                    }
+                                    var b4Sub = row.querySelector('.b4-sub');
+                                    if (b4Sub) {
+                                        var newB4Sub = item.status === 'paused' ? 'Paused' : 'Uploading';
+                                        if (b4Sub.textContent !== newB4Sub) b4Sub.textContent = newB4Sub;
+                                    }
+                                    var b4Strip = row.querySelector('.b4-bottom-strip');
+                                    if (b4Strip) {
+                                        b4Strip.style.width = progress + "%";
+                                    }
+                                    var waterBar = row.querySelector('.grid-water-progress-bar');
+                                    if (waterBar) {
+                                        waterBar.style.height = progress + "%";
+                                        var playPauseBtn = row.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
+                                     if (playPauseBtn) {
+                                         var currentAction = playPauseBtn.getAttribute("data-action");
+                                         var svgPlay = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+                                         var svgPause = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+
+                                         if (item.status === 'paused' && currentAction === 'pause-upload') {
+                                             playPauseBtn.setAttribute("data-action", "resume-upload");
+                                             playPauseBtn.setAttribute("title", "Resume upload");
+                                             playPauseBtn.innerHTML = svgPlay;
+                                         } else if (item.status !== 'paused' && currentAction === 'resume-upload') {
+                                             playPauseBtn.setAttribute("data-action", "pause-upload");
+                                             playPauseBtn.setAttribute("title", "Pause upload");
+                                             playPauseBtn.innerHTML = svgPause;
+                                         }
+                                     }
                                     }
                                 }
                             }
@@ -2467,25 +3129,35 @@
     window.pauseAllUploads = function () {
         var queue = window.uploadQueue || [];
         queue.forEach(function (item) {
-            if (item.status === "uploading" || item.status === "queued") {
+            if (item && (item.status === "uploading" || item.status === "queued" || item.status === "processing")) {
                 if (typeof window.pauseUpload === "function") {
                     window.pauseUpload(item.id);
+                } else if (typeof window.pauseUploadItem === "function") {
+                    window.pauseUploadItem(item.id);
+                } else {
+                    item.status = "paused";
+                    if (item.xhr) { try { item.xhr.abort(); } catch (e) {} }
                 }
             }
         });
-        window.uploadManagerExpanded = true;
+        window.uploadManagerExpanded = true; // Auto-expand when paused
         window.triggerInstantUIUpdate();
     };
 
     window.resumeAllUploads = function () {
         var queue = window.uploadQueue || [];
         queue.forEach(function (item) {
-            if (item.status === "paused") {
+            if (item && item.status === "paused") {
                 if (typeof window.resumeUpload === "function") {
                     window.resumeUpload(item.id);
+                } else if (typeof window.resumeUploadItem === "function") {
+                    window.resumeUploadItem(item.id);
+                } else {
+                    item.status = "uploading";
                 }
             }
         });
+        window.uploadManagerExpanded = false; // Auto-collapse when resumed
         window.triggerInstantUIUpdate();
     };
 
@@ -2500,15 +3172,16 @@
         var fillStyle = "";
         var actionHtml = "";
 
-        if (item.status === 'deleted') {
-            metaText = sizeStr;
-            fillStyle = 'background: rgba(220, 38, 38, 0.12); width: 100%;';
-            actionHtml = '<span style="color: #dc2626; display: flex; align-items: center; margin-right: 8px;"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></span>';
+        if (item.status === 'deleted' || item.status === 'cancelled') {
+            var label = item.status === 'deleted' ? 'Deleted' : 'Cancelled';
+            metaText = sizeStr + " • " + label;
+            fillStyle = 'background: rgba(220, 38, 38, 0.06); width: 100%;';
+            actionHtml = '<span style="color: #dc2626; font-size:0.75rem; font-weight:600; margin-right: 8px;">' + label + '</span>';
         } else if (item.status === 'completed') {
             var timeStr = item.uploadTime ? item.uploadTime + "s" : "completed";
             metaText = sizeStr + " • Completed (" + timeStr + ")";
             fillStyle = 'background: rgba(24, 128, 56, 0.08); width: 100%;';
-            actionHtml = '<span style="color: var(--green); display: flex; align-items: center; margin-right: 8px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>';
+            actionHtml = '<span style="color: var(--green); display: inline-flex; align-items: center; justify-content: center; margin-right: 8px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span>';
         } else if (item.status === 'paused') {
             metaText = sizeStr + " • " + pct + "% (Paused)";
             fillStyle = 'background: rgba(234, 179, 8, 0.12); width: ' + pct + '%;';
@@ -2616,29 +3289,40 @@
         var toggleHtml = "";
         var actionBtnHtml = "";
 
+        var svgChevronDown = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+        var svgChevronUp = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+        var svgPlay = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+        var svgPause = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+        var svgClose = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+        var svgPlus = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
+
         if (totalCount > 0) {
+            var chevronSvg = expanded ? svgChevronDown : svgChevronUp;
+            var chevronBtn = '<button type="button" class="upload-toast-header-btn header-expand-btn" title="Toggle detailed list" style="display:inline-flex; align-items:center; justify-content:center;">' +
+                chevronSvg +
+                '</button>';
+
             if (isAllCompleted) {
-                var chevronIcon = expanded ? "chevron-down" : "chevron-up";
-                toggleHtml = '<button type="button" class="upload-toast-header-btn header-expand-btn" title="Toggle detailed list">' +
-                    '<i data-lucide="' + chevronIcon + '"></i>' +
-                    '</button>';
+                toggleHtml = chevronBtn;
             } else {
+                var playPauseBtn = "";
                 if (pausedCount > 0) {
-                    toggleHtml = '<button type="button" class="upload-toast-header-btn header-playpause-btn" title="Resume all uploads" data-action="resume">' +
-                        '<i data-lucide="play" style="fill: currentColor;"></i>' +
+                    playPauseBtn = '<button type="button" class="upload-toast-header-btn header-playpause-btn" title="Resume all uploads" data-action="resume" style="display:inline-flex; align-items:center; justify-content:center;">' +
+                        svgPlay +
                         '</button>';
                 } else {
-                    toggleHtml = '<button type="button" class="upload-toast-header-btn header-playpause-btn" title="Pause all uploads" data-action="pause">' +
-                        '<i data-lucide="pause"></i>' +
+                    playPauseBtn = '<button type="button" class="upload-toast-header-btn header-playpause-btn" title="Pause all uploads" data-action="pause" style="display:inline-flex; align-items:center; justify-content:center;">' +
+                        svgPause +
                         '</button>';
                 }
+                toggleHtml = playPauseBtn + chevronBtn;
             }
-            actionBtnHtml = '<button type="button" class="upload-toast-header-btn close-panel-btn" title="Cancel all uploads and close">' +
-                '<i data-lucide="x"></i>' +
+            actionBtnHtml = '<button type="button" class="upload-toast-header-btn close-panel-btn" title="Cancel all uploads and close" style="display:inline-flex; align-items:center; justify-content:center;">' +
+                svgClose +
                 '</button>';
         } else {
-            actionBtnHtml = '<button type="button" class="upload-toast-header-btn open-menu-btn" title="Upload or Create">' +
-                '<i data-lucide="plus"></i>' +
+            actionBtnHtml = '<button type="button" class="upload-toast-header-btn open-menu-btn" title="Upload or Create" style="display:inline-flex; align-items:center; justify-content:center;">' +
+                svgPlus +
                 '</button>';
         }
 
@@ -2678,6 +3362,23 @@
         if (closeBtn) {
             closeBtn.addEventListener("click", function (e) {
                 e.stopPropagation();
+                if (window.uploadQueue) {
+                    var hasActive = window.uploadQueue.some(function (i) {
+                        return i.status === 'uploading' || i.status === 'queued' || i.status === 'processing' || i.status === 'paused';
+                    });
+                    if (!hasActive) {
+                        // Clear finished completed items immediately
+                        if (window._trayAutoDismissTimer) {
+                            clearTimeout(window._trayAutoDismissTimer);
+                            window._trayAutoDismissTimer = null;
+                        }
+                        window.uploadQueue = window.uploadQueue.filter(function (item) {
+                            return item.status !== 'completed' && item.status !== 'deleted';
+                        });
+                        renderUploadTray();
+                        return;
+                    }
+                }
                 if (typeof window.cancelAllUploads === "function") {
                     window.cancelAllUploads();
                 }
@@ -2803,6 +3504,30 @@
         // Make sure stack is always active/visible
         stack.classList.add("active");
 
+        if (!stack.__delegatedEvents) {
+            stack.__delegatedEvents = true;
+            stack.addEventListener("click", function (e) {
+                var cancelBtn = e.target.closest(".upload-toast-cancel-text");
+                if (cancelBtn) {
+                    e.stopPropagation();
+                    var uploadId = cancelBtn.getAttribute("data-upload-id");
+                    if (uploadId && typeof window.cancelUpload === "function") {
+                        window.cancelUpload(parseInt(uploadId, 10) || uploadId);
+                    }
+                    return;
+                }
+                var resumeBtn = e.target.closest(".upload-toast-resume-text");
+                if (resumeBtn) {
+                    e.stopPropagation();
+                    var uploadId = resumeBtn.getAttribute("data-upload-id");
+                    if (uploadId && typeof window.resumeUpload === "function") {
+                        window.resumeUpload(parseInt(uploadId, 10) || uploadId);
+                    }
+                    return;
+                }
+            });
+        }
+
         // Sort priority:
         // 1. Uploading / Active
         // 2. In Queue / Paused
@@ -2855,6 +3580,51 @@
         var pausedCount = activeUploads.filter(function (item) { return item.status === "paused"; }).length;
         var completedOrDeletedCount = activeUploads.filter(function (item) { return item.status === "completed" || item.status === "deleted"; }).length;
         var isAllCompleted = totalCount > 0 && completedOrDeletedCount === totalCount && pausedCount === 0 && activePendingCount === 0;
+
+        // Cap completed/deleted display to recent 5 items max to prevent tray overflow
+        if (completedOrDeletedCount > 5) {
+            var activePendingItems = activeUploads.filter(function (item) {
+                return item.status === "uploading" || item.status === "processing" || item.status === "queued" || item.status === "paused";
+            });
+            var completedItems = activeUploads.filter(function (item) {
+                return item.status === "completed" || item.status === "deleted";
+            }).slice(0, 5);
+            activeUploads = activePendingItems.concat(completedItems);
+        }
+
+        // Auto-dismiss completed tray batch after 5 seconds
+        if (isAllCompleted && totalCount > 0) {
+            if (!window._trayAutoDismissTimer) {
+                window._trayAutoDismissTimer = setTimeout(function () {
+                    window._trayAutoDismissTimer = null;
+                    if (window.uploadQueue) {
+                        window.uploadQueue = window.uploadQueue.filter(function (item) {
+                            return item.status !== 'completed' && item.status !== 'deleted' && item.status !== 'cancelled';
+                        });
+                        renderUploadTray();
+                    }
+                }, 5000);
+            }
+        } else {
+            if (window._trayAutoDismissTimer) {
+                clearTimeout(window._trayAutoDismissTimer);
+                window._trayAutoDismissTimer = null;
+            }
+        }
+
+        // Auto-remove individual deleted or cancelled items from tray after 2 seconds
+        activeUploads.forEach(function (item) {
+            if (item && (item.status === 'deleted' || item.status === 'cancelled') && !item._dismissTimer) {
+                item._dismissTimer = setTimeout(function () {
+                    if (window.uploadQueue) {
+                        window.uploadQueue = window.uploadQueue.filter(function (i) {
+                            return i && (i.id != item.id);
+                        });
+                        renderUploadTray();
+                    }
+                }, 2000);
+            }
+        });
 
         saveUploadQueueToStorage();
 
@@ -2915,10 +3685,15 @@
             // Wire header actions
             wireHeaderActions(stack.querySelector(".upload-toast-header-actions"));
 
-            // Wire header panel manual toggle
+            // Wire header panel manual toggle (only expands if uploads exist)
             stack.querySelector(".upload-toast-header").addEventListener("click", function (e) {
                 if (!e.target.closest(".upload-toast-header-actions")) {
-                    // Header title click always just toggles expand/collapse (never undocks)
+                    var queue = window.uploadQueue || [];
+                    var hasItems = queue.some(function (item) {
+                        return item && (item.status === "uploading" || item.status === "queued" || item.status === "processing" || item.status === "paused" || item.status === "completed" || item.status === "deleted");
+                    });
+                    if (!hasItems) return; // Do not expand when empty
+
                     window.uploadManagerExpanded = !window.uploadManagerExpanded;
                     var body = stack.querySelector(".upload-toast-body");
                     if (body) {
@@ -3022,12 +3797,13 @@
                 }
 
                 var metaEl = itemEl.querySelector(".upload-toast-meta");
-                if (metaEl) metaEl.textContent = metaText;
+                if (metaEl && metaEl.textContent !== metaText) metaEl.textContent = metaText;
 
                 var progressFill = itemEl.querySelector(".toast-progress-bar");
                 if (progressFill) {
-                    progressFill.style.width = pct + "%";
-                    progressFill.style.background = fillStyle;
+                    var newWidth = pct + "%";
+                    if (progressFill.style.width !== newWidth) progressFill.style.width = newWidth;
+                    if (progressFill.style.background !== fillStyle) progressFill.style.background = fillStyle;
                 }
 
                 if (item.status === 'completed' || item.status === 'deleted') {
@@ -3039,8 +3815,10 @@
                     wireTrayItemListeners(itemEl, item);
                 }
 
-                // Sink items based on sort order
-                bodyEl.appendChild(itemEl);
+                // Re-order only if the element is not already in the correct position (prevents hover flickering)
+                if (bodyEl.children[i] !== itemEl) {
+                    bodyEl.appendChild(itemEl);
+                }
             }
         }
 

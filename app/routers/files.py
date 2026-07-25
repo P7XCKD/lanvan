@@ -246,33 +246,64 @@ def format_size(size_bytes):
         size_bytes /= 1024.0
     return f"{size_bytes:.1f} TB"
 
+LOCKED_DELETIONS_SET = set()
+
+def is_pending_deletion(filename_or_path: str) -> bool:
+    """Check if file is in pending locked deletion list"""
+    global LOCKED_DELETIONS_SET
+    if not filename_or_path:
+        return False
+    str_val = str(filename_or_path).lower()
+    for item in list(LOCKED_DELETIONS_SET):
+        if str_val in item.lower() or item.lower() in str_val:
+            return True
+    return False
+
+def retry_pending_deletions():
+    """Background helper to retry unlinking locked files"""
+    global LOCKED_DELETIONS_SET
+    if not LOCKED_DELETIONS_SET:
+        return
+    to_remove = set()
+    for item in list(LOCKED_DELETIONS_SET):
+        p = Path(item)
+        if not p.exists():
+            to_remove.add(item)
+            continue
+        try:
+            p.unlink()
+            to_remove.add(item)
+            print(f"[BACKGROUND CLEANUP] Unlinked locked file: {p.name}")
+        except Exception:
+            pass
+    LOCKED_DELETIONS_SET -= to_remove
+
 def should_ignore_file(filename: str) -> bool:
     """
-    Check if a file should be ignored based on qt.py patterns from .gitignore
-     Filters out qt.py generated test files from file listings
+    Check if a file should be ignored based on qt.py patterns or pending deletion list
     """
+    if is_pending_deletion(filename):
+        return True
+
     qt_patterns = [
-        # Direct qt.py test file patterns
         "quick_test", "test_output", "temp_test", "debug_test",
-        # Qt.py generated logs and debug files  
         "qt_test_", "qt_debug_", "qt_output_", "test_results_", "test_log_",
-        # Any files that look like qt.py test files
         "test_file_"
     ]
     
-    # Check if filename matches any qt.py test patterns
     filename_lower = filename.lower()
     for pattern in qt_patterns:
         if pattern in filename_lower:
             return True
     
-    # Additional specific extensions for qt.py test files
     if filename_lower.endswith(('.tmp', '.log')) and any(p in filename_lower for p in qt_patterns):
         return True
         
     return False
 
 def get_file_list():
+    UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+    retry_pending_deletions()
     return sorted([
         {
             "name": f.name,
@@ -280,7 +311,7 @@ def get_file_list():
             "mtime": f.stat().st_mtime
         }
         for f in UPLOAD_FOLDER.iterdir() 
-        if f.is_file() and not f.name.endswith('.tmp') and not should_ignore_file(f.name)  #  Filter out temporary files and qt.py test files
+        if f.is_file() and not f.name.endswith('.tmp') and not should_ignore_file(f.name)
     ], key=lambda x: x["mtime"], reverse=True)
 
 async def get_file_list_async():
@@ -289,6 +320,8 @@ async def get_file_list_async():
      RACE CONDITION FIX: Filter out .tmp files to prevent downloading partial uploads
      Qt.py FILTER: Hide qt.py generated test files from listings
     """
+    UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+    retry_pending_deletions()
     files = []
     file_count = 0
     
@@ -1111,16 +1144,46 @@ async def download_file(filename: str, request: Request):
     print(f"[DIR] Looking for file at: {file_path}")
 
     mime_type, _ = guess_type(str(file_path))
+    if not mime_type or mime_type == "application/octet-stream":
+        ext = safe_name.split(".")[-1].lower() if "." in safe_name else ""
+        mime_map = {
+            "mp4": "video/mp4",
+            "webm": "video/webm",
+            "mov": "video/quicktime",
+            "mkv": "video/x-matroska",
+            "avi": "video/x-msvideo",
+            "3gp": "video/3gpp",
+            "m4v": "video/mp4",
+            "mp3": "audio/mpeg",
+            "wav": "audio/wav",
+            "ogg": "audio/ogg",
+            "flac": "audio/flac",
+            "m4a": "audio/mp4",
+            "aac": "audio/aac",
+            "pdf": "application/pdf",
+            "doc": "application/msword",
+            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "xls": "application/vnd.ms-excel",
+            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "ppt": "application/vnd.ms-powerpoint",
+            "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        }
+        if ext in mime_map:
+            mime_type = mime_map[ext]
+            
     file_size = file_path.stat().st_size
     
     print(f"[STATS] File info - Size: {file_size} bytes, MIME: {mime_type}")
     
+    is_download_requested = request.query_params.get("download") == "1"
+    disposition_type = "attachment" if is_download_requested else "inline"
+
     # OK: Handle HEAD requests - return headers only for file info
     if request.method == "HEAD":
         headers = {
             "Content-Length": str(file_size),
             "Content-Type": mime_type or "application/octet-stream",
-            "Content-Disposition": f'attachment; filename="{safe_name}"',
+            "Content-Disposition": f'{disposition_type}; filename="{safe_name}"',
             "Accept-Ranges": "bytes",  # Indicate support for range requests
             "Cache-Control": "public, max-age=86400"
         }
@@ -1137,19 +1200,86 @@ async def download_file(filename: str, request: Request):
     is_enc_file = safe_name.endswith(".enc")
     is_large_file = file_size >= 250 * 1024 * 1024  # 250MB threshold
     
+    # Check for HTTP Range header (crucial for HTML5 video/audio seeking & scrubbing)
+    range_header = request.headers.get("range") or request.headers.get("Range")
+    if range_header and not is_enc_file:
+        return await range_download_file(file_path, safe_name, mime_type, file_size, range_header, disposition_type=disposition_type)
+
     print(f"[SEARCH] Download strategy - Encrypted: {is_enc_file}, Large: {is_large_file}")
     
     # [PKG] Chunked download logic
     if is_large_file and not is_enc_file:
         print("[PKG] Using chunked download")
-        return await chunked_download_file(file_path, safe_name, mime_type, file_size, request)
+        return await chunked_download_file(file_path, safe_name, mime_type, file_size, request, disposition_type=disposition_type)
     else:
         print("[FILE] Using full download")
-        return await full_download_file(file_path, safe_name, mime_type, file_size)
+        return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type)
 
-async def full_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int):
+async def range_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, range_header: str, disposition_type: str = "inline"):
+    """Serve HTTP Range Requests (206 Partial Content) for seeking/forwarding in video and audio players."""
+    try:
+        if "=" not in range_header:
+            return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type)
+            
+        unit, bytes_range = range_header.strip().split("=", 1)
+        if unit.lower() != "bytes":
+            return Response("Invalid range unit", status_code=416)
+        
+        parts = bytes_range.split("-", 1)
+        start_str = parts[0].strip() if parts[0] else ""
+        end_str = parts[1].strip() if len(parts) > 1 and parts[1] else ""
+        
+        if start_str and end_str:
+            start = int(start_str)
+            end = int(end_str)
+        elif start_str:
+            start = int(start_str)
+            end = file_size - 1
+        elif end_str:
+            suffix = int(end_str)
+            start = max(0, file_size - suffix)
+            end = file_size - 1
+        else:
+            start = 0
+            end = file_size - 1
+
+        if start >= file_size or end >= file_size or start > end:
+            headers = {"Content-Range": f"bytes */{file_size}"}
+            return Response("Requested range not satisfiable", status_code=416, headers=headers)
+        
+        chunk_size = (end - start) + 1
+        
+        def iterfile():
+            with open(file_path, "rb") as f:
+                f.seek(start)
+                bytes_left = chunk_size
+                buffer_size = 64 * 1024  # 64KB chunks for smooth seeking
+                while bytes_left > 0:
+                    read_len = min(buffer_size, bytes_left)
+                    data = f.read(read_len)
+                    if not data:
+                        break
+                    bytes_left -= len(data)
+                    yield data
+
+        headers = {
+            "Content-Range": f"bytes {start}-{end}/{file_size}",
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(chunk_size),
+            "Content-Type": mime_type or "application/octet-stream",
+            "Content-Disposition": f'{disposition_type}; filename="{safe_name}"',
+            "Cache-Control": "public, max-age=3600"
+        }
+        
+        print(f"[STREAM] Serving Range 206 ({disposition_type}): bytes {start}-{end}/{file_size} for {safe_name}")
+        return StreamingResponse(iterfile(), status_code=206, headers=headers)
+    except Exception as e:
+        print(f"[ERR] Range request failed ({e}), falling back to full download")
+        return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type)
+
+async def full_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, disposition_type: str = "inline"):
     """Ultra-optimized full file download - for small files and .enc files"""
-    print(f"[OUT] Starting full download for: {safe_name}")
+    print(f"[OUT] Starting full download ({disposition_type}) for: {safe_name}")
     
     # [START] Much larger buffer for maximum speed - 32MB buffer (4x improvement)
     STREAM_BUFFER_SIZE = 32 * 1024 * 1024  # 32MB buffer (was 8MB)
@@ -1262,7 +1392,7 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                 print(f"[WARN] Could not read metadata for size: {e}")
     
     headers = {
-        "Content-Disposition": f'attachment; filename="{safe_name}"',
+        "Content-Disposition": f'{disposition_type}; filename="{safe_name}"',
         "Content-Type": mime_type or "application/octet-stream",
         "Cache-Control": "public, max-age=86400",
         "X-Accel-Buffering": "no",
@@ -1282,7 +1412,7 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
         headers=headers
     )
 
-async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, request: Request | None = None):
+async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, request: Request | None = None, disposition_type: str = "inline"):
     """High-performance chunked file download - for large files (≥250MB) that are not .enc"""
     # [START] Much larger chunk size for faster downloads - 16MB chunks (16x improvement)
     CHUNK_SIZE = 16 * 1024 * 1024  # 16MB chunks (was 1MB)
@@ -1324,7 +1454,7 @@ async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str 
                 yield chunk
 
     headers = {
-        "Content-Disposition": f'attachment; filename="{safe_name}"',
+        "Content-Disposition": f'{disposition_type}; filename="{safe_name}"',
         "Content-Length": str(content_length),
         "Cache-Control": "public, max-age=86400",
         "X-Accel-Buffering": "no",
@@ -1544,8 +1674,30 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
                 return JSONResponse(content={"status": "success", "msg": "File deleted successfully"})
 
         if file_path.is_file():
-            file_path.unlink()
-            print(f"OK: Deleted file: {file_path.name}")
+            try:
+                file_path.unlink()
+                print(f"OK: Deleted file: {file_path.name}")
+            except (PermissionError, OSError) as pe:
+                print(f"[WARN] File locked by process on Windows, attempting gc and retry: {pe}")
+                gc.collect()
+                time.sleep(0.05)
+                try:
+                    file_path.unlink()
+                    print(f"OK: Deleted file on retry: {file_path.name}")
+                except Exception:
+                    import uuid
+                    trash_name = file_path.parent / f".trash_{uuid.uuid4().hex[:8]}_{file_path.name}"
+                    try:
+                        file_path.rename(trash_name)
+                        print(f"OK: Renamed locked file to trash: {trash_name.name}")
+                        try:
+                            trash_name.unlink()
+                        except Exception:
+                            pass
+                    except Exception as e2:
+                        print(f"[WARN] File locked by process, scheduling background deletion: {e2}")
+                        LOCKED_DELETIONS_SET.add(str(file_path))
+                        LOCKED_DELETIONS_SET.add(filename)
             
         cleanup_temp_file_for_filename(filename, target_parent)
         return JSONResponse(content={"status": "success", "msg": "File deleted successfully"})

@@ -90,7 +90,8 @@ class Suite:
                    "cancelAllUploads","refreshFileList","showToast","clearSelection","deleteSelected",
                    "renderUploadTray","scheduleUploadTrayRender","navigateToPathAndSelect",
                    "showGenericContextMenu","downloadFileByName","openRenameModal","switchView",
-                   "setThemePreference","setTypeFilter"]:
+                   "setThemePreference","setTypeFilter","pauseAllUploads","resumeAllUploads",
+                   "setViewMode","triggerInstantUIUpdate"]:
             fnd = re.search(rf"window\.{g}\s*=",combined) or re.search(rf"{g}\s*=\s*function",combined) or (f"function {g}" in combined)
             self._ck(fnd is not None, f"Global '{g}' defined", "js")
 
@@ -101,6 +102,7 @@ class Suite:
 
         css = (CSS_DIR/"lanvan.css").read_text(encoding="utf-8",errors="ignore")
         self._ck(css.count("!important")<=50, f"!important: {css.count('!important')}", "css")
+        self._ck(".glass-b4-body" in css and ".b4-badge" in css and ".b4-bottom-strip" in css, "Option B4 Frosted Glass overlay CSS rules defined", "css")
 
         html_text = ""
         for tf in sorted(TEMPLATE_DIR.glob("*.html")):
@@ -112,6 +114,24 @@ class Suite:
                      "toolbarSelectionContent","renameDialog","newFolderDialog","searchResultsPanel","settingsDialog"]
         missing = [c for c in critical if c not in html_ids]
         self._ck(len(missing)==0, f"Critical IDs: {'ALL' if not missing else f'missing={missing[:5]}'}", "html")
+
+    def test_ui_and_viewmode_integrity(self):
+        HEAD("UI, VIEW MODE & UPLOAD TRAY INTEGRITY")
+        combined_js = ""
+        for f in sorted(JS_DIR.glob("*.js")):
+            combined_js += f"\n/*---{f.name}---*/\n"+f.read_text(encoding="utf-8",errors="ignore")
+
+        # 1. Check view mode state persistence & instant toggle
+        self._ck("lanvan_view_mode" in combined_js, "View mode state persistence in localStorage ('lanvan_view_mode')", "ui-integrity")
+        self._ck("setViewMode" in combined_js and "requestAnimationFrame" in combined_js, "Instant View Mode switching via setViewMode & rAF", "ui-integrity")
+
+        # 2. Check Option B4 Grid Card HTML generation
+        self._ck("glass-b4-body" in combined_js and "b4-num" in combined_js and "b4-bottom-strip" in combined_js, "Option B4 frosted glass grid card badge rendering", "ui-integrity")
+
+        # 3. Check Notification Tray Header Actions (Pause/Resume + Dynamic Chevron)
+        self._ck("pauseAllUploads" in combined_js and "uploadManagerExpanded = true" in combined_js, "pauseAllUploads auto-expands tray when paused", "ui-integrity")
+        self._ck("resumeAllUploads" in combined_js and "uploadManagerExpanded = false" in combined_js, "resumeAllUploads auto-collapses tray when resumed", "ui-integrity")
+        self._ck("buildHeaderActionsHtml" in combined_js, "buildHeaderActionsHtml renders correct controls based on upload/pause status", "ui-integrity")
 
     # ═══════ SERVER ═══════
     async def start_server(self, use_https=False):
@@ -487,7 +507,9 @@ class Suite:
         run_all = args.mode=="all"; start = time.time()
 
         if run_all or args.mode in ("security","fast"): self.test_security()
-        if run_all or args.mode in ("js","fast"): self.test_static_integrity()
+        if run_all or args.mode in ("js","fast"):
+            self.test_static_integrity()
+            self.test_ui_and_viewmode_integrity()
 
         async def _run_suite(use_https=False):
             proto_str = "HTTPS" if use_https else "HTTP"

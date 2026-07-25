@@ -379,6 +379,12 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         <span>Rename</span>
       </div>
     </div>
+    <div class="context-item" onclick="openFilePreviewTarget()">
+      <div class="context-item-left">
+        <i data-lucide="eye"></i>
+        <span>Preview</span>
+      </div>
+    </div>
     <div class="context-item" onclick="downloadSelected()">
       <div class="context-item-left">
         <i data-lucide="download"></i>
@@ -628,19 +634,27 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
   </div>
 </div>
 
-<!-- File Preview Modal -->
-<div id="previewModal" class="m3-modal-overlay" style="display: none;">
-  <div class="m3-modal-card" style="max-width: 500px; width: 90%;">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-      <h3 id="previewTitle" style="margin: 0; font-size: 1.1rem; color: var(--text-color);">File Preview</h3>
-      <button class="btn-icon" onclick="closePreviewModal()"><i data-lucide="x"
-          style="width: 16px; height: 16px;"></i></button>
+<!-- Google Drive Style Sleek Media Preview Modal -->
+<div id="previewModal" class="gdrive-preview-overlay" style="display: none;">
+  <div class="gdrive-preview-container">
+    <div class="gdrive-preview-header">
+      <div class="gdrive-header-left">
+        <button class="btn-icon header-close-btn" onclick="closePreviewModal()" title="Close preview">
+          <i data-lucide="arrow-left" style="width:20px;height:20px;"></i>
+        </button>
+        <span id="previewTitle" class="gdrive-preview-title">File Preview</span>
+      </div>
+      <div class="gdrive-header-right">
+        <a id="previewDownloadBtn" href="#" download class="gdrive-action-btn" title="Download file">
+          <i data-lucide="download" style="width:16px;height:16px;"></i>
+          <span>Download</span>
+        </a>
+        <button class="btn-icon header-close-btn" onclick="closePreviewModal()" title="Close">
+          <i data-lucide="x" style="width:20px;height:20px;"></i>
+        </button>
+      </div>
     </div>
-    <div id="previewBody"
-      style="min-height: 180px; display: flex; align-items: center; justify-content: center; background: var(--toggle-bg); border-radius: 12px; padding: 1.25rem;">
-    </div>
-    <div class="dialog-actions" style="margin-top: 1.25rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
-      <button class="m3-secondary-btn" onclick="closePreviewModal()">Close</button>
+    <div id="previewBody" class="gdrive-preview-body">
     </div>
   </div>
 </div>
