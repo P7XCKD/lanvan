@@ -495,6 +495,8 @@ app.add_middleware(ShutdownMiddleware)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
+from app.ws_manager import clipboard_ws_router, upload_status_ws_router, file_events_ws_router
+
 # [OK] Register app routes
 app.include_router(pages_router)
 app.include_router(files_router)
@@ -502,6 +504,7 @@ app.include_router(clipboard_router)
 app.include_router(system_router)
 app.include_router(clipboard_ws_router)
 app.include_router(upload_status_ws_router)
+app.include_router(file_events_ws_router)
 
 # [OK] Exception handlers for smart loading page system
 # Track when the server started and if resources are ready

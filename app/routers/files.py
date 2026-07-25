@@ -37,6 +37,7 @@ from starlette.status import (
 )
 
 # Import common app utilities
+from app.ws_manager.file_events import broadcast_file_event_sync
 from app.core.aes_utils import encrypt_file_http_safe, decrypt_http_safe_file, decrypt_file_stream, encrypt_session_data
 from app.core.metadata_protection import generate_secure_filename, obfuscate_file_size, generate_decoy_requests
 from app.core.validation import (
@@ -869,6 +870,11 @@ async def upload_files(
                 asyncio.create_task(upload_status_manager.notify_file_list_updated(successful_uploads))
             except Exception:
                 pass
+            # Broadcast via file_events WebSocket for instant cross-device sync
+            try:
+                broadcast_file_event_sync("upload", parent_path or "", ", ".join(successful_uploads))
+            except Exception:
+                pass
 
             return JSONResponse(content={
                 "status": "success",
@@ -1113,6 +1119,12 @@ async def upload_auto_file(
             "status": "error",
             "msg": "No valid files processed"
         })
+
+    # Broadcast via file_events WebSocket for instant cross-device sync
+    try:
+        broadcast_file_event_sync("upload", parent_path or "", ", ".join(uploaded))
+    except Exception:
+        pass
 
     protocol_info = "HTTPS" if is_https else "HTTP"
     response_data = {
@@ -1598,6 +1610,11 @@ async def clear_files():
         else:
             message = f"Cleared {files_deleted} files and {chunks_deleted} chunks"
             print(f"[OK] {message}")
+            # Broadcast via file_events WebSocket for instant cross-device sync
+            try:
+                broadcast_file_event_sync("clear", "", "")
+            except Exception:
+                pass
             return JSONResponse(content={
                 "status": "success",
                 "msg": message,
@@ -1707,6 +1724,11 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
                         LOCKED_DELETIONS_SET.add(filename)
             
         cleanup_temp_file_for_filename(filename, target_parent)
+        # Broadcast via file_events WebSocket for instant cross-device sync
+        try:
+            broadcast_file_event_sync("delete", target_parent or "", safe_name)
+        except Exception:
+            pass
         return JSONResponse(content={"status": "success", "msg": "File deleted successfully"})
     except Exception as e:
         print(f"[ERR] Error in delete_file: {e}")
@@ -2257,6 +2279,12 @@ async def finalize_upload(
         if warnings:
             success_msg += f" [WARN] Security Notes: {'; '.join(warnings)}"
         
+        # Broadcast via file_events WebSocket for instant cross-device sync
+        try:
+            broadcast_file_event_sync("upload", parent_path or "", final_path.name if final_path else "unknown")
+        except Exception:
+            pass
+
         return JSONResponse(content={
             "status": "success",
             "msg": success_msg,
@@ -2406,6 +2434,13 @@ async def upload_folder(
             print(f"[ERR] Failed to upload file {file.filename}: {e}")
             failed_files.append(file.filename)
     
+    # Broadcast via file_events WebSocket for instant cross-device sync
+    if uploaded_files:
+        try:
+            broadcast_file_event_sync("upload_folder", parent_path or "", folder_name)
+        except Exception:
+            pass
+
     return JSONResponse(content={
         "status": "success" if uploaded_files else "error",
         "msg": f"Folder '{folder_name}' uploaded with {len(uploaded_files)} files",
@@ -2586,11 +2621,41 @@ async def rename_file(filename: str = Form(...), new_name: str = Form(...), pare
     try:
         os.rename(src_path, dst_path)
         print(f"[RENAME] Renamed '{safe_filename}' to '{safe_new}' in '{src_path.parent}'")
+        broadcast_file_event_sync("rename", parent_path or "", safe_new)
         return JSONResponse(content={
             "status": "success",
             "msg": f"Renamed to '{safe_new}'",
             "old_name": safe_filename,
             "new_name": safe_new
+        })
+    except (PermissionError, OSError) as e:
+        # WinError 32: file is locked by another process (e.g. currently being streamed/previewed)
+        winerr = getattr(e, 'winerror', None)
+        if winerr == 32 or 'being used by another process' in str(e):
+            print(f"[WARN] Rename blocked: '{safe_filename}' is locked (streaming/open). Retrying after gc...")
+            gc.collect()
+            time.sleep(0.1)
+            try:
+                os.rename(src_path, dst_path)
+                print(f"[RENAME] Renamed '{safe_filename}' to '{safe_new}' on retry")
+                broadcast_file_event_sync("rename", parent_path or "", safe_new)
+                return JSONResponse(content={
+                    "status": "success",
+                    "msg": f"Renamed to '{safe_new}'",
+                    "old_name": safe_filename,
+                    "new_name": safe_new
+                })
+            except Exception:
+                pass
+            return JSONResponse(status_code=409, content={
+                "status": "error",
+                "msg": f"Cannot rename '{safe_filename}' — it is currently open or being streamed. Close the preview and try again.",
+                "file_locked": True
+            })
+        print(f"[ERR] Rename error: {e}")
+        return JSONResponse(status_code=500, content={
+            "status": "error",
+            "msg": f"Failed to rename: {e}"
         })
     except Exception as e:
         print(f"[ERR] Rename error: {e}")
@@ -2644,11 +2709,41 @@ async def move_file(filename: str = Form(...), destination: str = Form(...)):
     try:
         shutil.move(str(src_path), str(dst_path))
         print(f"[MOVE] Moved '{safe_filename}' to '{destination}'")
+        broadcast_file_event_sync("move", destination or "", safe_filename)
         return JSONResponse(content={
             "status": "success",
             "msg": f"File moved to '{destination}'",
             "filename": safe_filename,
             "destination": destination
+        })
+    except (PermissionError, OSError) as e:
+        # WinError 32: file locked by another process (e.g. currently being streamed/previewed)
+        winerr = getattr(e, 'winerror', None)
+        if winerr == 32 or 'being used by another process' in str(e):
+            print(f"[WARN] Move blocked: '{safe_filename}' is locked (streaming/open). Retrying after gc...")
+            gc.collect()
+            time.sleep(0.1)
+            try:
+                shutil.move(str(src_path), str(dst_path))
+                print(f"[MOVE] Moved '{safe_filename}' to '{destination}' on retry")
+                broadcast_file_event_sync("move", destination or "", safe_filename)
+                return JSONResponse(content={
+                    "status": "success",
+                    "msg": f"File moved to '{destination}'",
+                    "filename": safe_filename,
+                    "destination": destination
+                })
+            except Exception:
+                pass
+            return JSONResponse(status_code=409, content={
+                "status": "error",
+                "msg": f"Cannot move '{safe_filename}' — it is currently open or being streamed. Close the preview and try again.",
+                "file_locked": True
+            })
+        print(f"[ERR] Move error: {e}")
+        return JSONResponse(status_code=500, content={
+            "status": "error",
+            "msg": f"Failed to move file: {e}"
         })
     except Exception as e:
         print(f"[ERR] Move error: {e}")
@@ -2700,6 +2795,7 @@ async def create_folder(folder_name: str = Form(...), parent_path: Optional[str]
     try:
         new_folder.mkdir()
         print(f"[MKDIR] Created folder: {new_folder}")
+        broadcast_file_event_sync("mkdir", parent_path or "", safe_name)
         return JSONResponse(content={
             "status": "success",
             "msg": f"Folder '{safe_name}' created",
@@ -2756,6 +2852,7 @@ async def delete_folder(folder_path: str):
             shutil.rmtree(folder_path_obj, ignore_errors=True)
 
         print(f"[OK] Deleted folder: {folder_path}")
+        broadcast_file_event_sync("delete_folder", folder_path, folder_path)
         return JSONResponse(content={
             "status": "success",
             "msg": f"Folder '{folder_path}' deleted successfully"

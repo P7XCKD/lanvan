@@ -2356,9 +2356,12 @@
             setupImageZoomAndPan();
         } else if (videoExts.indexOf(ext) !== -1) {
             bodyEl.innerHTML = '<div style="width:100%; height:100%; min-height:70vh; flex:1; display:flex; align-items:center; justify-content:center; background:rgba(18,20,26,0.5); border-radius:14px; padding:1.5rem;">' +
-                '<video src="' + downloadUrl + '" controls autoplay playsinline preload="auto" style="max-width:90vw; max-height:84vh; width:auto; height:auto; object-fit:contain; border-radius:8px; outline:none; background:transparent; box-shadow:0 16px 48px rgba(0,0,0,0.6);"></video>' +
+                '<video src="' + downloadUrl + '" controls autoplay playsinline preload="auto" tabindex="0" style="max-width:90vw; max-height:84vh; width:auto; height:auto; object-fit:contain; border-radius:8px; outline:none; background:transparent; box-shadow:0 16px 48px rgba(0,0,0,0.6);"></video>' +
                 '</div>';
             modal.style.display = "flex";
+            // Auto-focus the video so native spacebar play/pause works without interference
+            var vid = bodyEl.querySelector("video");
+            if (vid) vid.focus();
         } else if (audioExts.indexOf(ext) !== -1) {
             bodyEl.innerHTML = '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.4rem; width:100%; height:100%; min-height:70vh; flex:1; padding:2.5rem; background:rgba(18,20,26,0.5); border-radius:14px; text-align:center;">' +
                 '<div class="avatar-icon avatar-audio" style="width:84px; height:84px; border-radius:24px; background:rgba(168, 85, 247, 0.15); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(168,85,247,0.2);">' +
@@ -2458,7 +2461,7 @@
         }
     };
 
-    // Keyboard Controls for Preview Modal (Escape to close, Arrow keys & Space for video controls)
+    // Keyboard controls for preview modal: Escape closes, Space/Arrows control video
     document.addEventListener("keydown", function (e) {
         var modal = document.getElementById("previewModal");
         if (!modal || modal.style.display === "none") return;
@@ -2476,15 +2479,27 @@
         var video = modal.querySelector("video");
         if (!video) return;
 
+        // If the native <video controls> element has focus, let the browser handle
+        // spacebar natively — don't intercept it. Only intercept when focus is
+        // elsewhere in the modal so the page doesn't scroll.
         if (e.key === "ArrowLeft") {
             e.preventDefault();
+            e.stopPropagation();
             video.currentTime = Math.max(0, video.currentTime - 10);
         } else if (e.key === "ArrowRight") {
             e.preventDefault();
+            e.stopPropagation();
             video.currentTime = Math.min(video.duration || 0, video.currentTime + 10);
-        } else if (e.key === " " || e.code === "Space") {
+        } else if ((e.key === " " || e.code === "Space") && document.activeElement !== video) {
+            // Only handle spacebar when the video element itself does NOT have focus.
+            // When video has focus, the browser's native controls handle space correctly.
             e.preventDefault();
-            if (video.paused) video.play(); else video.pause();
+            e.stopPropagation();
+            if (video.paused) { video.play(); } else { video.pause(); }
+        } else if (e.key === " " || e.code === "Space") {
+            // Video has focus — just suppress page scroll, let native controls handle play/pause
+            e.preventDefault();
+            e.stopPropagation();
         }
     });
 

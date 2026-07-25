@@ -3801,6 +3801,9 @@ video::-webkit-media-controls-cast-button {
     background: rgba(241, 245, 249, 0.78);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+    border-radius: 0 0 13px 13px;
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+    overflow: hidden;
     z-index: 12;
     display: flex;
     flex-direction: column;
@@ -3861,6 +3864,8 @@ video::-webkit-media-controls-cast-button {
     background: linear-gradient(90deg, #2563eb, #60a5fa);
     box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
     transition: width 0.3s ease;
+    border-bottom-left-radius: 13px;
+    border-bottom-right-radius: 13px;
 }
 
 /* Disable all floating popup toast notifications per user preference */

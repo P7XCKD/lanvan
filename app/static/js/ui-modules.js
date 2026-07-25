@@ -1155,6 +1155,31 @@ function processSelectedFiles(files, type) {
   }
 }
 
+/**
+ * Programmatically open the file or folder picker.
+ * Called from onclick handlers in app-init.js empty-state drop zones.
+ * @param {string} type - 'file' or 'folder'
+ */
+function handleFileSelection(type) {
+  if (type === 'folder') {
+    const folderInput = document.getElementById('folderInput') || document.getElementById('hiddenFolderInput');
+    if (folderInput) {
+      folderInput.setAttribute('webkitdirectory', '');
+      folderInput.setAttribute('directory', '');
+      folderInput.setAttribute('mozdirectory', '');
+      folderInput.value = '';
+      folderInput.click();
+    }
+  } else {
+    // Default to file picker
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) {
+      fileInput.value = '';
+      fileInput.click();
+    }
+  }
+}
+
 // Export to window so main-app.js and other scripts can call it directly
 window.handleFileSelection = handleFileSelection;
 

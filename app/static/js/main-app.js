@@ -247,10 +247,72 @@ function initUploadWebSocket() {
   }
 }
 
+//  Real-Time Cross-Device File Events WebSocket
+let fileEventsWs = null;
+let fileEventsWsReconnectTimer = null;
+
+function initFileEventsWebSocket() {
+  if (fileEventsWs && (fileEventsWs.readyState === WebSocket.CONNECTING || fileEventsWs.readyState === WebSocket.OPEN)) {
+    return;
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}/ws/file_events`;
+
+  try {
+    fileEventsWs = new WebSocket(wsUrl);
+
+    fileEventsWs.onopen = function () {
+      console.log('[WS FILE EVENTS] 🟢 Connected to Cross-Device Real-Time File Sync');
+      if (fileEventsWsReconnectTimer) {
+        clearTimeout(fileEventsWsReconnectTimer);
+        fileEventsWsReconnectTimer = null;
+      }
+    };
+
+    fileEventsWs.onmessage = function (event) {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'file_change') {
+          console.log('[WS FILE EVENTS] ⚡ Real-time file system mutation event received across devices:', payload);
+          if (typeof refreshFileList === 'function') refreshFileList();
+          if (typeof fetchFilesData === 'function') {
+            fetchFilesData().then(function (fd) {
+              if (typeof renderPrototypeFileList === 'function') renderPrototypeFileList(fd);
+            });
+          }
+          if (typeof window.triggerInstantUIUpdate === 'function') {
+            window.triggerInstantUIUpdate();
+          }
+        }
+      } catch (e) { }
+    };
+
+    fileEventsWs.onclose = function () {
+      fileEventsWs = null;
+      if (!fileEventsWsReconnectTimer) {
+        fileEventsWsReconnectTimer = setTimeout(initFileEventsWebSocket, 2500);
+      }
+    };
+
+    fileEventsWs.onerror = function () {
+      if (fileEventsWs) {
+        try { fileEventsWs.close(); } catch (e) { }
+      }
+    };
+  } catch (err) {
+    if (!fileEventsWsReconnectTimer) {
+      fileEventsWsReconnectTimer = setTimeout(initFileEventsWebSocket, 4000);
+    }
+  }
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initUploadWebSocket);
+  document.addEventListener('DOMContentLoaded', initFileEventsWebSocket);
 } else {
   initUploadWebSocket();
+  initFileEventsWebSocket();
 }
 
 //  Global Variables
@@ -2721,6 +2783,20 @@ function handleUploadEnd() {
   }, 2000);
 }
 
+// Prompt user with browser confirmation dialog ("Changes you made may not be saved") on reload/leave if uploads are in progress
+window.addEventListener('beforeunload', function (e) {
+  const queue = Array.isArray(window.uploadQueue) ? window.uploadQueue : (typeof uploadQueue !== 'undefined' && Array.isArray(uploadQueue) ? uploadQueue : []);
+  const hasActiveUploads = queue.some(item =>
+    item && ['uploading', 'queued', 'processing', 'paused'].includes(item.status)
+  );
+
+  if (hasActiveUploads) {
+    e.preventDefault();
+    e.returnValue = 'Uploads are currently in progress. Changes you made may not be saved if you leave or reload.';
+    return e.returnValue;
+  }
+});
+
 //  Dedicated function to update file count display
 function updateFileCount(fileCount) {
   const fileCountEl = document.getElementById('fileCount');
@@ -3364,6 +3440,35 @@ function setupEventListeners() {
     }
   });
 
+  // Shared async recursive directory scanner via HTML5 FileSystem API
+  async function scanFileSystemEntry(entry, path = '') {
+    if (!entry) return [];
+    if (entry.isFile) {
+      return new Promise(resolve => {
+        entry.file(file => {
+          const relPath = path ? path + file.name : file.name;
+          try {
+            Object.defineProperty(file, 'webkitRelativePath', {
+              value: relPath,
+              writable: false,
+              configurable: true
+            });
+          } catch (err) {}
+          resolve([file]);
+        }, () => resolve([]));
+      });
+    } else if (entry.isDirectory) {
+      const dirReader = entry.createReader();
+      const entries = await new Promise(resolve => {
+        dirReader.readEntries(results => resolve(results || []), () => resolve([]));
+      });
+      const nestedPromises = entries.map(childEntry => scanFileSystemEntry(childEntry, path + entry.name + '/'));
+      const nestedResults = await Promise.all(nestedPromises);
+      return nestedResults.flat();
+    }
+    return [];
+  }
+
   window.addEventListener('drop', async e => {
     e.preventDefault();
     windowDragCounter = 0;
@@ -3372,35 +3477,6 @@ function setupEventListeners() {
     const dtItems = e.dataTransfer ? e.dataTransfer.items : null;
     const dtFiles = e.dataTransfer ? e.dataTransfer.files : null;
 
-    // Async recursive directory scanner via HTML5 FileSystem API
-    async function scanEntry(entry, path = '') {
-      if (entry.isFile) {
-        return new Promise(resolve => {
-          entry.file(file => {
-            // Define webkitRelativePath property on File object
-            const relPath = path ? path + file.name : file.name;
-            try {
-              Object.defineProperty(file, 'webkitRelativePath', {
-                value: relPath,
-                writable: false,
-                configurable: true
-              });
-            } catch (err) {}
-            resolve([file]);
-          }, () => resolve([]));
-        });
-      } else if (entry.isDirectory) {
-        const dirReader = entry.createReader();
-        const entries = await new Promise(resolve => {
-          dirReader.readEntries(results => resolve(results || []), () => resolve([]));
-        });
-        const nestedPromises = entries.map(childEntry => scanEntry(childEntry, path + entry.name + '/'));
-        const nestedResults = await Promise.all(nestedPromises);
-        return nestedResults.flat();
-      }
-      return [];
-    }
-
     let collectedFiles = [];
 
     if (dtItems && dtItems.length > 0 && dtItems[0].webkitGetAsEntry) {
@@ -3408,7 +3484,7 @@ function setupEventListeners() {
       for (let i = 0; i < dtItems.length; i++) {
         const entry = dtItems[i].webkitGetAsEntry();
         if (entry) {
-          entryPromises.push(scanEntry(entry));
+          entryPromises.push(scanFileSystemEntry(entry));
         }
       }
       const results = await Promise.all(entryPromises);
@@ -3450,33 +3526,6 @@ function setupEventListeners() {
     const dtItems = e.dataTransfer ? e.dataTransfer.items : null;
     const dtFiles = e.dataTransfer ? e.dataTransfer.files : null;
 
-    async function scanEntry(entry, path = '') {
-      if (entry.isFile) {
-        return new Promise(resolve => {
-          entry.file(file => {
-            const relPath = path ? path + file.name : file.name;
-            try {
-              Object.defineProperty(file, 'webkitRelativePath', {
-                value: relPath,
-                writable: false,
-                configurable: true
-              });
-            } catch (err) {}
-            resolve([file]);
-          }, () => resolve([]));
-        });
-      } else if (entry.isDirectory) {
-        const dirReader = entry.createReader();
-        const entries = await new Promise(resolve => {
-          dirReader.readEntries(results => resolve(results || []), () => resolve([]));
-        });
-        const nestedPromises = entries.map(childEntry => scanEntry(childEntry, path + entry.name + '/'));
-        const nestedResults = await Promise.all(nestedPromises);
-        return nestedResults.flat();
-      }
-      return [];
-    }
-
     let collectedFiles = [];
 
     if (dtItems && dtItems.length > 0 && dtItems[0].webkitGetAsEntry) {
@@ -3484,7 +3533,7 @@ function setupEventListeners() {
       for (let i = 0; i < dtItems.length; i++) {
         const entry = dtItems[i].webkitGetAsEntry();
         if (entry) {
-          entryPromises.push(scanEntry(entry));
+          entryPromises.push(scanFileSystemEntry(entry));
         }
       }
       const results = await Promise.all(entryPromises);
@@ -5107,48 +5156,7 @@ function closeConnectionModal() {
   }
 }
 
-//  Update mDNS status in protocol indicator
-async function updateMDNSStatus() {
-  try {
-    const response = await fetch('/api/network-info');
-    if (response.ok) {
-      const networkInfo = await response.json();
 
-      // Check if mDNS status changed
-      const previousStatus = window._lastMDNSStatus;
-      const currentStatus = networkInfo.mdns?.status || 'disabled';
-
-      // Update stored status
-      window._lastMDNSStatus = currentStatus;
-
-      // Show toast notification on status change
-      if (previousStatus && previousStatus !== currentStatus) {
-        if (currentStatus === 'active') {
-          showToast(' mDNS Active: Guests can use ' + (networkInfo.mdns?.domain || 'lanvan.local'), 4000);
-          console.log(' mDNS became active:', networkInfo.mdns?.domain);
-        } else {
-          showToast(' mDNS Unavailable: Guests must use IP address', 4000);
-          console.log(' mDNS became unavailable');
-        }
-
-        // Auto-refresh QR codes and connection info
-        refreshConnectionInfo();
-      }
-
-      // Update protocol status indicator if needed
-      const protocolStatus = document.getElementById('protocolStatus');
-      if (protocolStatus && currentStatus === 'active') {
-        // Add mDNS indicator to protocol status
-        const qrHintText = protocolStatus.querySelector('#qrHintText');
-        if (qrHintText && !qrHintText.innerHTML.includes('mDNS')) {
-          qrHintText.innerHTML = ' mDNS Ready • Click for QR codes';
-        }
-      }
-    }
-  } catch (error) {
-    console.log('mDNS status check failed:', error);
-  }
-}
 
 //  Refresh connection info and QR codes
 function refreshConnectionInfo() {
