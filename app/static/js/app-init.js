@@ -247,6 +247,14 @@
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
+    // Strips all Home-prefix variants so folder paths match across upload queue and browser navigation
+    function cleanFolderPath(path) {
+        if (!path) return "";
+        var cleaned = String(path).replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
+        if (cleaned === "Home (Root)" || cleaned === "Home" || cleaned === "Home/") return "";
+        return cleaned;
+    }
+
     function renderPrototypeFileList(files) {
         lastRenderedFiles = files;
         var container = document.getElementById("nasFileList");
@@ -293,7 +301,7 @@
 
         // Retrieve active uploads from global window.uploadQueue for the current folder view
         var activeUploads = [];
-        var normCurrentDir = (currentFolderPath === "Home" || currentFolderPath === "Home/" || !currentFolderPath) ? "" : currentFolderPath;
+        var normCurrentDir = cleanFolderPath(currentFolderPath);
 
         // Exclude files/folders from backend scan if they were cancelled or deleted
         if (!window._cancelledFilesMap) window._cancelledFilesMap = {};
@@ -301,7 +309,7 @@
         normalizedFiles = normalizedFiles.filter(function (f) {
             if (!f || !f.name) return false;
 
-            var cleanDir = normCurrentDir.replace(/^Home\/?/, "");
+            var cleanDir = normCurrentDir;
             var fullRelPath = cleanDir ? (cleanDir + "/" + f.name) : f.name;
             var homeRelPath = "Home/" + fullRelPath;
 
@@ -534,7 +542,7 @@
         var savedViewMode = "grid";
         try {
             savedViewMode = localStorage.getItem("lanvan_view_mode") || "grid";
-        } catch (e) {}
+        } catch (e) { }
 
         var fileTableHead = document.getElementById("fileTableHead");
         var listBtn = document.getElementById("listViewBtn");
@@ -748,12 +756,12 @@
         var uploadStatusLabel = uploadStatus === 'paused' ? 'Paused' : 'Uploading';
         var progressBarHtml = isUploading
             ? '<div class="glass-b4-body">' +
-              '<div class="b4-badge">' +
-              '<div class="b4-num">' + Math.round(uploadProgress) + '%</div>' +
-              '<div class="b4-sub">' + uploadStatusLabel + '</div>' +
-              '</div>' +
-              '<div class="b4-bottom-strip" style="width:' + uploadProgress + '%;"></div>' +
-              '</div>'
+            '<div class="b4-badge">' +
+            '<div class="b4-num">' + Math.round(uploadProgress) + '%</div>' +
+            '<div class="b4-sub">' + uploadStatusLabel + '</div>' +
+            '</div>' +
+            '<div class="b4-bottom-strip" style="width:' + uploadProgress + '%;"></div>' +
+            '</div>'
             : '';
 
         var previewHtml = '';
@@ -1955,7 +1963,7 @@
 
         try {
             localStorage.setItem("lanvan_view_mode", mode);
-        } catch (e) {}
+        } catch (e) { }
 
         // Instant view mode toggle (< 1ms HTML template swap)
         if (fileList) {
@@ -3016,14 +3024,13 @@
         }
         var container = document.getElementById("nasFileList");
         if (container && window.uploadQueue) {
-            var normCurrentDir = (currentFolderPath === "Home" || currentFolderPath === "Home/" || !currentFolderPath) ? "" : currentFolderPath;
+            var normCurrentDir = cleanFolderPath(currentFolderPath);
             var missingRow = false;
 
             window.uploadQueue.forEach(function (item) {
                 if (item && (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused')) {
                     var itemName = item.fileName || (item.file && item.file.name) || item.name;
-                    var itemDir = item.targetDir || item.parent_path || item.folder || "";
-                    if (itemDir === "Home" || itemDir === "Home/") itemDir = "";
+                    var itemDir = cleanFolderPath(item.targetDir || item.parent_path || item.folder || "");
                     var relDir = itemDir;
                     if (normCurrentDir) {
                         if (relDir.startsWith(normCurrentDir + "/")) relDir = relDir.substring(normCurrentDir.length + 1);
@@ -3046,79 +3053,135 @@
                 renderPrototypeFileList(lastRenderedFiles);
                 setTimeout(function () { window._instantRenderInProgress = false; }, 200);
             } else {
+                // Pass 1: Aggregate items into per-row progress data
+                // This prevents synthetic folder rows from bouncing between individual file progress values
+                var rowDataMap = {};
+
                 window.uploadQueue.forEach(function (item) {
-                    if (item) {
-                        var itemName = item.fileName || (item.file && item.file.name) || item.name;
-                        if (itemName) {
-                            var rawDir = item.targetDir || item.parent_path || item.folder || "";
-                            var itemDir = rawDir.replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
-                            if (itemDir === "Home (Root)" || itemDir === "Home" || itemDir === "Home/") itemDir = "";
-                            var relDir = itemDir;
-                            if (normCurrentDir) {
-                                if (relDir.startsWith(normCurrentDir + "/")) relDir = relDir.substring(normCurrentDir.length + 1);
-                                else if (relDir === normCurrentDir) relDir = "";
-                            }
-                            var checkName = relDir === "" ? itemName : relDir.split("/")[0];
-                            var escName = escapeHtml(checkName);
-                            var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
-                            if (row) {
-                                if (item.status === 'cancelled') {
-                                    row.remove();
-                                } else if (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused') {
-                                    var progress = Math.round(item.progress || 0);
+                    if (!item) return;
+                    var itemName = item.fileName || (item.file && item.file.name) || item.name;
+                    if (!itemName) return;
+                    var rawDir = item.targetDir || item.parent_path || item.folder || "";
+                    var itemDir = rawDir.replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
+                    if (itemDir === "Home (Root)" || itemDir === "Home" || itemDir === "Home/") itemDir = "";
+                    var relDir = itemDir;
+                    if (normCurrentDir) {
+                        if (relDir.startsWith(normCurrentDir + "/")) relDir = relDir.substring(normCurrentDir.length + 1);
+                        else if (relDir === normCurrentDir) relDir = "";
+                    }
+                    var checkName = relDir === "" ? itemName : relDir.split("/")[0];
+                    var isFolder = relDir !== "";
 
-                                    var subtitleCell = row.querySelector('.item-subtitle');
-                                    if (subtitleCell) {
-                                        var newSub = progress + "% • " + (item.status === 'paused' ? 'Paused' : 'Uploading');
-                                        if (subtitleCell.textContent !== newSub) subtitleCell.textContent = newSub;
-                                    }
-                                    var dateCell = row.querySelector('.item-date');
-                                    if (dateCell) {
-                                        var newDate = item.status === 'paused' ? 'Paused' : 'Uploading';
-                                        if (dateCell.textContent !== newDate) dateCell.textContent = newDate;
-                                    }
-                                    var bar = row.querySelector('.row-progress-bar');
-                                    if (bar) {
-                                        bar.style.width = progress + "%";
-                                    }
+                    if (!rowDataMap[checkName]) {
+                        rowDataMap[checkName] = {
+                            isFolder: isFolder,
+                            totalBytes: 0,
+                            uploadedBytes: 0,
+                            status: 'queued',
+                            hasCancelled: false,
+                            hasUploading: false,
+                            hasPaused: false,
+                            itemCount: 0
+                        };
+                    }
 
-                                    // Sync Grid Mode Option B4 overlay elements live with upload progress
-                                    var b4Num = row.querySelector('.b4-num');
-                                    if (b4Num) {
-                                        var newNum = progress + "%";
-                                        if (b4Num.textContent !== newNum) b4Num.textContent = newNum;
-                                    }
-                                    var b4Sub = row.querySelector('.b4-sub');
-                                    if (b4Sub) {
-                                        var newB4Sub = item.status === 'paused' ? 'Paused' : 'Uploading';
-                                        if (b4Sub.textContent !== newB4Sub) b4Sub.textContent = newB4Sub;
-                                    }
-                                    var b4Strip = row.querySelector('.b4-bottom-strip');
-                                    if (b4Strip) {
-                                        b4Strip.style.width = progress + "%";
-                                    }
-                                    var waterBar = row.querySelector('.grid-water-progress-bar');
-                                    if (waterBar) {
-                                        waterBar.style.height = progress + "%";
-                                        var playPauseBtn = row.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
-                                     if (playPauseBtn) {
-                                         var currentAction = playPauseBtn.getAttribute("data-action");
-                                         var svgPlay = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
-                                         var svgPause = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+                    var rd = rowDataMap[checkName];
+                    rd.itemCount++;
 
-                                         if (item.status === 'paused' && currentAction === 'pause-upload') {
-                                             playPauseBtn.setAttribute("data-action", "resume-upload");
-                                             playPauseBtn.setAttribute("title", "Resume upload");
-                                             playPauseBtn.innerHTML = svgPlay;
-                                         } else if (item.status !== 'paused' && currentAction === 'resume-upload') {
-                                             playPauseBtn.setAttribute("data-action", "pause-upload");
-                                             playPauseBtn.setAttribute("title", "Pause upload");
-                                             playPauseBtn.innerHTML = svgPause;
-                                         }
-                                     }
-                                    }
-                                }
-                            }
+                    if (item.status === 'cancelled') {
+                        rd.hasCancelled = true;
+                        return;
+                    }
+
+                    var fileSize = item.fileSize || (item.file && item.file.size) || 0;
+                    var bytesDone = 0;
+                    if (item.status === 'completed') {
+                        bytesDone = fileSize;
+                    } else {
+                        bytesDone = item.bytesUploaded || 0;
+                        if (!bytesDone && item.progress && fileSize) {
+                            bytesDone = (fileSize * item.progress) / 100;
+                        }
+                    }
+                    rd.totalBytes += fileSize;
+                    rd.uploadedBytes += bytesDone;
+
+                    if (item.status === 'uploading' || item.status === 'processing') rd.hasUploading = true;
+                    if (item.status === 'paused') rd.hasPaused = true;
+                });
+
+                // Pass 2: Update DOM rows with aggregated progress
+                Object.keys(rowDataMap).forEach(function (checkName) {
+                    var rd = rowDataMap[checkName];
+                    var escName = escapeHtml(checkName);
+                    var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
+                    if (!row) return;
+
+                    // Handle cancelled items
+                    if (rd.hasCancelled && !rd.hasUploading && !rd.hasPaused && rd.itemCount === 1) {
+                        row.remove();
+                        return;
+                    }
+
+                    // Calculate aggregated progress
+                    var progress = rd.totalBytes > 0 ? Math.round((rd.uploadedBytes / rd.totalBytes) * 100) : 0;
+                    progress = Math.min(progress, 100);
+                    var statusLabel = rd.hasPaused ? 'Paused' : (rd.hasUploading ? 'Uploading' : 'Queued');
+                    var statusKey = rd.hasPaused ? 'paused' : (rd.hasUploading ? 'uploading' : 'queued');
+
+                    // Update subtitle text
+                    var subtitleCell = row.querySelector('.item-subtitle');
+                    if (subtitleCell) {
+                        var newSub = progress + "% • " + statusLabel;
+                        if (subtitleCell.textContent !== newSub) subtitleCell.textContent = newSub;
+                    }
+                    var dateCell = row.querySelector('.item-date');
+                    if (dateCell) {
+                        if (dateCell.textContent !== statusLabel) dateCell.textContent = statusLabel;
+                    }
+
+                    // Update row progress bar (list view)
+                    var bar = row.querySelector('.row-progress-bar');
+                    if (bar) {
+                        bar.style.width = progress + "%";
+                    }
+
+                    // Update grid B4 overlay elements
+                    var b4Num = row.querySelector('.b4-num');
+                    if (b4Num) {
+                        var newNum = progress + "%";
+                        if (b4Num.textContent !== newNum) b4Num.textContent = newNum;
+                    }
+                    var b4Sub = row.querySelector('.b4-sub');
+                    if (b4Sub) {
+                        if (b4Sub.textContent !== statusLabel) b4Sub.textContent = statusLabel;
+                    }
+                    var b4Strip = row.querySelector('.b4-bottom-strip');
+                    if (b4Strip) {
+                        b4Strip.style.width = progress + "%";
+                    }
+
+                    // Update grid water fill bar
+                    var waterBar = row.querySelector('.grid-water-progress-bar');
+                    if (waterBar) {
+                        waterBar.style.height = progress + "%";
+                    }
+
+                    // Sync play/pause button state
+                    var playPauseBtn = row.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
+                    if (playPauseBtn) {
+                        var currentAction = playPauseBtn.getAttribute("data-action");
+                        var svgPlay = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+                        var svgPause = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+
+                        if (statusKey === 'paused' && currentAction === 'pause-upload') {
+                            playPauseBtn.setAttribute("data-action", "resume-upload");
+                            playPauseBtn.setAttribute("title", "Resume upload");
+                            playPauseBtn.innerHTML = svgPlay;
+                        } else if (statusKey !== 'paused' && currentAction === 'resume-upload') {
+                            playPauseBtn.setAttribute("data-action", "pause-upload");
+                            playPauseBtn.setAttribute("title", "Pause upload");
+                            playPauseBtn.innerHTML = svgPause;
                         }
                     }
                 });
@@ -3136,7 +3199,7 @@
                     window.pauseUploadItem(item.id);
                 } else {
                     item.status = "paused";
-                    if (item.xhr) { try { item.xhr.abort(); } catch (e) {} }
+                    if (item.xhr) { try { item.xhr.abort(); } catch (e) { } }
                 }
             }
         });
@@ -4308,9 +4371,8 @@
             var container = document.getElementById("nasFileList");
             if (!container) return;
 
-            var normCurrentDir = (currentFolderPath === "Home" || currentFolderPath === "Home/" || !currentFolderPath) ? "" : currentFolderPath;
-            var itemDir = item.targetDir || item.parent_path || item.folder || "";
-            if (itemDir === "Home" || itemDir === "Home/") itemDir = "";
+            var normCurrentDir = cleanFolderPath(currentFolderPath);
+            var itemDir = cleanFolderPath(item.targetDir || item.parent_path || item.folder || "");
 
             if (itemDir === normCurrentDir) {
                 var progress = Math.round(item.progress || 0);
