@@ -154,22 +154,7 @@
     var itemsToMove = [];
     var isCreatingFolderInMove = false;
 
-    // Star state persisted in localStorage
-    var starredItems = JSON.parse(localStorage.getItem("starred_items") || "[]");
-    function isStarred(name) { return starredItems.indexOf(name) !== -1; }
-    function toggleStar(name, btnEl) {
-        var idx = starredItems.indexOf(name);
-        if (idx !== -1) { starredItems.splice(idx, 1); }
-        else { starredItems.push(name); }
-        localStorage.setItem("starred_items", JSON.stringify(starredItems));
-        if (btnEl) {
-            var icon = btnEl.querySelector("i[data-lucide='star']");
-            if (icon) {
-                icon.style.fill = isStarred(name) ? "var(--yellow, #f59e0b)" : "none";
-                icon.style.color = isStarred(name) ? "var(--yellow, #f59e0b)" : "";
-            }
-        }
-    }
+
 
     function renderBreadcrumbs() {
         var container = document.getElementById("breadcrumbsContainer");
@@ -1432,17 +1417,7 @@
         menu.style.display = "block";
     };
 
-    window.handleMenuStarToggle = function () {
-        var name = window._contextMenuTarget || "";
-        if (name) {
-            toggleStar(name);
-            fetchFilesData().then(function (fd) {
-                renderPrototypeFileList(fd);
-            });
-        }
-        var menu = document.getElementById("contextMenu");
-        if (menu) menu.style.display = "none";
-    };
+
 
     // Close context menu on mousedown (before click fires on menu items)
     var menuCloseTimer = null;
@@ -1889,22 +1864,7 @@
         window.setTypeFilter("all");
     };
 
-    window.setSearchQuery = function (value) {
-        var searchInput = document.getElementById("searchInput");
-        if (searchInput) {
-            searchInput.value = value;
-            searchInput.dispatchEvent(new Event("input", { bubbles: true }));
-        }
-    };
 
-    window.clearSearchQuery = function (event) {
-        if (event) event.preventDefault();
-        var searchInput = document.getElementById("searchInput");
-        if (searchInput) {
-            searchInput.value = "";
-            searchInput.dispatchEvent(new Event("input", { bubbles: true }));
-        }
-    };
 
     window.toggleSortMenu = function (event) {
         event.stopPropagation();
@@ -2522,100 +2482,7 @@
         document.body.removeChild(a);
     };
 
-    window.copyPreviewMediaToClipboard = function (filename) {
-        var menu = document.getElementById("previewContextMenu");
-        if (menu) menu.style.display = "none";
-        var fn = filename || window.currentPreviewFilename;
-        if (!fn) return;
 
-        var ext = fn.split(".").pop().toLowerCase();
-        var downloadUrl = "/download/" + encodeURIComponent(fn);
-        var imageExts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"];
-        var textExts = ["txt", "json", "py", "js", "css", "html", "md", "csv", "log", "xml", "yaml", "yml"];
-
-        if (imageExts.indexOf(ext) !== -1) {
-            fetch(downloadUrl)
-                .then(function (res) { return res.blob(); })
-                .then(function (blob) {
-                    if (navigator.clipboard && typeof navigator.clipboard.write === "function") {
-                        if (blob.type === "image/png") {
-                            return navigator.clipboard.write([
-                                new ClipboardItem({ "image/png": blob })
-                            ]);
-                        } else {
-                            var img = new Image();
-                            var url = URL.createObjectURL(blob);
-                            img.onload = function () {
-                                var canvas = document.createElement("canvas");
-                                canvas.width = img.naturalWidth || img.width;
-                                canvas.height = img.naturalHeight || img.height;
-                                var ctx = canvas.getContext("2d");
-                                ctx.drawImage(img, 0, 0);
-                                canvas.toBlob(function (pngBlob) {
-                                    URL.revokeObjectURL(url);
-                                    if (pngBlob && navigator.clipboard && typeof navigator.clipboard.write === "function") {
-                                        navigator.clipboard.write([
-                                            new ClipboardItem({ "image/png": pngBlob })
-                                        ]).then(function () {
-                                            if (typeof window.showToast === "function") window.showToast("Image copied to clipboard!");
-                                        }).catch(function (err) {
-                                            if (typeof window.copyTextToClipboard === "function") window.copyTextToClipboard(window.location.origin + downloadUrl);
-                                            if (typeof window.showToast === "function") window.showToast("Image link copied to clipboard!");
-                                        });
-                                    } else {
-                                        if (typeof window.copyTextToClipboard === "function") window.copyTextToClipboard(window.location.origin + downloadUrl);
-                                        if (typeof window.showToast === "function") window.showToast("Image link copied to clipboard!");
-                                    }
-                                }, "image/png");
-                            };
-                            img.src = url;
-                            return;
-                        }
-                    } else {
-                        if (typeof window.copyTextToClipboard === "function") window.copyTextToClipboard(window.location.origin + downloadUrl);
-                        if (typeof window.showToast === "function") window.showToast("Image link copied to clipboard!");
-                    }
-                })
-                .then(function () {
-                    if (typeof window.showToast === "function") window.showToast("Image copied to clipboard!");
-                })
-                .catch(function (err) {
-                    console.error("Image copy error:", err);
-                    if (typeof window.copyTextToClipboard === "function") window.copyTextToClipboard(window.location.origin + downloadUrl);
-                    if (typeof window.showToast === "function") window.showToast("File link copied to clipboard!");
-                });
-        } else if (textExts.indexOf(ext) !== -1) {
-            var pre = document.querySelector("#previewModal pre");
-            var textToCopy = pre && pre.textContent ? pre.textContent : "";
-            if (textToCopy) {
-                if (typeof window.copyTextToClipboard === "function") {
-                    window.copyTextToClipboard(textToCopy);
-                } else if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-                    navigator.clipboard.writeText(textToCopy);
-                }
-                if (typeof window.showToast === "function") window.showToast("Text copied to clipboard!");
-            } else {
-                fetch(downloadUrl)
-                    .then(function (res) { return res.text(); })
-                    .then(function (text) {
-                        if (typeof window.copyTextToClipboard === "function") {
-                            window.copyTextToClipboard(text);
-                        } else if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-                            navigator.clipboard.writeText(text);
-                        }
-                        if (typeof window.showToast === "function") window.showToast("Text copied to clipboard!");
-                    });
-            }
-        } else {
-            var fullUrl = window.location.origin + downloadUrl;
-            if (typeof window.copyTextToClipboard === "function") {
-                window.copyTextToClipboard(fullUrl);
-            } else if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-                navigator.clipboard.writeText(fullUrl);
-            }
-            if (typeof window.showToast === "function") window.showToast("File link copied to clipboard!");
-        }
-    };
 
     function showPreviewContextMenu(x, y, filename) {
         var menu = document.getElementById("previewContextMenu");
@@ -2639,12 +2506,6 @@
         var html = '<div class="menu-item" onclick="downloadPreviewFile(\'' + escFn + '\')" style="display:flex; align-items:center; gap:10px; padding:9px 16px; cursor:pointer; font-size:0.9rem; font-weight:500; color:var(--text-color, #fff); border-radius:6px; margin:0 4px; transition:background 0.15s ease;">' +
             '<i data-lucide="download" style="width:16px; height:16px; color:var(--primary, #3b82f6);"></i> Download' +
             '</div>';
-
-        if (isImage) {
-            html += '<div class="menu-item" onclick="copyPreviewMediaToClipboard(\'' + escFn + '\')" style="display:flex; align-items:center; gap:10px; padding:9px 16px; cursor:pointer; font-size:0.9rem; font-weight:500; color:var(--text-color, #fff); border-radius:6px; margin:0 4px; transition:background 0.15s ease;">' +
-                '<i data-lucide="copy" style="width:16px; height:16px; color:var(--primary, #3b82f6);"></i> Copy to Clipboard' +
-                '</div>';
-        }
 
         menu.innerHTML = html;
         menu.style.display = "block";
@@ -4203,6 +4064,17 @@
         document.addEventListener("keydown", function (e) {
             var active = document.activeElement;
             var isInputActive = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable);
+
+            // Escape Key to Clear Selection / Close Context Menus
+            if (e.key === "Escape" || e.key === "Esc") {
+                var contextMenu = document.getElementById("contextMenu");
+                if (contextMenu && contextMenu.style.display !== "none") {
+                    contextMenu.style.display = "none";
+                }
+                if (typeof window.clearSelection === "function") {
+                    window.clearSelection();
+                }
+            }
 
             // Ctrl+A Select All Files/Folders
             if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {

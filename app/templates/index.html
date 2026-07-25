@@ -487,7 +487,8 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
   <div class="m3-dialog">
     <span class="dialog-title">New folder</span>
     <input type="text" id="newFolderNameInput" class="dialog-input" placeholder="Untitled folder"
-      value="Untitled folder" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other">
+      value="Untitled folder" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true"
+      data-form-type="other">
     <div class="dialog-actions">
       <button class="dialog-btn" onclick="closeNewFolderDialog()" style="color:var(--text-muted);">Cancel</button>
       <button class="dialog-btn dialog-btn-primary" onclick="submitNewFolder()">Create</button>
@@ -536,8 +537,8 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
 <div id="renameDialog" class="m3-dialog-overlay" style="z-index: 21000;">
   <div class="m3-dialog">
     <span class="dialog-title">Rename</span>
-    <input type="text" id="renameInput" class="dialog-input" placeholder="Enter new name"
-      autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other">
+    <input type="text" id="renameInput" class="dialog-input" placeholder="Enter new name" autocomplete="off"
+      autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other">
     <div class="dialog-actions">
       <button class="dialog-btn" onclick="closeRenameDialog()" style="color:var(--text-muted);">Cancel</button>
       <button class="dialog-btn dialog-btn-primary" onclick="submitRename()">Rename</button>
@@ -579,21 +580,25 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         <div style="display: flex; flex-direction: column; gap: 0.2rem; flex: 1;">
           <div
             style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; font-weight: 650; color: var(--text-color);">
-            <i id="themeSettingIcon" data-lucide="monitor" style="width: 16px; height: 16px; color: var(--primary);"></i>
+            <i id="themeSettingIcon" data-lucide="monitor"
+              style="width: 16px; height: 16px; color: var(--primary);"></i>
             <span id="themeSettingTitle">System Theme</span>
           </div>
-          <span id="themeSettingDesc" style="font-size: 0.75rem; color: var(--text-muted);">Follow device's theme settings</span>
+          <span id="themeSettingDesc" style="font-size: 0.75rem; color: var(--text-muted);">Follow device's theme
+            settings</span>
         </div>
         <div class="segmented-control" id="themeSegmentedControl">
-          <input type="radio" id="themeLight" name="themePref" value="light" onchange="window.setThemePreference('light')">
+          <input type="radio" id="themeLight" name="themePref" value="light"
+            onchange="window.setThemePreference('light')">
           <label for="themeLight">Light</label>
-          
+
           <input type="radio" id="themeDark" name="themePref" value="dark" onchange="window.setThemePreference('dark')">
           <label for="themeDark">Dark</label>
-          
-          <input type="radio" id="themeSystem" name="themePref" value="system" onchange="window.setThemePreference('system')" checked>
+
+          <input type="radio" id="themeSystem" name="themePref" value="system"
+            onchange="window.setThemePreference('system')" checked>
           <label for="themeSystem">System</label>
-          
+
           <span class="segmented-control-slider"></span>
         </div>
       </div>
@@ -739,7 +744,8 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         <p id="dropZoneText"><i data-lucide="folder" style="width:1em;height:1em;vertical-align:-0.125em;"></i> Drag &
           Drop files or folders here or click to select</p>
         <input type="file" id="fileInput" name="files" multiple required style="display: none;">
-        <input type="file" id="folderInput" name="folder" webkitdirectory directory mozdirectory multiple style="display: none;">
+        <input type="file" id="folderInput" name="folder" webkitdirectory directory mozdirectory multiple
+          style="display: none;">
         <div class="file-preview" id="file-preview"></div>
       </div>
       <progress id="uploadProgress" value="0" max="100"></progress>

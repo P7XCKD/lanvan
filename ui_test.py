@@ -322,6 +322,24 @@ class BrowserSuite:
         await self.page.keyboard.press("Control+a"); await self.page.wait_for_timeout(300)
         self._check(len(items) > 0, f"Ctrl+A on {len(items)} items")
 
+    async def test_escape_key_clears_selection(self):
+        HEAD("ESCAPE KEY CLEARS SELECTION")
+        items = await self.page.query_selector_all("#nasFileList .m3-list-item")
+        if not items:
+            self._check(True, "Escape key clear selection (skipped - no items)")
+            return
+        box = await items[0].bounding_box()
+        if box:
+            await self.page.mouse.click(box["x"]+10, box["y"]+10)
+            await self.page.wait_for_timeout(200)
+
+        # Press Escape key
+        await self.page.keyboard.press("Escape")
+        await self.page.wait_for_timeout(200)
+
+        selected_after = await self.page.query_selector_all("#nasFileList .m3-list-item.selected")
+        self._check(len(selected_after) == 0, "Pressing Escape clears item selection")
+
     async def test_quick_access(self):
         HEAD("QUICK ACCESS")
         qa = await self.page.query_selector("#quickAccessContainer")
@@ -486,6 +504,7 @@ class BrowserSuite:
         await self.test_context_menu_on_file()
         await self.test_selection_then_clear()
         await self.test_ctrl_a()
+        await self.test_escape_key_clears_selection()
         await self.test_quick_access()
         await self.test_upload_toast_tray()
         await self.test_search()

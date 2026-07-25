@@ -187,6 +187,9 @@ class Suite:
         self._ck("function pauseUpload" in main_app and "triggerInstantUIUpdate" in main_app, "pauseUpload mutates state and triggers triggerInstantUIUpdate", "declarative-ui")
         self._ck("function resumeUpload" in main_app and "triggerInstantUIUpdate" in main_app, "resumeUpload mutates state and triggers triggerInstantUIUpdate", "declarative-ui")
 
+        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
+        self._ck('e.key === "Escape"' in app_init and "window.clearSelection()" in app_init, "Escape key clears selection handler present", "declarative-ui")
+
     def test_notification_tray_integrity(self):
         HEAD("NOTIFICATION TRAY INTEGRITY & DISMISSAL (§3)")
         app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
