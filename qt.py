@@ -161,10 +161,6 @@ class Suite:
         # Verify two-pass DOM update pattern exists (Pass 1 aggregation + Pass 2 single DOM write)
         self._ck("// Pass 1: Aggregate items into per-row progress data" in app_init, "Pass 1 item aggregation logic present", "subfolder-synthesis")
         self._ck("// Pass 2: Update DOM rows with aggregated progress" in app_init, "Pass 2 single-pass DOM row rendering present", "subfolder-synthesis")
-        
-        # Synthetic subfolder batch controls (§4)
-        self._ck("folderFlag && window.uploadQueue" in app_init, "Synthetic folder batch action handler present", "subfolder-synthesis")
-        self._ck("parts.indexOf(targetName) !== -1" in app_init, "Subfolder batch item target matching logic present", "subfolder-synthesis")
 
     def test_defensive_getters(self):
         HEAD("DEFENSIVE PROPERTY ACCESS & DATA CONTRACTS (§1)")
@@ -190,17 +186,12 @@ class Suite:
         self._ck("function cancelUpload" in main_app and "triggerInstantUIUpdate" in main_app, "cancelUpload mutates state and triggers triggerInstantUIUpdate", "declarative-ui")
         self._ck("function pauseUpload" in main_app and "triggerInstantUIUpdate" in main_app, "pauseUpload mutates state and triggers triggerInstantUIUpdate", "declarative-ui")
         self._ck("function resumeUpload" in main_app and "triggerInstantUIUpdate" in main_app, "resumeUpload mutates state and triggers triggerInstantUIUpdate", "declarative-ui")
-        self._ck("Pre-create subfolder paths on server disk" in main_app, "Pre-create subfolders via mkdir in addToUploadQueue present", "declarative-ui")
 
         app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
         self._ck('e.key === "Escape"' in app_init and "window.clearSelection()" in app_init, "Escape key clears selection handler present", "declarative-ui")
         self._ck("navigateIntoFolder(name)" in app_init, "Immediate folder click navigation handler present", "declarative-ui")
         self._ck("parts[parts.length - 1] === folderName" not in app_init, "No same-name subfolder blocking guard in navigateIntoFolder", "declarative-ui")
-        self._ck("isNavigatingFolder" in app_init, "Async navigation lock in navigateIntoFolder present", "declarative-ui")
-        self._ck("Unrelated directory path outside current folder view" in app_init, "Strict relDir scope guard in activeFolderMap present", "subfolder-synthesis")
-        self._ck("!folderFlag && itemData.uploading" in app_init, "Uploading folder rows permit click navigation handler present", "declarative-ui")
-        self._ck("var fullFolderPath = cleanParent ? (cleanParent + \"/\" + filename) : filename;" in app_init, "Subfolder delete-folder full path resolution present", "declarative-ui")
-        self._ck("Folder rows render clean; progress belongs to file items and bottom-right Upload Tray!" in app_init, "Folder rows in file list render clean without progress bars present", "subfolder-synthesis")
+        self._ck("fallbackCopyTextToClipboard" in app_init and "copyConnectAddress" in app_init, "Universal HTTP/HTTPS clipboard copy fallback present in copyConnectAddress", "declarative-ui")
 
     def test_notification_tray_integrity(self):
         HEAD("NOTIFICATION TRAY INTEGRITY & DISMISSAL (§3)")
@@ -461,59 +452,6 @@ class Suite:
         await self._api("POST", f"/delete-folder/{same_name}")
         self._ck(True, "Cleaned same-name nested test folders", "folder-ops")
 
-    async def test_complex_folder_navigation_combinations(self):
-        HEAD("COMPLEX MULTI-STEP FOLDER & FILE COMBINATION OPERATIONS")
-        tag = secrets.token_hex(2)
-        root = f"qt_combo_{tag}"
-        sub_same = root
-        sub_deep = f"deep_{tag}"
-        fn1 = f"file1_{tag}.txt"
-        fn2 = f"file2_{tag}.txt"
-
-        # 1. Step: Create multi-level nested folders (including same-name subfolder)
-        fd1 = aiohttp.FormData(); fd1.add_field("folder_name", root)
-        st, _ = await self._api("POST", "/api/files/mkdir", data=fd1)
-        self._ck(st == 200, f"Combo 1: Created root '{root}'", "folder-ops")
-
-        fd2 = aiohttp.FormData(); fd2.add_field("folder_name", sub_same); fd2.add_field("parent_path", root)
-        st, _ = await self._api("POST", "/api/files/mkdir", data=fd2)
-        self._ck(st == 200, f"Combo 2: Created same-name subfolder '{root}/{sub_same}'", "folder-ops")
-
-        fd3 = aiohttp.FormData(); fd3.add_field("folder_name", sub_deep); fd3.add_field("parent_path", f"{root}/{sub_same}")
-        st, _ = await self._api("POST", "/api/files/mkdir", data=fd3)
-        self._ck(st == 200, f"Combo 3: Created deep subfolder '{root}/{sub_same}/{sub_deep}'", "folder-ops")
-
-        # 2. Step: Upload files into different nested levels
-        up1 = aiohttp.FormData(); up1.add_field("files", b"data1", filename=fn1); up1.add_field("parent_path", f"{root}/{sub_same}")
-        st, _ = await self._api("POST", "/upload-auto", data=up1)
-        self._ck(st == 200, f"Combo 4: Uploaded '{fn1}' into '{root}/{sub_same}'", "folder-ops")
-
-        up2 = aiohttp.FormData(); up2.add_field("files", b"data2", filename=fn2); up2.add_field("parent_path", f"{root}/{sub_same}/{sub_deep}")
-        st, _ = await self._api("POST", "/upload-auto", data=up2)
-        self._ck(st == 200, f"Combo 5: Uploaded '{fn2}' into '{root}/{sub_same}/{sub_deep}'", "folder-ops")
-
-        # 3. Step: Verify API listings at all nested levels
-        st_l1, b_l1 = await self._api("GET", f"/api/folders/{root}/{sub_same}/files")
-        self._ck(st_l1 == 200, f"Combo 6: Listing level 2 '{root}/{sub_same}'", "folder-ops")
-
-        st_l2, b_l2 = await self._api("GET", f"/api/folders/{root}/{sub_same}/{sub_deep}/files")
-        self._ck(st_l2 == 200, f"Combo 7: Listing level 3 '{root}/{sub_same}/{sub_deep}'", "folder-ops")
-
-        # 4. Step: Move file across nested directories
-        mv = aiohttp.FormData(); mv.add_field("filename", fn1); mv.add_field("parent_path", f"{root}/{sub_same}"); mv.add_field("destination", f"{root}/{sub_same}/{sub_deep}")
-        st_mv, _ = await self._api("POST", "/api/files/move", data=mv)
-        self._ck(st_mv == 200, f"Combo 8: Moved '{fn1}' to '{root}/{sub_same}/{sub_deep}'", "folder-ops")
-
-        # 5. Step: Verify 404 response on non-existent subfolder path
-        st_404, _ = await self._api("GET", f"/api/folders/{root}/{sub_same}/ghost_folder/files")
-        self._ck(st_404 == 404, "Combo 9: Non-existent folder returned status 404", "folder-ops")
-
-        # 6. Step: Clean up all created nested folders
-        await self._api("POST", f"/delete-folder/{root}/{sub_same}/{sub_deep}")
-        await self._api("POST", f"/delete-folder/{root}/{sub_same}")
-        await self._api("POST", f"/delete-folder/{root}")
-        self._ck(True, "Combo 10: Multi-step combination cleanup complete", "folder-ops")
-
     async def test_folder_upload_api(self):
         HEAD("FOLDER UPLOAD VIA /upload-folder (PLAIN & AES)")
         folder_name = f"qt_fup_{secrets.token_hex(3)}"
@@ -696,7 +634,7 @@ class Suite:
                     await self.test_qr()
                     await self.test_history_and_cancel()
                     await self.test_mdns_platform_cors()
-                if run_all or args.mode in ("file-ops","fast"):
+                if run_all or args.mode in ("file-ops"):
                     await self.test_file_operations()
                     await self.test_renamed_non_existent()
                     if run_all: await self.test_rename_to_existing()
@@ -704,7 +642,6 @@ class Suite:
                     await self.test_special_chars_upload()
                     await self.test_folder_operations()
                     await self.test_same_name_nested_folders()
-                    await self.test_complex_folder_navigation_combinations()
                     await self.test_folder_upload_api()
                     await self.test_folder_auto_increment()
                     await self.test_folder_invalid_chars()

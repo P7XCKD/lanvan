@@ -695,9 +695,10 @@ function addToUploadQueue(files) {
   }
 
   for (let file of files) {
+    if (!file || typeof file !== 'object' || typeof file.name !== 'string') continue;
     const uploadId = ++uploadIdCounter;
     const uploadItem = createUploadItem(file, uploadId);
-    console.log("%c[LANVAN UPLOAD] 📄 '%s' (%s MB) -> targetDir: '%s'", "color:#ec4899; font-weight:500; font-size:11px;", file.name, (file.size / (1024 * 1024)).toFixed(1), uploadItem.targetDir || "Home (Root)");
+    console.log("%c[LANVAN UPLOAD] 📄 '%s' (%s MB) -> targetDir: '%s'", "color:#ec4899; font-weight:500; font-size:11px;", uploadItem.fileName, ((uploadItem.fileSize || 0) / (1024 * 1024)).toFixed(1), uploadItem.targetDir || "Home (Root)");
     uploadQueue.push(uploadItem);
     renderUploadItem(uploadItem);
   }
@@ -3504,12 +3505,14 @@ function setupEventListeners() {
 
   DOM_CACHE.dropZone.addEventListener('click', (e) => {
     // Ignore clicks that originated from the hidden file/folder inputs themselves
-    // (programmatic .click() on them bubbles up here and would re-open fileInput)
     if (e.target === DOM_CACHE.fileInput || e.target === DOM_CACHE.folderInput) return;
-    console.log(' Drop zone clicked - opening file picker');
-    if (DOM_CACHE.fileInput) {
-      DOM_CACHE.fileInput.value = '';
-      DOM_CACHE.fileInput.click();
+    // Only trigger file picker when clicking directly on the inner empty-dropzone-target area
+    if (e.target.closest('.empty-dropzone-target') || e.target.closest('.dropzone-click-target')) {
+      console.log(' Drop zone target clicked - opening file picker');
+      if (DOM_CACHE.fileInput) {
+        DOM_CACHE.fileInput.value = '';
+        DOM_CACHE.fileInput.click();
+      }
     }
   });
 

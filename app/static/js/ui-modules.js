@@ -1112,25 +1112,26 @@ window.handleDropZoneClick = handleDropZoneClick;
 
 // Main file upload handler
 window.handleFiles = function (files) {
-  console.log(' handleFiles called with:', files.length, 'files');
+  if (!files || !files.length) return;
+  // Ensure we only process valid File objects
+  const validFiles = Array.from(files).filter(f => f && typeof f === 'object' && typeof f.name === 'string');
+  if (validFiles.length === 0) return;
 
-  if (!files || files.length === 0) {
-    showToast(' No files selected!', 3000);
-    return;
-  }
+  console.log(' handleFiles called with:', validFiles.length, 'files');
 
   console.log(' Adding files to upload queue...');
-  addToUploadQueue(Array.from(files));
+  addToUploadQueue(validFiles);
 
   showUploadManager();
   startNextUpload();
 };
 
-function handleFileSelection(files, type) {
+function processSelectedFiles(files, type) {
+  if (!files || !files.length) return;
   if (type === 'folder') {
     const folderSet = new Set();
     Array.from(files).forEach(file => {
-      if (file.webkitRelativePath) {
+      if (file && file.webkitRelativePath) {
         const rootFolder = file.webkitRelativePath.split('/')[0];
         folderSet.add(rootFolder);
       }

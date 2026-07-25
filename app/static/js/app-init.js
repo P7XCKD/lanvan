@@ -335,9 +335,6 @@
                         relDir = relDir.substring(normCurrentDir.length + 1);
                     } else if (relDir === normCurrentDir) {
                         relDir = "";
-                    } else {
-                        // Unrelated directory path outside current folder view — skip item
-                        return;
                     }
                 }
 
@@ -377,11 +374,8 @@
                         }
                     }
                 } else if (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused' || item.status === 'completed') {
-                    // Only synthesize a folder progress row if relDir is the direct target subfolder (no deeper nested path)
-                    if (relDir.indexOf("/") !== -1) {
-                        return; // Deep nested upload — do not synthesize progress on intermediate ancestor folders!
-                    }
-                    var rootFolder = relDir;
+                    // Subfolder upload in current view
+                    var rootFolder = relDir.split("/")[0];
                     if (rootFolder) {
                         if (!activeFolderMap[rootFolder]) {
                             activeFolderMap[rootFolder] = {
@@ -419,19 +413,31 @@
                 }
             });
 
-            // Folder rows in the file list always render as clean, normal folders (all progress is tracked in the bottom-right Upload Tray)
+            // Synthesize folder rows for any active or paused folder uploads in current view
             Object.keys(activeFolderMap).forEach(function (folderName) {
                 var finfo = activeFolderMap[folderName];
                 if (!finfo.allCompleted) {
+                    var folderPct = finfo.totalBytes > 0 ? Math.min(99, Math.round((finfo.uploadedBytes / finfo.totalBytes) * 100)) : 0;
+                    var folderStatus = finfo.hasUploading ? 'uploading' : (finfo.hasPaused ? 'paused' : 'queued');
+
                     var existingFolder = normalizedFiles.find(function (f) { return f && f.name === folderName && f.isFolder; });
-                    if (!existingFolder) {
+                    if (existingFolder) {
+                        existingFolder.uploading = true;
+                        existingFolder.uploadProgress = folderPct;
+                        existingFolder.uploadStatus = folderStatus;
+                        existingFolder.uploadId = finfo.items[0] ? finfo.items[0].id : null;
+                    } else {
                         var alreadyInActive = activeUploads.find(function (f) { return f.name === folderName && f.isFolder; });
                         if (!alreadyInActive) {
                             activeUploads.push({
                                 name: folderName,
-                                size: "--",
+                                size: formatSize(finfo.uploadedBytes) + " / " + formatSize(finfo.totalBytes),
                                 mtime: Math.floor(Date.now() / 1000),
-                                isFolder: true
+                                isFolder: true,
+                                uploading: true,
+                                uploadProgress: folderPct,
+                                uploadStatus: folderStatus,
+                                uploadId: finfo.items[0] ? finfo.items[0].id : null
                             });
                         }
                     }
@@ -529,11 +535,13 @@
             } else {
                 container.innerHTML =
                     '<div class="empty-dropzone-wrapper" style="grid-column: 1 / -1; width:100%; flex:1; min-height:380px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; margin:auto;">' +
+                    '<div class="empty-dropzone-target" style="display:inline-flex; flex-direction:column; align-items:center; justify-content:center; padding:1.5rem 2.5rem; border-radius:16px; cursor:pointer; transition:background-color 0.2s ease;" onclick="if(typeof handleFileSelection===\'function\'){handleFileSelection(\'file\');}else{var fi=document.getElementById(\'fileInput\');if(fi){fi.value=\'\';fi.click();}}">' +
                     '<div class="avatar-icon avatar-folder" style="width:72px;height:72px;border-radius:18px;margin-bottom:1rem;">' +
                     '<i data-lucide="folder-open" style="width:34px;height:34px;"></i></div>' +
                     '<div style="font-size:1.05rem; font-weight:500; color:var(--text-color); margin-bottom:0.25rem;">Drop files here</div>' +
                     '<div style="font-size:0.8rem; color:var(--text-muted);">or right-click to upload / create folders.</div>' +
-                    "</div>";
+                    '</div>' +
+                    '</div>';
             }
             refreshLucideIcons(container);
             return;
@@ -818,37 +826,22 @@
                 // Click / Tap handler (Single click selects item or enters folder)
                 item.addEventListener("click", function (e) {
                     if (e.target.closest("button")) return;
-                    if (!folderFlag && itemData.uploading) return; // Prevent selection/preview only for uploading files (folders can be opened)
+                    if (itemData.uploading) return; // Prevent selection/navigation if uploading
 
-                    var isCheckboxClick = e.target.classList.contains("item-checkbox") || e.target.closest(".item-checkbox");
-                    var isMultiSelectKey = e.ctrlKey || e.metaKey || e.shiftKey;
-                    var isAlreadySelected = prototypeSelectedItems.indexOf(name) !== -1;
-                    var isSelectionActive = prototypeSelectedItems.length > 0;
-
-                    if (folderFlag) {
-                        // Explicit checkbox click or Ctrl/Cmd/Shift key -> toggle selection
-                        if (isCheckboxClick || isMultiSelectKey) {
-                            handleListItemClick(item, index, files);
-                            return;
-                        }
-                        // Multi-selection mode active & folder not yet selected -> toggle selection
-                        if (isSelectionActive && !isAlreadySelected) {
-                            handleListItemClick(item, index, files);
-                            return;
-                        }
-                        // Folder single click / selected folder click -> OPEN FOLDER IMMEDIATELY!
+                    var isTouch = e.pointerType === "touch" || e.pointerType === "pen" || ("ontouchstart" in window && window.innerWidth < 1024);
+                    if (folderFlag && isTouch) {
                         navigateIntoFolder(name);
                         return;
                     }
 
-                    // Single click selects item in both List and Grid modes for files
+                    // Single click selects item in both List and Grid modes
                     handleListItemClick(item, index, files);
                 });
 
                 // Double-click handler for desktop mouse
                 item.addEventListener("dblclick", function (e) {
                     if (e.target.closest("button")) return;
-                    if (!folderFlag && itemData.uploading) return;
+                    if (itemData.uploading) return;
                     if (folderFlag) {
                         navigateIntoFolder(name);
                     } else {
@@ -861,20 +854,6 @@
                 if (cancelBtn) {
                     cancelBtn.addEventListener("click", function (e) {
                         e.stopPropagation();
-                        if (folderFlag && window.uploadQueue && window.uploadQueue.length > 0) {
-                            var targetName = name;
-                            window.uploadQueue.forEach(function (up) {
-                                var rawDir = up.targetDir || up.parent_path || up.folder || "";
-                                var itemDir = rawDir.replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
-                                var parts = itemDir ? itemDir.split("/") : [];
-                                if (parts.indexOf(targetName) !== -1 || up.fileName === targetName) {
-                                    if (typeof window.cancelUpload === "function") {
-                                        window.cancelUpload(up.id);
-                                    }
-                                }
-                            });
-                            return;
-                        }
                         var uploadId = cancelBtn.getAttribute("data-upload-id");
                         if (uploadId && typeof window.cancelUpload === "function") {
                             window.cancelUpload(parseInt(uploadId));
@@ -887,24 +866,8 @@
                 if (playPauseBtn) {
                     playPauseBtn.addEventListener("click", function (e) {
                         e.stopPropagation();
-                        var action = playPauseBtn.getAttribute("data-action");
-                        if (folderFlag && window.uploadQueue && window.uploadQueue.length > 0) {
-                            var targetName = name;
-                            window.uploadQueue.forEach(function (up) {
-                                var rawDir = up.targetDir || up.parent_path || up.folder || "";
-                                var itemDir = rawDir.replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
-                                var parts = itemDir ? itemDir.split("/") : [];
-                                if (parts.indexOf(targetName) !== -1 || up.fileName === targetName) {
-                                    if (action === "pause-upload" && typeof window.pauseUpload === "function") {
-                                        window.pauseUpload(up.id);
-                                    } else if (action === "resume-upload" && typeof window.resumeUpload === "function") {
-                                        window.resumeUpload(up.id);
-                                    }
-                                }
-                            });
-                            return;
-                        }
                         var uploadId = playPauseBtn.getAttribute("data-upload-id");
+                        var action = playPauseBtn.getAttribute("data-action");
                         if (uploadId) {
                             var parsedId = parseInt(uploadId);
                             if (action === "pause-upload" && typeof window.pauseUpload === "function") {
@@ -961,25 +924,28 @@
      * Navigate into a subfolder, updating breadcrumbs and fetching contents.
      */
     var lastFolderNavTime = 0;
-    var isNavigatingFolder = false;
     function navigateIntoFolder(folderName) {
         var now = Date.now();
-        if (now - lastFolderNavTime < 400 || isNavigatingFolder) {
+        if (now - lastFolderNavTime < 400) {
             return;
         }
         lastFolderNavTime = now;
-        isNavigatingFolder = true;
 
         var base = currentFolderPath;
         if (base === "Home") base = "";
+
+        // Guard: check if currentFolderPath already ends with this folderName
+        var parts = base ? base.split("/") : [];
+        if (parts.length > 0 && parts[parts.length - 1] === folderName) {
+            return;
+        }
+
         currentFolderPath = base ? (base + "/" + folderName) : folderName;
         prototypeSelectedItems = [];
         updateSelectionToolbar();
         renderBreadcrumbs();
         fetchFilesData().then(function (fd) {
             renderPrototypeFileList(fd);
-        }).finally(function () {
-            isNavigatingFolder = false;
         });
     }
 
@@ -1348,9 +1314,7 @@
 
             var url, method;
             if (isFolder) {
-                var fullFolderPath = cleanParent ? (cleanParent + "/" + filename) : filename;
-                var encodedPath = fullFolderPath.split("/").map(encodeURIComponent).join("/");
-                url = "/delete-folder/" + encodedPath;
+                url = "/delete-folder/" + encodeURIComponent(filename);
                 method = "POST";
             } else {
                 url = "/delete/" + encodeURIComponent(filename);
@@ -2297,11 +2261,49 @@
     };
 
     window.copyConnectAddress = function () {
-        var addr = document.getElementById("connectQrDialogAddress");
-        if (addr && addr.textContent && navigator.clipboard) {
-            navigator.clipboard.writeText(addr.textContent);
+        var addr = document.getElementById("connectAddress") || document.getElementById("connectQrDialogAddress");
+        var textToCopy = addr ? addr.textContent.trim() : "";
+        if (!textToCopy || textToCopy === "...") {
+            textToCopy = window.location.origin;
+        }
+
+        if (textToCopy) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textToCopy).catch(function () {
+                    fallbackCopyTextToClipboard(textToCopy);
+                });
+            } else {
+                fallbackCopyTextToClipboard(textToCopy);
+            }
+        }
+
+        var tooltip = document.querySelector(".connect-tooltip");
+        if (tooltip) {
+            tooltip.textContent = "Copied successfully!";
+            tooltip.classList.add("copied");
+            setTimeout(function () {
+                tooltip.textContent = "Click to copy";
+                tooltip.classList.remove("copied");
+            }, 1800);
         }
     };
+
+    function fallbackCopyTextToClipboard(text) {
+        var textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.top = "-9999px";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+        } catch (err) {
+            console.error('Fallback copy error', err);
+        }
+        document.body.removeChild(textArea);
+    }
 
     // --- Preview ---
     window.closePreviewModal = function () {
@@ -2768,8 +2770,16 @@
             }
         });
 
-        // Click on empty "Drop files here" area triggers file input
-        // (production #drop-zone already handles its own click separately)
+        // Click on empty "Drop files here" area triggers file input strictly when inner target card is clicked
+        dropzone.addEventListener("click", function (e) {
+            if (e.target.closest(".empty-dropzone-target")) {
+                var fi = document.getElementById("fileInput");
+                if (fi) {
+                    fi.value = "";
+                    fi.click();
+                }
+            }
+        });
     }
 
     // =========================================================================
@@ -2994,7 +3004,7 @@
                     var rd = rowDataMap[checkName];
                     var escName = escapeHtml(checkName);
                     var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
-                    if (!row || row.getAttribute("data-is-folder") === "1") return; // Folder rows render clean; progress belongs to file items and bottom-right Upload Tray!
+                    if (!row) return;
 
                     // Handle cancelled items
                     if (rd.hasCancelled && !rd.hasUploading && !rd.hasPaused && rd.itemCount === 1) {
@@ -3905,9 +3915,7 @@
             return fetch("/api/folders/" + encodedPath + "/files")
                 .then(function (r) {
                     if (r.status === 404) {
-                        var parts = (currentFolderPath || "").split("/");
-                        parts.pop();
-                        currentFolderPath = parts.length > 0 ? parts.join("/") : "Home";
+                        currentFolderPath = "Home";
                         prototypeSelectedItems = [];
                         updateSelectionToolbar();
                         renderBreadcrumbs();

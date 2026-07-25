@@ -153,6 +153,8 @@ function formatSpeed(bytesPerSecond) {
  * @returns {string} HTML-escaped text
  */
 function escapeHtml(text) {
+  if (text == null) return "";
+  const str = String(text);
   const map = {
     '&': '&amp;',
     '<': '&lt;',
@@ -160,7 +162,7 @@ function escapeHtml(text) {
     '"': '&quot;',
     "'": '&#039;'
   };
-  return text.replace(/[&<>"']/g, m => map[m]);
+  return str.replace(/[&<>"']/g, m => map[m]);
 }
 
 /**
