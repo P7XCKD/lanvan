@@ -460,20 +460,6 @@
             });
         }
 
-        // Apply Tab-level Filtering (Recent vs Starred)
-        var tab = window.activeTab || "file";
-        if (tab === "recent") {
-            // Show only files (excluding folders) for Recents
-            normalizedFiles = normalizedFiles.filter(function (f) {
-                return !f.isFolder;
-            });
-        } else if (tab === "starred") {
-            // Show only starred files/folders
-            normalizedFiles = normalizedFiles.filter(function (f) {
-                return isStarred(f.name);
-            });
-        }
-
         // Apply client-side Sorting
         normalizedFiles.sort(function (a, b) {
             // Folders top / mixed logic
@@ -650,9 +636,6 @@
                 (isFolder ? '' :
                     '<button class="btn-icon hover-btn" title="Rename" data-action="rename" data-filename="' + escName + '">' +
                     '<i data-lucide="edit-2" style="width:16px;height:16px;"></i>' +
-                    '</button>' +
-                    '<button class="btn-icon hover-btn" title="Star" data-action="star" data-filename="' + escName + '" style="color:' + starColor + ';">' +
-                    '<i data-lucide="star" style="width:16px;height:16px;fill:' + starFill + ';"></i>' +
                     '</button>'
                 ) +
                 '<button class="btn-icon" title="More actions" data-action="menu" data-filename="' + escName + '">' +
@@ -775,15 +758,6 @@
                 }
 
                 // Star button (files only)
-                var starBtn = item.querySelector('[data-action="star"]');
-                if (starBtn) {
-                    starBtn.addEventListener("click", function (e) {
-                        e.stopPropagation();
-                        var fname = starBtn.getAttribute("data-filename");
-                        toggleStar(fname, starBtn);
-                    });
-                }
-
                 // Menu button
                 var menuBtn = item.querySelector('[data-action="menu"]');
                 if (menuBtn) {
@@ -944,33 +918,31 @@
 
     // --- View Switching ---
     window.switchView = function (tab) {
+        if (!tab || tab === "recent" || tab === "starred") tab = "file";
         window.activeTab = tab;
+
         var fileView = document.getElementById("fileView");
         var clipView = document.getElementById("clipboardView");
 
         // Sidebar items
         var sideFile = document.getElementById("sideItemFile");
         var sideClip = document.getElementById("sideItemClipboard");
-        var sideRecent = document.getElementById("sideItemRecent");
-        var sideStarred = document.getElementById("sideItemStarred");
 
         // Bottom nav items
         var navFile = document.getElementById("navItemFile");
         var navClip = document.getElementById("navItemClipboard");
-        var navRecent = document.getElementById("navItemRecent");
-        var navStarred = document.getElementById("navItemStarred");
 
         // Clear selection when switching views
         window.clearSelection();
 
         // Deactivate all sidebar items
-        var allSideItems = [sideFile, sideClip, sideRecent, sideStarred];
+        var allSideItems = [sideFile, sideClip];
         for (var i = 0; i < allSideItems.length; i++) {
             if (allSideItems[i]) allSideItems[i].classList.remove("active");
         }
 
         // Deactivate all nav items
-        var allNavItems = [navFile, navClip, navRecent, navStarred];
+        var allNavItems = [navFile, navClip];
         for (var j = 0; j < allNavItems.length; j++) {
             if (allNavItems[j]) allNavItems[j].classList.remove("active");
         }
@@ -982,24 +954,11 @@
             if (navClip) navClip.classList.add("active");
             if (typeof refreshClipboardHistory === "function") refreshClipboardHistory();
         } else {
-            // file, recent, starred — all show file view
             if (fileView) fileView.style.display = "flex";
             if (clipView) clipView.style.display = "none";
+            if (sideFile) sideFile.classList.add("active");
+            if (navFile) navFile.classList.add("active");
 
-            // Highlight correct sidebar item based on tab
-            if (tab === "recent" && sideRecent) {
-                sideRecent.classList.add("active");
-                if (navRecent) navRecent.classList.add("active");
-            } else if (tab === "starred" && sideStarred) {
-                sideStarred.classList.add("active");
-                if (navStarred) navStarred.classList.add("active");
-            } else {
-                // Default: Files
-                if (sideFile) sideFile.classList.add("active");
-                if (navFile) navFile.classList.add("active");
-            }
-
-            // Re-render prototype list to apply correct tab filters
             if (typeof lastRenderedFiles !== "undefined") {
                 renderPrototypeFileList(lastRenderedFiles);
             }

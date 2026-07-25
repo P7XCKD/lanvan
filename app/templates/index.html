@@ -48,12 +48,6 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
       <div class="sidebar-item" id="sideItemClipboard" onclick="switchView('clipboard')">
         <i data-lucide="clipboard"></i> Clipboard
       </div>
-      <div class="sidebar-item" id="sideItemRecent" onclick="switchView('recent')">
-        <i data-lucide="clock-3"></i> Recent
-      </div>
-      <div class="sidebar-item" id="sideItemStarred" onclick="switchView('starred')">
-        <i data-lucide="star"></i> Starred
-      </div>
     </nav>
     <div class="sidebar-utility">
       <section class="connection-card">
@@ -307,28 +301,16 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         </div>
         <span>Files</span>
       </div>
-      <div class="nav-item" id="navItemClipboard" onclick="switchView('clipboard')">
-        <div class="nav-item-icon-wrapper">
-          <i data-lucide="clipboard" style="width:20px;height:20px;"></i>
-        </div>
-        <span>Clipboard</span>
-      </div>
       <div class="yt-nav-add" onclick="showMobileUploadMenu(event)" title="Add new item">
         <button class="yt-add-btn">
           <i data-lucide="plus" style="width:22px;height:22px;"></i>
         </button>
       </div>
-      <div class="nav-item" id="navItemRecent" onclick="switchView('recent')">
+      <div class="nav-item" id="navItemClipboard" onclick="switchView('clipboard')">
         <div class="nav-item-icon-wrapper">
-          <i data-lucide="clock-3" style="width:20px;height:20px;"></i>
+          <i data-lucide="clipboard" style="width:20px;height:20px;"></i>
         </div>
-        <span>Recent</span>
-      </div>
-      <div class="nav-item" id="navItemStarred" onclick="switchView('starred')">
-        <div class="nav-item-icon-wrapper">
-          <i data-lucide="star" style="width:20px;height:20px;"></i>
-        </div>
-        <span>Starred</span>
+        <span>Clipboard</span>
       </div>
     </nav>
   </div><!-- /app-body -->
@@ -401,12 +383,6 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
       <div class="context-item-left">
         <i data-lucide="download"></i>
         <span>Download</span>
-      </div>
-    </div>
-    <div class="context-item" onclick="handleMenuStarToggle()">
-      <div class="context-item-left">
-        <i data-lucide="star" id="menuStarIcon" style="width:16px;height:16px;"></i>
-        <span id="menuStarText">Add to Starred</span>
       </div>
     </div>
     <div class="context-item" onclick="openMoveModal()">

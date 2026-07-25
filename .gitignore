@@ -185,3 +185,9 @@ settings.local.py
 # Workspace agent rules (explicitly tracked in git)
 !.agents/
 !.agents/AGENTS.md
+
+test downlaods/
+scratch/
+android/.gradle/
+*.apk
+*.zip
