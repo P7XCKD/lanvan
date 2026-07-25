@@ -214,6 +214,35 @@ class UploadStatusConnectionManager:
                             await self.active_connections[conn_id].send_text(message)
                         except Exception:
                             pass
+            
+            # Also broadcast completion to all clients for cross-device sync
+            await self.notify_file_list_updated([upload_id])
+
+    async def broadcast_to_all(self, message: str):
+        """
+        Broadcasts a text message to ALL active WebSocket connections across all devices.
+        """
+        failed_connections = []
+        for conn_id, websocket in list(self.active_connections.items()):
+            try:
+                await websocket.send_text(message)
+                self.connection_timeouts[conn_id] = time.time() + self.connection_timeout
+            except Exception:
+                failed_connections.append(conn_id)
+        
+        for conn_id in failed_connections:
+            await self.disconnect(connection_id=conn_id)
+
+    async def notify_file_list_updated(self, files: Optional[List[str]] = None):
+        """
+        Broadcasts a file_list_updated event to all clients so connected devices update immediately.
+        """
+        msg = json.dumps({
+            "type": "file_list_updated",
+            "files": files or [],
+            "timestamp": time.time()
+        })
+        await self.broadcast_to_all(msg)
 
     async def disconnect(self, websocket: Optional[WebSocket] = None, connection_id: Optional[str] = None):
         """

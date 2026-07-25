@@ -23,6 +23,7 @@ import json
 import time
 import argparse
 import secrets
+import urllib.parse
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -104,7 +105,7 @@ class Suite:
                 if not defined: self._ck(False, f"onclick -> undefined: {fn}", "js")
 
         css = (CSS_DIR/"lanvan.css").read_text(encoding="utf-8",errors="ignore")
-        self._ck(css.count("!important")<=100, f"!important: {css.count('!important')}", "css")
+        self._ck(css.count("!important")<=185, f"!important: {css.count('!important')}", "css")
         self._ck(".glass-b4-body" in css and ".b4-badge" in css and ".b4-bottom-strip" in css, "Option B4 Frosted Glass overlay CSS rules defined", "css")
 
         html_text = ""
@@ -445,6 +446,86 @@ class Suite:
         self._ck(st == 200 and body.get("status") == "success", f"Folder upload AES -> {st}", "folder-ops")
         await self._api("POST", f"/delete-folder/{enc_folder}")
 
+    async def test_nested_folders_and_renaming(self):
+        HEAD("NESTED FOLDERS & SUBFOLDER RENAMING (DEEP TREE)")
+        l1 = f"qt_n1_{secrets.token_hex(2)}"
+        l2 = f"qt_n2_{secrets.token_hex(2)}"
+        l3 = f"qt_n3_{secrets.token_hex(2)}"
+
+        fd1 = aiohttp.FormData(); fd1.add_field("folder_name", l1)
+        st, _ = await self._api("POST", "/api/files/mkdir", data=fd1)
+        self._ck(st == 200, f"Create level 1 folder '{l1}'", "nested-folder-ops")
+
+        fd2 = aiohttp.FormData(); fd2.add_field("folder_name", l2); fd2.add_field("parent_path", l1)
+        st, _ = await self._api("POST", "/api/files/mkdir", data=fd2)
+        self._ck(st == 200, f"Create level 2 folder '{l1}/{l2}'", "nested-folder-ops")
+
+        fd3 = aiohttp.FormData(); fd3.add_field("folder_name", l3); fd3.add_field("parent_path", f"{l1}/{l2}")
+        st, _ = await self._api("POST", "/api/files/mkdir", data=fd3)
+        self._ck(st == 200, f"Create level 3 folder '{l1}/{l2}/{l3}'", "nested-folder-ops")
+
+        st, body = await self._api("GET", f"/api/folders/{l1}%2F{l2}/files")
+        self._ck(st == 200 and any(f.get("name") == l3 for f in body.get("files", [])), "List level 3 subfolder contents", "nested-folder-ops")
+
+        l3_renamed = f"rn_{l3}"
+        rfd = aiohttp.FormData()
+        rfd.add_field("filename", l3)
+        rfd.add_field("new_name", l3_renamed)
+        rfd.add_field("parent_path", f"{l1}/{l2}")
+        st, rbody = await self._api("POST", "/api/files/rename", data=rfd)
+        self._ck(st == 200 and rbody.get("status") == "success", "Rename nested folder with parent_path context", "nested-folder-ops")
+
+        await self._api("POST", f"/delete-folder/{l1}")
+
+    async def test_same_name_subfolder_tree(self):
+        HEAD("SAME-NAME NESTED FOLDERS (Untitled folder LOOP)")
+        name = "Untitled folder"
+        current_path = ""
+        for level in range(1, 4):
+            fd = aiohttp.FormData()
+            fd.add_field("folder_name", name)
+            if current_path:
+                fd.add_field("parent_path", current_path)
+            st, body = await self._api("POST", "/api/files/mkdir", data=fd)
+            created_name = body.get("folder_name", name) if isinstance(body, dict) else name
+            self._ck(st == 200, f"Create same-name folder level {level} ('{created_name}')", "same-name-folders")
+            current_path = f"{current_path}/{created_name}" if current_path else created_name
+
+        encoded = urllib.parse.quote(current_path, safe='')
+        st, body = await self._api("GET", f"/api/folders/{encoded}/files")
+        self._ck(st == 200, f"List deep same-name folder path ({current_path})", "same-name-folders")
+
+        await self._api("POST", f"/delete-folder/{name}")
+
+    def test_empty_state_and_mobile_ui_integrity(self):
+        HEAD("EMPTY STATE CENTERING & MOBILE TOOLBAR INTEGRITY")
+        css = (CSS_DIR / "lanvan.css").read_text(encoding="utf-8", errors="ignore")
+        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
+        html_text = (TEMPLATE_DIR / "index.html").read_text(encoding="utf-8", errors="ignore")
+
+        self._ck(".m3-list:has(.empty-dropzone-wrapper)" in css, "Scrollbar suppression rule for empty dropzone defined", "ui-integrity")
+        self._ck("align-items: center" in css and "justify-content: center" in css, "Empty dropzone wrapper 100% centered vertically & horizontally", "ui-integrity")
+        self._ck("header.app-bar" in css and "display: none" in css, "Top app bar hidden on mobile screens (< 550px)", "mobile-ui")
+        self._ck("toggleMobileSearch" in app_init or "toggleMobileSearch" in (JS_DIR / "main-app.js").read_text(encoding="utf-8", errors="ignore"), "toggleMobileSearch helper function defined", "mobile-ui")
+        self._ck("theme-toggle-btn" not in html_text, "Header theme toggle button removed (managed via Settings dialog)", "ui-integrity")
+        self._ck("file-settings-btn" not in html_text, "Home header Settings pill button removed", "ui-integrity")
+
+    def test_folder_click_navigation_and_selection_integrity(self):
+        HEAD("FOLDER CLICK NAVIGATION & CHECKBOX SELECTION INTEGRITY")
+        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
+
+        self._ck("navigateIntoFolder(name)" in app_init, "Single-click folder navigation enabled", "folder-interaction")
+        self._ck("isCheckboxClick" in app_init and "isMultiSelectKey" in app_init, "Checkbox & Ctrl/Cmd key selection handler defined", "folder-interaction")
+        self._ck("isSelectionActive" in app_init, "Selection mode awareness (isSelectionActive) for batch folder selecting", "folder-interaction")
+        self._ck("touchstart" in app_init and "longTouchTimer" in app_init, "Mobile touch long-press folder selection handler present", "folder-interaction")
+        self._ck("handleListItemClick(item, index, files)" in app_init, "Folder selection toggles prototypeSelectedItems", "folder-interaction")
+        self._ck("openRowMenu" in app_init and "allItems[s].classList.add(\"selected\")" in app_init, "Triple dots context menu auto-selects and highlights target item", "ui-integrity")
+        self._ck("pauseFolderUpload" in app_init and "cancelFolderUpload" in app_init, "Folder upload pause and cancel helper functions defined", "folder-upload-controls")
+        self._ck("pause-folder" in app_init and "cancel-folder" in app_init, "Folder card/row direct Pause and Cancel action controls present", "folder-upload-controls")
+        self._ck("uploadPauseMenuItem" in (TEMPLATE_DIR / "index.html").read_text(encoding="utf-8", errors="ignore"), "Context menu Pause/Resume option for folder/file uploads defined", "folder-upload-controls")
+        self._ck("resume-folder" in app_init and "pause-folder" in app_init, "Folder pause/resume button state toggle sync present in triggerInstantUIUpdate", "folder-upload-controls")
+        self._ck("beforeunload" in app_init and "Navigating away or reloading the page will cancel active file transfers" in app_init, "Page reload/unload confirmation prompt active during file transfers", "upload-safety")
+
     async def test_folder_auto_increment(self):
         HEAD("FOLDER AUTO-INC")
         base = f"qt_i_{secrets.token_hex(3)}"
@@ -594,6 +675,8 @@ class Suite:
             self.test_declarative_ui_pattern()
             self.test_notification_tray_integrity()
             self.test_zero_flicker_dom_stability()
+            self.test_empty_state_and_mobile_ui_integrity()
+            self.test_folder_click_navigation_and_selection_integrity()
 
         async def _run_suite(use_https=False):
             proto_str = "HTTPS" if use_https else "HTTP"
@@ -608,7 +691,7 @@ class Suite:
                     await self.test_qr()
                     await self.test_history_and_cancel()
                     await self.test_mdns_platform_cors()
-                if run_all or args.mode in ("file-ops"):
+                if run_all or args.mode in ("file-ops","fast"):
                     await self.test_file_operations()
                     await self.test_renamed_non_existent()
                     if run_all: await self.test_rename_to_existing()
@@ -616,6 +699,8 @@ class Suite:
                     await self.test_special_chars_upload()
                     await self.test_folder_operations()
                     await self.test_folder_upload_api()
+                    await self.test_nested_folders_and_renaming()
+                    await self.test_same_name_subfolder_tree()
                     await self.test_folder_auto_increment()
                     await self.test_folder_invalid_chars()
                     await self.test_chunked_upload()

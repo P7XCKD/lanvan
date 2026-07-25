@@ -863,6 +863,13 @@ async def upload_files(
                 failed_uploads.append(result.get("error", "Unknown error"))
         
         if successful_uploads:
+            # Broadcast real-time WebSocket event to all connected devices
+            try:
+                from app.ws_manager.upload_status import upload_status_manager
+                asyncio.create_task(upload_status_manager.notify_file_list_updated(successful_uploads))
+            except Exception:
+                pass
+
             return JSONResponse(content={
                 "status": "success",
                 "msg": f"{len(successful_uploads)} file(s) uploaded via {protocol}",
@@ -2535,25 +2542,32 @@ async def list_folder_contents(folder_path: str):
 
 
 @router.post("/api/files/rename", name="rename_file")
-async def rename_file(filename: str = Form(...), new_name: str = Form(...)):
+async def rename_file(filename: str = Form(...), new_name: str = Form(...), parent_path: Optional[str] = Form(None)):
     """Rename a file or folder with validation and path traversal prevention"""
     # Validate source name
     safe_filename = secure_filename(filename)
     if not safe_filename:
         return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid source name"})
     
-    # Search for the file or folder in root and all subdirectories
-    src_path = UPLOAD_FOLDER / safe_filename
+    target_dir = UPLOAD_FOLDER
+    if parent_path:
+        cleaned_parent = parent_path.strip("/\\").replace("..", "")
+        if cleaned_parent and cleaned_parent != "Home":
+            target_dir = UPLOAD_FOLDER / cleaned_parent
+
+    src_path = target_dir / safe_filename
     if not src_path.exists():
-        # Search subdirectories
-        found = False
-        for subdir_item in UPLOAD_FOLDER.rglob(safe_filename):
-            if subdir_item.is_file() or subdir_item.is_dir():
-                src_path = subdir_item
-                found = True
-                break
-        if not found:
-            return JSONResponse(status_code=404, content={"status": "error", "msg": "Source not found"})
+        # Search root or subdirectories if direct parent path search failed
+        src_path = UPLOAD_FOLDER / safe_filename
+        if not src_path.exists():
+            found = False
+            for subdir_item in UPLOAD_FOLDER.rglob(safe_filename):
+                if subdir_item.is_file() or subdir_item.is_dir():
+                    src_path = subdir_item
+                    found = True
+                    break
+            if not found:
+                return JSONResponse(status_code=404, content={"status": "error", "msg": "Source not found"})
     
     # Validate destination name
     safe_new = secure_filename(new_name)

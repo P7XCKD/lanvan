@@ -940,8 +940,35 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    min-height: 480px;
     overflow: hidden;
+}
+
+.empty-dropzone-wrapper {
+    flex: 1 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    margin: auto !important;
+    padding: 1.5rem 1rem !important;
+}
+
+.m3-list:has(.empty-dropzone-wrapper),
+#nasFileList:has(.empty-dropzone-wrapper) {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 1 !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    overflow-y: hidden !important;
 }
 
 [data-theme="dark"] .m3-card {
@@ -1088,6 +1115,50 @@ body {
 [data-theme="dark"] .m3-list-item.selected {
     background-color: rgba(138, 180, 248, 0.15) !important;
     outline: 1px solid var(--primary);
+}
+
+/* Industry-Standard Zero-Flicker View Mode Anti-FOUC Rules */
+html[data-view-mode="grid"] #fileTableHead {
+    display: none !important;
+}
+
+html[data-view-mode="list"] #fileTableHead {
+    display: grid !important;
+}
+
+html[data-view-mode="grid"] .m3-list {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)) !important;
+    grid-auto-rows: 200px !important;
+    align-content: start !important;
+    gap: 1.1rem !important;
+    padding: 0.5rem 0.25rem !important;
+}
+
+html[data-view-mode="list"] .m3-list {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+}
+
+html[data-view-mode="grid"] #gridViewBtn {
+    background: var(--primary-container) !important;
+    color: var(--primary) !important;
+}
+
+html[data-view-mode="grid"] #listViewBtn {
+    background: transparent !important;
+    color: var(--text-muted) !important;
+}
+
+html[data-view-mode="list"] #listViewBtn {
+    background: var(--primary-container) !important;
+    color: var(--primary) !important;
+}
+
+html[data-view-mode="list"] #gridViewBtn {
+    background: transparent !important;
+    color: var(--text-muted) !important;
 }
 
 /* ==========================================================================
@@ -1776,18 +1847,21 @@ body {
    BOTTOM NAVIGATION BAR
    ========================================================================== */
 .bottom-nav {
-    position: absolute;
+    position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    height: 64px;
+    height: auto;
+    min-height: 60px;
     background: var(--card-bg);
     border-top: 1px solid var(--border-color);
     display: flex;
-    /* Hidden by default on desktop */
     justify-content: space-around;
     align-items: center;
-    z-index: 100;
+    z-index: 9999;
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    padding-bottom: max(8px, constant(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08);
 }
 
 .nav-item {
@@ -2515,13 +2589,152 @@ body {
         justify-content: space-between;
     }
 
+    #quickAccessContainer,
+    .quick-access {
+        display: none !important;
+    }
+
     body .item-date,
     body .item-size {
         display: none !important;
     }
 
+    .app-bar,
+    header.app-bar,
+    .theme-toggle-btn,
+    .qr-launch-btn {
+        display: none !important;
+    }
+
+    .mobile-search-btn,
+    .mobile-qr-btn {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        border: 1px solid var(--border-color);
+        background: var(--card-bg);
+        color: var(--primary);
+        flex-shrink: 0;
+    }
+
+    .search-shell.mobile-active {
+        display: flex !important;
+        position: fixed !important;
+        top: 0.75rem !important;
+        left: 0.75rem !important;
+        right: 0.75rem !important;
+        z-index: 10000 !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25) !important;
+        border: 1px solid var(--primary) !important;
+        background: var(--card-bg) !important;
+    }
+
+    body #fileTableHead,
+    #fileTableHead {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto !important;
+        padding: 0.5rem 0.75rem !important;
+    }
+
+    body #fileTableHead > span:nth-child(2),
+    body #fileTableHead > span:nth-child(3),
+    #fileTableHead > span:nth-child(2),
+    #fileTableHead > span:nth-child(3) {
+        display: none !important;
+    }
+
+    body .m3-list:not(.grid-mode) .m3-list-item {
+        grid-template-columns: minmax(0, 1fr) auto !important;
+    }
+
+    html,
+    body,
+    .android-app,
+    .app-body {
+        height: 100vh !important;
+        height: 100dvh !important;
+        overflow: hidden !important;
+    }
+
+    .app-content {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        padding-bottom: calc(82px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    .view-content:not([style*="display: none"]):not([style*="display:none"]) {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    .view-content[style*="display: none"],
+    .view-content[style*="display:none"] {
+        display: none !important;
+    }
+
+    #nasDropzone,
+    .m3-card#nasDropzone {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 0 !important;
+        height: auto !important;
+        margin-bottom: 0 !important;
+        padding-bottom: 0 !important;
+        overflow: hidden !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: var(--radius-lg) !important;
+    }
+
+    body .m3-list,
+    .m3-list {
+        flex: 1 !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 1rem !important;
+    }
+
+    /* Hide scrollbars completely when dropzone/file list is empty */
+    .m3-list:has(.empty-dropzone-wrapper),
+    #nasFileList:has(.empty-dropzone-wrapper),
+    .m3-card:has(.empty-dropzone-wrapper) .m3-list {
+        overflow-y: hidden !important;
+        overflow: hidden !important;
+    }
+
+    html[data-view-mode="grid"] .m3-list,
+    body .m3-list.grid-mode,
+    .m3-list.grid-mode {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        grid-auto-rows: minmax(160px, auto) !important;
+        gap: 0.6rem !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        padding: 0.5rem 0.25rem 1rem !important;
+    }
+
     body .bottom-nav {
         display: flex !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        z-index: 9999 !important;
+        padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)) !important;
+        padding-bottom: max(8px, constant(safe-area-inset-bottom, 0px)) !important;
     }
 
     .search-results-panel {
@@ -3652,4 +3865,23 @@ video::-webkit-media-controls-cast-button {
     background: linear-gradient(90deg, #2563eb, #60a5fa);
     box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
     transition: width 0.3s ease;
+}
+
+/* Disable all floating popup toast notifications per user preference */
+#toast,
+.toast-container,
+.toast-notification,
+#toast-notification,
+.toast-visible {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+@media (min-width: 551px) {
+    .mobile-search-btn,
+    .mobile-qr-btn {
+        display: none !important;
+    }
 }

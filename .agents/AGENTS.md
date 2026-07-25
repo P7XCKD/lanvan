@@ -100,3 +100,8 @@ When rendering file lists (`renderPrototypeFileList`), subfolder uploads (e.g. `
 - **Loose ID Equality**: Event handlers and queue lookups MUST use loose type coercion (`item.id == uploadId` or `String(item.id) === String(uploadId)`). Never use strict number-to-string equality (`item.id === uploadId`), which fails when `uploadId` is read as a string from DOM attributes.
 - **Scrollbar Layout Shift Prevention**: Scrollable containers with dynamic content (`.upload-toast-body`) MUST specify `scrollbar-gutter: stable;` and `overflow-x: hidden;` in CSS. Action controls (`.upload-toast-actions`, `.upload-toast-cancel-text`) MUST have `flex-shrink: 0; margin-left: auto;` so scrollbar toggle states never cause horizontal button shifting.
 - **Guard DOM Element Re-ordering**: High-frequency list renderers (`renderUploadTray`) MUST verify if an element is already in position (`if (container.children[i] !== itemEl)`) before calling `appendChild(itemEl)`. Re-attaching existing DOM nodes continuously detaches them from the render tree, dropping CSS `:hover` states and causing button flickering on mouseover.
+
+---
+
+## 8. Mandatory Test Suite Sync & QA Regression Gate (`qt.py`)
+Whenever adding new UI behavior, folder navigation rules, or resolving user bug reports (e.g. folder clicking vs checkbox selection, same-name subfolder loops, mobile layout changes), you MUST update `qt.py` with corresponding assertions and test cases. Always run `python qt.py --fast` (and full suite) to ensure 100% pass rate before declaring completion.

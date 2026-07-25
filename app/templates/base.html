@@ -48,6 +48,10 @@
             } else {
                 document.documentElement.setAttribute('data-theme', 'light');
             }
+
+            // Zero-flicker view mode initialization before first paint
+            var viewModePref = localStorage.getItem('lanvan_view_mode') || 'grid';
+            document.documentElement.setAttribute('data-view-mode', viewModePref);
         })();
     </script>
     <!-- Legacy CSS (preserved for rollback â€” inactive) -->

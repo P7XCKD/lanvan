@@ -190,6 +190,69 @@ if (typeof show_clipboard_only !== 'undefined' && show_clipboard_only) {
   });
 }
 
+//  Upload Status WebSocket for low-latency real-time cross-device sync
+let uploadWs = null;
+let uploadWsReconnectTimer = null;
+
+function initUploadWebSocket() {
+  if (uploadWs && (uploadWs.readyState === WebSocket.CONNECTING || uploadWs.readyState === WebSocket.OPEN)) {
+    return;
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}/ws/upload-status`;
+
+  try {
+    uploadWs = new WebSocket(wsUrl);
+
+    uploadWs.onopen = function () {
+      console.log('[WS UPLOAD] 🟢 Connected to Upload Status WebSocket');
+      if (uploadWsReconnectTimer) {
+        clearTimeout(uploadWsReconnectTimer);
+        uploadWsReconnectTimer = null;
+      }
+    };
+
+    uploadWs.onmessage = function (event) {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'file_list_updated' || payload.type === 'upload_complete') {
+          console.log('[WS UPLOAD] 🔄 Received real-time sync event across devices:', payload);
+          if (typeof refreshFileList === 'function') refreshFileList();
+          if (typeof fetchFilesData === 'function') {
+            fetchFilesData().then(function (fd) {
+              if (typeof renderPrototypeFileList === 'function') renderPrototypeFileList(fd);
+            });
+          }
+        }
+      } catch (e) { }
+    };
+
+    uploadWs.onclose = function () {
+      uploadWs = null;
+      if (!uploadWsReconnectTimer) {
+        uploadWsReconnectTimer = setTimeout(initUploadWebSocket, 3000);
+      }
+    };
+
+    uploadWs.onerror = function () {
+      if (uploadWs) {
+        try { uploadWs.close(); } catch (e) { }
+      }
+    };
+  } catch (err) {
+    if (!uploadWsReconnectTimer) {
+      uploadWsReconnectTimer = setTimeout(initUploadWebSocket, 5000);
+    }
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initUploadWebSocket);
+} else {
+  initUploadWebSocket();
+}
+
 //  Global Variables
 // Page mode detection
 
@@ -363,6 +426,21 @@ const LANVAN_CONFIG = {
     RETRY_DELAY: 1000,        // Base delay between retries (ms)
     EXPONENTIAL_BACKOFF: 2,   // Multiplier for exponential backoff
     NETWORK_TIMEOUT: 30000    // Network timeout for chunk uploads (30s)
+  }
+};
+
+window.toggleMobileSearch = function () {
+  const searchShell = document.querySelector('.search-shell');
+  if (!searchShell) return;
+
+  if (searchShell.classList.contains('mobile-active')) {
+    searchShell.classList.remove('mobile-active');
+    const input = document.getElementById('searchInput');
+    if (input) input.blur();
+  } else {
+    searchShell.classList.add('mobile-active');
+    const input = document.getElementById('searchInput');
+    if (input) input.focus();
   }
 };
 
@@ -614,6 +692,9 @@ function addToUploadQueue(files) {
   if (typeof window.triggerInstantUIUpdate === "function") {
     window.triggerInstantUIUpdate();
   }
+
+  // Instantly start processing new uploads
+  startNextUpload();
 }
 
 function showUploadManager() {
@@ -1723,6 +1804,14 @@ function removeCompletedUpload(itemId) {
 }
 
 function startNextUpload() {
+  // Resolve ghost items restored from JSON storage without binary File handles
+  uploadQueue.forEach(item => {
+    if ((item.status === 'queued' || item.status === 'paused') && !item.file) {
+      item.status = 'completed';
+      item.progress = 100;
+    }
+  });
+
   // Protect against interfering with active uploads
   if (uploadQueue.length === 0) {
     console.log(' Upload queue is empty');
@@ -1964,9 +2053,14 @@ function uploadSingleFileWithProgress(uploadItem) {
         // All uploads complete - show clear button but DON'T auto-refresh files
         showClearCompletedButton();
 
-        //  Refresh file count immediately to show new total
+        //  Refresh file list immediately across prototype and production views
         setTimeout(() => {
-          refreshFileCountOnly();
+          if (typeof refreshFileList === 'function') refreshFileList();
+          if (typeof fetchFilesData === 'function') {
+            fetchFilesData().then(function (fd) {
+              if (typeof renderPrototypeFileList === 'function') renderPrototypeFileList(fd);
+            });
+          }
         }, 100); // Small delay to ensure server has processed all files
 
         //  Show final completion toast for all uploads without creating batch log entry
@@ -3999,77 +4093,8 @@ let lastToastMessage = '';
 let isPersistentToast = false;
 
 function showToast(message, duration = 3000, transferData = null, type = 'default') {
-  if (typeof window.logUIDisplay === 'function') {
-    window.logUIDisplay('Toast Notification', message);
-  } else {
-    console.log(' Toast: ', message);
-  }
-
-  const toast = DOM_CACHE.toast;
-  if (!toast) {
-    console.warn(' Toast element not found');
-    return;
-  }
-
-  // Clear any existing timeout
-  if (toastTimeout) {
-    clearTimeout(toastTimeout);
-    toastTimeout = null;
-  }
-
-  // Reset persistent state
-  isPersistentToast = false;
-
-  // Set message and data
-  toast.innerText = message;
-  lastToastMessage = message;
-
-  // Store transfer data for detailed view
-  if (transferData) {
-    toast._transferData = transferData;
-  } else {
-    delete toast._transferData;
-  }
-
-  // Determine background color based on type and duration
-  let backgroundColor = '#333'; // Default
-  if (duration === 0) { // Persistent toast
-    if (type === 'error') {
-      backgroundColor = '#dc3545'; // Red for error
-    } else if (type === 'warning') {
-      backgroundColor = '#ffc107'; // Yellow for warning
-    } else {
-      backgroundColor = '#27ae60'; // Green for success/default persistent
-    }
-  } else {
-    // Non-persistent toasts can also have colors based on type
-    if (type === 'info') {
-      backgroundColor = '#17a2b8'; // Blue for info
-    } else if (type === 'warning') {
-      backgroundColor = '#ffc107'; // Yellow for warning  
-    } else if (type === 'error') {
-      backgroundColor = '#dc3545'; // Red for error
-    }
-  }
-
-  //  PERFORMANCE: Batch style changes with Object.assign
-  Object.assign(toast.style, {
-    display: 'block',
-    opacity: '1',
-    transform: 'translateX(-50%) translateY(0)',
-    backgroundColor: backgroundColor,
-    whiteSpace: 'normal'
-  });
-  toast.title = 'Click to keep visible';
-
-  console.log(` Toast: ${message}`);
-
-  // Auto-hide unless duration is 0 (persistent)
-  if (duration > 0) {
-    toastTimeout = setTimeout(() => {
-      hideToast();
-    }, duration);
-  }
+  // Completely disable floating toast notifications per user preference
+  return;
 }
 
 function updateToastContent(message) {

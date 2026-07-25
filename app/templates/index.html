@@ -93,9 +93,6 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         </button>
       </label>
       <div class="app-actions">
-        <button class="btn-icon" onclick="toggleDarkMode()" title="Toggle theme">
-          <i data-lucide="sun" style="width:18px;height:18px;"></i>
-        </button>
         <button class="btn-icon" onclick="openSettingsDialog()" title="Settings">
           <i data-lucide="settings" style="width:18px;height:18px;"></i>
         </button>
@@ -122,10 +119,6 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
             <span class="panel-meta" id="filePanelMeta"></span>
             <button class="btn-icon qr-launch-btn" onclick="openConnectQrDialog()" title="Show QR" aria-label="Show QR">
               <i data-lucide="qr-code" style="width:15px;height:15px;"></i>
-            </button>
-            <button class="file-settings-btn" onclick="openSettingsDialog()" title="Settings">
-              <i data-lucide="settings" style="width: 15px; height: 15px; color: var(--primary);"></i>
-              <span>Settings</span>
             </button>
           </div>
         </div>
@@ -191,13 +184,21 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
                 </div>
               </div>
             </div>
-            <div class="view-switcher-pill">
-              <button id="listViewBtn" class="view-switcher-btn active" onclick="setViewMode('list')" title="List View">
-                <i data-lucide="menu" style="width:16px;height:16px;"></i>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <button class="btn-icon mobile-search-btn" onclick="toggleMobileSearch()" title="Search" aria-label="Search">
+                <i data-lucide="search" style="width:15px;height:15px;"></i>
               </button>
-              <button id="gridViewBtn" class="view-switcher-btn" onclick="setViewMode('grid')" title="Grid View">
-                <i data-lucide="layout-grid" style="width:16px;height:16px;"></i>
+              <button class="btn-icon mobile-qr-btn" onclick="openConnectQrDialog()" title="Show QR" aria-label="Show QR">
+                <i data-lucide="qr-code" style="width:15px;height:15px;"></i>
               </button>
+              <div class="view-switcher-pill">
+                <button id="listViewBtn" class="view-switcher-btn active" onclick="setViewMode('list')" title="List View">
+                  <i data-lucide="menu" style="width:16px;height:16px;"></i>
+                </button>
+                <button id="gridViewBtn" class="view-switcher-btn" onclick="setViewMode('grid')" title="Grid View">
+                  <i data-lucide="layout-grid" style="width:16px;height:16px;"></i>
+                </button>
+              </div>
             </div>
           </div>
           <div id="toolbarSelectionContent"
@@ -366,6 +367,12 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
     </div>
   </div>
   <div id="itemMenuOptions" style="display:none;">
+    <div class="context-item" id="uploadPauseMenuItem" onclick="pauseSelectedUpload()" style="display:none;">
+      <div class="context-item-left">
+        <i data-lucide="pause-circle"></i>
+        <span id="uploadPauseMenuText">Pause upload</span>
+      </div>
+    </div>
     <div class="context-item" id="uploadCancelMenuItem" onclick="cancelSelectedUpload()"
       style="display:none; color:var(--danger);">
       <div class="context-item-left">
