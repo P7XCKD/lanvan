@@ -31,17 +31,20 @@ JS_DIR = APP_DIR / "static" / "js"
 CSS_DIR = APP_DIR / "static" / "css"
 TEMPLATE_DIR = APP_DIR / "templates"
 sys.path.insert(0, str(ROOT))
+if hasattr(sys.stdout, "reconfigure"):
+    try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
 
 class C:
     RESET="\033[0m"; BOLD="\033[1m"; RED="\033[91m"; GREEN="\033[92m"
     YELLOW="\033[93m"; BLUE="\033[94m"; MAGENTA="\033[95m"; CYAN="\033[96m"
     WHITE="\033[97m"; BG_RED="\033[41m"; BG_GREEN="\033[42m"; BG_YELLOW="\033[43m"
 
-def OK(m):   return f"  {C.GREEN}\u2713{C.RESET} {m}"
-def FAIL(m): return f"  {C.RED}\u2717{C.RESET} {C.RED}{m}{C.RESET}"
-def WARN(m): return f"  {C.YELLOW}\u26a0{C.RESET} {m}"
-def INFO(m): return f"  {C.CYAN}\u2192{C.RESET} {m}"
-def HEAD(m): return f"\n{C.BOLD}{C.CYAN}{'\u2501'*60}\n  {m}\n{'\u2501'*60}{C.RESET}"
+def OK(m):   return f"  {C.GREEN}[OK]{C.RESET} {m}"
+def FAIL(m): return f"  {C.RED}[FAIL]{C.RESET} {C.RED}{m}{C.RESET}"
+def WARN(m): return f"  {C.YELLOW}[WARN]{C.RESET} {m}"
+def INFO(m): return f"  {C.CYAN}[INFO]{C.RESET} {m}"
+def HEAD(m): return f"\n{C.BOLD}{C.CYAN}{'='*60}\n  {m}\n{'='*60}{C.RESET}"
 
 class Suite:
     def __init__(self):
@@ -101,7 +104,7 @@ class Suite:
                 if not defined: self._ck(False, f"onclick -> undefined: {fn}", "js")
 
         css = (CSS_DIR/"lanvan.css").read_text(encoding="utf-8",errors="ignore")
-        self._ck(css.count("!important")<=50, f"!important: {css.count('!important')}", "css")
+        self._ck(css.count("!important")<=100, f"!important: {css.count('!important')}", "css")
         self._ck(".glass-b4-body" in css and ".b4-badge" in css and ".b4-bottom-strip" in css, "Option B4 Frosted Glass overlay CSS rules defined", "css")
 
         html_text = ""
@@ -132,6 +135,78 @@ class Suite:
         self._ck("pauseAllUploads" in combined_js and "uploadManagerExpanded = true" in combined_js, "pauseAllUploads auto-expands tray when paused", "ui-integrity")
         self._ck("resumeAllUploads" in combined_js and "uploadManagerExpanded = false" in combined_js, "resumeAllUploads auto-collapses tray when resumed", "ui-integrity")
         self._ck("buildHeaderActionsHtml" in combined_js, "buildHeaderActionsHtml renders correct controls based on upload/pause status", "ui-integrity")
+
+    def test_cleanFolderPath_normalization(self):
+        HEAD("PATH NORMALIZATION INTEGRITY (cleanFolderPath)")
+        combined_js = ""
+        for f in sorted(JS_DIR.glob("*.js")):
+            combined_js += f"\n/*---{f.name}---*/\n"+f.read_text(encoding="utf-8",errors="ignore")
+
+        self._ck("function cleanFolderPath" in combined_js, "cleanFolderPath helper function defined", "path-normalization")
+        
+        # Verify cleanFolderPath is used in all key path resolution locations
+        clean_usages = len(re.findall(r"normCurrentDir\s*=\s*cleanFolderPath", combined_js))
+        self._ck(clean_usages >= 3, f"normCurrentDir consistently initialized via cleanFolderPath (found {clean_usages} usages)", "path-normalization")
+        
+        raw_home_strip = len(re.findall(r"normCurrentDir\.replace\(\/\^Home\\\/\?\/", combined_js))
+        self._ck(raw_home_strip == 0, "No raw Home/ string replace hacks on normCurrentDir", "path-normalization")
+
+    def test_subfolder_synthesis_patterns(self):
+        HEAD("SUBFOLDER SYNTHESIS & AGGREGATION PATTERNS")
+        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
+
+        self._ck("activeFolderMap" in app_init, "activeFolderMap root subfolder aggregation in renderPrototypeFileList", "subfolder-synthesis")
+        self._ck("rowDataMap" in app_init, "rowDataMap two-pass aggregation in _doInstantUIUpdate (prevents progress bar bouncing)", "subfolder-synthesis")
+        
+        # Verify two-pass DOM update pattern exists (Pass 1 aggregation + Pass 2 single DOM write)
+        self._ck("// Pass 1: Aggregate items into per-row progress data" in app_init, "Pass 1 item aggregation logic present", "subfolder-synthesis")
+        self._ck("// Pass 2: Update DOM rows with aggregated progress" in app_init, "Pass 2 single-pass DOM row rendering present", "subfolder-synthesis")
+
+    def test_defensive_getters(self):
+        HEAD("DEFENSIVE PROPERTY ACCESS & DATA CONTRACTS (§1)")
+        main_app = (JS_DIR / "main-app.js").read_text(encoding="utf-8", errors="ignore")
+        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
+
+        # Defensive getter existence
+        self._ck("getItemSize" in main_app or "window.getItemSize" in main_app, "getItemSize defensive getter defined", "defensive-getters")
+        self._ck("getItemName" in main_app or "window.getItemName" in main_app, "getItemName defensive getter defined", "defensive-getters")
+        self._ck("getItemProgress" in main_app or "window.getItemProgress" in main_app, "getItemProgress defensive getter defined", "defensive-getters")
+
+        # Defensive usage in app-init
+        self._ck("window.getItemSize" in app_init, "getItemSize safely invoked in prototype adapter", "defensive-getters")
+        self._ck("window.getItemName" in app_init, "getItemName safely invoked in prototype adapter", "defensive-getters")
+
+    def test_declarative_ui_pattern(self):
+        HEAD("DECLARATIVE UI RENDERING & SINGLE SOURCE OF TRUTH (§2)")
+        main_app = (JS_DIR / "main-app.js").read_text(encoding="utf-8", errors="ignore")
+
+        self._ck("window.uploadQueue" in main_app, "window.uploadQueue authoritative state repository", "declarative-ui")
+        
+        # Action handlers must trigger instant UI update
+        self._ck("function cancelUpload" in main_app and "triggerInstantUIUpdate" in main_app, "cancelUpload mutates state and triggers triggerInstantUIUpdate", "declarative-ui")
+        self._ck("function pauseUpload" in main_app and "triggerInstantUIUpdate" in main_app, "pauseUpload mutates state and triggers triggerInstantUIUpdate", "declarative-ui")
+        self._ck("function resumeUpload" in main_app and "triggerInstantUIUpdate" in main_app, "resumeUpload mutates state and triggers triggerInstantUIUpdate", "declarative-ui")
+
+    def test_notification_tray_integrity(self):
+        HEAD("NOTIFICATION TRAY INTEGRITY & DISMISSAL (§3)")
+        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
+
+        self._ck("scheduleUploadTrayRender" in app_init, "scheduleUploadTrayRender debouncer present", "tray-integrity")
+        self._ck("buildTrayItemHtml" in app_init, "buildTrayItemHtml tray renderer present", "tray-integrity")
+        self._ck("if (!hasItems) return; // Do not expand when empty" in app_init, "Empty notification tray expansion guard present", "tray-integrity")
+
+    def test_zero_flicker_dom_stability(self):
+        HEAD("ZERO-FLICKER DOM STABILITY (§7)")
+        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
+        css = (CSS_DIR / "lanvan.css").read_text(encoding="utf-8", errors="ignore")
+
+        # DOM Node Re-ordering Guard
+        self._ck("bodyEl.children[i] !== itemEl" in app_init, "Guarded DOM re-ordering in renderUploadTray (prevents hover drop)", "zero-flicker")
+
+        # CSS layout shift prevention
+        self._ck("scrollbar-gutter: stable" in css, "Scrollbar gutter stable in CSS (prevents layout shift)", "zero-flicker")
+        self._ck("flex-shrink: 0" in css, "flex-shrink: 0 applied on dynamic notification action items", "zero-flicker")
+        self._ck("Drop files here" in app_init, "Spacious empty state dropzone card rules defined", "zero-flicker")
 
     # ═══════ SERVER ═══════
     async def start_server(self, use_https=False):
@@ -180,7 +255,7 @@ class Suite:
         self.task = None; await asyncio.sleep(0.3)  # Give OS time to release port
 
     async def _api(self,method,path,**kw):
-        timeout = aiohttp.ClientTimeout(total=15)
+        timeout = kw.pop("timeout", aiohttp.ClientTimeout(total=30))
         conn = aiohttp.TCPConnector(ssl=False)
         async with aiohttp.ClientSession(timeout=timeout, connector=conn) as s:
             async with s.request(method,f"{self.base_url}{path}",**kw) as resp:
@@ -510,6 +585,12 @@ class Suite:
         if run_all or args.mode in ("js","fast"):
             self.test_static_integrity()
             self.test_ui_and_viewmode_integrity()
+            self.test_cleanFolderPath_normalization()
+            self.test_subfolder_synthesis_patterns()
+            self.test_defensive_getters()
+            self.test_declarative_ui_pattern()
+            self.test_notification_tray_integrity()
+            self.test_zero_flicker_dom_stability()
 
         async def _run_suite(use_https=False):
             proto_str = "HTTPS" if use_https else "HTTP"

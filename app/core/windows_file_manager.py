@@ -58,7 +58,7 @@ class WindowsFileManager:
             return True  # Assume in use if other errors
     
     @staticmethod
-    async def safe_delete_file(file_path: Path, max_attempts: int = 5) -> tuple[bool, str]:
+    async def safe_delete_file(file_path: Path, max_attempts: int = 3) -> tuple[bool, str]:
         """
         [DEL] Safely delete a file with progressive retry and handle release
         
@@ -75,10 +75,7 @@ class WindowsFileManager:
                 # Progressive handle release attempts
                 if attempt > 0:
                     await WindowsFileManager.async_force_release_handles()
-                    
-                    # Progressive backoff
-                    wait_time = 0.3 + (attempt * 0.2)
-                    await asyncio.sleep(wait_time)
+                    await asyncio.sleep(0.1 * attempt)
                     
                     # Check if file is still in use
                     if WindowsFileManager.check_file_in_use(file_path):
@@ -109,17 +106,21 @@ class WindowsFileManager:
         if not psutil:
             return processes
         try:
-            for proc in psutil.process_iter(['pid', 'name', 'open_files']):
+            current_pid = os.getpid()
+            for proc in psutil.process_iter(['pid', 'name']):
                 try:
-                    open_files = proc.info['open_files']
-                    if open_files:
-                        for open_file in open_files:
-                            if Path(open_file.path) == file_path:
-                                processes.append({
-                                    'pid': proc.info['pid'],
-                                    'name': proc.info['name'],
-                                    'file_path': open_file.path
-                                })
+                    # Only check Python/server processes to avoid slow system-wide scans
+                    pname = (proc.info['name'] or '').lower()
+                    if 'python' in pname or proc.info['pid'] == current_pid:
+                        open_files = proc.open_files()
+                        if open_files:
+                            for open_file in open_files:
+                                if Path(open_file.path) == file_path:
+                                    processes.append({
+                                        'pid': proc.info['pid'],
+                                        'name': proc.info['name'],
+                                        'file_path': open_file.path
+                                    })
                 except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     pass
         except Exception as e:
