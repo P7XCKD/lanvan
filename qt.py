@@ -239,6 +239,15 @@ class Suite:
         st,_ = await self._api("POST",f"/delete/{new}")
         self._ck(st==200,f"Delete '{new}'","file-ops")
 
+        # Idempotent delete (file already gone -> 200 OK)
+        st,idem_res = await self._api("POST",f"/delete/{new}")
+        self._ck(st==200 and idem_res.get("status")=="success","Idempotent delete of unlinked file -> 200 OK","file-ops")
+
+        # Delete with parent_path
+        fd_sub = aiohttp.FormData(); fd_sub.add_field("filename","sub_test.txt"); fd_sub.add_field("parent_path","Home/subfolder")
+        st,sub_res = await self._api("POST","/delete/sub_test.txt",data=fd_sub)
+        self._ck(st==200 and sub_res.get("status")=="success","Subfolder delete with parent_path -> 200 OK","file-ops")
+
         # Verify gone
         st,body = await self._api("GET","/api/files")
         names = [f["name"] for f in body.get("files_data",[])]
@@ -434,6 +443,8 @@ class Suite:
         self._ck(st==200,"Retrieve history","api")
         st,_ = await self._api("POST","/api/cancel-upload",data={"filename":"ghost.tmp"})
         self._ck(st==200,"Cancel upload","api")
+        st,res = await self._api("POST","/api/cancel-upload",data={"filename":"sub_ghost.tmp","parent_path":"Home/test_subfolder"})
+        self._ck(st==200 and res.get("status")=="success","Cancel upload subfolder with Home/ prefix","api")
 
     async def test_mdns_platform_cors(self):
         HEAD("mDNS + PLATFORM + CORS")

@@ -610,6 +610,10 @@ function addToUploadQueue(files) {
 
   console.log(' Updating upload manager display...');
   updateUploadManager();
+
+  if (typeof window.triggerInstantUIUpdate === "function") {
+    window.triggerInstantUIUpdate();
+  }
 }
 
 function showUploadManager() {
@@ -1560,10 +1564,26 @@ function cancelUpload(uploadId) {
   const fileName = window.getItemName(uploadItem);
   const targetDir = window.getItemFolder(uploadItem);
   if (fileName && fileName !== 'Unknown') {
+    window._cancelledFilesMap = window._cancelledFilesMap || {};
+    const cancelKey = targetDir ? (targetDir + '/' + fileName) : fileName;
+    window._cancelledFilesMap[cancelKey] = true;
+    window._cancelledFilesMap[fileName] = true;
+    if (targetDir) {
+      const cleanDir = targetDir.replace(/^Home\/?/, '');
+      if (cleanDir) {
+        window._cancelledFilesMap[cleanDir + '/' + fileName] = true;
+        window._cancelledFilesMap['Home/' + cleanDir + '/' + fileName] = true;
+      }
+    }
+
     const formData = new FormData();
     formData.append("filename", fileName);
     if (targetDir) formData.append("parent_path", targetDir);
-    fetch("/api/cancel-upload", { method: "POST", body: formData }).catch(e => { });
+    fetch("/api/cancel-upload", { method: "POST", body: formData })
+      .then(() => {
+        if (typeof window.refreshFileList === "function") window.refreshFileList();
+      })
+      .catch(e => { });
   }
 
   // Set status to cancelled and update UI to show red mark IMMEDIATELY

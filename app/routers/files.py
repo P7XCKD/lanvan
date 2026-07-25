@@ -81,7 +81,9 @@ except Exception:
 def cleanup_temp_file_for_filename(filename: str, parent_path: Optional[str] = None) -> int:
     """Find and delete all .tmp files and chunk artifacts associated with a filename."""
     deleted_count = 0
-    safe_name = secure_filename(filename) if filename else ""
+    if not filename:
+        return 0
+    safe_name = secure_filename(filename)
     if not safe_name:
         return 0
 
@@ -89,10 +91,10 @@ def cleanup_temp_file_for_filename(filename: str, parent_path: Optional[str] = N
 
     target_dirs = [UPLOAD_FOLDER]
     if parent_path:
-        clean_parent = parent_path.strip('/\\')
+        clean_parent = urllib.parse.unquote(parent_path).replace('\\', '/').strip('/')
         if clean_parent:
-            # Sanitize each path component to prevent traversal
-            parts = [secure_filename(p) for p in clean_parent.replace('\\', '/').split('/') if p and secure_filename(p)]
+            # Sanitize each path component to prevent traversal & filter virtual 'Home' root
+            parts = [secure_filename(p) for p in clean_parent.split('/') if p and p != "Home" and secure_filename(p)]
             if parts:
                 sub_dir = UPLOAD_FOLDER.joinpath(*parts)
                 try:
@@ -104,6 +106,18 @@ def cleanup_temp_file_for_filename(filename: str, parent_path: Optional[str] = N
                     pass
 
     for d in target_dirs:
+        # Delete any partially written destination file matching safe_name or raw filename
+        for target_name in set([safe_name, filename, secure_filename(filename)]):
+            if not target_name: continue
+            exact_target = d / target_name
+            if exact_target.exists() and exact_target.is_file():
+                try:
+                    exact_target.unlink()
+                    deleted_count += 1
+                    print(f"[CLEANUP] Deleted cancelled target file: {exact_target}")
+                except Exception as e:
+                    print(f"[ERR] Failed to delete cancelled target file {exact_target}: {e}")
+
         for p in d.rglob("*.tmp"):
             p_name = p.name
             if (base_name in p_name or safe_name in p_name) and p.is_file():
@@ -1484,8 +1498,9 @@ async def cancel_upload_api(filename: Optional[str] = Form(None), parent_path: O
         return JSONResponse(status_code=500, content={"status": "error", "msg": str(e)})
 
 @router.post("/delete/{filename}", name="delete_file")
-async def delete_file(filename: str):
-    """Delete a specific file with proper error handling"""
+@router.post("/api/files/delete", name="delete_file_api")
+async def delete_file(filename: str, parent_path: Optional[str] = Form(None), request: Request = None):
+    """Delete a specific file with proper error handling and idempotent safety"""
     try:
         safe_name = secure_filename(filename)
         if not safe_name:
@@ -1494,50 +1509,48 @@ async def delete_file(filename: str):
                 content={"status": "error", "msg": "Invalid filename"}
             )
             
-        file_path = UPLOAD_FOLDER / safe_name
+        target_parent = parent_path
+        if not target_parent and request:
+            try:
+                form = await request.form()
+                target_parent = form.get("parent_path")
+            except Exception:
+                pass
+
+        target_dir = UPLOAD_FOLDER
+        if target_parent:
+            clean_parent = urllib.parse.unquote(target_parent).replace('\\', '/').strip('/')
+            parts = [secure_filename(p) for p in clean_parent.split('/') if p and p != "Home" and secure_filename(p)]
+            if parts:
+                target_dir = UPLOAD_FOLDER.joinpath(*parts)
+
+        file_path = target_dir / safe_name
         
         if not file_path.exists():
-            # Fallback 1: search subdirectories recursively
+            # Search target_dir and subdirectories recursively for filename or safe_name
             found = False
-            for subdir_file in UPLOAD_FOLDER.rglob(safe_name):
-                if subdir_file.is_file():
-                    file_path = subdir_file
-                    found = True
-                    break
-            if not found:
-                # Fallback 2: match base name & extension if server auto-renamed duplicate file
-                dot_idx = safe_name.rfind(".")
-                base = safe_name[:dot_idx] if dot_idx > 0 else safe_name
-                ext = safe_name[dot_idx:] if dot_idx > 0 else ""
-                for candidate in UPLOAD_FOLDER.rglob("*"):
+            for target_name in set([safe_name, filename, secure_filename(filename)]):
+                if not target_name: continue
+                for candidate in UPLOAD_FOLDER.rglob(target_name):
                     if candidate.is_file():
-                        c_name = candidate.name
-                        if ext and c_name.startswith(base) and c_name.endswith(ext):
-                            file_path = candidate
-                            found = True
-                            break
-                        elif not ext and c_name.startswith(base):
-                            file_path = candidate
-                            found = True
-                            break
+                        file_path = candidate
+                        found = True
+                        break
+                if found: break
+
             if not found:
-                return JSONResponse(
-                    status_code=404,
-                    content={"status": "error", "msg": "File not found"}
-                )
-            
+                # Idempotent delete: file is already unlinked from disk! Purge any leftover temp artifacts
+                cleanup_temp_file_for_filename(filename, target_parent)
+                return JSONResponse(content={"status": "success", "msg": "File deleted successfully"})
+
         if file_path.is_file():
             file_path.unlink()
             print(f"OK: Deleted file: {file_path.name}")
-            return JSONResponse(content={"status": "success", "msg": f"Deleted {file_path.name}"})
-        else:
-            return JSONResponse(
-                status_code=HTTP_400_BAD_REQUEST,
-                content={"status": "error", "msg": "Not a valid file"}
-            )
             
+        cleanup_temp_file_for_filename(filename, target_parent)
+        return JSONResponse(content={"status": "success", "msg": "File deleted successfully"})
     except Exception as e:
-        print(f"[ERR] Error deleting file {filename}: {e}")
+        print(f"[ERR] Error in delete_file: {e}")
         return JSONResponse(
             status_code=500,
             content={"status": "error", "msg": f"Failed to delete file: {str(e)}"}

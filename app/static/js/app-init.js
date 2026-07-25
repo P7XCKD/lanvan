@@ -295,6 +295,36 @@
         var activeUploads = [];
         var normCurrentDir = (currentFolderPath === "Home" || currentFolderPath === "Home/" || !currentFolderPath) ? "" : currentFolderPath;
 
+        // Exclude files/folders from backend scan if they were cancelled or deleted
+        if (!window._cancelledFilesMap) window._cancelledFilesMap = {};
+
+        normalizedFiles = normalizedFiles.filter(function (f) {
+            if (!f || !f.name) return false;
+
+            var cleanDir = normCurrentDir.replace(/^Home\/?/, "");
+            var fullRelPath = cleanDir ? (cleanDir + "/" + f.name) : f.name;
+            var homeRelPath = "Home/" + fullRelPath;
+
+            if (window._cancelledFilesMap[fullRelPath] || window._cancelledFilesMap[homeRelPath] || window._cancelledFilesMap[f.name]) {
+                return false;
+            }
+
+            if (window.uploadQueue && window.uploadQueue.length > 0) {
+                var isCancelledOrDeleted = window.uploadQueue.some(function (item) {
+                    if (!item || (!item.fileName && !item.name)) return false;
+                    if (item.status !== 'cancelled' && item.status !== 'deleted') return false;
+
+                    var itemDir = (item.targetDir || item.parent_path || item.folder || "").replace(/^Home\/?/, "");
+                    var itemName = item.fileName || item.name || "";
+
+                    return itemDir === cleanDir && itemName === f.name;
+                });
+                if (isCancelledOrDeleted) return false;
+            }
+
+            return true;
+        });
+
         if (window.uploadQueue && window.uploadQueue.length > 0) {
             var activeFolderMap = {};
 
@@ -1069,18 +1099,37 @@
     // --- File Operations ---
     window.downloadSelected = function () {
         var items = prototypeSelectedItems.slice();
+        var target = window._contextMenuTarget || "";
+
+        if (items.length === 0 && target) {
+            items = [target];
+        }
+        window._contextMenuTarget = "";
+
         if (items.length === 0) return;
 
         var index = 0;
         function downloadNext() {
             if (index >= items.length) {
                 if (typeof showToast === "function") {
-                    showToast("Downloaded " + items.length + " file(s).", 3000);
+                    showToast("Downloaded " + items.length + " item(s).", 3000);
                 }
                 window.clearSelection();
                 return;
             }
-            downloadFileByName(items[index]);
+            var targetItem = items[index];
+            var isFolder = false;
+            if (Array.isArray(lastFilesData)) {
+                var foundMeta = lastFilesData.find(function (f) { return f && f.name === targetItem; });
+                if (foundMeta && foundMeta.isFolder) isFolder = true;
+            }
+
+            if (isFolder) {
+                downloadFolderAsZip(targetItem);
+            } else {
+                downloadFileByName(targetItem);
+            }
+
             index++;
             if (index < items.length) {
                 setTimeout(downloadNext, 300); // 300ms delay between downloads
@@ -1148,9 +1197,15 @@
                 if (foundData) isFolder = !!foundData.isFolder;
             }
 
+            var parentPath = (currentFolderPath === "Home" || currentFolderPath === "Home/" || !currentFolderPath) ? "" : currentFolderPath;
+            var cleanParent = parentPath.replace(/^Home\/?/, "");
+
+            var formData = new FormData();
+            formData.append("filename", filename);
+            if (cleanParent) formData.append("parent_path", cleanParent);
+
             var url, method;
             if (isFolder) {
-                // Use folder delete endpoint
                 url = "/delete-folder/" + encodeURIComponent(filename);
                 method = "POST";
             } else {
@@ -1163,12 +1218,18 @@
             xhr.onload = function () {
                 if (xhr.status === 200 || xhr.status === 302) {
                     completed++;
+                    window._cancelledFilesMap = window._cancelledFilesMap || {};
+                    var fullRelPath = cleanParent ? (cleanParent + "/" + filename) : filename;
+                    window._cancelledFilesMap[fullRelPath] = true;
+                    window._cancelledFilesMap["Home/" + fullRelPath] = true;
+                    window._cancelledFilesMap[filename] = true;
+
                     // Mark matching upload queue items as deleted
                     if (Array.isArray(window.uploadQueue)) {
                         var basename = filename.split('/').pop().split('\\').pop();
                         window.uploadQueue.forEach(function (qi) {
                             var qiName = (qi.fileName || qi.name || "");
-                            if (qi.status === 'completed' && (qiName === basename || qiName === filename)) {
+                            if (qiName === basename || qiName === filename) {
                                 qi.status = 'deleted';
                             }
                         });
@@ -1178,6 +1239,7 @@
                 } else { failed.push(filename); }
                 deleteNext(index + 1);
             };
+            xhr.send(formData);
             xhr.onerror = function () {
                 failed.push(filename);
                 deleteNext(index + 1);
@@ -3559,6 +3621,9 @@
             window.uploadTrayDocked = false;
             if (typeof renderUploadTray === "function") {
                 renderUploadTray();
+            }
+            if (typeof lastRenderedFiles !== "undefined" && typeof renderPrototypeFileList === "function") {
+                renderPrototypeFileList(lastRenderedFiles);
             }
             startUploadTrayPolling();
             var checkInterval = setInterval(function () {
