@@ -233,9 +233,8 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
               <span id="sortArrow-size"></span>
             </span>
             <span style="display:flex; justify-content:flex-end;">
-              <button id="sortMenuBtn" onclick="toggleSortMenu(event)"
-                style="display:flex; align-items:center; gap:0.25rem; border:none; background:var(--toggle-bg); color:var(--text-color); font-size:0.7rem; font-weight:700; padding:4px 10px; border-radius:12px; cursor:pointer;">
-                <i data-lucide="arrow-up-down" style="width:12px;height:12px;"></i>
+              <button id="sortMenuBtn" class="sort-menu-btn" onclick="toggleSortMenu(event)" title="Sort files">
+                <i data-lucide="arrow-up-down" style="width:13px;height:13px;"></i>
                 <span>Sort</span>
               </button>
             </span>
@@ -556,7 +555,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
 </div>
 
 <!-- Settings Dialog -->
-<div id="settingsDialog" class="m3-dialog-overlay" style="z-index: 21000; display: none;">
+<div id="settingsDialog" class="m3-dialog-overlay" style="z-index: 21000; display: none;" onclick="if(event.target === this) closeSettingsDialog();">
   <div class="m3-dialog" style="max-width: 420px; width: 90%; padding: 1.5rem; border-radius: 20px;">
     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem;">
       <div

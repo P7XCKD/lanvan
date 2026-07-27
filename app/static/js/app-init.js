@@ -520,8 +520,7 @@
 
             // Render quick access cards (empty when normalizedFiles is 0)
             renderQuickAccess(originalFilesForQuickAccess
-                .filter(function (f) { return !f.isFolder && !f.uploading; })
-                .map(function (f) { return f.name; }));
+                .filter(function (f) { return !f.isFolder && !f.uploading; }));
 
             // Check if uploads are active — show different message
             var queue = window.uploadQueue || [];
@@ -649,8 +648,7 @@
 
         // Also render quick access cards (only non-folders)
         renderQuickAccess(originalFilesForQuickAccess
-            .filter(function (f) { return !f.isFolder && !f.uploading; })
-            .map(function (f) { return f.name; }));
+            .filter(function (f) { return !f.isFolder && !f.uploading; }));
 
         refreshLucideIcons(container);
     }
@@ -4310,34 +4308,75 @@
         var recentFiles = files.slice(0, 4);
         var html = "";
         for (var i = 0; i < recentFiles.length; i++) {
-            var name = recentFiles[i];
+            var item = recentFiles[i];
+            var name = typeof item === "string" ? item : (item.name || item.filename || "");
             var ext = name.split(".").pop().toLowerCase();
             var info = getFileTypeInfo(name, ext);
             var escName = escapeHtml(name);
+            var sizeBytes = typeof item === "object" && typeof item.size === "number" ? item.size : 0;
+            var formattedSize = sizeBytes > 0 ? formatBytes(sizeBytes) : "";
+            var typeLabel = ext ? ext.toUpperCase() : "FILE";
+            var subtitle = formattedSize ? (typeLabel + " - " + formattedSize) : typeLabel;
 
             html +=
                 '<div class="quick-card" data-filename="' + escName + '">' +
                 '<div class="quick-icon ' + info.avatarClass + '"><i data-lucide="' + info.iconName + '"></i></div>' +
                 '<div class="quick-copy" style="flex:1;min-width:0;">' +
-                '<div class="quick-title">' + escName + "</div>" +
-                '<div class="quick-subtitle">File</div>' +
-                "</div>" +
-                "</div>";
+                '<div class="quick-title" title="' + escName + '">' + escName + '</div>' +
+                '<div class="quick-subtitle">' + subtitle + '</div>' +
+                '</div>' +
+                '<div class="quick-hover-actions" style="display:flex;align-items:center;gap:4px;flex-shrink:0;">' +
+                '<button class="btn-icon" data-action="download" data-filename="' + escName + '" title="Download" style="width:24px;height:24px;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;border:none;color:var(--text-muted);cursor:pointer;">' +
+                '<i data-lucide="download" style="width:14px;height:14px;"></i>' +
+                '</button>' +
+                '<button class="btn-icon" data-action="menu" data-filename="' + escName + '" title="More actions" style="width:24px;height:24px;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;border:none;color:var(--text-muted);cursor:pointer;">' +
+                '<i data-lucide="more-vertical" style="width:14px;height:14px;"></i>' +
+                '</button>' +
+                '</div>' +
+                '</div>';
         }
         container.innerHTML = html;
 
-        // Click to select
+        refreshLucideIcons(container);
+
+        // Action Handlers
+        var downloadBtns = container.querySelectorAll('button[data-action="download"]');
+        for (var d = 0; d < downloadBtns.length; d++) {
+            downloadBtns[d].addEventListener("click", function (e) {
+                e.stopPropagation();
+                var fname = this.getAttribute("data-filename");
+                if (fname) {
+                    var link = document.createElement("a");
+                    link.href = "/download/" + encodeURIComponent(fname);
+                    link.download = fname;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            });
+        }
+
+        var menuBtns = container.querySelectorAll('button[data-action="menu"]');
+        for (var m = 0; m < menuBtns.length; m++) {
+            menuBtns[m].addEventListener("click", function (e) {
+                e.stopPropagation();
+                var fname = this.getAttribute("data-filename");
+                if (fname && typeof window.openRowMenu === "function") {
+                    window.openRowMenu(e, fname);
+                }
+            });
+        }
+
+        // Click card to select
         var cards = container.querySelectorAll(".quick-card");
         for (var k = 0; k < cards.length; k++) {
-            cards[k].addEventListener("click", function () {
+            cards[k].addEventListener("click", function (e) {
+                if (e.target.closest("button")) return;
                 var fname = this.getAttribute("data-filename");
                 if (prototypeSelectedItems.indexOf(fname) === -1) {
                     prototypeSelectedItems = [fname];
                 }
-                // Scroll to highlight
-                var listItem = document.querySelector('#nasFileList [data-filename="' + fname.replace(/"/g, '"') + '"]');
-                if (listItem) listItem.scrollIntoView({ behavior: "smooth", block: "center" });
-                updateSelectionToolbar();
+                renderPrototypeFileList();
             });
         }
 
@@ -4533,11 +4572,21 @@
             var active = document.activeElement;
             var isInputActive = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable);
 
-            // Escape Key to Clear Selection / Close Context Menus
+            // Escape Key to Close Settings Dialog / Context Menus / Clear Selection
             if (e.key === "Escape" || e.key === "Esc") {
+                var settingsDialog = document.getElementById("settingsDialog");
+                if (settingsDialog && settingsDialog.style.display !== "none" && settingsDialog.style.display !== "") {
+                    if (typeof window.closeSettingsDialog === "function") {
+                        window.closeSettingsDialog();
+                    } else {
+                        settingsDialog.style.display = "none";
+                    }
+                    return;
+                }
                 var contextMenu = document.getElementById("contextMenu");
                 if (contextMenu && contextMenu.style.display !== "none") {
                     contextMenu.style.display = "none";
+                    return;
                 }
                 if (typeof window.clearSelection === "function") {
                     window.clearSelection();
