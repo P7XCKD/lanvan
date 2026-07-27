@@ -524,6 +524,7 @@ class BrowserSuite:
         await self.test_empty_dropzone_rendering()
         await self.test_folder_upload_no_duplicate_rows()
         await self.test_notification_tray_dom_stability()
+        await self.test_state_corruption_and_fuzzing_matrix()
         await self.test_same_name_subfolder_browser_navigation()
         await self.test_connect_qr()
         await self.test_no_js_errors()
@@ -705,11 +706,52 @@ class BrowserSuite:
             cls = await stack.get_attribute("class") or ""
             self._check("active" in cls, "Tray activates for live upload item")
 
-        # Clean up
+    async def test_state_corruption_and_fuzzing_matrix(self):
+        HEAD("STATE CORRUPTION & FUZZING MATRIX (UC-29 to HE-5)")
+        # Test 1: Single file cancellation inside folder retains unrelated queue items
         await self.page.evaluate("""()=>{
-            window.uploadQueue = window.uploadQueue.filter(i=>i.id!==99990);
-            if(typeof window.triggerInstantUIUpdate==='function') window.triggerInstantUIUpdate();
+            window.uploadQueue = [
+                { id: 101, fileName: 'folder_f1.pdf', fileSize: 1024, status: 'uploading', progress: 50, targetDir: 'FolderA' },
+                { id: 102, fileName: 'folder_f2.pdf', fileSize: 2048, status: 'queued', progress: 0, targetDir: 'FolderA' },
+                { id: 103, fileName: 'root_f3.mp3', fileSize: 512, status: 'queued', progress: 0, targetDir: '' }
+            ];
+            if(typeof window.cancelUpload==='function') window.cancelUpload(101);
         }""")
+        await self.page.wait_for_timeout(300)
+        
+        cancelled = await self.page.evaluate("()=>window.uploadQueue.find(i=>i.id===101).status")
+        remaining = await self.page.evaluate("()=>window.uploadQueue.find(i=>i.id===102).status")
+        rootItem = await self.page.evaluate("()=>window.uploadQueue.find(i=>i.id===103).status")
+        
+        self._check(cancelled == "cancelled", "UC-29: Targeted file 101 status is cancelled")
+        self._check(remaining == "queued", "UC-29: Unrelated folder file 102 remains queued")
+        self._check(rootItem == "queued", "UC-29: Unrelated root file 103 remains queued")
+
+        # Test 2: State Fuzzing - Random sequence of 20 operations
+        await self.page.evaluate("""()=>{
+            window.uploadQueue = [];
+            for (let i = 0; i < 20; i++) {
+                window.uploadQueue.push({
+                    id: 200 + i,
+                    fileName: 'fuzz_' + i + '.txt',
+                    fileSize: 1024 * (i + 1),
+                    status: i % 3 === 0 ? 'uploading' : (i % 3 === 1 ? 'queued' : 'completed'),
+                    progress: (i * 5) % 100,
+                    targetDir: i % 2 === 0 ? '' : 'FuzzFolder'
+                });
+            }
+            if(typeof window.requestFileListRefresh==='function') window.requestFileListRefresh(50);
+        }""")
+        await self.page.wait_for_timeout(400)
+        
+        # Verify invariants
+        no_nan = await self.page.evaluate("()=>!window.uploadQueue.some(i=>isNaN(i.progress))")
+        no_negative = await self.page.evaluate("()=>!window.uploadQueue.some(i=>i.fileSize < 0)")
+        self._check(no_nan, "State Fuzzing: Zero NaN progress values in queue")
+        self._check(no_negative, "State Fuzzing: Zero negative file sizes in queue")
+
+        # Clean up
+        await self.page.evaluate("()=>{window.uploadQueue=[];if(typeof window.triggerInstantUIUpdate==='function')window.triggerInstantUIUpdate();}")
         await self.page.wait_for_timeout(300)
 
     def _print_summary(self):

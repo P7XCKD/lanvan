@@ -275,14 +275,10 @@ function initFileEventsWebSocket() {
         const payload = JSON.parse(event.data);
         if (payload.type === 'file_change') {
           console.log('[WS FILE EVENTS] ⚡ Real-time file system mutation event received across devices:', payload);
-          if (typeof refreshFileList === 'function') refreshFileList();
-          if (typeof fetchFilesData === 'function') {
-            fetchFilesData().then(function (fd) {
-              if (typeof renderPrototypeFileList === 'function') renderPrototypeFileList(fd);
-            });
-          }
-          if (typeof window.triggerInstantUIUpdate === 'function') {
-            window.triggerInstantUIUpdate();
+          if (typeof window.requestFileListRefresh === 'function') {
+            window.requestFileListRefresh(100);
+          } else if (typeof refreshFileList === 'function') {
+            refreshFileList();
           }
         }
       } catch (e) { }
@@ -702,13 +698,14 @@ function createUploadItem(file, uploadId) {
     return p.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
   })();
 
-  // If file came from a directory upload (has webkitRelativePath), append subfolder path to targetDir
+  // If file came from a directory upload (has webkitRelativePath), extract relative directory path
   let finalTargetDir = baseFolder;
   if (file.webkitRelativePath && file.webkitRelativePath.includes('/')) {
     const relParts = file.webkitRelativePath.replace(/\\/g, '/').split('/');
-    // Extract parent directory path inside relative path (everything except the filename)
     const relDir = relParts.slice(0, -1).join('/');
-    finalTargetDir = baseFolder ? `${baseFolder}/${relDir}` : relDir;
+    finalTargetDir = relDir; // Folder uploads create their structure starting at root
+  } else if (file._explicitTargetDir !== undefined) {
+    finalTargetDir = file._explicitTargetDir;
   }
 
   return {
@@ -738,10 +735,10 @@ function addToUploadQueue(files) {
       let currAccum = "";
       for (let i = 0; i < relParts.length - 1; i++) {
         const folderName = relParts[i];
-        const baseCur = (window.currentFolderPath && window.currentFolderPath !== "Home" && window.currentFolderPath !== "Home (Root)") ? window.currentFolderPath : "";
-        const parentPath = i === 0 ? baseCur : (baseCur ? `${baseCur}/${currAccum}` : currAccum);
+        const baseCur = "";
+        const parentPath = i === 0 ? baseCur : currAccum;
         currAccum = currAccum ? `${currAccum}/${folderName}` : folderName;
-        const fullFolderKey = baseCur ? `${baseCur}/${currAccum}` : currAccum;
+        const fullFolderKey = currAccum;
 
         if (!createdFolderPaths.has(fullFolderKey)) {
           createdFolderPaths.add(fullFolderKey);
@@ -1603,7 +1600,7 @@ function cancelUpload(uploadId) {
   const uploadItem = uploadQueue.find(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
   if (!uploadItem) return;
 
-  // Abort the upload if in progress
+  // Abort the target item if in progress
   if (uploadItem.xhr) {
     try { uploadItem.xhr.abort(); } catch (err) {}
   }
@@ -1629,17 +1626,23 @@ function cancelUpload(uploadId) {
     if (targetDir) formData.append("parent_path", targetDir);
     fetch("/api/cancel-upload", { method: "POST", body: formData })
       .then(() => {
-        if (typeof window.refreshFileList === "function") window.refreshFileList();
+        if (typeof window.requestFileListRefresh === "function") {
+          window.requestFileListRefresh(100);
+        }
       })
       .catch(e => { });
   }
 
-  // Set status to cancelled and update UI to show red mark IMMEDIATELY
+  // Set status to cancelled for THIS SPECIFIC ITEM ONLY
   uploadItem.status = 'cancelled';
   uploadItem.error = 'Cancelled by user';
+  console.log(`[LANVAN UPLOAD] ❌ Upload cancelled: ${fileName}`);
 
   // Force immediate UI update to show cancel status
   updateUploadItem(uploadItem);
+  if (typeof window.triggerInstantUIUpdate === "function") {
+    window.triggerInstantUIUpdate();
+  }
 
   const itemSize = window.getItemSize(uploadItem);
   const itemProg = window.getItemProgress(uploadItem);
@@ -1987,8 +1990,7 @@ function uploadSingleFileWithProgress(uploadItem) {
   const formData = new FormData();
   formData.append('files', uploadItem.file);
 
-  let fallbackFolder = typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "");
-  let parentPath = (uploadItem.targetDir !== undefined && uploadItem.targetDir !== null) ? uploadItem.targetDir : fallbackFolder;
+  let parentPath = typeof window.getItemFolder === "function" ? window.getItemFolder(uploadItem) : (uploadItem.targetDir || "");
   if (parentPath.startsWith("Home/")) parentPath = parentPath.substring(5);
   else if (parentPath === "Home") parentPath = "";
   if (parentPath) {
@@ -2377,8 +2379,7 @@ async function uploadLargeFileChunked(uploadItem) {
       formData.append('filename', file.name);
       formData.append('part_number', (chunkIndex + 1).toString());
       formData.append('total_parts', totalChunks.toString());
-      let fallbackFolder = typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "");
-      let parentPath = (uploadItem.targetDir !== undefined && uploadItem.targetDir !== null) ? uploadItem.targetDir : fallbackFolder;
+      let parentPath = typeof window.getItemFolder === "function" ? window.getItemFolder(uploadItem) : (uploadItem.targetDir || "");
       if (parentPath.startsWith("Home/")) parentPath = parentPath.substring(5);
       else if (parentPath === "Home") parentPath = "";
       if (parentPath) {
@@ -2493,8 +2494,7 @@ async function finalizeChunkedUpload(uploadItem) {
   formData.append('total_parts', uploadItem.totalChunks.toString());
   formData.append('encrypt', 'false'); // Chunked uploads don't support encryption
 
-  let fallbackFolder = typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "");
-  let parentPath = (uploadItem.targetDir !== undefined && uploadItem.targetDir !== null) ? uploadItem.targetDir : fallbackFolder;
+  let parentPath = typeof window.getItemFolder === "function" ? window.getItemFolder(uploadItem) : (uploadItem.targetDir || "");
   if (parentPath.startsWith("Home/")) parentPath = parentPath.substring(5);
   else if (parentPath === "Home") parentPath = "";
   if (parentPath) {
@@ -2640,11 +2640,47 @@ async function finalizeChunkedUpload(uploadItem) {
   });
 }
 
-// Dynamic file list refresh function
-async function refreshFileList() {
-  try {
-    console.log(' Refreshing file list...');
+// Single-flight debounced refresh manager to prevent double/triple parallel re-renders
+let _activeRefreshPromise = null;
+let _refreshDebounceTimer = null;
 
+function requestFileListRefresh(delayMs = 150) {
+  if (_refreshDebounceTimer) {
+    clearTimeout(_refreshDebounceTimer);
+  }
+  return new Promise((resolve) => {
+    _refreshDebounceTimer = setTimeout(() => {
+      if (_activeRefreshPromise) {
+        _activeRefreshPromise.then(resolve).catch(resolve);
+        return;
+      }
+      _activeRefreshPromise = refreshFileList()
+        .finally(() => {
+          _activeRefreshPromise = null;
+          resolve();
+        });
+    }, delayMs);
+  });
+}
+window.requestFileListRefresh = requestFileListRefresh;
+
+// Structured State Logger helper
+function logStructuredState(reason, beforeCount, afterCount) {
+  const currentFolder = (typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "Home"));
+  const queue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
+  const queued = queue.filter(i => i && i.status === 'queued').length;
+  const active = queue.filter(i => i && (i.status === 'uploading' || i.status === 'processing')).length;
+  const completed = queue.filter(i => i && i.status === 'completed').length;
+  const cancelled = queue.filter(i => i && i.status === 'cancelled').length;
+
+  console.log(`%c[ACTION] Triggered state refresh | Reason: ${reason}`, "color:#6366f1; font-weight:bold;");
+}
+window.logStructuredState = logStructuredState;
+
+// Dynamic file list refresh function
+async function refreshFileList(reason = 'manual_or_api') {
+  try {
+    const lastCount = typeof lastFileCount !== "undefined" ? lastFileCount : 0;
     const response = await fetch(getCurrentFileListEndpoint());
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -2654,13 +2690,9 @@ async function refreshFileList() {
     const files = data.files || [];
     updateFileDisplay(files);
 
-    console.log(` File list updated: ${files.length} files`);
+    logStructuredState(reason, lastCount, files.length);
   } catch (error) {
     console.error(' Failed to refresh file list:', error);
-    // Fallback to page reload if API fails
-    setTimeout(() => {
-      location.reload();
-    }, 1000);
   }
 }
 
@@ -2706,19 +2738,25 @@ function startAutoRefresh() {
       return;
     }
 
-          try {
-            const endpoint = getCurrentFileListEndpoint();
-            const response = await fetch(endpoint);
-            if (!response.ok) return;
+    // Skip auto-refresh file count comparison while active uploads are transferring
+    const hasActiveUploads = Array.isArray(window.uploadQueue) && window.uploadQueue.some(i => i && (i.status === 'uploading' || i.status === 'queued' || i.status === 'processing'));
+    if (hasActiveUploads) {
+      return;
+    }
 
-            const data = await response.json();
-            const files = data.files || [];
-            const currentFileCount = files.length;
+    try {
+      const endpoint = getCurrentFileListEndpoint();
+      const response = await fetch(endpoint);
+      if (!response.ok) return;
 
-            // Only update if file count changed (indicating new uploads/deletions)
-            if (currentFileCount !== lastFileCount) {
-              console.log(` File count changed: ${lastFileCount} → ${currentFileCount}, auto-loading...`);
-              updateFileDisplay(files);
+      const data = await response.json();
+      const files = data.files || [];
+      const currentFileCount = files.length;
+
+      // Only update if file count changed (indicating new uploads/deletions)
+      if (currentFileCount !== lastFileCount) {
+        console.log(` File count changed: ${lastFileCount} → ${currentFileCount}, auto-loading...`);
+        updateFileDisplay(files);
 
         // Silently auto-load new files without showing toast notifications
         if (currentFileCount > lastFileCount) {
@@ -2726,15 +2764,12 @@ function startAutoRefresh() {
         } else if (currentFileCount < lastFileCount) {
           console.log(` ${lastFileCount - currentFileCount} file(s) removed from other device(s)`);
         }
-
-        // lastFileCount is updated inside updateFileDisplay now
       } else {
         // Even if file count is same, ensure display is current (files might have changed)
         updateFileCount(currentFileCount);
       }
     } catch (error) {
       console.error(' Auto-refresh failed:', error);
-      // Don't spam errors, just log them
     }
   }, 5000); // Check every 5 seconds
 }

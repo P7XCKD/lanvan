@@ -165,3 +165,12 @@ Whenever encountering repetitive errors, circular loops, structural ambiguities,
 - **Absolute Inset Positioning**: All grid card preview containers (`.grid-card-preview`, `.video-preview-box`) MUST use `position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; z-index: 1;` so media previews (images, videos, document previews) stretch 100% full-bleed from top edge to bottom edge without top margin gaps.
 - **Glass Overlay Offset**: Frosted glass upload overlays (`.glass-b4-body`) MUST specify `top: 39px;` (or match `.grid-card-head` height) to sit flush against the bottom border of `.grid-card-head` without leaving blank gaps.
 - **Header Selection Tinting**: Selected grid card headers (`.grid-card-head`) MUST inherit a solid primary tint (`#dbeafe` in light mode, `#1c2d4a` in dark mode) with contrasting title text (`#1e40af` in light mode, `#93c5fd` in dark mode) to clearly indicate selection state without visual glare.
+
+---
+
+## 19. Unidirectional Architecture & The Golden Invariant (Mandatory Standard)
+- **The Golden Invariant**: There shall be exactly one code path that produces `VisibleFiles[]`. No component, reducer, repository, WebSocket handler, upload manager, or renderer may create, modify, append to, or filter visible file lists outside the Projection Layer.
+- **Pure Reducers**: Reducers must be pure functions `(oldState, action) => newState`. Reducers must NEVER fetch network requests, call other reducers, dispatch actions, render UI, or touch the DOM.
+- **Stateless Renderer**: The Renderer is write-only `render(viewModel)`. It must NEVER read global variables (`window.currentFolder`, `window.uploadQueue`, `window.lastFilesData`) or compute state from DOM queries.
+- **Strict Fast-Path Boundaries**: Fast-Path progress updates may ONLY modify progress bar width, speed text, and ETA text on existing DOM rows in-place. Fast-Path MAY NEVER create rows, remove rows, reorder rows, switch folders, or modify `VisibleFiles[]`.
+- **Repository Isolation**: `FileRepository` owns HTTP fetches, WebSockets, cache invalidation, and `AbortController` request cancellation. It communicates exclusively by dispatching actions to `ActionQueue`. It must NEVER trigger renders or touch the DOM directly.

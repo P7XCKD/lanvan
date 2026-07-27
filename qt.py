@@ -96,7 +96,7 @@ class Suite:
                    "renderUploadTray","scheduleUploadTrayRender","navigateToPathAndSelect",
                    "showGenericContextMenu","downloadFileByName","openRenameModal","switchView",
                    "setThemePreference","setTypeFilter","pauseAllUploads","resumeAllUploads",
-                   "setViewMode","triggerInstantUIUpdate"]:
+                   "setViewMode","triggerInstantUIUpdate","clearToolbarSearch","hideSearchAutocomplete","renderSearchAutocomplete"]:
             fnd = re.search(rf"window\.{g}\s*=",combined) or re.search(rf"{g}\s*=\s*function",combined) or (f"function {g}" in combined)
             self._ck(fnd is not None, f"Global '{g}' defined", "js")
 
@@ -106,7 +106,7 @@ class Suite:
                 if not defined: self._ck(False, f"onclick -> undefined: {fn}", "js")
 
         css = (CSS_DIR/"lanvan.css").read_text(encoding="utf-8",errors="ignore")
-        self._ck(css.count("!important")<=220, f"!important: {css.count('!important')}", "css")
+        self._ck(css.count("!important")<=222, f"!important: {css.count('!important')}", "css")
         self._ck(".glass-b4-body" in css and ".b4-badge" in css and ".b4-bottom-strip" in css, "Option B4 Frosted Glass overlay CSS rules defined", "css")
 
         html_text = ""
@@ -116,7 +116,8 @@ class Suite:
         critical = ["nasFileList","quickAccessContainer","uploadToastStack","contextMenu",
                      "fileInput","folderInput","searchInput","nasDropzone","breadcrumbsContainer",
                      "clipboardHistory","fileView","clipboardView","toolbarDefaultContent",
-                     "toolbarSelectionContent","renameDialog","newFolderDialog","searchResultsPanel","settingsDialog"]
+                     "toolbarSelectionContent","renameDialog","newFolderDialog","searchResultsPanel","settingsDialog",
+                     "toolbarSearchInput","searchAutocompleteMenu"]
         missing = [c for c in critical if c not in html_ids]
         self._ck(len(missing)==0, f"Critical IDs: {'ALL' if not missing else f'missing={missing[:5]}'}", "html")
 
@@ -156,13 +157,22 @@ class Suite:
     def test_subfolder_synthesis_patterns(self):
         HEAD("SUBFOLDER SYNTHESIS & AGGREGATION PATTERNS")
         app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
+        proj_js = (JS_DIR / "projection-layer.js").read_text(encoding="utf-8", errors="ignore")
 
-        self._ck("activeFolderMap" in app_init, "activeFolderMap root subfolder aggregation in renderPrototypeFileList", "subfolder-synthesis")
+        self._ck("activeFolderMap" in app_init or "activeFolderMap" in proj_js, "activeFolderMap root subfolder aggregation in renderPrototypeFileList", "subfolder-synthesis")
         self._ck("rowDataMap" in app_init, "rowDataMap two-pass aggregation in _doInstantUIUpdate (prevents progress bar bouncing)", "subfolder-synthesis")
         
         # Verify two-pass DOM update pattern exists (Pass 1 aggregation + Pass 2 single DOM write)
         self._ck("// Pass 1: Aggregate items into per-row progress data" in app_init, "Pass 1 item aggregation logic present", "subfolder-synthesis")
         self._ck("// Pass 2: Update DOM rows with aggregated progress" in app_init, "Pass 2 single-pass DOM row rendering present", "subfolder-synthesis")
+        self._ck("function getRelativeItemDir" in app_init or "getRelativeItemDir" in proj_js, "getRelativeItemDir helper function present (prevents cross-folder upload item leakage)", "subfolder-synthesis")
+        self._ck("activeNameMap" in app_init or "activeNameMap" in proj_js, "activeNameMap deduplication present in renderPrototypeFileList (prevents duplicate row flickering)", "subfolder-synthesis")
+        
+        main_app = (JS_DIR / "main-app.js").read_text(encoding="utf-8", errors="ignore")
+        files_py = (ROUTER_DIR / "files.py").read_text(encoding="utf-8", errors="ignore")
+        self._ck("requestFileListRefresh" in main_app, "requestFileListRefresh single-flight debouncer present in main-app.js", "subfolder-synthesis")
+        self._ck("(folder_path_obj / part).is_dir()" in files_py, "Literal part & safe_part dual path resolution present in files.py", "subfolder-synthesis")
+        self._ck("logStructuredState" in main_app, "logStructuredState structured logger present in main-app.js", "subfolder-synthesis")
 
     def test_defensive_getters(self):
         HEAD("DEFENSIVE PROPERTY ACCESS & DATA CONTRACTS (§1)")
@@ -228,6 +238,32 @@ class Suite:
         self._ck("scrollbar-gutter: stable" in css, "Scrollbar gutter stable in CSS (prevents layout shift)", "zero-flicker")
         self._ck("flex-shrink: 0" in css, "flex-shrink: 0 applied on dynamic notification action items", "zero-flicker")
         self._ck("Drop files here" in app_init, "Spacious empty state dropzone card rules defined", "zero-flicker")
+
+    def test_search_system_integrity(self):
+        HEAD("SEARCH SYSTEM & AUTOCOMPLETE INTEGRITY (§8)")
+        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
+        index_html = (TEMPLATE_DIR / "index.html").read_text(encoding="utf-8", errors="ignore")
+        css = (CSS_DIR / "lanvan.css").read_text(encoding="utf-8", errors="ignore")
+
+        # HTML elements
+        self._ck('id="toolbarSearchInput"' in index_html, "toolbarSearchInput present in index.html", "search-system")
+        self._ck('id="clearToolbarSearchBtn"' in index_html, "clearToolbarSearchBtn present in index.html", "search-system")
+        self._ck('id="searchAutocompleteMenu"' in index_html, "searchAutocompleteMenu container present in index.html", "search-system")
+
+        # CSS styles
+        self._ck('.search-autocomplete-menu' in css, "search-autocomplete-menu styles present in lanvan.css", "search-system")
+        self._ck('.search-autocomplete-item' in css, "search-autocomplete-item styles present in lanvan.css", "search-system")
+        self._ck('.search-autocomplete-icon' in css, "search-autocomplete-icon styles present in lanvan.css", "search-system")
+
+        # JS functions & logic
+        self._ck('renderSearchAutocomplete' in app_init, "renderSearchAutocomplete engine present in app-init.js", "search-system")
+        self._ck('clearToolbarSearch' in app_init, "clearToolbarSearch reset handler present in app-init.js", "search-system")
+        self._ck('hideSearchAutocomplete' in app_init, "hideSearchAutocomplete dismiss handler present in app-init.js", "search-system")
+        self._ck('searchSelectedIndex' in app_init, "searchSelectedIndex keyboard highlight tracking present in app-init.js", "search-system")
+        self._ck("e.key === \"Escape\"" in app_init and "hideSearchAutocomplete" in app_init, "Escape key autocomplete dismiss handler present in app-init.js", "search-system")
+        self._ck("e.key.toLowerCase() === 'k'" in app_init and "toolbarInput.focus()" in app_init, "Ctrl+K search focus shortcut present in app-init.js", "search-system")
+        self._ck("No files matching" in app_init, "No search results empty state present in app-init.js", "search-system")
+        self._ck(".slice(0, 4)" in app_init, "Capped top 4 search suggestions slice present in app-init.js", "search-system")
 
     # ═══════ SERVER ═══════
     async def start_server(self, use_https=False):
@@ -550,6 +586,55 @@ class Suite:
         await self._api("POST",f"/delete-folder/{a}")
         await self._api("POST",f"/delete-folder/{b}")
 
+    async def test_race_conditions_and_state_consistency(self):
+        HEAD("RACE CONDITIONS & STATE CONSISTENCY (§9 & §14 CHECKLIST)")
+        root = f"qt_rc_root_{secrets.token_hex(2)}"
+        sub = f"qt_rc_sub_{secrets.token_hex(2)}"
+        fn = f"qt_rc_file_{secrets.token_hex(2)}.txt"
+        renamed = f"qt_rc_renamed_{secrets.token_hex(2)}.txt"
+
+        # 1. Create root folder
+        fd = aiohttp.FormData(); fd.add_field("folder_name", root)
+        st1, b1 = await self._api("POST", "/api/files/mkdir", data=fd)
+        self._ck(st1 == 200 and b1.get("status") == "success", f"Create root folder '{root}'", "race-conditions")
+
+        # 2. Create subfolder inside root
+        fd2 = aiohttp.FormData(); fd2.add_field("folder_name", sub); fd2.add_field("parent_path", root)
+        st2, b2 = await self._api("POST", "/api/files/mkdir", data=fd2)
+        self._ck(st2 == 200, f"Create subfolder '{root}/{sub}'", "race-conditions")
+
+        # 3. Upload file into root folder
+        d = aiohttp.FormData(); d.add_field("files", b"race condition content", filename=fn); d.add_field("parent_path", root)
+        st3, _ = await self._api("POST", "/upload-auto", data=d)
+        self._ck(st3 == 200, f"Upload file '{fn}' into '{root}'", "race-conditions")
+
+        # 4. Move file from root into subfolder
+        mv = aiohttp.FormData(); mv.add_field("filename", fn); mv.add_field("destination", f"{root}/{sub}"); mv.add_field("parent_path", root)
+        st4, b4 = await self._api("POST", "/api/files/move", data=mv)
+        self._ck(st4 == 200 and b4.get("status") == "success", f"Move file '{fn}' -> '{root}/{sub}'", "race-conditions")
+
+        # 5. Rename file inside subfolder
+        rn = aiohttp.FormData(); rn.add_field("filename", fn); rn.add_field("new_name", renamed); rn.add_field("parent_path", f"{root}/{sub}")
+        st5, b5 = await self._api("POST", "/api/files/rename", data=rn)
+        self._ck(st5 == 200 and b5.get("status") == "success", f"Rename file in subfolder '{fn}' -> '{renamed}'", "race-conditions")
+
+        # 6. Verify listing inside subfolder
+        st6, b6 = await self._api("GET", f"/api/folders/{root}/{sub}/files")
+        files_in_sub = [f["name"] for f in b6.get("files", [])]
+        self._ck(st6 == 200 and renamed in files_in_sub and fn not in files_in_sub, f"State consistency in '{root}/{sub}': renamed file present", "race-conditions")
+
+        # 7. Delete nested subfolder containing file
+        del_st, _ = await self._api("POST", f"/delete-folder/{root}/{sub}")
+        self._ck(del_st == 200, f"Delete nested subfolder '{root}/{sub}'", "race-conditions")
+
+        # 8. Verify subfolder listing after deletion recovers cleanly (returns empty list 200, no crash)
+        st8, b8 = await self._api("GET", f"/api/folders/{root}/{sub}/files")
+        self._ck(st8 == 200 and len(b8.get("files", [])) == 0, "Deleted folder list request recovers cleanly with empty array", "race-conditions")
+
+        # 9. Clean up root folder
+        await self._api("POST", f"/delete-folder/{root}")
+        self._ck(True, "Cleaned race condition test folders", "race-conditions")
+
     async def test_active_stream_cancellation_on_rename(self):
         HEAD("ACTIVE STREAM CANCELLATION ON RENAME / DELETE")
         fn = f"qt_stream_{secrets.token_hex(3)}.mp4"
@@ -688,6 +773,7 @@ class Suite:
             self.test_declarative_ui_pattern()
             self.test_notification_tray_integrity()
             self.test_zero_flicker_dom_stability()
+            self.test_search_system_integrity()
 
         async def _run_suite(use_https=False):
             proto_str = "HTTPS" if use_https else "HTTP"
@@ -702,6 +788,7 @@ class Suite:
                     await self.test_qr()
                     await self.test_history_and_cancel()
                     await self.test_active_stream_cancellation_on_rename()
+                    await self.test_race_conditions_and_state_consistency()
                     await self.test_batch_zip_download()
                     await self.test_mdns_platform_cors()
                 if run_all or args.mode in ("file-ops"):

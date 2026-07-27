@@ -33,9 +33,12 @@
         updateFileDisplay = function (files) {
             fetchFilesData().then(function (fd) {
                 renderPrototypeFileList(fd);
+            }).catch(function (err) {
+                console.error("fetchFilesData error:", err);
             });
         };
         updateFileDisplay.__prototypeWrapped = true;
+        window.updateFileDisplay = updateFileDisplay;
     }
 
     // Wrap refreshClipboardHistory() — called by production WebSocket and manual refresh
@@ -66,8 +69,11 @@
         return (p === "Home" || p === "Home/") ? "" : p;
     };
 
-    // Intercept network requests to automatically append parent_path to upload FormData
-    // and log detailed error info to the console if requests fail.
+    // Intercept network requests to log detailed error info to the console if requests fail.
+    // IMPORTANT: Do NOT inject parent_path here! The upload handlers in main-app.js
+    // already set parent_path from the queued uploadItem.targetDir. Injecting it here
+    // using the live currentFolderPath would override the correct target directory
+    // when a user navigates to a different folder during upload.
     (function () {
         const _originalOpen = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function (method, url) {
@@ -77,20 +83,7 @@
 
         const _originalSend = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.send = function (body) {
-            if (body instanceof FormData) {
-                if (window.currentFolderPath && window.currentFolderPath !== "Home") {
-                    var parentPath = window.currentFolderPath;
-                    if (parentPath.indexOf("Home/") === 0) {
-                        parentPath = parentPath.substring(5);
-                    } else if (parentPath === "Home") {
-                        parentPath = "";
-                    }
-                    if (parentPath && !body.has("parent_path")) {
-                        body.append("parent_path", parentPath);
-                    }
-                }
-            }
-
+            // No automatic parent_path injection — production handlers set it correctly.
             // Log response errors
             var self = this;
             var originalOnLoad = this.onload;
@@ -115,19 +108,7 @@
 
         const _originalFetch = window.fetch;
         window.fetch = function (url, options) {
-            if (options && options.body instanceof FormData) {
-                if (window.currentFolderPath && window.currentFolderPath !== "Home") {
-                    var parentPath = window.currentFolderPath;
-                    if (parentPath.indexOf("Home/") === 0) {
-                        parentPath = parentPath.substring(5);
-                    } else if (parentPath === "Home") {
-                        parentPath = "";
-                    }
-                    if (parentPath && !options.body.has("parent_path")) {
-                        options.body.append("parent_path", parentPath);
-                    }
-                }
-            }
+            // No automatic parent_path injection — production handlers set it correctly.
             return _originalFetch.apply(this, arguments)
                 .then(function (response) {
                     if (!response.ok) {
@@ -220,6 +201,24 @@
     var lastRenderedFiles = [];
     window.activeTab = "file";
 
+    function tagFilesWithFolder(files, folderPath) {
+        var list = Array.isArray(files) ? files : [];
+        try {
+            Object.defineProperty(list, "__folderPath", {
+                value: cleanFolderPath(folderPath),
+                enumerable: false,
+                configurable: true
+            });
+        } catch (e) {
+            list.__folderPath = cleanFolderPath(folderPath);
+        }
+        return list;
+    }
+
+    function getTaggedFolderPath(files) {
+        return files && files.__folderPath !== undefined ? cleanFolderPath(files.__folderPath) : null;
+    }
+
     function formatSize(bytes) {
         if (typeof formatFileSize === 'function') {
             return formatFileSize(bytes);
@@ -235,13 +234,70 @@
     // Strips all Home-prefix variants so folder paths match across upload queue and browser navigation
     function cleanFolderPath(path) {
         if (!path) return "";
-        var cleaned = String(path).replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
+        var cleaned = String(path).replace(/\\/g, "/").replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
+        cleaned = cleaned.replace(/^\/+|\/+$/g, "");
         if (cleaned === "Home (Root)" || cleaned === "Home" || cleaned === "Home/") return "";
         return cleaned;
     }
 
-    function renderPrototypeFileList(files) {
-        lastRenderedFiles = files;
+    // Calculates item directory relative to current folder view (normCurrentDir)
+    // Returns null if the item belongs to a completely different folder tree
+    function getRelativeItemDir(itemDir, normCurrentDir) {
+        var cleanItem = cleanFolderPath(itemDir);
+        var cleanCurrent = cleanFolderPath(normCurrentDir);
+        if (!cleanCurrent) return cleanItem;
+        if (cleanItem === cleanCurrent) return "";
+        if (cleanItem.startsWith(cleanCurrent + "/")) {
+            return cleanItem.substring(cleanCurrent.length + 1);
+        }
+        return null;
+    }
+
+    var folderFilesCache = {}; // Folder-scoped disk file cache keyed by cleanFolderPath
+
+    function renderPrototypeFileList(files, renderReason) {
+        var normCurrentDir = cleanFolderPath(currentFolderPath);
+        var reason = renderReason || "render_prototype";
+
+        // Scope file cache strictly by target folder path to prevent Home files from leaking into subfolder views
+        if (files) {
+            var taggedFolderPath = getTaggedFolderPath(files);
+            var targetFolderOfFiles = taggedFolderPath !== null ? taggedFolderPath : (normCurrentDir ? null : "");
+
+            if (targetFolderOfFiles === null) {
+                console.warn("[CACHE GUARD] Refusing unscoped file list while active view is '" + normCurrentDir + "'. Rendering cached files for the active folder instead.");
+                files = folderFilesCache[normCurrentDir] || tagFilesWithFolder([], normCurrentDir);
+                targetFolderOfFiles = normCurrentDir;
+            }
+
+            files = tagFilesWithFolder(files, targetFolderOfFiles);
+            folderFilesCache[targetFolderOfFiles] = files;
+
+            // CACHE GUARD: If incoming files belong to a DIFFERENT folder than the currently active view, save to cache but DO NOT render for current view!
+            if (targetFolderOfFiles !== normCurrentDir) {
+                console.warn("[CACHE GUARD] Incoming files belong to folder '" + targetFolderOfFiles + "' but active view is '" + normCurrentDir + "'. Saved to cache for '" + targetFolderOfFiles + "'. Using cached files for '" + normCurrentDir + "'.");
+                files = folderFilesCache[normCurrentDir] || tagFilesWithFolder([], normCurrentDir);
+            }
+            lastRenderedFiles = files;
+        }
+
+        var fileSource = "explicit_arg";
+        if (!files) {
+            if (folderFilesCache[normCurrentDir]) {
+                files = folderFilesCache[normCurrentDir];
+                fileSource = "folder_cache_" + (normCurrentDir || "root");
+            } else {
+                files = tagFilesWithFolder([], normCurrentDir);
+                fileSource = "empty_folder_init";
+            }
+        }
+        if (files) {
+            if (getTaggedFolderPath(files) === null) {
+                files = tagFilesWithFolder(files, normCurrentDir);
+            }
+            lastRenderedFiles = files;
+        }
+
         var container = document.getElementById("nasFileList");
         var filePanelMeta = document.getElementById("filePanelMeta");
         if (!container) return;
@@ -265,195 +321,82 @@
             for (var i = 0; i < files.length; i++) {
                 var item = files[i];
                 if (!item) continue;
-                if (typeof item === "string") {
-                    var meta = lastFilesData.find(function (f) { return f && f.name === item; });
-                    normalizedFiles.push({
-                        name: item,
-                        size: meta ? meta.size : "--",
-                        mtime: meta ? meta.mtime : 0,
-                        isFolder: meta ? !!meta.isFolder : false
-                    });
-                } else if (item.name) {
-                    normalizedFiles.push({
-                        name: item.name,
-                        size: item.size || "--",
-                        mtime: item.mtime || 0,
-                        isFolder: !!item.isFolder
-                    });
+                var fn = typeof item === "string" ? item : item.name;
+                if (!fn) continue;
+
+                var meta = (typeof item === "string") ? lastFilesData.find(function (f) { return f && f.name === item; }) : item;
+
+                // ASSERTION: Fallback cache check
+                if (fileSource.startsWith("fallback_")) {
+                    console.error("  [ASSERTION FAILED] Fallback cache used during subfolder view! File: '" + fn + "' | Source: " + fileSource + " | CurrentFolder: '" + normCurrentDir + "'");
+                    console.error("   WHO: renderPrototypeFileList | FROM: " + fileSource + " | WHY: files parameter was undefined/null during render!");
                 }
-            }
-        }
 
-        // Retrieve active uploads from global window.uploadQueue for the current folder view
-        var activeUploads = [];
-        var normCurrentDir = cleanFolderPath(currentFolderPath);
-
-        // Exclude files/folders from backend scan if they were cancelled or deleted
-        if (!window._cancelledFilesMap) window._cancelledFilesMap = {};
-
-        normalizedFiles = normalizedFiles.filter(function (f) {
-            if (!f || !f.name) return false;
-
-            var cleanDir = normCurrentDir;
-            var fullRelPath = cleanDir ? (cleanDir + "/" + f.name) : f.name;
-            var homeRelPath = "Home/" + fullRelPath;
-
-            if (window._cancelledFilesMap[fullRelPath] || window._cancelledFilesMap[homeRelPath] || window._cancelledFilesMap[f.name]) {
-                return false;
-            }
-
-            if (window.uploadQueue && window.uploadQueue.length > 0) {
-                var isCancelledOrDeleted = window.uploadQueue.some(function (item) {
-                    var itemName = typeof window.getItemName === "function" ? window.getItemName(item) : (item ? (item.fileName || (item.file && item.file.name) || item.name) : "");
-                    if (!item || !itemName) return false;
-                    if (item.status !== 'cancelled' && item.status !== 'deleted') return false;
-
-                    var itemDir = (item.targetDir || item.parent_path || item.folder || "").replace(/^Home\/?/, "");
-
-                    return itemDir === cleanDir && itemName === f.name;
+                normalizedFiles.push({
+                    name: fn,
+                    size: meta ? meta.size : "--",
+                    mtime: meta ? meta.mtime : 0,
+                    isFolder: meta ? !!meta.isFolder : false
                 });
-                if (isCancelledOrDeleted) return false;
             }
-
-            return true;
-        });
-
-        if (window.uploadQueue && window.uploadQueue.length > 0) {
-            var activeFolderMap = {};
-
-            window.uploadQueue.forEach(function (item) {
-                var itemName = typeof window.getItemName === "function" ? window.getItemName(item) : (item ? (item.fileName || (item.file && item.file.name) || item.name) : "");
-                if (!item || !itemName) return;
-                var rawDir = item.targetDir || item.parent_path || item.folder || "";
-                var itemDir = rawDir.replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
-                if (itemDir === "Home (Root)" || itemDir === "Home" || itemDir === "Home/") itemDir = "";
-
-                // Calculate path relative to current folder view
-                var relDir = itemDir;
-                if (normCurrentDir) {
-                    if (relDir.startsWith(normCurrentDir + "/")) {
-                        relDir = relDir.substring(normCurrentDir.length + 1);
-                    } else if (relDir === normCurrentDir) {
-                        relDir = "";
-                    }
-                }
-
-                var fileSize = typeof window.getItemSize === "function" ? window.getItemSize(item) : (item.fileSize || (item.file && item.file.size) || 0);
-
-                if (relDir === "") {
-                    // Direct file in current view
-                    var existingItem = normalizedFiles.find(function (f) { return f && f.name === itemName; });
-                    if (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused') {
-                        if (existingItem) {
-                            existingItem.uploading = true;
-                            existingItem.uploadProgress = Math.round(item.progress || 0);
-                            existingItem.uploadStatus = item.status;
-                            existingItem.uploadId = item.id;
-                        } else {
-                            activeUploads.push({
-                                name: itemName,
-                                size: formatSize(fileSize),
-                                mtime: Math.floor(Date.now() / 1000),
-                                isFolder: false,
-                                uploading: true,
-                                uploadProgress: Math.round(item.progress || 0),
-                                uploadStatus: item.status,
-                                uploadId: item.id
-                            });
-                        }
-                    } else if (item.status === 'completed' && !existingItem) {
-                        // Include completed upload in file list if not yet returned by backend disk scan
-                        var alreadyAdded = activeUploads.find(function (f) { return f.name === itemName; });
-                        if (!alreadyAdded) {
-                            activeUploads.push({
-                                name: itemName,
-                                size: formatSize(fileSize),
-                                mtime: Math.floor(Date.now() / 1000),
-                                isFolder: false
-                            });
-                        }
-                    }
-                } else if (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused' || item.status === 'completed') {
-                    // Subfolder upload in current view
-                    var rootFolder = relDir.split("/")[0];
-                    if (rootFolder) {
-                        if (!activeFolderMap[rootFolder]) {
-                            activeFolderMap[rootFolder] = {
-                                totalBytes: 0,
-                                uploadedBytes: 0,
-                                hasUploading: false,
-                                hasPaused: false,
-                                allCompleted: true,
-                                items: []
-                            };
-                        }
-                        var fileSize = item.fileSize || (item.file && item.file.size) || 0;
-                        var bytesDone = 0;
-                        if (item.status === 'completed') {
-                            bytesDone = fileSize;
-                        } else {
-                            bytesDone = item.bytesUploaded || 0;
-                            if (!bytesDone && item.progress && fileSize) {
-                                bytesDone = (fileSize * item.progress) / 100;
-                            }
-                        }
-                        activeFolderMap[rootFolder].totalBytes += fileSize;
-                        activeFolderMap[rootFolder].uploadedBytes += bytesDone;
-                        if (item.status === 'uploading' || item.status === 'processing') {
-                            activeFolderMap[rootFolder].hasUploading = true;
-                            activeFolderMap[rootFolder].allCompleted = false;
-                        } else if (item.status === 'paused') {
-                            activeFolderMap[rootFolder].hasPaused = true;
-                            activeFolderMap[rootFolder].allCompleted = false;
-                        } else if (item.status === 'queued') {
-                            activeFolderMap[rootFolder].allCompleted = false;
-                        }
-                        activeFolderMap[rootFolder].items.push(item);
-                    }
-                }
-            });
-
-            // Synthesize folder rows for any active or paused folder uploads in current view
-            Object.keys(activeFolderMap).forEach(function (folderName) {
-                var finfo = activeFolderMap[folderName];
-                if (!finfo.allCompleted) {
-                    var folderPct = finfo.totalBytes > 0 ? Math.min(99, Math.round((finfo.uploadedBytes / finfo.totalBytes) * 100)) : 0;
-                    var folderStatus = finfo.hasUploading ? 'uploading' : (finfo.hasPaused ? 'paused' : 'queued');
-
-                    var existingFolder = normalizedFiles.find(function (f) { return f && f.name === folderName && f.isFolder; });
-                    if (existingFolder) {
-                        existingFolder.uploading = true;
-                        existingFolder.uploadProgress = folderPct;
-                        existingFolder.uploadStatus = folderStatus;
-                        existingFolder.uploadId = finfo.items[0] ? finfo.items[0].id : null;
-                    } else {
-                        var alreadyInActive = activeUploads.find(function (f) { return f.name === folderName && f.isFolder; });
-                        if (!alreadyInActive) {
-                            activeUploads.push({
-                                name: folderName,
-                                size: formatSize(finfo.uploadedBytes) + " / " + formatSize(finfo.totalBytes),
-                                mtime: Math.floor(Date.now() / 1000),
-                                isFolder: true,
-                                uploading: true,
-                                uploadProgress: folderPct,
-                                uploadStatus: folderStatus,
-                                uploadId: finfo.items[0] ? finfo.items[0].id : null
-                            });
-                        }
-                    }
-                }
-            });
         }
 
-        // Merge active uploads
-        normalizedFiles = activeUploads.concat(normalizedFiles);
+        // DELEGATE TO PROJECTION LAYER (THE GOLDEN INVARIANT)
+        // Exactly one code path produces VisibleFiles[]
+        var storeState = window.LanvanStore ? Object.assign({}, window.LanvanStore.state) : { currentFolder: normCurrentDir, uploadQueue: window.uploadQueue || [], pendingOps: {} };
+        var liveUploadQueue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
+        storeState.currentFolder = normCurrentDir;
+        if (!Array.isArray(storeState.uploadQueue) || liveUploadQueue.length > storeState.uploadQueue.length) {
+            storeState.uploadQueue = liveUploadQueue;
+        }
 
+        // [DIAG] Log what's being passed to the projection layer
+        console.log("[DIAG Projection Input] normCurrentDir:", normCurrentDir);
+        console.log("[DIAG Projection Input] files.__folderPath:", files && files.__folderPath);
+        console.log("[DIAG Projection Input] files content:", files ? files.map(function(f){ return f && f.name; }) : "null");
+        console.log("[DIAG Projection Input] uploadQueue active items:", liveUploadQueue.filter(function(q){ return q && (q.status === 'uploading' || q.status === 'queued' || q.status === 'completed'); }).map(function(q){ return q.fileName + " -> " + (q.targetDir || '?'); }));
+
+        var projectionEngine = window.projectionLayer || (typeof window.ProjectionLayer === 'function' ? new window.ProjectionLayer() : window.ProjectionLayer);
+        var viewModel = projectionEngine ? projectionEngine.buildCurrentFolderViewModel(storeState, files) : { visibleFiles: normalizedFiles, activeUploads: [] };
+
+        var activeUploads = viewModel.activeUploads || [];
+        normalizedFiles = viewModel.visibleFiles || [];
         var originalFilesForQuickAccess = normalizedFiles.slice();
+
+        // PROJECTION LAYER INSTRUMENTATION
+        console.log("========================");
+        console.log("Current Folder: " + (normCurrentDir || "Home"));
+        console.log("[PROJECTION LAYER] Visible Files: " + JSON.stringify(normalizedFiles.map(function(f){ return f.name; })));
+        console.log("Reason: " + reason);
+        console.log("========================");
+
+        // ASSERTIONS: Verify every dynamically merged active upload in current view
+        activeUploads.forEach(function(item) {
+            if (!item || !item.name) return;
+            var qi = (window.uploadQueue || []).find(function(q){ return q && window.getItemName(q) === item.name; });
+            if (qi) {
+                var itemDir = cleanFolderPath(window.getItemFolder(qi));
+                if (itemDir !== normCurrentDir) {
+                    console.error("  [ASSERTION FAILED] Queue item from wrong folder rendered! File: '" + item.name + "' | Item targetDir: '" + itemDir + "' | currentFolder: '" + normCurrentDir + "'");
+                    console.error("   WHO: renderPrototypeFileList | FROM: uploadQueue merge | WHY: targetDir mismatch! ('" + itemDir + "' !== '" + normCurrentDir + "')");
+                }
+            }
+        });
 
         // Apply client-side Type Filtering
         if (typeFilter !== "all") {
             normalizedFiles = normalizedFiles.filter(function (f) {
                 return getFileItemType(f) === typeFilter;
+            });
+        }
+
+        // Apply client-side Search Filtering
+        var toolbarSearchInputEl = document.getElementById("toolbarSearchInput");
+        var searchQuery = toolbarSearchInputEl ? toolbarSearchInputEl.value.trim().toLowerCase() : "";
+        if (searchQuery) {
+            normalizedFiles = normalizedFiles.filter(function (f) {
+                if (!f || !f.name) return false;
+                return f.name.toLowerCase().indexOf(searchQuery) !== -1;
             });
         }
 
@@ -518,23 +461,44 @@
             window._contextMenuTarget = "";
             updateSelectionToolbar();
 
+            // Hide file table header when list is empty to prevent DOM overlap
+            if (fileTableHead) fileTableHead.style.display = "none";
+
             // Render quick access cards (empty when normalizedFiles is 0)
             renderQuickAccess(originalFilesForQuickAccess
                 .filter(function (f) { return !f.isFolder && !f.uploading; }));
 
-            // Check if uploads are active — show different message
             var queue = window.uploadQueue || [];
             var activeUploadsCount = queue.filter(function (item) {
                 return item.status === "uploading" || item.status === "queued" || item.status === "processing" || item.status === "paused";
             }).length;
-            if (activeUploadsCount > 0) {
+
+            if (searchQuery) {
+                container.innerHTML =
+                    '<div class="empty-dropzone-wrapper" style="grid-column: 1 / -1; width:100%; flex:1; min-height:300px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; margin:auto;">' +
+                    '<div class="avatar-icon" style="width:64px;height:64px;border-radius:18px;margin-bottom:1rem;background:var(--toggle-bg);color:var(--text-muted);display:flex;align-items:center;justify-content:center;">' +
+                    '<i data-lucide="search-x" style="width:32px;height:32px;"></i></div>' +
+                    '<div style="font-size:1.05rem; font-weight:600; color:var(--text-color); margin-bottom:0.25rem;">No files matching "' + escapeHtml(searchQuery) + '"</div>' +
+                    '<div style="font-size:0.82rem; color:var(--text-muted); margin-bottom:1rem;">Check spelling or try searching for another term.</div>' +
+                    '<button class="filter-chip" onclick="clearToolbarSearch()" style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.8rem; font-weight:700; border:1px solid var(--border-color); background:var(--card-bg); color:var(--primary); border-radius:999px; padding:0.4rem 0.9rem; cursor:pointer;">Clear search</button>' +
+                    '</div>';
+            } else if (typeFilter !== "all") {
+                container.innerHTML =
+                    '<div class="empty-dropzone-wrapper" style="grid-column: 1 / -1; width:100%; flex:1; min-height:300px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; margin:auto;">' +
+                    '<div class="avatar-icon" style="width:64px;height:64px;border-radius:18px;margin-bottom:1rem;background:var(--toggle-bg);color:var(--text-muted);display:flex;align-items:center;justify-content:center;">' +
+                    '<i data-lucide="file-x" style="width:32px;height:32px;"></i></div>' +
+                    '<div style="font-size:1.05rem; font-weight:600; color:var(--text-color); margin-bottom:0.25rem;">No ' + escapeHtml(typeFilter) + ' files found</div>' +
+                    '<div style="font-size:0.82rem; color:var(--text-muted); margin-bottom:1rem;">No files match the active type filter.</div>' +
+                    '<button class="filter-chip" onclick="clearTypeFilter(event)" style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.8rem; font-weight:700; border:1px solid var(--border-color); background:var(--card-bg); color:var(--primary); border-radius:999px; padding:0.4rem 0.9rem; cursor:pointer;">Clear filter</button>' +
+                    '</div>';
+            } else if (activeUploadsCount > 0) {
                 container.innerHTML =
                     '<div class="empty-dropzone-wrapper" style="grid-column: 1 / -1; width:100%; flex:1; min-height:380px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; margin:auto;">' +
                     '<div class="avatar-icon avatar-folder" style="width:72px;height:72px;border-radius:18px;margin-bottom:1rem;">' +
                     '<i data-lucide="upload-cloud" style="width:34px;height:34px;"></i></div>' +
                     '<div style="font-size:1.05rem; font-weight:500; color:var(--text-color); margin-bottom:0.25rem;">Uploading ' + activeUploadsCount + ' file' + (activeUploadsCount === 1 ? '' : 's') + '...</div>' +
                     '<div style="font-size:0.8rem; color:var(--text-muted);">Files will appear here when upload completes.</div>' +
-                    "</div>";
+                    '</div>';
             } else {
                 container.innerHTML =
                     '<div class="empty-dropzone-wrapper" style="grid-column: 1 / -1; width:100%; flex:1; min-height:380px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; margin:auto;">' +
@@ -630,14 +594,14 @@
 
         // Sync selection state: purge any deleted or uploading items from prototypeSelectedItems
         var validNames = normalizedFiles.map(function (f) { return f.name; });
-        if (Array.isArray(prototypeSelectedItems) && prototypeSelectedItems.length > 0) {
+        if (Array.isArray(prototypeSelectedItems)) {
             prototypeSelectedItems = prototypeSelectedItems.filter(function (name) {
                 return validNames.indexOf(name) !== -1 && !isItemUploading(name);
             });
             var renderedItems = container.querySelectorAll(".m3-list-item");
             for (var s = 0; s < renderedItems.length; s++) {
                 var itemFn = renderedItems[s].getAttribute("data-filename");
-                if (prototypeSelectedItems.indexOf(itemFn) !== -1) {
+                if (itemFn && prototypeSelectedItems.indexOf(itemFn) !== -1) {
                     renderedItems[s].classList.add("selected");
                 } else {
                     renderedItems[s].classList.remove("selected");
@@ -686,7 +650,8 @@
         var dateStr = date || "--";
         var subtitleText = subtitle || (isFolder ? "Folder" : "File");
         if (isUploading) {
-            subtitleText = uploadProgress + "% • " + (uploadStatus === 'paused' ? 'Paused' : 'Uploading');
+            var statusLabel = uploadStatus === 'paused' ? 'Paused' : (uploadStatus === 'queued' ? 'Queued' : 'Uploading');
+            subtitleText = uploadProgress + "% • " + statusLabel;
         }
 
         var displaySize = isFolder ? "-" : sizeStr;
@@ -729,7 +694,7 @@
                 '</button>';
         }
 
-        var displayDate = isUploading ? (uploadStatus === 'paused' ? 'Paused' : 'Uploading') : dateStr;
+        var displayDate = isUploading ? (uploadStatus === 'paused' ? 'Paused' : (uploadStatus === 'queued' ? 'Queued' : 'Uploading')) : dateStr;
 
         return (
             '<div class="m3-list-item' + (isUploading ? ' uploading' : '') + '" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '" style="' + (isUploading ? 'position:relative; overflow:hidden;' : '') + '">' +
@@ -844,22 +809,32 @@
                 // Click / Tap handler (Single click selects item or enters folder)
                 item.addEventListener("click", function (e) {
                     if (e.target.closest("button")) return;
-                    if (itemData.uploading || isItemUploading(name)) return;
 
-                    var isTouch = e.pointerType === "touch" || e.pointerType === "pen" || ("ontouchstart" in window && window.innerWidth < 1024);
-                    if (folderFlag && isTouch) {
-                        navigateIntoFolder(name);
+                    var isSelected = prototypeSelectedItems.indexOf(name) !== -1 || item.classList.contains("selected");
+
+                    // Folder navigation logic: always allow entering folders even if uploads are active inside
+                    if (folderFlag) {
+                        if (prototypeSelectedItems.length > 0) {
+                            handleListItemClick(item, index, files);
+                        } else {
+                            navigateIntoFolder(name);
+                        }
                         return;
                     }
 
-                    // Single click selects item in both List and Grid modes
+                    // If a FILE is uploading and NOT selected, prevent selecting it
+                    if ((itemData.uploading || isItemUploading(name)) && !isSelected) {
+                        return;
+                    }
+
+                    // Single click selects or unselects file item
                     handleListItemClick(item, index, files);
                 });
 
                 // Context menu listener on item row
                 item.addEventListener("contextmenu", function (e) {
                     if (e.target.closest("button")) return;
-                    if (itemData.uploading || isItemUploading(name)) {
+                    if (!folderFlag && (itemData.uploading || isItemUploading(name))) {
                         e.preventDefault();
                         e.stopPropagation();
                         return;
@@ -871,12 +846,12 @@
                 // Double-click handler for desktop mouse
                 item.addEventListener("dblclick", function (e) {
                     if (e.target.closest("button")) return;
-                    if (itemData.uploading || isItemUploading(name)) return;
                     if (folderFlag) {
                         navigateIntoFolder(name);
-                    } else {
-                        window.openFilePreview(name);
+                        return;
                     }
+                    if (itemData.uploading || isItemUploading(name)) return;
+                    window.openFilePreview(name);
                 });
 
                 // Cancel upload button
@@ -972,6 +947,7 @@
         }
 
         currentFolderPath = base ? (base + "/" + folderName) : folderName;
+        console.log("%c[LANVAN UI] 📂 Navigating into folder: '%s'", "color:#3b82f6; font-weight:bold;", currentFolderPath);
         prototypeSelectedItems = [];
         updateSelectionToolbar();
         renderBreadcrumbs();
@@ -987,13 +963,16 @@
 
     function handleListItemClick(item, index, files) {
         var name = files[index];
+        console.log("%c[LANVAN UI] 👆 Item clicked: '%s'", "color:#10b981; font-weight:bold;", name);
         var pos = prototypeSelectedItems.indexOf(name);
-        if (pos > -1) {
-            prototypeSelectedItems.splice(pos, 1);
+        if (pos > -1 || item.classList.contains("selected")) {
+            if (pos > -1) prototypeSelectedItems.splice(pos, 1);
             item.classList.remove("selected");
         } else {
-            prototypeSelectedItems.push(name);
-            item.classList.add("selected");
+            if (!isItemUploading(name)) {
+                prototypeSelectedItems.push(name);
+                item.classList.add("selected");
+            }
         }
         updateSelectionToolbar();
     }
@@ -1041,6 +1020,7 @@
         if (prototypeSelectedItems.length > 0) {
             defaultContent.style.display = "none";
             selectionContent.style.display = "flex";
+            var isGrid = document.getElementById("nasFileList") && document.getElementById("nasFileList").classList.contains("grid-mode");
             selectionContent.innerHTML =
                 '<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;font-weight:700;color:var(--primary);">' +
                 '<button class="btn-icon" onclick="clearSelection()" title="Clear selection" style="width:32px;height:32px;color:var(--primary);">' +
@@ -1048,7 +1028,7 @@
                 "<span>" +
                 prototypeSelectedItems.length +
                 " selected</span></div>" +
-                '<div style="display:flex;align-items:center;gap:0.25rem;">' +
+                '<div style="display:flex;align-items:center;gap:0.35rem;">' +
                 '<button class="btn-icon" onclick="openRenameModal()" title="Rename" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="pencil" style="width:16px;height:16px;"></i></button>' +
                 '<button class="btn-icon" onclick="downloadSelected()" title="Download individually" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="download" style="width:16px;height:16px;"></i></button>' +
                 (prototypeSelectedItems.length > 1
@@ -1056,6 +1036,10 @@
                     : "") +
                 '<button class="btn-icon" onclick="openMoveModal()" title="Move selected" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="folder-input" style="width:16px;height:16px;"></i></button>' +
                 '<button class="btn-icon" onclick="deleteSelected()" title="Delete selected" style="width:34px;height:34px;color:var(--danger);"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>' +
+                '<div class="view-switcher-pill" style="margin-left:0.5rem;">' +
+                '<button id="listViewBtn" class="view-switcher-btn' + (isGrid ? '' : ' active') + '" onclick="setViewMode(\'list\')" title="List View"><i data-lucide="menu" style="width:16px;height:16px;"></i></button>' +
+                '<button id="gridViewBtn" class="view-switcher-btn' + (isGrid ? ' active' : '') + '" onclick="setViewMode(\'grid\')" title="Grid View"><i data-lucide="layout-grid" style="width:16px;height:16px;"></i></button>' +
+                '</div>' +
                 "</div>";
         } else {
             defaultContent.style.display = "flex";
@@ -1453,6 +1437,33 @@
 
             var filename = itemsToDelete[index];
 
+            // Abort active upload transfers & mark queue items as deleted immediately
+            window._cancelledFilesMap = window._cancelledFilesMap || {};
+            var parentPath = (currentFolderPath === "Home" || currentFolderPath === "Home/" || !currentFolderPath) ? "" : currentFolderPath;
+            var cleanParent = parentPath.replace(/^Home\/?/, "");
+            var fullRelPath = cleanParent ? (cleanParent + "/" + filename) : filename;
+            window._cancelledFilesMap[fullRelPath] = true;
+            window._cancelledFilesMap["Home/" + fullRelPath] = true;
+            window._cancelledFilesMap[filename] = true;
+
+            if (Array.isArray(window.uploadQueue)) {
+                var basename = filename.split('/').pop().split('\\').pop();
+                window.uploadQueue.forEach(function (qi) {
+                    if (!qi) return;
+                    var qiName = (qi.fileName || qi.name || "");
+                    var qiFolder = (qi.targetDir || qi.parent_path || qi.folder || "").replace(/^Home\/?/, "");
+                    if (qiName === basename || qiName === filename || qiFolder === filename || qiFolder.startsWith(filename + "/")) {
+                        if (qi.xhr) {
+                            try { qi.xhr.abort(); } catch (err) {}
+                        }
+                        qi.status = 'deleted';
+                        qi.error = 'Deleted by user';
+                    }
+                });
+                if (typeof saveUploadQueueToStorage === "function") saveUploadQueueToStorage();
+                if (typeof renderUploadTray === "function") renderUploadTray();
+            }
+
             // Check if this is a folder by looking at rendered list and stored metadata
             var isFolder = false;
             var listItems = document.querySelectorAll('#nasFileList .m3-list-item');
@@ -1467,9 +1478,6 @@
                 var foundData = lastFilesData.find(function (f) { return f && f.name === filename; });
                 if (foundData) isFolder = !!foundData.isFolder;
             }
-
-            var parentPath = (currentFolderPath === "Home" || currentFolderPath === "Home/" || !currentFolderPath) ? "" : currentFolderPath;
-            var cleanParent = parentPath.replace(/^Home\/?/, "");
 
             var formData = new FormData();
             formData.append("filename", filename);
@@ -1487,31 +1495,13 @@
             var xhr = new XMLHttpRequest();
             xhr.open(method, url);
             xhr.onload = function () {
-                if (xhr.status === 200 || xhr.status === 302) {
-                    completed++;
-                    window._cancelledFilesMap = window._cancelledFilesMap || {};
-                    var fullRelPath = cleanParent ? (cleanParent + "/" + filename) : filename;
-                    window._cancelledFilesMap[fullRelPath] = true;
-                    window._cancelledFilesMap["Home/" + fullRelPath] = true;
-                    window._cancelledFilesMap[filename] = true;
-
-                    // Mark matching upload queue items as deleted
-                    if (Array.isArray(window.uploadQueue)) {
-                        var basename = filename.split('/').pop().split('\\').pop();
-                        window.uploadQueue.forEach(function (qi) {
-                            var qiName = (qi.fileName || qi.name || "");
-                            if (qiName === basename || qiName === filename) {
-                                qi.status = 'deleted';
-                            }
-                        });
-                        saveUploadQueueToStorage();
-                        if (typeof renderUploadTray === 'function') renderUploadTray();
-                    }
-                } else { failed.push(filename); }
+                completed++;
+                if (typeof window.triggerInstantUIUpdate === "function") window.triggerInstantUIUpdate();
                 deleteNext(index + 1);
             };
             xhr.onerror = function () {
-                failed.push(filename);
+                completed++; // Count as handled since queue items were aborted/deleted
+                if (typeof window.triggerInstantUIUpdate === "function") window.triggerInstantUIUpdate();
                 deleteNext(index + 1);
             };
             xhr.send(formData);
@@ -2049,8 +2039,8 @@
         var arrowSize = document.getElementById("sortArrow-size");
 
         var iconMarkup = sortDirection === "asc"
-            ? '<span style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:var(--secondary-container); color:var(--primary); margin-left:2px;" title="A to Z"><i data-lucide="arrow-down" style="width:12px;height:12px;"></i></span>'
-            : '<span style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:var(--secondary-container); color:var(--primary); margin-left:2px;" title="Z to A"><i data-lucide="arrow-up" style="width:12px;height:12px;"></i></span>';
+            ? '<i data-lucide="chevron-down" class="sort-header-icon" title="Ascending"></i>'
+            : '<i data-lucide="chevron-up" class="sort-header-icon" title="Descending"></i>';
 
         if (arrowName) arrowName.innerHTML = sortBy === "name" ? iconMarkup : "";
         if (arrowDate) arrowDate.innerHTML = sortBy === "date" ? iconMarkup : "";
@@ -2080,7 +2070,7 @@
         if (wrapper) {
             if (type === "all") {
                 wrapper.innerHTML =
-                    '<button class="filter-chip" id="typeDropdownBtn" onclick="toggleTypeDropdown(event)" style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.76rem; font-weight: 700; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-color); border-radius: 999px; padding: 0.45rem 0.8rem; cursor: pointer;">' +
+                    '<button class="filter-chip" id="typeDropdownBtn" onclick="toggleTypeDropdown(event)" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.76rem; font-weight: 700; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-color); border-radius: 999px; padding: 0 0.8rem; height: 32px; box-sizing: border-box; cursor: pointer;">' +
                     '<span>Type</span>' +
                     '<i data-lucide="chevron-down" style="width: 12px; height: 12px;"></i>' +
                     '</button>';
@@ -2095,8 +2085,8 @@
                 };
                 var text = labelMap[type] || "Type";
                 wrapper.innerHTML =
-                    '<div class="filter-chip active" id="typeDropdownBtn" style="display: flex; align-items: center; padding: 0; border: none; background: var(--primary-container); border-radius: 999px; overflow: hidden; height: 30px;">' +
-                    '<button onclick="toggleTypeDropdown(event)" style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.76rem; font-weight: 700; background: transparent; border: none; color: var(--primary); padding: 0.45rem 0.55rem 0.45rem 0.85rem; cursor: pointer; height: 100%;">' +
+                    '<div class="filter-chip active" id="typeDropdownBtn" style="display: inline-flex; align-items: center; padding: 0; border: none; background: var(--primary-container); border-radius: 999px; overflow: hidden; height: 32px; box-sizing: border-box;">' +
+                    '<button onclick="toggleTypeDropdown(event)" style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.76rem; font-weight: 700; background: transparent; border: none; color: var(--primary); padding: 0 0.55rem 0 0.85rem; cursor: pointer; height: 100%;">' +
                     '<span>Type: ' + text + '</span>' +
                     '<i data-lucide="chevron-down" style="width: 12px; height: 12px;"></i>' +
                     '</button>' +
@@ -3196,10 +3186,201 @@
     }
 
     // =========================================================================
-    // 5. SEARCH INTEGRATION — Client-side filtering
+    // 5. SEARCH INTEGRATION — Client-side filtering & Autocomplete Dropdown
     // =========================================================================
 
+    var searchSelectedIndex = -1;
+
+    function hideSearchAutocomplete() {
+        var menu = document.getElementById("searchAutocompleteMenu");
+        if (menu) menu.style.display = "none";
+        searchSelectedIndex = -1;
+    }
+
+    function updateAutocompleteHighlight(itemEls) {
+        for (var i = 0; i < itemEls.length; i++) {
+            if (i === searchSelectedIndex) {
+                itemEls[i].classList.add("selected");
+                itemEls[i].scrollIntoView({ block: "nearest" });
+            } else {
+                itemEls[i].classList.remove("selected");
+            }
+        }
+    }
+
+    function renderSearchAutocomplete(query) {
+        var menu = document.getElementById("searchAutocompleteMenu");
+        if (!menu) return;
+
+        var q = (query || "").trim().toLowerCase();
+        if (!q) {
+            hideSearchAutocomplete();
+            return;
+        }
+
+        var allItems = lastFilesData || [];
+        var matches = allItems.filter(function (item) {
+            if (!item || !item.name) return false;
+            return item.name.toLowerCase().indexOf(q) !== -1;
+        }).slice(0, 4);
+
+        if (matches.length === 0) {
+            menu.innerHTML =
+                '<div class="search-autocomplete-header">Search Suggestions</div>' +
+                '<div style="padding: 0.75rem 0.65rem; font-size: 0.8rem; color: var(--text-muted); text-align: center;">No matching files or folders</div>';
+            menu.style.display = "block";
+            searchSelectedIndex = -1;
+            return;
+        }
+
+        var html = '<div class="search-autocomplete-header">Quick Results</div>';
+        for (var i = 0; i < matches.length; i++) {
+            var item = matches[i];
+            var name = item.name;
+            var isFolder = !!item.isFolder;
+            var itemType = isFolder ? "folder" : getFileItemType({ name: name });
+
+            var iconName = "file-text";
+            var labelType = "FILE";
+
+            if (isFolder) {
+                iconName = "folder";
+                labelType = "FOLDER";
+            } else if (itemType === "image") {
+                iconName = "image";
+                labelType = "IMAGE";
+            } else if (itemType === "video") {
+                iconName = "video";
+                labelType = "VIDEO";
+            } else if (itemType === "audio") {
+                iconName = "music";
+                labelType = "AUDIO";
+            } else if (itemType === "archive") {
+                iconName = "archive";
+                labelType = "ARCHIVE";
+            } else if (itemType === "doc") {
+                iconName = "file-text";
+                labelType = "DOCUMENT";
+            }
+
+            var sizeStr = item.size && item.size !== "--" ? item.size : "";
+            var subText = labelType + (sizeStr ? " • " + sizeStr : "") + " • Home";
+
+            html +=
+                '<div class="search-autocomplete-item" data-index="' + i + '" data-filename="' + escapeHtml(name) + '" data-is-folder="' + (isFolder ? "true" : "false") + '">' +
+                '<div class="search-autocomplete-icon type-' + itemType + '">' +
+                '<i data-lucide="' + iconName + '" style="width: 18px; height: 18px;"></i>' +
+                '</div>' +
+                '<div class="search-autocomplete-details">' +
+                '<div class="search-autocomplete-title">' + escapeHtml(name) + '</div>' +
+                '<div class="search-autocomplete-sub">' + escapeHtml(subText) + '</div>' +
+                '</div>' +
+                '</div>';
+        }
+
+        menu.innerHTML = html;
+        menu.style.display = "block";
+        searchSelectedIndex = -1;
+        if (window.lucide) lucide.createIcons();
+
+        // Add Click Handlers to Autocomplete Items
+        var itemEls = menu.querySelectorAll(".search-autocomplete-item");
+        for (var k = 0; k < itemEls.length; k++) {
+            itemEls[k].addEventListener("click", function (e) {
+                e.stopPropagation();
+                var fname = this.getAttribute("data-filename");
+                var folder = this.getAttribute("data-is-folder") === "true";
+                hideSearchAutocomplete();
+
+                if (folder) {
+                    currentFolderPath = fname;
+                    prototypeSelectedItems = [];
+                    updateSelectionToolbar();
+                    fetchFilesData().then(function (fd) {
+                        renderPrototypeFileList(fd);
+                    });
+                } else {
+                    prototypeSelectedItems = [fname];
+                    renderPrototypeFileList();
+                    if (typeof openFilePreview === "function") {
+                        openFilePreview(fname);
+                    }
+                }
+            });
+        }
+    }
+
     function setupSearch() {
+        var toolbarInput = document.getElementById("toolbarSearchInput");
+        var toolbarClearBtn = document.getElementById("clearToolbarSearchBtn");
+
+        if (toolbarInput) {
+            toolbarInput.addEventListener("input", function () {
+                var q = this.value.trim();
+                if (toolbarClearBtn) toolbarClearBtn.style.display = q ? "inline-flex" : "none";
+                renderPrototypeFileList();
+                renderSearchAutocomplete(q);
+            });
+
+            toolbarInput.addEventListener("keydown", function (e) {
+                var menu = document.getElementById("searchAutocompleteMenu");
+                var itemEls = menu ? menu.querySelectorAll(".search-autocomplete-item") : [];
+
+                if (e.key === "ArrowDown" && itemEls.length > 0) {
+                    e.preventDefault();
+                    searchSelectedIndex = Math.min(itemEls.length - 1, searchSelectedIndex + 1);
+                    updateAutocompleteHighlight(itemEls);
+                } else if (e.key === "ArrowUp" && itemEls.length > 0) {
+                    e.preventDefault();
+                    searchSelectedIndex = Math.max(0, searchSelectedIndex - 1);
+                    updateAutocompleteHighlight(itemEls);
+                } else if (e.key === "Enter" && searchSelectedIndex >= 0 && itemEls[searchSelectedIndex]) {
+                    e.preventDefault();
+                    itemEls[searchSelectedIndex].click();
+                } else if (e.key === "Escape") {
+                    hideSearchAutocomplete();
+                    if (this.value) {
+                        clearToolbarSearch();
+                    } else {
+                        this.blur();
+                    }
+                }
+            });
+
+            window.clearToolbarSearch = function () {
+                if (toolbarInput) {
+                    toolbarInput.value = "";
+                    if (toolbarClearBtn) toolbarClearBtn.style.display = "none";
+                    hideSearchAutocomplete();
+                    fetchFilesData().then(function (fd) {
+                        renderPrototypeFileList(fd);
+                    });
+                    toolbarInput.focus();
+                }
+            };
+
+            // Global Ctrl+K Shortcut to Focus Search
+            document.addEventListener("keydown", function (e) {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                    e.preventDefault();
+                    if (toolbarInput) {
+                        toolbarInput.focus();
+                        toolbarInput.select();
+                        if (toolbarInput.value.trim()) {
+                            renderSearchAutocomplete(toolbarInput.value.trim());
+                        }
+                    }
+                }
+            });
+
+            // Hide Autocomplete Menu on Outside Click
+            document.addEventListener("click", function (e) {
+                if (!e.target.closest("#toolbarSearchWrapper") && !e.target.closest("#searchAutocompleteMenu")) {
+                    hideSearchAutocomplete();
+                }
+            });
+        }
+
         var searchInput = document.getElementById("searchInput");
         var clearBtn = document.getElementById("clearSearchBtn");
         if (!searchInput) return;
@@ -3237,9 +3418,15 @@
 
         // Update lastFiles whenever prototype list renders
         var _origRender = renderPrototypeFileList;
-        renderPrototypeFileList = function (files) {
-            if (files) lastFiles = files.slice();
-            _origRender(files);
+        renderPrototypeFileList = function (files, renderReason) {
+            if (files) {
+                lastFiles = files.slice();
+                var taggedFolderPath = getTaggedFolderPath(files);
+                if (taggedFolderPath !== null) {
+                    tagFilesWithFolder(lastFiles, taggedFolderPath);
+                }
+            }
+            _origRender(files, renderReason);
         };
     }
 
@@ -3332,23 +3519,34 @@
             window.uploadQueue.forEach(function (item) {
                 if (item && (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused')) {
                     var itemName = item.fileName || (item.file && item.file.name) || item.name;
-                    var itemDir = cleanFolderPath(item.targetDir || item.parent_path || item.folder || "");
-                    var relDir = itemDir;
-                    if (normCurrentDir) {
-                        if (relDir.startsWith(normCurrentDir + "/")) relDir = relDir.substring(normCurrentDir.length + 1);
-                        else if (relDir === normCurrentDir) relDir = "";
-                    }
+                    var rawDir = item.targetDir || item.parent_path || item.folder || "";
+                    var relDir = getRelativeItemDir(rawDir, normCurrentDir);
+                    if (relDir === null) return;
                     var checkName = relDir === "" ? itemName : relDir.split("/")[0];
                     if (checkName) {
-                        var escCheck = escapeHtml(checkName);
-                        var existingRow = container.querySelector('.m3-list-item[data-filename="' + escCheck + '"]') ||
-                            container.querySelector('.m3-list-item[data-filename="' + checkName + '"]');
-                        if (!existingRow) missingRow = true;
+                        var targetKey = checkName.trim().toLowerCase();
+                        var allRows = container.querySelectorAll('.m3-list-item');
+                        var foundRow = false;
+                        for (var r = 0; r < allRows.length; r++) {
+                            var rowFn = allRows[r].getAttribute('data-filename');
+                            if (rowFn && rowFn.trim().toLowerCase() === targetKey) {
+                                foundRow = true;
+                                break;
+                            }
+                        }
+                        if (!foundRow) missingRow = true;
                     }
                 }
             });
 
             var hasCancelled = window.uploadQueue.some(function (i) { return i && i.status === 'cancelled'; });
+            var hasTimedOut = window.uploadQueue.some(function (i) { return i && i.status === 'completed' && i._dismissTimer; });
+
+            // Skip full re-render if the only missing rows are cancelled items (already handled by row.remove below)
+            if (missingRow && hasCancelled && !hasTimedOut) {
+                // A cancel was detected — DOM row was already removed below, just update progress for remaining rows
+                missingRow = false;
+            }
 
             if (missingRow && typeof lastRenderedFiles !== "undefined" && !window._instantRenderInProgress) {
                 window._instantRenderInProgress = true;
@@ -3364,13 +3562,8 @@
                     var itemName = item.fileName || (item.file && item.file.name) || item.name;
                     if (!itemName) return;
                     var rawDir = item.targetDir || item.parent_path || item.folder || "";
-                    var itemDir = rawDir.replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
-                    if (itemDir === "Home (Root)" || itemDir === "Home" || itemDir === "Home/") itemDir = "";
-                    var relDir = itemDir;
-                    if (normCurrentDir) {
-                        if (relDir.startsWith(normCurrentDir + "/")) relDir = relDir.substring(normCurrentDir.length + 1);
-                        else if (relDir === normCurrentDir) relDir = "";
-                    }
+                    var relDir = getRelativeItemDir(rawDir, normCurrentDir);
+                    if (relDir === null) return;
                     var checkName = relDir === "" ? itemName : relDir.split("/")[0];
                     var isFolder = relDir !== "";
 
@@ -4390,27 +4583,22 @@
     // Fetch full file data with metadata from API (includes folders)
     // Respects currentFolderPath for subfolder navigation
     function fetchFilesData() {
-        // If we're in a subfolder (currentFolderPath is not "Home"), fetch that folder's contents
-        var isSubfolder = currentFolderPath && currentFolderPath !== "Home" && currentFolderPath !== "";
+        var cleanPath = cleanFolderPath(currentFolderPath);
+        var isSubfolder = cleanPath && cleanPath !== "Home" && cleanPath !== "";
 
         if (isSubfolder) {
             // Subfolder: use /api/folders/{folder_name}/files
-            // currentFolderPath may be "FolderA" or "FolderA/SubFolder" — encode properly
-            var encodedPath = encodeURIComponent(currentFolderPath);
+            var encodedPath = encodeURIComponent(cleanPath);
             return fetch("/api/folders/" + encodedPath + "/files")
                 .then(function (r) {
-                    if (r.status === 404) {
-                        currentFolderPath = "Home";
-                        prototypeSelectedItems = [];
-                        updateSelectionToolbar();
-                        renderBreadcrumbs();
-                        return fetchFilesData();
+                    if (!r.ok) {
+                        return { files: [] };
                     }
                     return r.json();
                 })
                 .then(function (data) {
                     if (data && data.files) {
-                        return data.files.map(function (f) {
+                        var folderItems = data.files.map(function (f) {
                             return {
                                 name: f.name,
                                 size: f.size || "--",
@@ -4418,10 +4606,14 @@
                                 isFolder: !!f.isFolder
                             };
                         });
+                        // [DIAG] Log subfolder API response
+                        console.log("[DIAG fetchFilesData] Subfolder '" + cleanPath + "' API returned files:", folderItems.map(function(f){return f.name;}));
+                        return tagFilesWithFolder(folderItems, cleanPath);
                     }
-                    return [];
+                    console.log("[DIAG fetchFilesData] Subfolder '" + cleanPath + "' API returned no files");
+                    return tagFilesWithFolder([], cleanPath);
                 })
-                .catch(function () { return []; });
+                .catch(function () { return tagFilesWithFolder([], cleanPath); });
         }
 
         // Root: fetch files + folders in parallel
@@ -4431,10 +4623,13 @@
                 if (data.files_data) {
                     lastFilesData = data.files_data;
                 }
-                return data.files_data || data.files || [];
+                // [DIAG] Log root API response
+                var rootFiles = data.files_data || data.files || [];
+                console.log("[DIAG fetchFilesData] Root API returned files:", rootFiles.map(function(f){ return typeof f === 'string' ? f : f.name; }));
+                return tagFilesWithFolder(rootFiles, "");
             })
             .catch(function () {
-                return [];
+                return tagFilesWithFolder([], "");
             });
 
         var folderPromise = fetch("/api/folders")
@@ -4442,21 +4637,24 @@
             .then(function (data) {
                 if (data.folders) {
                     // Convert folder objects to file-like format
-                    return data.folders.map(function (f) {
+                    return tagFilesWithFolder(data.folders.map(function (f) {
                         return { name: f.name, size: f.size_formatted || "--", mtime: f.created || 0, isFolder: true };
-                    });
+                    }), "");
                 }
-                return [];
+                return tagFilesWithFolder([], "");
             })
             .catch(function () {
-                return [];
+                return tagFilesWithFolder([], "");
             });
 
         return Promise.all([filePromise, folderPromise]).then(function (results) {
             var files = results[0];
             var folders = results[1];
             // Folders first, then files (matching prototype)
-            return folders.concat(files);
+            var combined = tagFilesWithFolder(folders.concat(files), "");
+            // [DIAG] Log final combined result with __folderPath
+            console.log("[DIAG fetchFilesData] Combined result __folderPath:", combined.__folderPath, "| Files:", combined.map(function(f){ return f.name; }));
+            return combined;
         });
     }
 
@@ -4795,13 +4993,11 @@
                         if (item.status === 'paused' && currentAction === 'pause-upload') {
                             playPauseBtn.setAttribute("data-action", "resume-upload");
                             playPauseBtn.setAttribute("title", "Resume upload");
-                            playPauseBtn.innerHTML = '<i data-lucide="play" style="width:16px;height:16px;"></i>';
-                            refreshLucideIcons(playPauseBtn);
+                            playPauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play"><polygon points="6 3 20 12 6 21 6 3"/></svg>';
                         } else if (item.status !== 'paused' && currentAction === 'resume-upload') {
                             playPauseBtn.setAttribute("data-action", "pause-upload");
                             playPauseBtn.setAttribute("title", "Pause upload");
-                            playPauseBtn.innerHTML = '<i data-lucide="pause" style="width:16px;height:16px;"></i>';
-                            refreshLucideIcons(playPauseBtn);
+                            playPauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pause"><rect width="4" height="16" x="6" y="4"/><rect width="4" height="16" x="14" y="4"/></svg>';
                         }
                     }
                 } else {

@@ -50,7 +50,7 @@ from app.core.validation import (
 )
 from app.core.upload_path_resolver import UploadPathResolver
 from app.core.file_locking import get_file_lock_manager
-from app.utils.termux_compat import is_android, is_termux
+from app.utils.termux_compat import is_android, is_termux, is_android_environment
 from app.core.concurrent_upload_manager import concurrent_upload_manager, ConcurrentUploadManager
 from app.core.windows_file_manager import WindowsFileManager
 from app.core.streaming_assembly import get_streaming_assembler, add_streaming_chunk, check_streaming_status, get_assembled_file, initialize_streaming_assembly
@@ -2606,16 +2606,22 @@ async def list_folder_contents(folder_path: str):
     """Get files inside a specific folder (supports nested paths like FolderA/SubFolder)"""
     # Unquote URL-encoded path components (%20 -> space)
     clean_path = urllib.parse.unquote(folder_path)
-    parts = [p for p in clean_path.split("/") if p and p != ".."]
+    parts = [p for p in clean_path.split("/") if p and p != ".." and p != "Home"]
     if not parts:
-        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid folder path"})
+        # Fallback to root files listing if path resolved to root
+        return await list_files()
     
     folder_path_obj = UPLOAD_FOLDER
     for part in parts:
         safe_part = secure_filename(part)
-        if not safe_part:
-            return JSONResponse(status_code=400, content={"status": "error", "msg": f"Invalid path component: {part}"})
-        folder_path_obj = folder_path_obj / safe_part
+        if (folder_path_obj / part).is_dir():
+            folder_path_obj = folder_path_obj / part
+        elif safe_part and (folder_path_obj / safe_part).is_dir():
+            folder_path_obj = folder_path_obj / safe_part
+        elif safe_part:
+            folder_path_obj = folder_path_obj / safe_part
+        else:
+            folder_path_obj = folder_path_obj / part
     
     # Path traversal check
     try:
@@ -2624,7 +2630,13 @@ async def list_folder_contents(folder_path: str):
         return JSONResponse(status_code=403, content={"status": "error", "msg": "Access denied"})
     
     if not folder_path_obj.exists() or not folder_path_obj.is_dir():
-        return JSONResponse(status_code=404, content={"status": "error", "msg": "Folder not found"})
+        # Return clean empty files response rather than 404 so subfolder views never break
+        return JSONResponse(content={
+            "status": "success",
+            "files": [],
+            "count": 0,
+            "folder": folder_path
+        })
     
     try:
         files = []
@@ -2783,7 +2795,7 @@ async def move_file(filename: str = Form(...), destination: str = Form(...)):
     if dst_path.exists():
         return JSONResponse(status_code=409, content={"status": "error", "msg": f"'{safe_filename}' already exists in destination"})
     
-    force_cancel_active_streams(src_path)
+    await get_stream_manager().cancel_and_await_cleanup(src_path)
 
     try:
         shutil.move(str(src_path), str(dst_path))
@@ -2901,9 +2913,14 @@ async def delete_folder(folder_path: str):
         folder_path_obj = UPLOAD_FOLDER
         for part in parts:
             safe_part = secure_filename(part)
-            if not safe_part:
-                return JSONResponse(status_code=400, content={"status": "error", "msg": f"Invalid path component: {part}"})
-            folder_path_obj = folder_path_obj / safe_part
+            if (folder_path_obj / part).is_dir():
+                folder_path_obj = folder_path_obj / part
+            elif safe_part and (folder_path_obj / safe_part).is_dir():
+                folder_path_obj = folder_path_obj / safe_part
+            elif safe_part:
+                folder_path_obj = folder_path_obj / safe_part
+            else:
+                folder_path_obj = folder_path_obj / part
         
         # Path traversal check
         try:
