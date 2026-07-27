@@ -24,6 +24,8 @@ from pathlib import Path
 from mimetypes import guess_type
 from typing import List, Optional, Dict, Any, Tuple, Set
 
+from pydantic import BaseModel
+
 from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -1149,7 +1151,11 @@ async def download_file(filename: str, request: Request):
     clean_filename = urllib.parse.unquote(filename).strip("/\\")
     safe_name = secure_filename(clean_filename)
     file_path = UPLOAD_FOLDER / clean_filename
-    
+
+    if file_path.exists() and file_path.is_dir():
+        print(f"[DIR] Directory requested via /download/{clean_filename}. Redirecting to /download-folder/{clean_filename}...")
+        return RedirectResponse(url=f"/download-folder/{urllib.parse.quote(clean_filename)}", status_code=307)
+
     if not file_path.is_file():
         file_path = UPLOAD_FOLDER / safe_name
         if not file_path.is_file():
@@ -1538,64 +1544,107 @@ async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str 
         status_code=status_code
     )
 
+def create_fast_zip_response(files_to_download: list, zip_filename: str = "archive.zip"):
+    """
+    High-performance ZIP generator & streaming response.
+    Uses ZIP_STORED for pre-compressed media/binaries to eliminate CPU compression delay,
+    and streams with 512KB chunks for maximum throughput.
+    """
+    import zipfile
+    from urllib.parse import quote
+
+    PRECOMPRESSED_EXTS = {
+        '.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.3gp', '.m4v', '.mp3', '.aac',
+        '.flac', '.ogg', '.wav', '.jpg', '.jpeg', '.png', '.webp', '.gif', '.zip', '.rar',
+        '.7z', '.gz', '.tar', '.bz2', '.iso', '.pdf', '.docx', '.xlsx', '.pptx'
+    }
+
+    try:
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+            for file_path, arcname in files_to_download:
+                try:
+                    if not file_path.exists():
+                        continue
+                    ext = file_path.suffix.lower()
+                    compress_type = zipfile.ZIP_STORED if ext in PRECOMPRESSED_EXTS else zipfile.ZIP_DEFLATED
+                    zip_file.write(file_path, arcname=arcname, compress_type=compress_type)
+                except Exception as e:
+                    print(f"[WARN] Error adding {arcname} to ZIP: {e}")
+                    continue
+
+        zip_buffer.seek(0)
+        zip_data = zip_buffer.getvalue()
+        zip_buffer.close()
+
+        def generate_zip():
+            chunk_size = 524288  # 512KB chunks for high throughput LAN transfers
+            for i in range(0, len(zip_data), chunk_size):
+                chunk = zip_data[i:i + chunk_size]
+                if chunk:
+                    yield chunk
+
+        encoded_name = quote(zip_filename)
+        return StreamingResponse(
+            generate_zip(),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{zip_filename}"; filename*=UTF-8\'\'{encoded_name}',
+                "Content-Length": str(len(zip_data))
+            }
+        )
+    except Exception as e:
+        print(f"[ERR] Error creating fast ZIP: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to create ZIP archive: {str(e)}"}
+        )
+
+class BatchDownloadZipRequest(BaseModel):
+    files: List[str]
+
+@router.post("/api/files/download-zip", name="download_files_zip")
+@router.post("/download-zip", name="download_files_zip_alias")
+async def download_files_zip(req: BatchDownloadZipRequest):
+    """Download arbitrary selected list of files as a high-speed ZIP archive"""
+    files_to_download = []
+    for fn in req.files:
+        safe_fn = secure_filename(fn)
+        if not safe_fn:
+            continue
+        fp = UPLOAD_FOLDER / safe_fn
+        if fp.exists() and fp.is_file():
+            files_to_download.append((fp, fp.name))
+        elif fp.exists() and fp.is_dir():
+            for child in fp.rglob('*'):
+                if child.is_file():
+                    rel = child.relative_to(fp.parent)
+                    files_to_download.append((child, str(rel)))
+
+    if not files_to_download:
+        return JSONResponse(status_code=404, content={"error": "No valid files found for ZIP download"})
+
+    zip_name = "selected_files.zip" if len(req.files) > 1 else f"{safe_fn}.zip"
+    return create_fast_zip_response(files_to_download, zip_name)
+
 @router.get("/download-all", name="download_all")
 async def download_all_files():
-    """Download all files as a ZIP archive with proper streaming"""
-    
-    # Check if there are any files to download
-    files_to_download = [file for file in UPLOAD_FOLDER.iterdir() if file.is_file() and not file.name.endswith('.tmp')]
+    """Download all files as a ZIP archive with proper high-speed streaming"""
+    files_to_download = [(file, file.name) for file in UPLOAD_FOLDER.iterdir() if file.is_file() and not file.name.endswith('.tmp')]
     if not files_to_download:
         return JSONResponse(
             status_code=404,
             content={"error": "No files available for download"}
         )
-    
-    # Create ZIP in memory with proper error handling
-    try:
-        zip_buffer = io.BytesIO()
-        with ZipFile(zip_buffer, "w") as zip_file:
-            for file in files_to_download:
-                try:
-                    if file.suffix == ".enc":
-                        # Note: Legacy .enc files no longer supported for security reasons
-                        print(f"[WARN] Skipping legacy encrypted file: {file.name}")
-                        error_content = f"File {file.name} uses legacy encryption which is no longer supported for security reasons."
-                        zip_file.writestr(f"{file.stem}_LEGACY_ENCRYPTION_WARNING.txt", error_content.encode('utf-8'))
-                    else:
-                        # Add regular files directly
-                        zip_file.write(file, arcname=file.name)
-                except Exception as e:
-                    print(f"[WARN] Error adding {file.name} to ZIP: {e}")
-                    # Continue with other files even if one fails
-                    continue
-        
-        zip_buffer.seek(0)
-        zip_data = zip_buffer.getvalue()
-        zip_buffer.close()
-        
-        # Create a proper generator for streaming
-        def generate_zip():
-            chunk_size = 8192  # 8KB chunks
-            for i in range(0, len(zip_data), chunk_size):
-                chunk = zip_data[i:i + chunk_size]
-                if chunk:  # Only yield non-empty chunks
-                    yield chunk
-        
-        return StreamingResponse(
-            generate_zip(),
-            media_type="application/zip",
-            headers={
-                "Content-Disposition": "attachment; filename=all_files.zip",
-                "Content-Length": str(len(zip_data))
-            }
-        )
-        
-    except Exception as e:
-        print(f"[ERR] Error creating ZIP archive: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Failed to create ZIP archive: {str(e)}"}
-        )
+    return create_fast_zip_response(files_to_download, "all_files.zip")
+
+@router.get("/selection-demo")
+async def selection_demo():
+    """Serve interactive selection style showcase & demo page"""
+    demo_path = TEMPLATE_DIR / "selection_demo.html"
+    if demo_path.is_file():
+        return FileResponse(demo_path)
+    return Response("Demo page not found", status_code=404)
 
 @router.post("/clear", name="clear_files")
 async def clear_files():
@@ -2500,7 +2549,7 @@ async def upload_folder(
 
 @router.get("/download-folder/{folder_name}", name="download_folder")
 async def download_folder(folder_name: str):
-    """Download an entire folder as a ZIP file"""
+    """Download an entire folder as a high-speed ZIP file"""
     safe_folder = secure_filename(folder_name)
     if not safe_folder:
         raise HTTPException(status_code=400, detail="Invalid folder name")
@@ -2509,30 +2558,14 @@ async def download_folder(folder_name: str):
     
     if not folder_path.exists() or not folder_path.is_dir():
         raise HTTPException(status_code=404, detail="Folder not found")
+
+    files_to_download = [
+        (file_path, str(file_path.relative_to(folder_path)))
+        for file_path in folder_path.rglob('*')
+        if file_path.is_file()
+    ]
     
-    # Create ZIP file in memory
-    import zipfile
-    
-    zip_buffer = io.BytesIO()
-    
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        for file_path in folder_path.rglob('*'):
-            if file_path.is_file():
-                # Add file to ZIP with relative path
-                arcname = file_path.relative_to(folder_path)
-                zip_file.write(file_path, arcname)
-    
-    zip_buffer.seek(0)
-    
-    # Properly quote filename in header to prevent injection
-    from urllib.parse import quote
-    encoded_filename = quote(f"{safe_folder}.zip")
-    
-    return StreamingResponse(
-        io.BytesIO(zip_buffer.read()),
-        media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename=\"{safe_folder}.zip\"; filename*=UTF-8''{encoded_filename}"}
-    )
+    return create_fast_zip_response(files_to_download, f"{safe_folder}.zip")
 
 @router.get("/api/folders", name="list_folders")
 async def list_folders():

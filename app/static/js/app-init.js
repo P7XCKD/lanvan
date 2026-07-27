@@ -1054,7 +1054,10 @@
                 " selected</span></div>" +
                 '<div style="display:flex;align-items:center;gap:0.25rem;">' +
                 '<button class="btn-icon" onclick="openRenameModal()" title="Rename" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="pencil" style="width:16px;height:16px;"></i></button>' +
-                '<button class="btn-icon" onclick="downloadSelected()" title="Download selected" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="download" style="width:16px;height:16px;"></i></button>' +
+                '<button class="btn-icon" onclick="downloadSelected()" title="Download individually" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="download" style="width:16px;height:16px;"></i></button>' +
+                (prototypeSelectedItems.length > 1
+                    ? '<button class="btn-icon" onclick="downloadSelectedAsZip()" title="Download as ZIP" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="file-archive" style="width:16px;height:16px;"></i></button>'
+                    : "") +
                 '<button class="btn-icon" onclick="openMoveModal()" title="Move selected" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="folder-input" style="width:16px;height:16px;"></i></button>' +
                 '<button class="btn-icon" onclick="deleteSelected()" title="Delete selected" style="width:34px;height:34px;color:var(--danger);"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>' +
                 "</div>";
@@ -1292,9 +1295,13 @@
             }
             var targetItem = items[index];
             var isFolder = false;
-            if (Array.isArray(lastFilesData)) {
+            var listEl = document.querySelector('#nasFileList [data-filename="' + targetItem.replace(/"/g, '&quot;') + '"]');
+            if (listEl) {
+                isFolder = listEl.getAttribute("data-is-folder") === "1";
+            }
+            if (!isFolder && Array.isArray(lastFilesData)) {
                 var foundMeta = lastFilesData.find(function (f) { return f && f.name === targetItem; });
-                if (foundMeta && foundMeta.isFolder) isFolder = true;
+                if (foundMeta && (foundMeta.isFolder || foundMeta.is_dir)) isFolder = true;
             }
 
             if (isFolder) {
@@ -1306,11 +1313,103 @@
             index++;
             if (index < items.length) {
                 setTimeout(downloadNext, 300); // 300ms delay between downloads
-            } else {
-                downloadNext(); // Last one — no delay needed
             }
         }
         downloadNext();
+    };
+
+    window.downloadSelectedAsZip = function () {
+        var menu = document.getElementById("contextMenu");
+        if (menu) menu.style.display = "none";
+
+        var items = prototypeSelectedItems.slice();
+        var target = window._contextMenuTarget || "";
+
+        if (items.length === 0 && target) {
+            items = [target];
+        }
+        window._contextMenuTarget = "";
+
+        if (items.length === 0) return;
+
+        if (typeof showToast === "function") {
+            showToast("Preparing ZIP archive...", 0);
+        }
+
+        fetch("/api/files/download-zip", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ files: items })
+        })
+        .then(function (res) {
+            if (!res.ok) {
+                if (res.status === 404 && (typeof lastFilesData === "undefined" || items.length >= (lastFilesData || []).length)) {
+                    window.location.href = "/download-all";
+                    return null;
+                }
+                throw new Error("Status " + res.status);
+            }
+
+            var contentLength = res.headers.get("Content-Length");
+            var totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+            var receivedBytes = 0;
+            var chunks = [];
+
+            if (!res.body || !res.body.getReader) {
+                if (typeof showToast === "function") {
+                    showToast("Processing ZIP download...", 0);
+                }
+                return res.blob();
+            }
+
+            var reader = res.body.getReader();
+
+            function readChunk() {
+                return reader.read().then(function (result) {
+                    if (result.done) {
+                        return new Blob(chunks, { type: "application/zip" });
+                    }
+                    chunks.push(result.value);
+                    receivedBytes += result.value.length;
+
+                    if (typeof showToast === "function") {
+                        var recvMB = (receivedBytes / (1024 * 1024)).toFixed(1);
+                        if (totalBytes > 0) {
+                            var pct = Math.min(100, Math.round((receivedBytes / totalBytes) * 100));
+                            var totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
+                            showToast("Processing ZIP download: " + recvMB + " / " + totalMB + " MB (" + pct + "%)", 0);
+                        } else {
+                            showToast("Processing ZIP download: " + recvMB + " MB transferred...", 0);
+                        }
+                    }
+
+                    return readChunk();
+                });
+            }
+
+            return readChunk();
+        })
+        .then(function (blob) {
+            if (!blob) return;
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement("a");
+            a.href = url;
+            a.download = items.length === 1 ? items[0] + ".zip" : "selected_files.zip";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            if (typeof showToast === "function") {
+                showToast("ZIP download started!", 3500);
+            }
+            window.clearSelection();
+        })
+        .catch(function (err) {
+            console.error("ZIP download error:", err);
+            if (typeof showToast === "function") {
+                showToast("Error downloading ZIP archive.", 4000);
+            }
+        });
     };
 
     window.deleteSelected = function () {
@@ -1427,6 +1526,21 @@
 
     function downloadFileByName(filename) {
         if (!filename) return;
+        var isFolder = false;
+        var listEl = document.querySelector('#nasFileList [data-filename="' + filename.replace(/"/g, '&quot;') + '"]');
+        if (listEl) {
+            isFolder = listEl.getAttribute("data-is-folder") === "1";
+        }
+        if (!isFolder && Array.isArray(lastFilesData)) {
+            var foundMeta = lastFilesData.find(function (f) { return f && f.name === filename; });
+            if (foundMeta && (foundMeta.isFolder || foundMeta.is_dir)) isFolder = true;
+        }
+
+        if (isFolder) {
+            downloadFolderAsZip(filename);
+            return;
+        }
+
         var link = document.createElement("a");
         link.href = "/download/" + encodeURIComponent(filename);
         link.download = filename;
@@ -1517,14 +1631,41 @@
             }
         }
 
-        // Context menu items visibility based on multi-selection count
+        // Check if target item is a folder
+        var isTargetFolder = false;
+        var targetName = filename || (prototypeSelectedItems && prototypeSelectedItems[0]) || "";
+        if (targetName) {
+            var listEl = document.querySelector('#nasFileList [data-filename="' + targetName.replace(/"/g, '&quot;') + '"]');
+            if (listEl) {
+                isTargetFolder = listEl.getAttribute("data-is-folder") === "1";
+            } else if (Array.isArray(lastFilesData)) {
+                var meta = lastFilesData.find(function (f) { return f && f.name === targetName; });
+                if (meta) isTargetFolder = !!meta.isFolder;
+            }
+        }
+
+        // Context menu items visibility based on multi-selection count & item type
         var isSingle = prototypeSelectedItems.length <= 1;
 
         var renameItem = document.getElementById("renameMenuItem");
         if (renameItem) renameItem.style.display = "flex";
 
+        // Preview item: HIDE if target is a folder OR if multiple items selected
         var previewItem = document.getElementById("previewMenuItem");
-        if (previewItem) previewItem.style.display = isSingle ? "flex" : "none";
+        if (previewItem) previewItem.style.display = (isSingle && !isTargetFolder) ? "flex" : "none";
+
+        var downloadText = document.getElementById("downloadMenuText");
+        var downloadZipItem = document.getElementById("downloadZipMenuItem");
+        if (isSingle && isTargetFolder) {
+            if (downloadText) downloadText.textContent = "Download as ZIP";
+            if (downloadZipItem) downloadZipItem.style.display = "none";
+        } else if (isSingle) {
+            if (downloadText) downloadText.textContent = "Download";
+            if (downloadZipItem) downloadZipItem.style.display = "none";
+        } else {
+            if (downloadText) downloadText.textContent = "Download individually";
+            if (downloadZipItem) downloadZipItem.style.display = "flex";
+        }
 
         // Show/Hide "Copy Stream Link" option if single item and target file is a video
         var copyStreamLinkItem = document.getElementById("copyStreamLinkMenuItem");
@@ -2714,14 +2855,18 @@
     window.showToast = function (message, duration) {
         if (!message) return;
         var dur = duration || 3000;
+        var isMobile = window.innerWidth <= 768;
+        var bottomPos = isMobile ? "90px" : "32px";
         var toast = document.getElementById("lanvanGlobalToast");
         if (!toast) {
             toast = document.createElement("div");
             toast.id = "lanvanGlobalToast";
-            toast.style.cssText = "position:fixed; bottom:32px; left:50%; transform:translateX(-50%) translateY(16px); background:rgba(20, 22, 30, 0.95); color:#ffffff; padding:11px 24px; border-radius:30px; font-size:0.88rem; font-weight:600; z-index:999999; border:1px solid rgba(255,255,255,0.2); backdrop-filter:blur(16px); box-shadow:0 14px 40px rgba(0,0,0,0.6); opacity:0; transition:all 0.22s cubic-bezier(0.16, 1, 0.3, 1); pointer-events:none; font-family:inherit; text-align:center; max-width:90vw; word-break:break-word;";
+            toast.className = "lanvan-toast";
+            toast.style.cssText = "position:fixed; left:50%; transform:translateX(-50%) translateY(16px); background:rgba(20, 22, 30, 0.95); color:#ffffff; padding:11px 24px; border-radius:30px; font-size:0.88rem; font-weight:600; z-index:999999; border:1px solid rgba(255,255,255,0.2); backdrop-filter:blur(16px); box-shadow:0 14px 40px rgba(0,0,0,0.6); opacity:0; transition:all 0.22s cubic-bezier(0.16, 1, 0.3, 1); pointer-events:none; font-family:inherit; text-align:center; max-width:90vw; word-break:break-word;";
             document.body.appendChild(toast);
         }
 
+        toast.style.bottom = bottomPos;
         toast.textContent = message;
         toast.style.display = "block";
         requestAnimationFrame(function () {
@@ -3852,7 +3997,38 @@
             stack.classList.remove("empty-state");
         }
 
-        var avgPct = totalCount > 0 ? Math.round(activeUploads.reduce(function (sum, item) { return sum + (item.progress || 0); }, 0) / totalCount) : 0;
+        // Calculate byte-weighted total progress across all items in queue batch
+        var allQueueItems = window.uploadQueue || [];
+        var totalBytesAll = 0;
+        var uploadedBytesAll = 0;
+
+        allQueueItems.forEach(function (item) {
+            if (!item || item.status === 'deleted' || item.status === 'cancelled') return;
+            var sz = item.fileSize || (item.file && item.file.size) || 0;
+            totalBytesAll += sz;
+            if (item.status === 'completed') {
+                uploadedBytesAll += sz;
+            } else {
+                var bytesDone = item.bytesUploaded || 0;
+                if (!bytesDone && item.progress && sz) {
+                    bytesDone = (sz * item.progress) / 100;
+                }
+                uploadedBytesAll += Math.min(sz, bytesDone);
+            }
+        });
+
+        var calcPct = totalBytesAll > 0 ? Math.min(100, Math.round((uploadedBytesAll / totalBytesAll) * 100)) : (isAllCompleted ? 100 : 0);
+
+        // Monotonic Progress Guard: Ensure progress percentage ONLY moves forward during an active upload batch
+        if (isAllCompleted) {
+            window._maxUploadTrayProgress = 100;
+        } else if (activePendingCount > 0) {
+            window._maxUploadTrayProgress = Math.max(window._maxUploadTrayProgress || 0, calcPct);
+        } else if (pausedCount === 0 && activePendingCount === 0 && totalCount === 0) {
+            window._maxUploadTrayProgress = 0;
+        }
+
+        var avgPct = isAllCompleted ? 100 : Math.min(100, Math.max(window._maxUploadTrayProgress || 0, calcPct));
         var totalSpeedBytes = activeUploads.reduce(function (sum, item) { return sum + (item.speed || 0); }, 0);
         var totalSpeedMB = (totalSpeedBytes / (1024 * 1024)).toFixed(1) + " MB/s";
 

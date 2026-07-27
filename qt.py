@@ -31,6 +31,7 @@ APP_DIR = ROOT / "app"
 JS_DIR = APP_DIR / "static" / "js"
 CSS_DIR = APP_DIR / "static" / "css"
 TEMPLATE_DIR = APP_DIR / "templates"
+ROUTER_DIR = APP_DIR / "routers"
 sys.path.insert(0, str(ROOT))
 if hasattr(sys.stdout, "reconfigure"):
     try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -197,13 +198,15 @@ class Suite:
         self._ck("copyVideoStreamUrl" in app_init and "lanvanGlobalToast" in app_init, "Copy stream link handler with global toast notification present in app-init.js", "declarative-ui")
         self._ck("alreadySelected" in app_init and "prototypeSelectedItems.indexOf(filename)" in app_init, "Multi-selection context menu right-click preservation present in app-init.js", "declarative-ui")
         self._ck("SINGLE FILE / FOLDER RENAME" in app_init and "MULTI-ITEM BATCH RENAME" in app_init, "Single file extension modification & multi-item extension preservation handlers present in app-init.js", "declarative-ui")
-        self._ck("renameDialogTitle" in (TEMPLATE_DIR / "index.html").read_text(encoding="utf-8", errors="ignore"), "Rename dialog title ID present in index.html", "declarative-ui")
+        self._ck("downloadSelectedAsZip" in app_init and "downloadZipMenuItem" in (TEMPLATE_DIR / "index.html").read_text(encoding="utf-8", errors="ignore"), "Multi-selection Download individually and Download as ZIP options present in app-init.js & index.html", "declarative-ui")
+        self._ck("isTargetFolder" in app_init and "(isSingle && !isTargetFolder)" in app_init, "Folder preview option suppression & Download as ZIP menu handler present in app-init.js", "declarative-ui")
+        self._ck("Directory requested via /download/" in (ROUTER_DIR / "files.py").read_text(encoding="utf-8", errors="ignore"), "Automatic directory download redirect to ZIP present in files.py", "declarative-ui")
 
     def test_notification_tray_integrity(self):
         HEAD("NOTIFICATION TRAY INTEGRITY & DISMISSAL (§3)")
         app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
 
-        self._ck("scheduleUploadTrayRender" in app_init, "scheduleUploadTrayRender debouncer present", "tray-integrity")
+        self._ck("calc(76px + env(safe-area-inset-bottom, 0px))" in (CSS_DIR / "lanvan.css").read_text(encoding="utf-8", errors="ignore"), "Mobile bottom nav safe clearance for global toasts present in lanvan.css", "tray-integrity")
         self._ck("buildTrayItemHtml" in app_init, "buildTrayItemHtml tray renderer present", "tray-integrity")
         self._ck("if (!hasItems) return; // Do not expand when empty" in app_init, "Empty notification tray expansion guard present", "tray-integrity")
 
@@ -605,6 +608,30 @@ class Suite:
         st,res = await self._api("POST","/api/cancel-upload",data={"filename":"sub_ghost.tmp","parent_path":"Home/test_subfolder"})
         self._ck(st==200 and res.get("status")=="success","Cancel upload subfolder with Home/ prefix","api")
 
+    async def test_batch_zip_download(self):
+        HEAD("BATCH ZIP DOWNLOAD API")
+        async with aiohttp.ClientSession() as s:
+            fd1 = aiohttp.FormData()
+            fd1.add_field("files", b"zip test file 1 content", filename="qt_zip1.txt")
+            async with s.post(f"{self.base_url}/upload", data=fd1) as r1:
+                self._ck(r1.status == 200, "Upload qt_zip1.txt", "api")
+
+            fd2 = aiohttp.FormData()
+            fd2.add_field("files", b"zip test file 2 content", filename="qt_zip2.txt")
+            async with s.post(f"{self.base_url}/upload", data=fd2) as r2:
+                self._ck(r2.status == 200, "Upload qt_zip2.txt", "api")
+
+            req_data = {"files": ["qt_zip1.txt", "qt_zip2.txt"]}
+            async with s.post(f"{self.base_url}/api/files/download-zip", json=req_data) as r_zip:
+                self._ck(r_zip.status == 200, "POST /api/files/download-zip -> 200", "api")
+                ct = r_zip.headers.get("Content-Type", "")
+                self._ck("application/zip" in ct, "Content-Type is application/zip", "api")
+                data = await r_zip.read()
+                self._ck(len(data) > 0 and b"PK" in data[:4], "Valid ZIP header returned", "api")
+
+            async with s.post(f"{self.base_url}/download-zip", json=req_data) as r_alias:
+                self._ck(r_alias.status == 200, "POST /download-zip (alias) -> 200", "api")
+
     async def test_mdns_platform_cors(self):
         HEAD("mDNS + PLATFORM + CORS")
         try:
@@ -669,6 +696,7 @@ class Suite:
                     await self.test_qr()
                     await self.test_history_and_cancel()
                     await self.test_active_stream_cancellation_on_rename()
+                    await self.test_batch_zip_download()
                     await self.test_mdns_platform_cors()
                 if run_all or args.mode in ("file-ops"):
                     await self.test_file_operations()

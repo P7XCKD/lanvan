@@ -3954,3 +3954,11 @@ video::-webkit-media-controls-cast-button {
     display: block !important;
     margin: 0 auto !important;
 }
+
+/* Mobile Bottom Navigation Safe Clearance for Global Toasts */
+@media (max-width: 768px) {
+    #toast,
+    .lanvan-toast {
+        bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+}

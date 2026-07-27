@@ -193,10 +193,6 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
               </button>
             </div>
             <div style="display: flex; align-items: center; gap: 0.4rem;">
-              <button class="btn-icon mobile-qr-btn" onclick="openConnectQrDialog()" title="Show QR"
-                aria-label="Show QR">
-                <i data-lucide="qr-code" style="width:15px;height:15px;"></i>
-              </button>
               <div class="view-switcher-pill">
                 <button id="listViewBtn" class="view-switcher-btn active" onclick="setViewMode('list')"
                   title="List View">
@@ -392,10 +388,16 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         <span>Copy Stream Link</span>
       </div>
     </div>
-    <div class="context-item" onclick="downloadSelected()">
+    <div class="context-item" id="downloadMenuItem" onclick="downloadSelected()">
       <div class="context-item-left">
         <i data-lucide="download"></i>
-        <span>Download</span>
+        <span id="downloadMenuText">Download</span>
+      </div>
+    </div>
+    <div class="context-item" id="downloadZipMenuItem" onclick="downloadSelectedAsZip()" style="display:none;">
+      <div class="context-item-left">
+        <i data-lucide="file-archive"></i>
+        <span>Download as ZIP</span>
       </div>
     </div>
     <div class="context-item" onclick="openMoveModal()">

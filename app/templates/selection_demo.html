@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lanvan - Selection Style Showcase & Interactive Demo</title>
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <style>
+    :root {
+      --bg-color: #0f1117;
+      --card-bg: #181a24;
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --primary: #3b82f6;
+      --primary-light: rgba(59, 130, 246, 0.12);
+      --primary-border: rgba(59, 130, 246, 0.4);
+      --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    [data-theme="light"] {
+      --bg-color: #f8fafc;
+      --card-bg: #ffffff;
+      --card-border: rgba(0, 0, 0, 0.08);
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-light: rgba(37, 99, 235, 0.08);
+      --primary-border: rgba(37, 99, 235, 0.35);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-family);
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      padding: 2rem 1.5rem;
+      min-height: 100vh;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.75rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #60a5fa, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .theme-toggle-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 0.5rem 1rem;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .style-picker-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .style-card {
+      background: var(--card-bg);
+      border: 2px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .style-card:hover {
+      border-color: var(--primary-border);
+    }
+
+    .style-card.active {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    .style-card h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+      color: var(--text-main);
+    }
+
+    .style-card p {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    .section-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* ==========================================================================
+       STYLE DEFINITIONS FOR DEMO
+       ========================================================================== */
+
+    /* ----- DEMO ROW BASE STYLING ----- */
+    .demo-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 3rem;
+    }
+
+    .demo-row {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 0.85rem 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+    }
+
+    .demo-row-left {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .demo-icon-box {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: rgba(59, 130, 246, 0.1);
+      color: #3b82f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .demo-item-info h4 {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .demo-item-info span {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* ----- DEMO GRID BASE STYLING ----- */
+    .demo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-bottom: 3rem;
+    }
+
+    .demo-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.1rem;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    /* --------------------------------------------------------------------------
+       STYLE 1: Material You / Google Drive Soft Tint + Left Accent Pill
+       -------------------------------------------------------------------------- */
+    body.style-1 .demo-row.selected {
+      background: rgba(59, 130, 246, 0.14) !important;
+      border-color: rgba(59, 130, 246, 0.5) !important;
+      box-shadow: inset 4px 0 0 #3b82f6;
+    }
+    body.style-1 .demo-card.selected {
+      background: rgba(59, 130, 246, 0.14) !important;
+      border-color: rgba(59, 130, 246, 0.5) !important;
+      box-shadow: inset 0 4px 0 #3b82f6;
+    }
+
+    /* --------------------------------------------------------------------------
+       STYLE 2: Apple macOS Subtle Glassmorphic Glow & Lift
+       -------------------------------------------------------------------------- */
+    body.style-2 .demo-row.selected {
+      background: rgba(59, 130, 246, 0.18) !important;
+      border-color: #3b82f6 !important;
+      box-shadow: 0 0 16px rgba(59, 130, 246, 0.25), 0 4px 12px rgba(0, 0, 0, 0.2);
+      transform: translateY(-2px);
+    }
+    body.style-2 .demo-card.selected {
+      background: rgba(59, 130, 246, 0.18) !important;
+      border-color: #3b82f6 !important;
+      box-shadow: 0 0 16px rgba(59, 130, 246, 0.25), 0 6px 16px rgba(0, 0, 0, 0.2);
+      transform: translateY(-3px);
+    }
+
+    /* --------------------------------------------------------------------------
+       STYLE 3: Minimalist Checkbox Badge + Smooth Outline
+       -------------------------------------------------------------------------- */
+    body.style-3 .demo-row.selected {
+      background: rgba(59, 130, 246, 0.08) !important;
+      border: 2px solid #3b82f6 !important;
+    }
+    body.style-3 .demo-card.selected {
+      background: rgba(59, 130, 246, 0.08) !important;
+      border: 2px solid #3b82f6 !important;
+    }
+    .badge-check {
+      display: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #3b82f6;
+      color: #ffffff;
+      align-items: center;
+      justify-content: center;
+    }
+    body.style-3 .selected .badge-check,
+    body.style-5 .selected .badge-check {
+      display: flex;
+    }
+
+    /* --------------------------------------------------------------------------
+       STYLE 4: Modern Dark SaaS Vibrant Container & Soft Glow
+       -------------------------------------------------------------------------- */
+    body.style-4 .demo-row.selected {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(37, 99, 235, 0.12)) !important;
+      border-color: #3b82f6 !important;
+      box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+    }
+    body.style-4 .demo-card.selected {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(37, 99, 235, 0.12)) !important;
+      border-color: #3b82f6 !important;
+      box-shadow: 0 0 16px rgba(59, 130, 246, 0.3);
+    }
+
+    /* --------------------------------------------------------------------------
+       STYLE 5: Full Edge Highlight & Checkbox Pill
+       -------------------------------------------------------------------------- */
+    body.style-5 .demo-row.selected {
+      background: rgba(59, 130, 246, 0.15) !important;
+      border-color: #2563eb !important;
+      outline: 1px solid #3b82f6;
+    }
+    body.style-5 .demo-card.selected {
+      background: rgba(59, 130, 246, 0.15) !important;
+      border-color: #2563eb !important;
+      outline: 1px solid #3b82f6;
+    }
+
+  </style>
+</head>
+<body class="style-1">
+
+  <div class="container">
+    <header>
+      <div>
+        <h1>Lanvan Selection Aesthetics Showcase</h1>
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin-top: 0.25rem;">
+          Click any row or grid card to toggle selection. Switch styles below to compare aesthetics live.
+        </p>
+      </div>
+      <button class="theme-toggle-btn" onclick="toggleTheme()">
+        <i data-lucide="moon" style="width:16px;height:16px;"></i>
+        <span id="themeBtnText">Light Mode</span>
+      </button>
+    </header>
+
+    <div class="section-title">
+      <i data-lucide="sliders" style="width:20px;height:20px;color:var(--primary);"></i>
+      <span>Select a Design Style:</span>
+    </div>
+
+    <!-- Style Picker Cards -->
+    <div class="style-picker-grid">
+      <div class="style-card active" onclick="setStyle('style-1', this)">
+        <h3>Style 1: Google Drive Accent</h3>
+        <p>Soft tint background with a bold left/top blue accent bar indicator.</p>
+      </div>
+      <div class="style-card" onclick="setStyle('style-2', this)">
+        <h3>Style 2: macOS Ambient Glow</h3>
+        <p>Glassmorphic blue container with a subtle elevation lift and outer ambient glow.</p>
+      </div>
+      <div class="style-card" onclick="setStyle('style-3', this)">
+        <h3>Style 3: Checkbox Badge</h3>
+        <p>Clean 2px outline with a floating circular checkmark badge on selected items.</p>
+      </div>
+      <div class="style-card" onclick="setStyle('style-4', this)">
+        <h3>Style 4: Modern Gradient Glow</h3>
+        <p>Dynamic dual-tone gradient fill with high-contrast primary border highlights.</p>
+      </div>
+      <div class="style-card" onclick="setStyle('style-5', this)">
+        <h3>Style 5: Full Focus Outline</h3>
+        <p>Crisp double-ring outline with subtle background tint for maximum clarity.</p>
+      </div>
+    </div>
+
+    <!-- Row View Interactive Demo -->
+    <div class="section-title">
+      <i data-lucide="list" style="width:20px;height:20px;color:var(--primary);"></i>
+      <span>List View (Row Wise Preview)</span>
+    </div>
+
+    <div class="demo-list">
+      <div class="demo-row selected" onclick="toggleSelect(this)">
+        <div class="demo-row-left">
+          <div class="demo-icon-box"><i data-lucide="video" style="width:18px;height:18px;"></i></div>
+          <div class="demo-item-info">
+            <h4>80mb file.mp4</h4>
+            <span>80.9 MB • Modified Jul 27</span>
+          </div>
+        </div>
+        <div class="badge-check"><i data-lucide="check" style="width:12px;height:12px;"></i></div>
+      </div>
+
+      <div class="demo-row selected" onclick="toggleSelect(this)">
+        <div class="demo-row-left">
+          <div class="demo-icon-box"><i data-lucide="image" style="width:18px;height:18px;"></i></div>
+          <div class="demo-item-info">
+            <h4>Picture (2).png</h4>
+            <span>198.0 KB • Modified Jul 27</span>
+          </div>
+        </div>
+        <div class="badge-check"><i data-lucide="check" style="width:12px;height:12px;"></i></div>
+      </div>
+
+      <div class="demo-row" onclick="toggleSelect(this)">
+        <div class="demo-row-left">
+          <div class="demo-icon-box"><i data-lucide="file-text" style="width:18px;height:18px;"></i></div>
+          <div class="demo-item-info">
+            <h4>Document.doc</h4>
+            <span>147.9 KB • Modified Jul 27</span>
+          </div>
+        </div>
+        <div class="badge-check"><i data-lucide="check" style="width:12px;height:12px;"></i></div>
+      </div>
+
+      <div class="demo-row" onclick="toggleSelect(this)">
+        <div class="demo-row-left">
+          <div class="demo-icon-box"><i data-lucide="music" style="width:18px;height:18px;"></i></div>
+          <div class="demo-item-info">
+            <h4>audio.mp3</h4>
+            <span>1.0 MB • Modified Jul 27</span>
+          </div>
+        </div>
+        <div class="badge-check"><i data-lucide="check" style="width:12px;height:12px;"></i></div>
+      </div>
+    </div>
+
+    <!-- Grid View Interactive Demo -->
+    <div class="section-title">
+      <i data-lucide="grid" style="width:20px;height:20px;color:var(--primary);"></i>
+      <span>Grid View Preview</span>
+    </div>
+
+    <div class="demo-grid">
+      <div class="demo-card selected" onclick="toggleSelect(this)">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="demo-icon-box"><i data-lucide="video" style="width:18px;height:18px;"></i></div>
+          <div class="badge-check"><i data-lucide="check" style="width:12px;height:12px;"></i></div>
+        </div>
+        <div class="demo-item-info">
+          <h4>80mb file.mp4</h4>
+          <span>80.9 MB</span>
+        </div>
+      </div>
+
+      <div class="demo-card selected" onclick="toggleSelect(this)">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="demo-icon-box"><i data-lucide="image" style="width:18px;height:18px;"></i></div>
+          <div class="badge-check"><i data-lucide="check" style="width:12px;height:12px;"></i></div>
+        </div>
+        <div class="demo-item-info">
+          <h4>Picture (2).png</h4>
+          <span>198.0 KB</span>
+        </div>
+      </div>
+
+      <div class="demo-card" onclick="toggleSelect(this)">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="demo-icon-box"><i data-lucide="file-text" style="width:18px;height:18px;"></i></div>
+          <div class="badge-check"><i data-lucide="check" style="width:12px;height:12px;"></i></div>
+        </div>
+        <div class="demo-item-info">
+          <h4>Document.doc</h4>
+          <span>147.9 KB</span>
+        </div>
+      </div>
+
+      <div class="demo-card" onclick="toggleSelect(this)">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="demo-icon-box"><i data-lucide="music" style="width:18px;height:18px;"></i></div>
+          <div class="badge-check"><i data-lucide="check" style="width:12px;height:12px;"></i></div>
+        </div>
+        <div class="demo-item-info">
+          <h4>audio.mp3</h4>
+          <span>1.0 MB</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    function setStyle(styleClass, cardEl) {
+      document.body.className = styleClass;
+      document.querySelectorAll('.style-card').forEach(c => c.classList.remove('active'));
+      if (cardEl) cardEl.classList.add('active');
+    }
+
+    function toggleSelect(el) {
+      el.classList.toggle('selected');
+    }
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      document.getElementById('themeBtnText').textContent = next === 'dark' ? 'Light Mode' : 'Dark Mode';
+    }
+  </script>
+</body>
+</html>

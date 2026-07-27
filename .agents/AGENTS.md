@@ -103,8 +103,8 @@ When rendering file lists (`renderPrototypeFileList`), subfolder uploads (e.g. `
 
 ---
 
-## 8. Mandatory Test Suite Sync & QA Regression Gate (`qt.py` & `ui_test.py`)
-Whenever adding new UI behavior, folder navigation rules, responsive layouts, or resolving user bug reports (e.g. folder clicking vs checkbox selection, same-name subfolder loops, mobile layout changes, dialog placement), you MUST update BOTH `qt.py` (server API & static integrity tests) AND `ui_test.py` (Playwright browser UI end-to-end tests) with corresponding test cases. Always run `python qt.py --fast` (and full suite) to ensure 100% pass rate before declaring completion.
+## 8. Mandatory Test Suite Expansion & Feature/Combination Coverage (`qt.py` & `ui_test.py`)
+Whenever introducing new features, options, UI flows, API routes, or multi-item operation combinations, you MUST proactively update and expand `qt.py` (server API, static integrity, & feature assertion tests) and `ui_test.py` to cover all new features and operational combinations. Always run `python qt.py --fast` (and full suite) to ensure 100% pass rate before declaring completion.
 
 ---
 
@@ -112,3 +112,19 @@ Whenever adding new UI behavior, folder navigation rules, responsive layouts, or
 Whenever the user reports a bug:
 - You MUST create temporary scratch test scripts (in scratch directory or exploratory combination runs) to stress test all edge-case variations, nested combinations, and race conditions related to that bug before declaring completion.
 - Test multiple combinations of operations (e.g. create same-name folders $\rightarrow$ upload files $\rightarrow$ move files $\rightarrow$ delete nested folders $\rightarrow$ verify 404 recovery) to discover any hidden side effects and guarantee the bug is 100% permanently eliminated.
+
+---
+
+## 10. Mandatory Server Restart Notification Pattern
+The user runs `python run.py` continuously in a background terminal. Whenever modifying backend Python code (`.py` files), FastAPI routes, or server environment configurations, you MUST explicitly remind the user in your response summary to restart `python run.py` so the active background server process registers the backend changes.
+
+---
+
+## 11. Autonomous Protocol & AGENTS.md Rule Self-Evolution Pattern
+Whenever encountering repetitive errors, circular loops, structural ambiguities, or discovering new architectural best practices, you ARE FULLY AUTHORIZED AND MANDATED to update `.agents/AGENTS.md` immediately. Document the new pattern, architectural standard, or preventive rule explicitly in `.agents/AGENTS.md` and strictly follow it going forward to guarantee zero regression and maximum code quality.
+
+---
+
+## 12. Strict Zero-Emoji & Native Lucide Icon Standard (Mandatory Standard)
+- **Zero Emojis in Toast Notifications or UI Text**: NEVER use emoji characters (e.g. 📦, ✅, 📥, 📄, 🚀, ⚡, 🟢) in toast notification messages, dialog titles, alert strings, or user-facing UI text. Keep all toast notifications clean, professional, and plain text.
+- **Lucide Icons Only**: Use native Lucide inline SVG icons whenever icons are needed in UI components, buttons, or context menus.
