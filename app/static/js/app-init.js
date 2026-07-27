@@ -869,9 +869,6 @@
                         return;
                     }
                     e.preventDefault();
-                    if (typeof window.setSelectedItem === "function") {
-                        window.setSelectedItem(name);
-                    }
                     openRowMenu(e, name);
                 });
 
@@ -951,12 +948,6 @@
                         e.stopPropagation();
                         var fname = menuBtn.getAttribute("data-filename");
                         if (isItemUploading(fname)) return;
-                        if (typeof window.setSelectedItem === "function") {
-                            window.setSelectedItem(fname);
-                        } else {
-                            prototypeSelectedItems = [fname];
-                            updateSelectionToolbar();
-                        }
                         openRowMenu(e, fname);
                     });
                 }
@@ -1062,9 +1053,7 @@
                 prototypeSelectedItems.length +
                 " selected</span></div>" +
                 '<div style="display:flex;align-items:center;gap:0.25rem;">' +
-                (prototypeSelectedItems.length === 1
-                    ? '<button class="btn-icon" onclick="openRenameModal()" title="Rename" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="pencil" style="width:16px;height:16px;"></i></button>'
-                    : "") +
+                '<button class="btn-icon" onclick="openRenameModal()" title="Rename" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="pencil" style="width:16px;height:16px;"></i></button>' +
                 '<button class="btn-icon" onclick="downloadSelected()" title="Download selected" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="download" style="width:16px;height:16px;"></i></button>' +
                 '<button class="btn-icon" onclick="openMoveModal()" title="Move selected" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="folder-input" style="width:16px;height:16px;"></i></button>' +
                 '<button class="btn-icon" onclick="deleteSelected()" title="Delete selected" style="width:34px;height:34px;color:var(--danger);"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>' +
@@ -1503,18 +1492,46 @@
         if (genericOps) genericOps.style.display = "none";
         if (itemOps) itemOps.style.display = "block";
 
-        // Set context menu target & select the item visually
         window._contextMenuTarget = filename;
-        if (filename && typeof window.setSelectedItem === "function") {
-            window.setSelectedItem(filename);
+
+        // Smart Selection Logic for Right-Click Context Menu:
+        // If filename is NOT currently part of prototypeSelectedItems, select ONLY filename.
+        // If filename IS ALREADY in prototypeSelectedItems (multi-selection), PRESERVE ALL selected items!
+        if (filename) {
+            var alreadySelected = Array.isArray(prototypeSelectedItems) && prototypeSelectedItems.indexOf(filename) !== -1;
+            if (!alreadySelected) {
+                prototypeSelectedItems = [filename];
+            }
+            // Sync visual DOM selection state across list items and quick cards
+            var items = document.querySelectorAll("#nasFileList .m3-list-item, .quick-card");
+            for (var i = 0; i < items.length; i++) {
+                var itemFn = items[i].getAttribute("data-filename");
+                if (itemFn && prototypeSelectedItems.indexOf(itemFn) !== -1) {
+                    items[i].classList.add("selected");
+                } else {
+                    items[i].classList.remove("selected");
+                }
+            }
+            if (typeof updateSelectionToolbar === "function") {
+                updateSelectionToolbar();
+            }
         }
 
-        // Show/Hide "Copy Stream Link" option if target file is a video
+        // Context menu items visibility based on multi-selection count
+        var isSingle = prototypeSelectedItems.length <= 1;
+
+        var renameItem = document.getElementById("renameMenuItem");
+        if (renameItem) renameItem.style.display = "flex";
+
+        var previewItem = document.getElementById("previewMenuItem");
+        if (previewItem) previewItem.style.display = isSingle ? "flex" : "none";
+
+        // Show/Hide "Copy Stream Link" option if single item and target file is a video
         var copyStreamLinkItem = document.getElementById("copyStreamLinkMenuItem");
         if (copyStreamLinkItem) {
             var ext = filename ? filename.split(".").pop().toLowerCase() : "";
             var videoExts = ["mp4", "webm", "mov", "mkv", "avi", "3gp", "m4v", "ts", "flv"];
-            if (videoExts.indexOf(ext) !== -1) {
+            if (isSingle && videoExts.indexOf(ext) !== -1) {
                 copyStreamLinkItem.style.display = "flex";
             } else {
                 copyStreamLinkItem.style.display = "none";
@@ -1566,11 +1583,24 @@
         if (typeof window.closePreviewModal === "function") {
             window.closePreviewModal();
         }
-        var name = prototypeSelectedItems[0] || (window._contextMenuTarget || "");
+        var targets = prototypeSelectedItems.slice();
+        if (targets.length === 0 && window._contextMenuTarget) {
+            targets = [window._contextMenuTarget];
+        }
+        if (targets.length === 0) return;
+
         var dialog = document.getElementById("renameDialog");
         var input = document.getElementById("renameInput");
+        var titleNode = document.getElementById("renameDialogTitle");
         if (!dialog || !input) return;
-        input.value = name;
+
+        if (targets.length > 1) {
+            if (titleNode) titleNode.textContent = "Batch Rename (" + targets.length + " items)";
+            input.value = "Item";
+        } else {
+            if (titleNode) titleNode.textContent = "Rename";
+            input.value = targets[0];
+        }
         dialog.style.display = "flex";
 
         if (!input.__keyListenerWired) {
@@ -1591,8 +1621,9 @@
         // Pre-select only the filename part, NOT the extension
         setTimeout(function () {
             input.focus();
-            var dotIdx = name.lastIndexOf(".");
-            var selectEnd = (dotIdx > 0) ? dotIdx : name.length;
+            var val = input.value;
+            var dotIdx = val.lastIndexOf(".");
+            var selectEnd = (dotIdx > 0) ? dotIdx : val.length;
             if (input.setSelectionRange) {
                 input.setSelectionRange(0, selectEnd);
             } else {
@@ -2192,16 +2223,6 @@
 
             var oldName = itemsToRename[index];
 
-            // Build the new name
-            var nameToUse = newBaseName;
-
-            // For multiple items, append index suffix: test, test (1), test (2)...
-            if (itemsToRename.length > 1) {
-                if (index > 0) {
-                    nameToUse = newBaseName + " (" + index + ")";
-                }
-            }
-
             // Determine if the item is a folder
             var isFolder = false;
             var listEl = document.querySelector('#nasFileList [data-filename="' + oldName.replace(/"/g, '&quot;') + '"]');
@@ -2212,23 +2233,43 @@
                 if (meta) isFolder = !!meta.isFolder;
             }
 
-            // If it's a file, preserve the extension
-            if (!isFolder) {
-                var dotIdx = oldName.lastIndexOf(".");
-                if (dotIdx > 0) {
-                    var ext = oldName.substring(dotIdx);
-                    // Check if newBaseName already has an extension
-                    var targetDot = newBaseName.lastIndexOf(".");
-                    if (targetDot > 0) {
-                        var userBase = newBaseName.substring(0, targetDot);
-                        if (itemsToRename.length > 1 && index > 0) {
-                            nameToUse = userBase + " (" + index + ")" + ext;
-                        } else {
-                            nameToUse = userBase + ext;
-                        }
+            var nameToUse = "";
+
+            if (itemsToRename.length === 1) {
+                // SINGLE FILE / FOLDER RENAME:
+                // User has full control. Allow changing the extension if typed.
+                if (isFolder) {
+                    nameToUse = newBaseName;
+                } else {
+                    var oldDot = oldName.lastIndexOf(".");
+                    var oldExt = oldDot > 0 ? oldName.substring(oldDot) : "";
+                    var newDot = newBaseName.lastIndexOf(".");
+                    
+                    if (newDot > 0) {
+                        // User typed a name WITH an extension (e.g. myfile.pdf)
+                        nameToUse = newBaseName;
                     } else {
-                        nameToUse = nameToUse + ext;
+                        // User typed a name WITHOUT an extension (e.g. myfile) -> keep original extension
+                        nameToUse = newBaseName + oldExt;
                     }
+                }
+            } else {
+                // MULTI-ITEM BATCH RENAME:
+                // Do not change individual item extensions. Strip extension from input if user typed one.
+                var cleanBase = newBaseName;
+                var baseDot = newBaseName.lastIndexOf(".");
+                if (baseDot > 0) {
+                    cleanBase = newBaseName.substring(0, baseDot);
+                }
+
+                var suffix = index > 0 ? " (" + index + ")" : "";
+
+                if (isFolder) {
+                    nameToUse = cleanBase + suffix;
+                } else {
+                    var oldDotIdx = oldName.lastIndexOf(".");
+                    var itemExt = oldDotIdx > 0 ? oldName.substring(oldDotIdx) : "";
+                    nameToUse = cleanBase + suffix + itemExt;
                 }
             }
 
@@ -2935,28 +2976,11 @@
 
                 if (targetItem) {
                     var filename = targetItem.getAttribute("data-filename") || "";
-                    var nameEl = targetItem.querySelector(".item-title, .quick-title");
-                    var itemName = nameEl ? nameEl.textContent.trim() : filename;
-
-                    // Select this item if not already selected
-                    if (prototypeSelectedItems.indexOf(itemName) === -1) {
-                        prototypeSelectedItems = [itemName];
-                        var allItems = document.querySelectorAll("#nasFileList .m3-list-item");
-                        for (var i = 0; i < allItems.length; i++) {
-                            var curName = allItems[i].getAttribute("data-filename");
-                            if (curName === itemName) {
-                                allItems[i].classList.add("selected");
-                            } else {
-                                allItems[i].classList.remove("selected");
-                            }
-                        }
-                        updateSelectionToolbar();
-                    }
-
                     if (genericOps) genericOps.style.display = "none";
                     if (itemOps) itemOps.style.display = "block";
                     if (clipboardOps) clipboardOps.style.display = "none";
-                    window._contextMenuTarget = filename;
+                    openRowMenu(e, filename);
+                    return;
                 } else {
                     // Right-clicked on empty space — show generic menu
                     if (genericOps) genericOps.style.display = "block";

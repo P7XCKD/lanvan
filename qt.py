@@ -195,7 +195,9 @@ class Suite:
         self._ck("initFileEventsWebSocket" in main_app and "/ws/file_events" in main_app, "Real-time cross-device file events WebSocket listener present", "declarative-ui")
         self._ck("isItemUploading" in app_init, "Uploading files selection guard present in app-init.js", "declarative-ui")
         self._ck("copyVideoStreamUrl" in app_init and "lanvanGlobalToast" in app_init, "Copy stream link handler with global toast notification present in app-init.js", "declarative-ui")
-        self._ck("previewStreamBtn" in (TEMPLATE_DIR / "index.html").read_text(encoding="utf-8", errors="ignore"), "Header preview copy stream link button present in index.html", "declarative-ui")
+        self._ck("alreadySelected" in app_init and "prototypeSelectedItems.indexOf(filename)" in app_init, "Multi-selection context menu right-click preservation present in app-init.js", "declarative-ui")
+        self._ck("SINGLE FILE / FOLDER RENAME" in app_init and "MULTI-ITEM BATCH RENAME" in app_init, "Single file extension modification & multi-item extension preservation handlers present in app-init.js", "declarative-ui")
+        self._ck("renameDialogTitle" in (TEMPLATE_DIR / "index.html").read_text(encoding="utf-8", errors="ignore"), "Rename dialog title ID present in index.html", "declarative-ui")
 
     def test_notification_tray_integrity(self):
         HEAD("NOTIFICATION TRAY INTEGRITY & DISMISSAL (§3)")

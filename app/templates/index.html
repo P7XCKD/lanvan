@@ -374,13 +374,13 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
     </div>
   </div>
   <div id="itemMenuOptions" style="display:none;">
-    <div class="context-item" onclick="openRenameModal()">
+    <div class="context-item" id="renameMenuItem" onclick="openRenameModal()">
       <div class="context-item-left">
         <i data-lucide="pencil"></i>
         <span>Rename</span>
       </div>
     </div>
-    <div class="context-item" onclick="openFilePreviewTarget()">
+    <div class="context-item" id="previewMenuItem" onclick="openFilePreviewTarget()">
       <div class="context-item-left">
         <i data-lucide="eye"></i>
         <span>Preview</span>
@@ -543,7 +543,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
 <!-- Rename Dialog -->
 <div id="renameDialog" class="m3-dialog-overlay" style="z-index: 21000;">
   <div class="m3-dialog">
-    <span class="dialog-title">Rename</span>
+    <span class="dialog-title" id="renameDialogTitle">Rename</span>
     <input type="text" id="renameInput" class="dialog-input" placeholder="Enter new name" autocomplete="off"
       autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other">
     <div class="dialog-actions">
