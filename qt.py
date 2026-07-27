@@ -200,7 +200,13 @@ class Suite:
         self._ck("SINGLE FILE / FOLDER RENAME" in app_init and "MULTI-ITEM BATCH RENAME" in app_init, "Single file extension modification & multi-item extension preservation handlers present in app-init.js", "declarative-ui")
         self._ck("downloadSelectedAsZip" in app_init and "downloadZipMenuItem" in (TEMPLATE_DIR / "index.html").read_text(encoding="utf-8", errors="ignore"), "Multi-selection Download individually and Download as ZIP options present in app-init.js & index.html", "declarative-ui")
         self._ck("isTargetFolder" in app_init and "(isSingle && !isTargetFolder)" in app_init, "Folder preview option suppression & Download as ZIP menu handler present in app-init.js", "declarative-ui")
+        self._ck("Style 3: Minimalist 2px Primary Border" in (CSS_DIR / "lanvan.css").read_text(encoding="utf-8", errors="ignore"), "Style 3 selection aesthetics present in lanvan.css", "declarative-ui")
         self._ck("Directory requested via /download/" in (ROUTER_DIR / "files.py").read_text(encoding="utf-8", errors="ignore"), "Automatic directory download redirect to ZIP present in files.py", "declarative-ui")
+        
+        css = (CSS_DIR / "lanvan.css").read_text(encoding="utf-8", errors="ignore")
+        self._ck(".video-preview-box {" in css and "position: absolute;" in css, "Full-bleed absolute inset grid preview layout present in lanvan.css", "declarative-ui")
+        self._ck("top: 39px;" in css, "Glass upload body top offset flush with header in lanvan.css", "declarative-ui")
+        self._ck(".m3-list.grid-mode .m3-list-item.selected .grid-card-head" in css and "#dbeafe" in css, "Selected grid card header blue accent fill present in lanvan.css", "declarative-ui")
 
     def test_notification_tray_integrity(self):
         HEAD("NOTIFICATION TRAY INTEGRITY & DISMISSAL (§3)")

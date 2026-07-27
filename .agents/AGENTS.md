@@ -128,3 +128,40 @@ Whenever encountering repetitive errors, circular loops, structural ambiguities,
 ## 12. Strict Zero-Emoji & Native Lucide Icon Standard (Mandatory Standard)
 - **Zero Emojis in Toast Notifications or UI Text**: NEVER use emoji characters (e.g. 📦, ✅, 📥, 📄, 🚀, ⚡, 🟢) in toast notification messages, dialog titles, alert strings, or user-facing UI text. Keep all toast notifications clean, professional, and plain text.
 - **Lucide Icons Only**: Use native Lucide inline SVG icons whenever icons are needed in UI components, buttons, or context menus.
+
+---
+
+## 13. Folder Download & Preview Hierarchy Standard (Mandatory Standard)
+- **Folder Preview Prohibition**: Folders cannot be previewed in UI modals. The "Preview" option MUST be strictly hidden from context menus and toolbars when a folder is targeted or selected.
+- **Folder ZIP Download Standard**: Downloading a folder MUST always trigger a ZIP archive stream (`/download-folder/{folder_name}`).
+- **Backend Directory Shield**: The backend `/download/{filename}` endpoint MUST check if `filename` is a directory on disk and return an HTTP 307 Redirect to `/download-folder/{filename}`, preventing 404 errors.
+
+---
+
+## 14. Mobile Bottom Nav Safe Clearance for Global Toasts (Mandatory Standard)
+- **Mobile Navigation Overlap Prevention**: On mobile viewports ($\le 768\text{px}$), global toast notifications MUST dynamically adjust their `bottom` position to at least `90px` (or `calc(76px + env(safe-area-inset-bottom, 0px))`) to sit cleanly above the mobile bottom navigation bar (`Files`, `+`, `Clipboard`).
+
+---
+
+## 15. Monotonic Byte-Weighted Progress Tracking for Queue Batches (Mandatory Standard)
+- **Byte-Weighted Progress**: Batch upload progress MUST be calculated using total batch bytes (`totalUploadedBytes / totalBatchBytes * 100`) rather than simple average item percentages, preventing small file progress spikes.
+- **Monotonic Ceiling Guard**: Queue progress calculations MUST enforce a monotonic ceiling (`Math.max(highestReached, currentPct)`) during active transfers to guarantee the progress bar never moves backward.
+
+---
+
+## 16. Selection Aesthetic Standard (Style 3 Grid & Row Fill)
+- **Minimalist 2px Primary Border**: Selected file/folder rows and grid cards MUST use a crisp 2px solid primary border (`border: 2px solid var(--primary) !important`) with a subtle 10%-14% primary background container tint (`rgba(59, 130, 246, 0.14)`).
+- **Grid Header Fill**: The top header bar (`.grid-card-head`) of a selected grid card MUST inherit a matching primary accent background tint (`rgba(59, 130, 246, 0.22) !important`) and border-bottom color, ensuring the top title bar gets filled seamlessly with the selection state.
+
+---
+
+## 17. Human-Style Professional Git Commit Messages (Mandatory Standard)
+- **Natural & Human-Readable Commit Summaries**: Git commit suggestions MUST read like concise, high-quality human engineer commits (e.g., `Improve selection styles, fix mobile toast clearance, and streamline folder ZIP downloads`).
+- **Avoid Robotic Boilerplate**: Avoid long, repetitive machine logs or list dumps in commit titles. Keep messages clear, imperative, professional, and easy to understand for team members.
+
+---
+
+## 18. Full-Bleed Grid Card Preview Positioning Standard (Mandatory Standard)
+- **Absolute Inset Positioning**: All grid card preview containers (`.grid-card-preview`, `.video-preview-box`) MUST use `position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; z-index: 1;` so media previews (images, videos, document previews) stretch 100% full-bleed from top edge to bottom edge without top margin gaps.
+- **Glass Overlay Offset**: Frosted glass upload overlays (`.glass-b4-body`) MUST specify `top: 39px;` (or match `.grid-card-head` height) to sit flush against the bottom border of `.grid-card-head` without leaving blank gaps.
+- **Header Selection Tinting**: Selected grid card headers (`.grid-card-head`) MUST inherit a solid primary tint (`#dbeafe` in light mode, `#1e3a8a` in dark mode) with contrasting title text (`#1e40af` / `#eff6ff`) to clearly indicate selection state without transparency bleed-through.

@@ -772,21 +772,21 @@
 
         var previewHtml = '';
         if (isFolder) {
-            previewHtml = '<div class="grid-card-preview" style="background:#e8f0fe;">' +
-                '<i data-lucide="folder" style="width:52px;height:52px;color:#0b57d0;stroke-width:1.5;"></i>' +
+            previewHtml = '<div class="grid-card-preview" style="background:var(--primary-light, rgba(59,130,246,0.08));">' +
+                '<i data-lucide="folder" style="width:52px;height:52px;color:var(--primary, #3b82f6);stroke-width:1.5;"></i>' +
                 '</div>';
         } else if (info.avatarClass === 'avatar-archive') {
-            previewHtml = '<div class="grid-card-preview" style="background:#efebe9;">' +
-                '<i data-lucide="archive" style="width:48px;height:48px;color:#5d4037;stroke-width:1.5;"></i>' +
+            previewHtml = '<div class="grid-card-preview" style="background:rgba(245,158,11,0.08);">' +
+                '<i data-lucide="archive" style="width:48px;height:48px;color:#f59e0b;stroke-width:1.5;"></i>' +
                 '</div>';
         } else if (info.avatarClass === 'avatar-audio') {
-            previewHtml = '<div class="grid-card-preview" style="background:#f3e8ff;">' +
+            previewHtml = '<div class="grid-card-preview" style="background:rgba(147,51,234,0.08);">' +
                 '<i data-lucide="music" style="width:48px;height:48px;color:#9333ea;stroke-width:1.5;"></i>' +
                 '</div>';
         } else if (info.avatarClass === 'avatar-image') {
             var downloadUrl = "/download/" + encodeURIComponent(name);
-            previewHtml = '<div class="grid-card-preview" style="background:#1e293b;padding:0;">' +
-                '<img src="' + downloadUrl + '" alt="' + escName + '" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.style.display=\'none\';if(this.nextElementSibling)this.nextElementSibling.style.display=\'flex\';" />' +
+            previewHtml = '<div class="grid-card-preview" style="padding:0;margin:0;background:var(--card-bg);width:100%;height:100%;">' +
+                '<img src="' + downloadUrl + '" alt="' + escName + '" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;" onerror="this.style.display=\'none\';if(this.nextElementSibling)this.nextElementSibling.style.display=\'flex\';" />' +
                 '<div style="display:none;width:100%;height:100%;align-items:center;justify-content:center;">' +
                 '<svg viewBox="0 0 100 60" style="width:75%;height:75%;" fill="none">' +
                 '<path d="M10 50 L35 20 L55 40 L70 25 L90 50 Z" fill="#38bdf8" opacity="0.85"/>' +
@@ -796,14 +796,14 @@
                 '</div>';
         } else if (info.avatarClass === 'avatar-video') {
             var downloadUrl = "/download/" + encodeURIComponent(name);
-            previewHtml = '<div class="grid-card-preview video-preview-box" style="padding:0;">' +
-                '<video src="' + downloadUrl + '#t=0.5" preload="metadata" style="width:100%;height:100%;object-fit:cover;display:block;" muted></video>' +
+            previewHtml = '<div class="grid-card-preview video-preview-box" style="padding:0;margin:0;background:#0f172a;width:100%;height:100%;">' +
+                '<video src="' + downloadUrl + '#t=0.5" preload="metadata" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;" muted></video>' +
                 '<div class="video-play-badge" style="position:absolute;z-index:3;">' +
                 '<i data-lucide="play" style="width:20px;height:20px;fill:currentColor;"></i>' +
                 '</div>' +
                 '</div>';
         } else {
-            previewHtml = '<div class="grid-card-preview" style="background:#f1f3f4;">' +
+            previewHtml = '<div class="grid-card-preview" style="background:var(--card-bg);">' +
                 '<div class="doc-preview-sheet">' +
                 '<div class="doc-preview-line title"></div>' +
                 '<div class="doc-preview-line"></div>' +
@@ -823,9 +823,7 @@
             '<i data-lucide="more-vertical" style="width:14px;height:14px;"></i>' +
             '</button>' +
             '</div>' +
-            '<div style="position:relative; z-index:2; flex:1; display:flex; flex-direction:column; overflow:hidden;">' +
             previewHtml +
-            '</div>' +
             progressBarHtml +
             '</div>'
         );
@@ -1341,75 +1339,75 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ files: items })
         })
-        .then(function (res) {
-            if (!res.ok) {
-                if (res.status === 404 && (typeof lastFilesData === "undefined" || items.length >= (lastFilesData || []).length)) {
-                    window.location.href = "/download-all";
-                    return null;
-                }
-                throw new Error("Status " + res.status);
-            }
-
-            var contentLength = res.headers.get("Content-Length");
-            var totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
-            var receivedBytes = 0;
-            var chunks = [];
-
-            if (!res.body || !res.body.getReader) {
-                if (typeof showToast === "function") {
-                    showToast("Processing ZIP download...", 0);
-                }
-                return res.blob();
-            }
-
-            var reader = res.body.getReader();
-
-            function readChunk() {
-                return reader.read().then(function (result) {
-                    if (result.done) {
-                        return new Blob(chunks, { type: "application/zip" });
+            .then(function (res) {
+                if (!res.ok) {
+                    if (res.status === 404 && (typeof lastFilesData === "undefined" || items.length >= (lastFilesData || []).length)) {
+                        window.location.href = "/download-all";
+                        return null;
                     }
-                    chunks.push(result.value);
-                    receivedBytes += result.value.length;
+                    throw new Error("Status " + res.status);
+                }
 
+                var contentLength = res.headers.get("Content-Length");
+                var totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+                var receivedBytes = 0;
+                var chunks = [];
+
+                if (!res.body || !res.body.getReader) {
                     if (typeof showToast === "function") {
-                        var recvMB = (receivedBytes / (1024 * 1024)).toFixed(1);
-                        if (totalBytes > 0) {
-                            var pct = Math.min(100, Math.round((receivedBytes / totalBytes) * 100));
-                            var totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
-                            showToast("Processing ZIP download: " + recvMB + " / " + totalMB + " MB (" + pct + "%)", 0);
-                        } else {
-                            showToast("Processing ZIP download: " + recvMB + " MB transferred...", 0);
-                        }
+                        showToast("Processing ZIP download...", 0);
                     }
+                    return res.blob();
+                }
 
-                    return readChunk();
-                });
-            }
+                var reader = res.body.getReader();
 
-            return readChunk();
-        })
-        .then(function (blob) {
-            if (!blob) return;
-            var url = URL.createObjectURL(blob);
-            var a = document.createElement("a");
-            a.href = url;
-            a.download = items.length === 1 ? items[0] + ".zip" : "selected_files.zip";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            if (typeof showToast === "function") {
-                showToast("ZIP download started!", 3500);
-            }
-            window.clearSelection();
-        })
-        .catch(function (err) {
-            console.error("ZIP download error:", err);
-            if (typeof showToast === "function") {
-                showToast("Error downloading ZIP archive.", 4000);
-            }
-        });
+                function readChunk() {
+                    return reader.read().then(function (result) {
+                        if (result.done) {
+                            return new Blob(chunks, { type: "application/zip" });
+                        }
+                        chunks.push(result.value);
+                        receivedBytes += result.value.length;
+
+                        if (typeof showToast === "function") {
+                            var recvMB = (receivedBytes / (1024 * 1024)).toFixed(1);
+                            if (totalBytes > 0) {
+                                var pct = Math.min(100, Math.round((receivedBytes / totalBytes) * 100));
+                                var totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
+                                showToast("Processing ZIP download: " + recvMB + " / " + totalMB + " MB (" + pct + "%)", 0);
+                            } else {
+                                showToast("Processing ZIP download: " + recvMB + " MB transferred...", 0);
+                            }
+                        }
+
+                        return readChunk();
+                    });
+                }
+
+                return readChunk();
+            })
+            .then(function (blob) {
+                if (!blob) return;
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement("a");
+                a.href = url;
+                a.download = items.length === 1 ? items[0] + ".zip" : "selected_files.zip";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                if (typeof showToast === "function") {
+                    showToast("ZIP download started!", 3500);
+                }
+                window.clearSelection();
+            })
+            .catch(function (err) {
+                console.error("ZIP download error:", err);
+                if (typeof showToast === "function") {
+                    showToast("Error downloading ZIP archive.", 4000);
+                }
+            });
     };
 
     window.deleteSelected = function () {
@@ -2385,7 +2383,7 @@
                     var oldDot = oldName.lastIndexOf(".");
                     var oldExt = oldDot > 0 ? oldName.substring(oldDot) : "";
                     var newDot = newBaseName.lastIndexOf(".");
-                    
+
                     if (newDot > 0) {
                         // User typed a name WITH an extension (e.g. myfile.pdf)
                         nameToUse = newBaseName;
@@ -2649,7 +2647,7 @@
                         if (typeof mediaEls[i].pause === "function") mediaEls[i].pause();
                         mediaEls[i].removeAttribute("src");
                         if (typeof mediaEls[i].load === "function") mediaEls[i].load();
-                    } catch (e) {}
+                    } catch (e) { }
                 }
                 bodyEl.innerHTML = "";
             }
@@ -2894,7 +2892,7 @@
         var fn = filename || window.currentPreviewFilename || (window._contextMenuTarget || (prototypeSelectedItems && prototypeSelectedItems[0]));
         if (!fn) return;
         var fullUrl = window.location.origin + "/download/" + encodeURIComponent(fn);
-        
+
         var copied = fallbackCopyTextToClipboard(fullUrl);
         if (!copied && navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(fullUrl).catch(function () {

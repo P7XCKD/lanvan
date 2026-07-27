@@ -747,9 +747,9 @@ body {
 }
 
 .quick-card.selected {
-    background-color: rgba(138, 180, 248, 0.15) !important;
-    outline: 2px solid var(--primary);
-    border-color: transparent;
+    background-color: rgba(59, 130, 246, 0.1) !important;
+    border: 2px solid var(--primary) !important;
+    outline: none !important;
 }
 
 .quick-card .quick-hover-actions {
@@ -1136,14 +1136,17 @@ header.app-bar,
     background-color: var(--hover-bg);
 }
 
+/* Style 3: Minimalist 2px Primary Border & Subtle Background Tint */
 .m3-list-item.selected {
-    background-color: rgba(11, 87, 208, 0.08) !important;
-    outline: 1px solid var(--primary);
+    background-color: rgba(37, 99, 235, 0.08) !important;
+    border: 2px solid var(--primary) !important;
+    box-shadow: none !important;
 }
 
 [data-theme="dark"] .m3-list-item.selected {
-    background-color: rgba(138, 180, 248, 0.15) !important;
-    outline: 1px solid var(--primary);
+    background-color: rgba(59, 130, 246, 0.12) !important;
+    border: 2px solid var(--primary) !important;
+    box-shadow: none !important;
 }
 
 /* Industry-Standard Zero-Flicker View Mode Anti-FOUC Rules */
@@ -1206,7 +1209,6 @@ html[data-view-mode="list"] #gridViewBtn {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    justify-content: flex-start;
     padding: 0;
     height: 200px;
     border-radius: 14px;
@@ -1225,24 +1227,46 @@ html[data-view-mode="list"] #gridViewBtn {
 }
 
 .m3-list.grid-mode .m3-list-item.selected {
-    background-color: rgba(11, 87, 208, 0.12) !important;
+    background-color: rgba(37, 99, 235, 0.1) !important;
     border: 2px solid var(--primary) !important;
+    outline: none !important;
+}
+
+.m3-list.grid-mode .m3-list-item.selected .grid-card-head {
+    background-color: #dbeafe !important;
+    border-bottom: 1px solid rgba(37, 99, 235, 0.3) !important;
+}
+
+.m3-list.grid-mode .m3-list-item.selected .grid-card-head .item-title {
+    color: #1e40af !important;
 }
 
 [data-theme="dark"] .m3-list.grid-mode .m3-list-item.selected {
-    background-color: rgba(138, 180, 248, 0.18) !important;
+    background-color: rgba(59, 130, 246, 0.14) !important;
     border: 2px solid var(--primary) !important;
+    outline: none !important;
+}
+
+[data-theme="dark"] .m3-list.grid-mode .m3-list-item.selected .grid-card-head {
+    background-color: #1e3a8a !important;
+    border-bottom: 1px solid rgba(59, 130, 246, 0.4) !important;
+}
+
+[data-theme="dark"] .m3-list.grid-mode .m3-list-item.selected .grid-card-head .item-title {
+    color: #eff6ff !important;
 }
 
 .grid-card-head {
+    position: relative;
+    z-index: 10;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.65rem 0.75rem;
+    padding: 0.5rem 0.75rem;
     gap: 0.5rem;
     background: var(--card-bg);
     border-bottom: 1px solid var(--border-color);
-    min-height: 44px;
+    min-height: 40px;
 }
 
 .grid-card-head .avatar-icon {
@@ -1269,18 +1293,34 @@ html[data-view-mode="list"] #gridViewBtn {
 }
 
 .grid-card-preview {
-    flex: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--surface-variant);
-    position: relative;
+    background: var(--card-bg);
     overflow: hidden;
-    padding: 0.75rem;
+    padding: 0;
+    margin: 0;
+}
+
+.grid-card-preview img,
+.grid-card-preview video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
 }
 
 [data-theme="dark"] .grid-card-preview {
-    background: #18191c;
+    background: #121318;
 }
 
 /* ==========================================================================
@@ -3377,13 +3417,29 @@ html[data-view-mode="list"] #gridViewBtn {
 }
 
 .video-preview-box {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: 100%;
     height: 100%;
+    z-index: 1;
     background: linear-gradient(135deg, #111827, #1f2937);
     display: flex;
     align-items: center;
     justify-content: center;
-    position: relative;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+}
+
+.video-preview-box video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
 }
 
 [data-theme="dark"] .aes-card,
@@ -3794,7 +3850,7 @@ video::-webkit-media-controls-cast-button {
    ========================================================================== */
 .glass-b4-body {
     position: absolute;
-    top: 48px;
+    top: 39px;
     left: 0;
     right: 0;
     bottom: 0;
@@ -3926,7 +3982,7 @@ video::-webkit-media-controls-cast-button {
     transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
     white-space: nowrap;
     z-index: 20;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .connect-value:hover .connect-tooltip,
@@ -3947,7 +4003,10 @@ video::-webkit-media-controls-cast-button {
     align-items: stretch !important;
 }
 
-.qr-box canvas, .qr-box img, #qrBox canvas, #qrBox img {
+.qr-box canvas,
+.qr-box img,
+#qrBox canvas,
+#qrBox img {
     max-width: 100% !important;
     max-height: 100% !important;
     object-fit: contain !important;
@@ -3957,6 +4016,7 @@ video::-webkit-media-controls-cast-button {
 
 /* Mobile Bottom Navigation Safe Clearance for Global Toasts */
 @media (max-width: 768px) {
+
     #toast,
     .lanvan-toast {
         bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
