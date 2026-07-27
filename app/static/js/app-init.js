@@ -514,6 +514,10 @@
         }
 
         if (!normalizedFiles || normalizedFiles.length === 0) {
+            prototypeSelectedItems = [];
+            window._contextMenuTarget = "";
+            updateSelectionToolbar();
+
             // Render quick access cards (empty when normalizedFiles is 0)
             renderQuickAccess(originalFilesForQuickAccess
                 .filter(function (f) { return !f.isFolder && !f.uploading; })
@@ -624,6 +628,24 @@
 
         // Attach click handlers — pass full normalized data for folder detection
         attachListItemHandlers(container, normalizedFiles.map(function (f) { return f.name; }), normalizedFiles);
+
+        // Sync selection state: purge any deleted or uploading items from prototypeSelectedItems
+        var validNames = normalizedFiles.map(function (f) { return f.name; });
+        if (Array.isArray(prototypeSelectedItems) && prototypeSelectedItems.length > 0) {
+            prototypeSelectedItems = prototypeSelectedItems.filter(function (name) {
+                return validNames.indexOf(name) !== -1 && !isItemUploading(name);
+            });
+            var renderedItems = container.querySelectorAll(".m3-list-item");
+            for (var s = 0; s < renderedItems.length; s++) {
+                var itemFn = renderedItems[s].getAttribute("data-filename");
+                if (prototypeSelectedItems.indexOf(itemFn) !== -1) {
+                    renderedItems[s].classList.add("selected");
+                } else {
+                    renderedItems[s].classList.remove("selected");
+                }
+            }
+        }
+        updateSelectionToolbar();
 
         // Also render quick access cards (only non-folders)
         renderQuickAccess(originalFilesForQuickAccess
@@ -826,7 +848,7 @@
                 // Click / Tap handler (Single click selects item or enters folder)
                 item.addEventListener("click", function (e) {
                     if (e.target.closest("button")) return;
-                    if (itemData.uploading) return; // Prevent selection/navigation if uploading
+                    if (itemData.uploading || isItemUploading(name)) return;
 
                     var isTouch = e.pointerType === "touch" || e.pointerType === "pen" || ("ontouchstart" in window && window.innerWidth < 1024);
                     if (folderFlag && isTouch) {
@@ -838,10 +860,25 @@
                     handleListItemClick(item, index, files);
                 });
 
+                // Context menu listener on item row
+                item.addEventListener("contextmenu", function (e) {
+                    if (e.target.closest("button")) return;
+                    if (itemData.uploading || isItemUploading(name)) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                    }
+                    e.preventDefault();
+                    if (typeof window.setSelectedItem === "function") {
+                        window.setSelectedItem(name);
+                    }
+                    openRowMenu(e, name);
+                });
+
                 // Double-click handler for desktop mouse
                 item.addEventListener("dblclick", function (e) {
                     if (e.target.closest("button")) return;
-                    if (itemData.uploading) return;
+                    if (itemData.uploading || isItemUploading(name)) return;
                     if (folderFlag) {
                         navigateIntoFolder(name);
                     } else {
@@ -913,6 +950,13 @@
                     menuBtn.addEventListener("click", function (e) {
                         e.stopPropagation();
                         var fname = menuBtn.getAttribute("data-filename");
+                        if (isItemUploading(fname)) return;
+                        if (typeof window.setSelectedItem === "function") {
+                            window.setSelectedItem(fname);
+                        } else {
+                            prototypeSelectedItems = [fname];
+                            updateSelectionToolbar();
+                        }
                         openRowMenu(e, fname);
                     });
                 }
@@ -965,6 +1009,38 @@
             item.classList.add("selected");
         }
         updateSelectionToolbar();
+    }
+
+    function isItemUploading(filename) {
+        if (!filename) return false;
+        if (lastRenderedFiles && lastRenderedFiles.length > 0) {
+            var r = lastRenderedFiles.find(function (f) {
+                return f && (f.name === filename || (typeof f === 'string' && f === filename));
+            });
+            if (r && (r.uploading || r.uploadStatus)) return true;
+        }
+        var queue = window.uploadQueue || [];
+        var targetBase = filename.split("/").pop().split("\\").pop();
+        for (var i = 0; i < queue.length; i++) {
+            var item = queue[i];
+            if (!item) continue;
+            var status = item.status;
+            if (status === 'uploading' || status === 'queued' || status === 'processing' || status === 'paused') {
+                var names = [
+                    item.fileName,
+                    item.name,
+                    item.file ? item.file.name : "",
+                    item.relativePath,
+                    typeof window.getItemName === "function" ? window.getItemName(item) : ""
+                ];
+                for (var j = 0; j < names.length; j++) {
+                    var n = names[j];
+                    if (!n) continue;
+                    if (n === filename || n.split("/").pop().split("\\").pop() === targetBase) return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -1249,6 +1325,9 @@
     };
 
     window.deleteSelected = function () {
+        if (typeof window.closePreviewModal === "function") {
+            window.closePreviewModal();
+        }
         var itemsToDelete = [];
         var target = window._contextMenuTarget || "";
 
@@ -1380,9 +1459,42 @@
         document.body.removeChild(link);
     }
 
+    // --- Item Selection Helper ---
+    window.setSelectedItem = function (filename) {
+        if (!filename || isItemUploading(filename)) return;
+        prototypeSelectedItems = [filename];
+        var items = document.querySelectorAll("#nasFileList .m3-list-item");
+        for (var i = 0; i < items.length; i++) {
+            var itemFn = items[i].getAttribute("data-filename");
+            if (itemFn === filename) {
+                items[i].classList.add("selected");
+            } else {
+                items[i].classList.remove("selected");
+            }
+        }
+        if (typeof updateSelectionToolbar === "function") {
+            updateSelectionToolbar();
+        }
+    };
+
+    window.handleCopyStreamLinkFromMenu = function () {
+        var menu = document.getElementById("contextMenu");
+        if (menu) menu.style.display = "none";
+        var fname = window._contextMenuTarget || (prototypeSelectedItems && prototypeSelectedItems[0]) || "";
+        if (fname && typeof copyVideoStreamUrl === "function") {
+            copyVideoStreamUrl(fname);
+        }
+    };
+
     // --- Context Menu ---
     window.openRowMenu = function (event, filename) {
         event.stopPropagation();
+        if (isItemUploading(filename)) {
+            if (event.preventDefault) event.preventDefault();
+            var menuToHide = document.getElementById("contextMenu");
+            if (menuToHide) menuToHide.style.display = "none";
+            return;
+        }
         var menu = document.getElementById("contextMenu");
         var genericOps = document.getElementById("genericMenuOptions");
         var itemOps = document.getElementById("itemMenuOptions");
@@ -1391,8 +1503,23 @@
         if (genericOps) genericOps.style.display = "none";
         if (itemOps) itemOps.style.display = "block";
 
-        // Set context menu target
+        // Set context menu target & select the item visually
         window._contextMenuTarget = filename;
+        if (filename && typeof window.setSelectedItem === "function") {
+            window.setSelectedItem(filename);
+        }
+
+        // Show/Hide "Copy Stream Link" option if target file is a video
+        var copyStreamLinkItem = document.getElementById("copyStreamLinkMenuItem");
+        if (copyStreamLinkItem) {
+            var ext = filename ? filename.split(".").pop().toLowerCase() : "";
+            var videoExts = ["mp4", "webm", "mov", "mkv", "avi", "3gp", "m4v", "ts", "flv"];
+            if (videoExts.indexOf(ext) !== -1) {
+                copyStreamLinkItem.style.display = "flex";
+            } else {
+                copyStreamLinkItem.style.display = "none";
+            }
+        }
 
         // Position at cursor, only reposition if menu won't fit
         var top = event.clientY;
@@ -1436,6 +1563,9 @@
 
     // --- Dialog Openers ---
     window.openRenameModal = function () {
+        if (typeof window.closePreviewModal === "function") {
+            window.closePreviewModal();
+        }
         var name = prototypeSelectedItems[0] || (window._contextMenuTarget || "");
         var dialog = document.getElementById("renameDialog");
         var input = document.getElementById("renameInput");
@@ -1483,6 +1613,9 @@
     // Move Modal — full folder tree browser
     // -------------------------------------------------------------------------
     window.openMoveModal = function () {
+        if (typeof window.closePreviewModal === "function") {
+            window.closePreviewModal();
+        }
         var targets = prototypeSelectedItems.slice();
         if (targets.length === 0 && window._contextMenuTarget) {
             targets = [window._contextMenuTarget];
@@ -2023,6 +2156,9 @@
     };
 
     window.submitRename = function () {
+        if (typeof window.closePreviewModal === "function") {
+            window.closePreviewModal();
+        }
         var itemsToRename = prototypeSelectedItems.slice();
         if (itemsToRename.length === 0 && window._contextMenuTarget) {
             itemsToRename = [window._contextMenuTarget];
@@ -2292,26 +2428,49 @@
         var textArea = document.createElement("textarea");
         textArea.value = text;
         textArea.style.position = "fixed";
-        textArea.style.top = "-9999px";
-        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        textArea.style.left = "0";
+        textArea.style.width = "2em";
+        textArea.style.height = "2em";
+        textArea.style.padding = "0";
+        textArea.style.border = "none";
+        textArea.style.outline = "none";
+        textArea.style.boxShadow = "none";
+        textArea.style.background = "transparent";
+        textArea.style.opacity = "0.01";
+        textArea.style.zIndex = "999999";
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
+        if (typeof textArea.setSelectionRange === "function") {
+            textArea.setSelectionRange(0, 99999);
+        }
+        var success = false;
         try {
-            document.execCommand('copy');
+            success = document.execCommand('copy');
         } catch (err) {
-            console.error('Fallback copy error', err);
+            console.error('[COPY] Fallback copy error', err);
         }
         document.body.removeChild(textArea);
+        return success;
     }
 
-    // --- Preview ---
     window.closePreviewModal = function () {
         var modal = document.getElementById("previewModal");
         if (modal) {
             modal.style.display = "none";
             var bodyEl = document.getElementById("previewBody");
-            if (bodyEl) bodyEl.innerHTML = "";
+            if (bodyEl) {
+                var mediaEls = bodyEl.querySelectorAll("video, audio, iframe");
+                for (var i = 0; i < mediaEls.length; i++) {
+                    try {
+                        if (typeof mediaEls[i].pause === "function") mediaEls[i].pause();
+                        mediaEls[i].removeAttribute("src");
+                        if (typeof mediaEls[i].load === "function") mediaEls[i].load();
+                    } catch (e) {}
+                }
+                bodyEl.innerHTML = "";
+            }
             window.currentPreviewFilename = "";
             var ctxMenu = document.getElementById("previewContextMenu");
             if (ctxMenu) ctxMenu.style.display = "none";
@@ -2347,6 +2506,15 @@
 
         var docExts = ["doc", "docx", "ppt", "pptx", "xls", "xlsx", "rtf", "odt"];
 
+        var streamBtn = document.getElementById("previewStreamBtn");
+        if (streamBtn) {
+            if (videoExts.indexOf(ext) !== -1) {
+                streamBtn.style.display = "inline-flex";
+            } else {
+                streamBtn.style.display = "none";
+            }
+        }
+
         if (imageExts.indexOf(ext) !== -1) {
             bodyEl.innerHTML = '<div class="image-preview-wrapper" style="position:relative; width:100%; height:100%; min-height:70vh; flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; background:rgba(18,20,26,0.5); border-radius:14px; padding:1.5rem;">' +
                 '<img id="lanvanZoomImage" src="' + downloadUrl + '" alt="' + escName + '" style="max-width:90vw; max-height:84vh; width:auto; height:auto; object-fit:contain; border-radius:8px; display:block; margin:auto; box-shadow:0 16px 48px rgba(0,0,0,0.6); transition:transform 0.15s ease-out; cursor:grab;" />' +
@@ -2359,7 +2527,6 @@
                 '<video src="' + downloadUrl + '" controls autoplay playsinline preload="auto" tabindex="0" style="max-width:90vw; max-height:84vh; width:auto; height:auto; object-fit:contain; border-radius:8px; outline:none; background:transparent; box-shadow:0 16px 48px rgba(0,0,0,0.6);"></video>' +
                 '</div>';
             modal.style.display = "flex";
-            // Auto-focus the video so native spacebar play/pause works without interference
             var vid = bodyEl.querySelector("video");
             if (vid) vid.focus();
         } else if (audioExts.indexOf(ext) !== -1) {
@@ -2503,6 +2670,68 @@
         }
     });
 
+    window.showToast = function (message, duration) {
+        if (!message) return;
+        var dur = duration || 3000;
+        var toast = document.getElementById("lanvanGlobalToast");
+        if (!toast) {
+            toast = document.createElement("div");
+            toast.id = "lanvanGlobalToast";
+            toast.style.cssText = "position:fixed; bottom:32px; left:50%; transform:translateX(-50%) translateY(16px); background:rgba(20, 22, 30, 0.95); color:#ffffff; padding:11px 24px; border-radius:30px; font-size:0.88rem; font-weight:600; z-index:999999; border:1px solid rgba(255,255,255,0.2); backdrop-filter:blur(16px); box-shadow:0 14px 40px rgba(0,0,0,0.6); opacity:0; transition:all 0.22s cubic-bezier(0.16, 1, 0.3, 1); pointer-events:none; font-family:inherit; text-align:center; max-width:90vw; word-break:break-word;";
+            document.body.appendChild(toast);
+        }
+
+        toast.textContent = message;
+        toast.style.display = "block";
+        requestAnimationFrame(function () {
+            toast.style.opacity = "1";
+            toast.style.transform = "translateX(-50%) translateY(0px)";
+        });
+
+        if (window._lanvanToastTimer) {
+            clearTimeout(window._lanvanToastTimer);
+            window._lanvanToastTimer = null;
+        }
+
+        if (dur > 0) {
+            window._lanvanToastTimer = setTimeout(function () {
+                toast.style.opacity = "0";
+                toast.style.transform = "translateX(-50%) translateY(16px)";
+                setTimeout(function () {
+                    toast.style.display = "none";
+                }, 220);
+            }, dur);
+        }
+    };
+
+    window.copyVideoStreamUrl = function (filename) {
+        var fn = filename || window.currentPreviewFilename || (window._contextMenuTarget || (prototypeSelectedItems && prototypeSelectedItems[0]));
+        if (!fn) return;
+        var fullUrl = window.location.origin + "/download/" + encodeURIComponent(fn);
+        
+        var copied = fallbackCopyTextToClipboard(fullUrl);
+        if (!copied && navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(fullUrl).catch(function () {
+                fallbackCopyTextToClipboard(fullUrl);
+            });
+        }
+
+        // 1. Toast Notification
+        window.showToast('Stream link copied to clipboard!', 3000);
+
+        // 2. Button Visual Feedback (if in preview modal)
+        var streamBtn = document.getElementById("previewStreamBtn");
+        if (streamBtn) {
+            var origHtml = streamBtn.innerHTML;
+            streamBtn.innerHTML = '<i data-lucide="check" style="width:16px;height:16px;color:#4ade80;"></i><span>Copied!</span>';
+            if (typeof refreshLucideIcons === "function") refreshLucideIcons(streamBtn);
+            setTimeout(function () {
+                streamBtn.innerHTML = origHtml;
+                if (typeof refreshLucideIcons === "function") refreshLucideIcons(streamBtn);
+            }, 2000);
+        }
+    };
+
     // --- Right-Click Context Menu for Preview Modal ---
     window.downloadPreviewFile = function (filename) {
         var menu = document.getElementById("previewContextMenu");
@@ -2516,8 +2745,6 @@
         a.click();
         document.body.removeChild(a);
     };
-
-
 
     function showPreviewContextMenu(x, y, filename) {
         var menu = document.getElementById("previewContextMenu");
@@ -2535,10 +2762,16 @@
 
         var escFn = escapeHtml(filename);
         var ext = filename.split(".").pop().toLowerCase();
-        var imageExts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"];
-        var isImage = imageExts.indexOf(ext) !== -1;
+        var videoExts = ["mp4", "webm", "mov", "mkv", "avi", "3gp", "m4v", "ts", "flv"];
+        var isVideo = videoExts.indexOf(ext) !== -1;
 
-        var html = '<div class="menu-item" onclick="downloadPreviewFile(\'' + escFn + '\')" style="display:flex; align-items:center; gap:10px; padding:9px 16px; cursor:pointer; font-size:0.9rem; font-weight:500; color:var(--text-color, #fff); border-radius:6px; margin:0 4px; transition:background 0.15s ease;">' +
+        var html = '';
+        if (isVideo) {
+            html += '<div class="menu-item" onclick="copyVideoStreamUrl(\'' + escFn + '\')" style="display:flex; align-items:center; gap:10px; padding:9px 16px; cursor:pointer; font-size:0.9rem; font-weight:500; color:var(--text-color, #fff); border-radius:6px; margin:0 4px; transition:background 0.15s ease;">' +
+                '<i data-lucide="tv" style="width:16px; height:16px; color:var(--primary, #3b82f6);"></i> Copy Stream Link' +
+                '</div>';
+        }
+        html += '<div class="menu-item" onclick="downloadPreviewFile(\'' + escFn + '\')" style="display:flex; align-items:center; gap:10px; padding:9px 16px; cursor:pointer; font-size:0.9rem; font-weight:500; color:var(--text-color, #fff); border-radius:6px; margin:0 4px; transition:background 0.15s ease;">' +
             '<i data-lucide="download" style="width:16px; height:16px; color:var(--primary, #3b82f6);"></i> Download' +
             '</div>';
 

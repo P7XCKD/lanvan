@@ -374,19 +374,6 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
     </div>
   </div>
   <div id="itemMenuOptions" style="display:none;">
-    <div class="context-item" id="uploadPauseMenuItem" onclick="pauseSelectedUpload()" style="display:none;">
-      <div class="context-item-left">
-        <i data-lucide="pause-circle"></i>
-        <span id="uploadPauseMenuText">Pause upload</span>
-      </div>
-    </div>
-    <div class="context-item" id="uploadCancelMenuItem" onclick="cancelSelectedUpload()"
-      style="display:none; color:var(--danger);">
-      <div class="context-item-left">
-        <i data-lucide="x-circle" style="color:var(--danger);"></i>
-        <span>Cancel upload</span>
-      </div>
-    </div>
     <div class="context-item" onclick="openRenameModal()">
       <div class="context-item-left">
         <i data-lucide="pencil"></i>
@@ -397,6 +384,12 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
       <div class="context-item-left">
         <i data-lucide="eye"></i>
         <span>Preview</span>
+      </div>
+    </div>
+    <div class="context-item" id="copyStreamLinkMenuItem" onclick="handleCopyStreamLinkFromMenu()" style="display:none;">
+      <div class="context-item-left">
+        <i data-lucide="tv"></i>
+        <span>Copy Stream Link</span>
       </div>
     </div>
     <div class="context-item" onclick="downloadSelected()">
@@ -664,6 +657,10 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         <span id="previewTitle" class="gdrive-preview-title">File Preview</span>
       </div>
       <div class="gdrive-header-right">
+        <button id="previewStreamBtn" class="gdrive-action-btn" onclick="copyVideoStreamUrl(window.currentPreviewFilename)" title="Copy stream link" style="display:none; background:rgba(59,130,246,0.15); color:#60a5fa; border:1px solid rgba(59,130,246,0.3); margin-right:4px;">
+          <i data-lucide="tv" style="width:16px;height:16px;color:#60a5fa;"></i>
+          <span>Copy Stream Link</span>
+        </button>
         <a id="previewDownloadBtn" href="#" download class="gdrive-action-btn" title="Download file">
           <i data-lucide="download" style="width:16px;height:16px;"></i>
           <span>Download</span>

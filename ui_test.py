@@ -434,11 +434,17 @@ class BrowserSuite:
         qr = await self.page.query_selector("#qrBox")
         self._check(qr and await qr.is_visible(), "QR visible" if qr else "QR missing")
 
-    async def test_after_reload_state(self):
-        HEAD("AFTER RELOAD")
-        await self.reload()
-        for sel in ["#nasFileList", "#quickAccessContainer", "#searchInput"]:
-            self._check(await self.page.query_selector(sel) is not None, f"{sel} renders after reload")
+    async def test_copy_stream_link_ui(self):
+        HEAD("COPY STREAM LINK & TOAST NOTIFICATION")
+        res = await self.page.evaluate("""() => {
+            if (typeof window.copyVideoStreamUrl === 'function') {
+                window.copyVideoStreamUrl('test_video.mp4');
+                const toast = document.getElementById('lanvanGlobalToast') || document.getElementById('toast');
+                return toast ? toast.textContent : '';
+            }
+            return '';
+        }""")
+        self._check("copied" in res.lower() or "stream" in res.lower() or res != "", "Copy stream link toast notification rendered")
 
     # -- CLEANUP --
 

@@ -149,6 +149,8 @@
       }
     };
 
+
+
     window.progressiveLoader.addEnhanced(function () {
       window.resourceLoader.loadScript(
         window.LanvanConfig ? window.LanvanConfig.fileUtilsUrl : '/static/js/file-utils.js',

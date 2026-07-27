@@ -23,6 +23,7 @@ import json
 import time
 import argparse
 import secrets
+import urllib.parse
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -192,6 +193,9 @@ class Suite:
         self._ck("navigateIntoFolder" in app_init, "Immediate folder click navigation handler present", "declarative-ui")
         self._ck("fallbackCopyTextToClipboard" in app_init and "copyConnectAddress" in app_init, "Universal HTTP/HTTPS clipboard copy fallback present in copyConnectAddress", "declarative-ui")
         self._ck("initFileEventsWebSocket" in main_app and "/ws/file_events" in main_app, "Real-time cross-device file events WebSocket listener present", "declarative-ui")
+        self._ck("isItemUploading" in app_init, "Uploading files selection guard present in app-init.js", "declarative-ui")
+        self._ck("copyVideoStreamUrl" in app_init and "lanvanGlobalToast" in app_init, "Copy stream link handler with global toast notification present in app-init.js", "declarative-ui")
+        self._ck("previewStreamBtn" in (TEMPLATE_DIR / "index.html").read_text(encoding="utf-8", errors="ignore"), "Header preview copy stream link button present in index.html", "declarative-ui")
 
     def test_notification_tray_integrity(self):
         HEAD("NOTIFICATION TRAY INTEGRITY & DISMISSAL (§3)")
@@ -535,6 +539,35 @@ class Suite:
         await self._api("POST",f"/delete-folder/{a}")
         await self._api("POST",f"/delete-folder/{b}")
 
+    async def test_active_stream_cancellation_on_rename(self):
+        HEAD("ACTIVE STREAM CANCELLATION ON RENAME / DELETE")
+        fn = f"qt_stream_{secrets.token_hex(3)}.mp4"
+        fn_new = f"qt_stream_renamed_{secrets.token_hex(3)}.mp4"
+        d = aiohttp.FormData()
+        d.add_field("files", secrets.token_bytes(256 * 1024), filename=fn)
+        st, _ = await self._api("POST", "/upload-auto", data=d)
+        self._ck(st == 200, f"Upload stream test file '{fn}'", "file-ops")
+
+        async with aiohttp.ClientSession() as session:
+            stream_req = asyncio.create_task(
+                session.get(f"{self.base_url}/download/{urllib.parse.quote(fn)}", headers={"Range": "bytes=0-100000"})
+            )
+            await asyncio.sleep(0.1)
+
+            ren_data = aiohttp.FormData()
+            ren_data.add_field("filename", fn)
+            ren_data.add_field("new_name", fn_new)
+            st_ren, body_ren = await self._api("POST", "/api/files/rename", data=ren_data)
+            self._ck(st_ren == 200 and body_ren.get("status") == "success", f"StreamManager: Rename streaming file -> {st_ren}", "file-ops")
+
+            try:
+                resp = await stream_req
+                await resp.close()
+            except Exception:
+                pass
+
+        await self._api("POST", f"/delete/{fn_new}")
+
     async def test_clear_files(self):
         HEAD("CLEAR FILES")
         st,body = await self._api("POST","/clear")
@@ -633,6 +666,7 @@ class Suite:
                     await self.test_clipboard()
                     await self.test_qr()
                     await self.test_history_and_cancel()
+                    await self.test_active_stream_cancellation_on_rename()
                     await self.test_mdns_platform_cors()
                 if run_all or args.mode in ("file-ops"):
                     await self.test_file_operations()

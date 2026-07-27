@@ -19,11 +19,10 @@ import base64
 import tempfile
 import asyncio
 import urllib.parse
-from typing import List, Optional, Dict, Any, Tuple
+import threading
 from pathlib import Path
 from mimetypes import guess_type
-from zipfile import ZipFile
-from app.utils.termux_compat import is_android_environment
+from typing import List, Optional, Dict, Any, Tuple, Set
 
 from fastapi import APIRouter, Request, UploadFile, File, BackgroundTasks, Query, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse, Response
@@ -53,6 +52,8 @@ from app.utils.termux_compat import is_android, is_termux
 from app.core.concurrent_upload_manager import concurrent_upload_manager, ConcurrentUploadManager
 from app.core.windows_file_manager import WindowsFileManager
 from app.core.streaming_assembly import get_streaming_assembler, add_streaming_chunk, check_streaming_status, get_assembled_file, initialize_streaming_assembly
+
+from app.core.stream_manager import get_stream_manager, StreamSession
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -1140,25 +1141,28 @@ async def upload_auto_file(
     print(f"[TARGET] Upload response: {response_data}")
     return JSONResponse(content=response_data)
 
-@router.get("/download/{filename}", name="download_file")
-@router.head("/download/{filename}")
+@router.get("/download/{filename:path}", name="download_file")
+@router.head("/download/{filename:path}")
 async def download_file(filename: str, request: Request):
     print(f"[IN] Download request for: {filename}")
     
-    safe_name = secure_filename(filename)
-    file_path = UPLOAD_FOLDER / safe_name
+    clean_filename = urllib.parse.unquote(filename).strip("/\\")
+    safe_name = secure_filename(clean_filename)
+    file_path = UPLOAD_FOLDER / clean_filename
     
     if not file_path.is_file():
-        # Fallback: search subdirectories recursively
-        found = False
-        for subdir_file in UPLOAD_FOLDER.rglob(safe_name):
-            if subdir_file.is_file():
-                file_path = subdir_file
-                found = True
-                break
-        if not found:
-            print(f"[ERR] File not found: {safe_name}")
-            return Response("File not found", status_code=404)
+        file_path = UPLOAD_FOLDER / safe_name
+        if not file_path.is_file():
+            # Fallback: search subdirectories recursively
+            found = False
+            for subdir_file in UPLOAD_FOLDER.rglob(safe_name):
+                if subdir_file.is_file():
+                    file_path = subdir_file
+                    found = True
+                    break
+            if not found:
+                print(f"[ERR] File not found: {clean_filename}")
+                return Response("File not found", status_code=404)
             
     print(f"[DIR] Looking for file at: {file_path}")
 
@@ -1222,7 +1226,7 @@ async def download_file(filename: str, request: Request):
     # Check for HTTP Range header (crucial for HTML5 video/audio seeking & scrubbing)
     range_header = request.headers.get("range") or request.headers.get("Range")
     if range_header and not is_enc_file:
-        return await range_download_file(file_path, safe_name, mime_type, file_size, range_header, disposition_type=disposition_type)
+        return await range_download_file(file_path, safe_name, mime_type, file_size, range_header, disposition_type=disposition_type, request=request)
 
     print(f"[SEARCH] Download strategy - Encrypted: {is_enc_file}, Large: {is_large_file}")
     
@@ -1234,9 +1238,20 @@ async def download_file(filename: str, request: Request):
         print("[FILE] Using full download")
         return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type)
 
-async def range_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, range_header: str, disposition_type: str = "inline"):
-    """Serve HTTP Range Requests (206 Partial Content) for seeking/forwarding in video and audio players."""
+async def range_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, range_header: str, disposition_type: str = "inline", request: Optional[Request] = None):
+    """Serve HTTP Range Requests (206 Partial Content) with ETag caching & dynamic buffer scaling."""
     try:
+        # Generate stable ETag based on file modification time & size
+        st = file_path.stat()
+        mtime_ns = getattr(st, 'st_mtime_ns', int(st.st_mtime * 1e9))
+        etag = f'"{mtime_ns:x}-{file_size:x}"'
+
+        # Check If-None-Match header for 304 Not Modified validation
+        if request:
+            if_none_match = request.headers.get("if-none-match") or request.headers.get("If-None-Match")
+            if if_none_match and if_none_match.strip() == etag:
+                return Response(status_code=304, headers={"ETag": etag, "Accept-Ranges": "bytes"})
+
         if "=" not in range_header:
             return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type)
             
@@ -1268,29 +1283,53 @@ async def range_download_file(file_path: Path, safe_name: str, mime_type: str | 
         
         chunk_size = (end - start) + 1
         
+        # Dynamic Range Buffer Scaling:
+        # - Small probes or timestamp seeks (< 1MB requested): 256KB buffer (< 1ms seek latency)
+        # - Mid-size range requests (1MB - 10MB): 512KB buffer
+        # - Large sequential Range requests (≥ 10MB): 1MB buffer for max LAN throughput on 4K movies
+        if chunk_size >= 10 * 1024 * 1024:
+            buffer_size = 1024 * 1024  # 1MB buffer
+        elif chunk_size >= 1024 * 1024:
+            buffer_size = 512 * 1024   # 512KB buffer
+        else:
+            buffer_size = 256 * 1024   # 256KB buffer
+
+        session = get_stream_manager().register_stream(file_path, "http-client")
+
         def iterfile():
-            with open(file_path, "rb") as f:
-                f.seek(start)
-                bytes_left = chunk_size
-                buffer_size = 64 * 1024  # 64KB chunks for smooth seeking
-                while bytes_left > 0:
-                    read_len = min(buffer_size, bytes_left)
-                    data = f.read(read_len)
-                    if not data:
-                        break
-                    bytes_left -= len(data)
-                    yield data
+            try:
+                with open(file_path, "rb") as f:
+                    session.file_handle = f
+                    f.seek(start)
+                    bytes_left = chunk_size
+                    while bytes_left > 0:
+                        if session.cancel_event.is_set():
+                            print(f"[STREAM] Range stream session {session.session_id} canceled for '{safe_name}'")
+                            break
+                        read_len = min(buffer_size, bytes_left)
+                        data = f.read(read_len)
+                        if not data:
+                            break
+                        bytes_left -= len(data)
+                        yield data
+            except (ValueError, OSError) as e:
+                print(f"[STREAM] Range stream session {session.session_id} closed during read: {e}")
+            finally:
+                get_stream_manager().unregister_stream(session)
 
         headers = {
             "Content-Range": f"bytes {start}-{end}/{file_size}",
             "Accept-Ranges": "bytes",
             "Content-Length": str(chunk_size),
             "Content-Type": mime_type or "application/octet-stream",
-            "Content-Disposition": f'{disposition_type}; filename="{safe_name}"',
-            "Cache-Control": "public, max-age=3600"
+            "ETag": etag,
+            "Cache-Control": "public, max-age=3600",
+            "X-Accel-Buffering": "no"
         }
+        if disposition_type == "attachment":
+            headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
         
-        print(f"[STREAM] Serving Range 206 ({disposition_type}): bytes {start}-{end}/{file_size} for {safe_name}")
+        print(f"[STREAM] Serving Range 206 ({disposition_type}): bytes {start}-{end}/{file_size} (buffer {buffer_size // 1024}KB) for {safe_name}")
         return StreamingResponse(iterfile(), status_code=206, headers=headers)
     except Exception as e:
         print(f"[ERR] Range request failed ({e}), falling back to full download")
@@ -1299,6 +1338,7 @@ async def range_download_file(file_path: Path, safe_name: str, mime_type: str | 
 async def full_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, disposition_type: str = "inline"):
     """Ultra-optimized full file download - for small files and .enc files"""
     print(f"[OUT] Starting full download ({disposition_type}) for: {safe_name}")
+    session = get_stream_manager().register_stream(file_path, "http-client")
     
     # [START] Much larger buffer for maximum speed - 32MB buffer (4x improvement)
     STREAM_BUFFER_SIZE = 32 * 1024 * 1024  # 32MB buffer (was 8MB)
@@ -1368,6 +1408,7 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                 # [START] Ultra-fast regular file streaming with optimized buffer and proper cleanup
                 try:
                     file_handle = open(path, "rb")
+                    session.file_handle = file_handle
                     chunks_sent = 0
                     while True:
                         chunk = file_handle.read(STREAM_BUFFER_SIZE)
@@ -1382,6 +1423,7 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                     error_message = f"Error: Failed to read file {path.name}. {str(e)}"
                     yield error_message.encode('utf-8')
         finally:
+            get_stream_manager().unregister_stream(session)
             # Ensure file handle is always closed
             if file_handle is not None:
                 try:
@@ -1698,30 +1740,35 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
                 return JSONResponse(content={"status": "success", "msg": "File deleted successfully"})
 
         if file_path.is_file():
-            try:
-                file_path.unlink()
-                print(f"OK: Deleted file: {file_path.name}")
-            except (PermissionError, OSError) as pe:
-                print(f"[WARN] File locked by process on Windows, attempting gc and retry: {pe}")
-                gc.collect()
-                time.sleep(0.05)
+            await get_stream_manager().cancel_and_await_cleanup(file_path)
+            retry_delays = [0.0, 0.05, 0.1, 0.2]
+            deleted = False
+            for attempt, delay in enumerate(retry_delays):
+                if delay > 0:
+                    gc.collect()
+                    await asyncio.sleep(delay)
                 try:
                     file_path.unlink()
-                    print(f"OK: Deleted file on retry: {file_path.name}")
-                except Exception:
+                    print(f"OK: Deleted file: {file_path.name}")
+                    deleted = True
+                    break
+                except (PermissionError, OSError) as pe:
+                    await get_stream_manager().cancel_and_await_cleanup(file_path)
+                    continue
+
+            if not deleted and file_path.exists():
+                try:
                     import uuid
                     trash_name = file_path.parent / f".trash_{uuid.uuid4().hex[:8]}_{file_path.name}"
+                    file_path.rename(trash_name)
                     try:
-                        file_path.rename(trash_name)
-                        print(f"OK: Renamed locked file to trash: {trash_name.name}")
-                        try:
-                            trash_name.unlink()
-                        except Exception:
-                            pass
-                    except Exception as e2:
-                        print(f"[WARN] File locked by process, scheduling background deletion: {e2}")
-                        LOCKED_DELETIONS_SET.add(str(file_path))
-                        LOCKED_DELETIONS_SET.add(filename)
+                        trash_name.unlink()
+                    except Exception:
+                        pass
+                except Exception as e2:
+                    print(f"[WARN] Scheduled background deletion for locked file: {e2}")
+                    LOCKED_DELETIONS_SET.add(str(file_path))
+                    LOCKED_DELETIONS_SET.add(filename)
             
         cleanup_temp_file_for_filename(filename, target_parent)
         # Broadcast via file_events WebSocket for instant cross-device sync
@@ -2618,51 +2665,48 @@ async def rename_file(filename: str = Form(...), new_name: str = Form(...), pare
     if dst_path.exists():
         return JSONResponse(status_code=409, content={"status": "error", "msg": f"'{safe_new}' already exists"})
     
-    try:
-        os.rename(src_path, dst_path)
-        print(f"[RENAME] Renamed '{safe_filename}' to '{safe_new}' in '{src_path.parent}'")
-        broadcast_file_event_sync("rename", parent_path or "", safe_new)
-        return JSONResponse(content={
-            "status": "success",
-            "msg": f"Renamed to '{safe_new}'",
-            "old_name": safe_filename,
-            "new_name": safe_new
-        })
-    except (PermissionError, OSError) as e:
-        # WinError 32: file is locked by another process (e.g. currently being streamed/previewed)
-        winerr = getattr(e, 'winerror', None)
-        if winerr == 32 or 'being used by another process' in str(e):
-            print(f"[WARN] Rename blocked: '{safe_filename}' is locked (streaming/open). Retrying after gc...")
+    # 1. Deterministically cancel and await any active stream cleanup (file or folder contents)
+    await get_stream_manager().cancel_and_await_cleanup(src_path)
+
+    # 2. Execute operation with 4-attempt exponential backoff for OS kernel handle release latency
+    retry_delays = [0.0, 0.05, 0.1, 0.2]
+    last_err = None
+    for attempt, delay in enumerate(retry_delays):
+        if delay > 0:
             gc.collect()
-            time.sleep(0.1)
-            try:
-                os.rename(src_path, dst_path)
-                print(f"[RENAME] Renamed '{safe_filename}' to '{safe_new}' on retry")
-                broadcast_file_event_sync("rename", parent_path or "", safe_new)
-                return JSONResponse(content={
-                    "status": "success",
-                    "msg": f"Renamed to '{safe_new}'",
-                    "old_name": safe_filename,
-                    "new_name": safe_new
-                })
-            except Exception:
-                pass
-            return JSONResponse(status_code=409, content={
-                "status": "error",
-                "msg": f"Cannot rename '{safe_filename}' — it is currently open or being streamed. Close the preview and try again.",
-                "file_locked": True
+            await asyncio.sleep(delay)
+        try:
+            os.rename(src_path, dst_path)
+            # Rename .enc.meta sidecar if present
+            meta_src = src_path.with_name(src_path.name + ".meta") if src_path.name.endswith(".enc") else src_path.with_suffix('.enc.meta')
+            if meta_src.exists():
+                meta_dst = dst_path.with_name(dst_path.name + ".meta") if dst_path.name.endswith(".enc") else dst_path.with_suffix('.enc.meta')
+                try:
+                    os.rename(meta_src, meta_dst)
+                except Exception:
+                    pass
+            print(f"[RENAME] Renamed '{safe_filename}' to '{safe_new}' in '{src_path.parent}' (attempt {attempt + 1})")
+            broadcast_file_event_sync("rename", parent_path or "", safe_new)
+            return JSONResponse(content={
+                "status": "success",
+                "msg": f"Renamed to '{safe_new}'",
+                "old_name": safe_filename,
+                "new_name": safe_new
             })
-        print(f"[ERR] Rename error: {e}")
-        return JSONResponse(status_code=500, content={
-            "status": "error",
-            "msg": f"Failed to rename: {e}"
-        })
-    except Exception as e:
-        print(f"[ERR] Rename error: {e}")
-        return JSONResponse(status_code=500, content={
-            "status": "error",
-            "msg": f"Failed to rename: {e}"
-        })
+        except (PermissionError, OSError) as e:
+            last_err = e
+            winerr = getattr(e, 'winerror', None)
+            if winerr == 32 or 'being used by another process' in str(e):
+                print(f"[WARN] Rename attempt {attempt + 1} blocked for '{safe_filename}' (file locked). Re-canceling streams...")
+                await get_stream_manager().cancel_and_await_cleanup(src_path)
+                continue
+            break
+
+    print(f"[ERR] Rename failed for '{safe_filename}': {last_err}")
+    return JSONResponse(status_code=409 if (getattr(last_err, 'winerror', None) == 32 or 'being used by another process' in str(last_err)) else 500, content={
+        "status": "error",
+        "msg": f"Cannot rename '{safe_filename}': {last_err}"
+    })
 
 
 @router.post("/api/files/move", name="move_file")
@@ -2706,6 +2750,8 @@ async def move_file(filename: str = Form(...), destination: str = Form(...)):
     if dst_path.exists():
         return JSONResponse(status_code=409, content={"status": "error", "msg": f"'{safe_filename}' already exists in destination"})
     
+    force_cancel_active_streams(src_path)
+
     try:
         shutil.move(str(src_path), str(dst_path))
         print(f"[MOVE] Moved '{safe_filename}' to '{destination}'")
@@ -2835,7 +2881,8 @@ async def delete_folder(folder_path: str):
         if not folder_path_obj.exists() or not folder_path_obj.is_dir():
             return JSONResponse(status_code=404, content={"status": "error", "msg": "Folder not found"})
         
-        # Force garbage collection to release any open file handles on Windows
+        # Cancel any active streams for files inside this folder hierarchy
+        await get_stream_manager().cancel_and_await_cleanup(folder_path_obj)
         gc.collect()
 
         def handle_remove_readonly(func, path, exc_info):

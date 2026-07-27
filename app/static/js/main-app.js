@@ -4171,8 +4171,38 @@ let lastToastMessage = '';
 let isPersistentToast = false;
 
 function showToast(message, duration = 3000, transferData = null, type = 'default') {
-  // Completely disable floating toast notifications per user preference
-  return;
+  if (!message) return;
+  let toast = (DOM_CACHE && DOM_CACHE.toast) || document.getElementById('toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    toast.style.cssText = 'position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(12px); background:rgba(24, 26, 34, 0.94); color:#ffffff; padding:10px 22px; border-radius:24px; font-size:0.88rem; font-weight:600; z-index:999999; border:1px solid rgba(255,255,255,0.18); backdrop-filter:blur(14px); box-shadow:0 12px 36px rgba(0,0,0,0.5); display:none; opacity:0; transition:all 0.22s cubic-bezier(0.16, 1, 0.3, 1); pointer-events:auto; font-family:inherit; text-align:center; max-width:90vw; word-break:break-word;';
+    document.body.appendChild(toast);
+    if (typeof DOM_CACHE !== "undefined") DOM_CACHE.toast = toast;
+  }
+
+  toast.innerText = message;
+  toast.style.display = 'block';
+  requestAnimationFrame(() => {
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateX(-50%) translateY(0px)';
+  });
+
+  if (typeof toastTimeout !== "undefined" && toastTimeout) {
+    clearTimeout(toastTimeout);
+    toastTimeout = null;
+  }
+
+  if (duration > 0) {
+    const timer = setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(-50%) translateY(12px)';
+      setTimeout(() => {
+        toast.style.display = 'none';
+      }, 220);
+    }, duration);
+    if (typeof toastTimeout !== "undefined") toastTimeout = timer;
+  }
 }
 
 function updateToastContent(message) {
