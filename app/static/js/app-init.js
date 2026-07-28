@@ -149,19 +149,12 @@
 
     // renderBreadcrumbs is provided by breadcrumb-nav.js module
 
-        // Update panel title icon
-        var panelIcon = document.getElementById("desktopPanelTitleIcon");
-        if (panelIcon) {
-            panelIcon.setAttribute("data-lucide", "folder");
-        }
-        if (window.lucide) lucide.createIcons();
-    }
-
     /**
      * Render files in prototype #nasFileList from the same data production uses.
      * @param {string[]} files - Array of filenames from production API
      */
     function getDiskFileMetadata(filename, folderPath) {
+
         if (!filename) return null;
         var path = folderPath || (typeof window.lanvanStore !== 'undefined' && window.lanvanStore.getState ? window.lanvanStore.getState().currentFolder : (window.currentFolderPath || ""));
         var cache = (window.FileRepository && typeof window.FileRepository.getFolderCache === 'function')
@@ -761,13 +754,14 @@
         var base = currentFolderPath;
         if (base === "Home") base = "";
 
-        // Guard: check if currentFolderPath already ends with this folderName
-        var parts = base ? base.split("/") : [];
-        if (parts.length > 0 && parts[parts.length - 1] === folderName) {
+        // Allow navigating to subfolders with the same name (e.g. "SameTest/SameTest")
+        // Only prevent the no-op case where we'd navigate into the exact same path
+        var newPath = base ? (base + "/" + folderName) : folderName;
+        if (newPath === currentFolderPath) {
             return;
         }
 
-        currentFolderPath = base ? (base + "/" + folderName) : folderName;
+        currentFolderPath = newPath;
         console.log("%c[LANVAN UI] 📂 Navigating into folder: '%s'", "color:#3b82f6; font-weight:bold;", currentFolderPath);
         prototypeSelectedItems = [];
         updateSelectionToolbar();
@@ -2204,7 +2198,7 @@
                 var failed = [];
                 function moveNext(index) {
                     if (index >= filesToMove.length) {
-                        return Promise.resolve({ status: "success", completed: completed });
+                        return Promise.resolve({ status: "success", completed: completed, failed: failed });
                     }
                     var filename = filesToMove[index];
                     var formData = new FormData();
@@ -2215,6 +2209,10 @@
                         .then(function (data) {
                             if (data.status === "success") completed++; else failed.push(filename);
                             return moveNext(index + 1);
+                        })
+                        .catch(function () {
+                            failed.push(filename);
+                            return moveNext(index + 1);
                         });
                 }
                 return moveNext(0);
@@ -2222,27 +2220,27 @@
 
         repoPromise
             .then(function (data) {
-                if (typeof showToast === "function") showToast("Moved file(s) to '" + (destination || "Home") + "'.", 3000);
+                var failedCount = (data && data.failed && data.failed.length) ? data.failed.length : 0;
+                if (typeof showToast === "function") {
+                    if (failedCount > 0) {
+                        showToast("Moved file(s) with " + failedCount + " failure(s).", 4000);
+                    } else {
+                        showToast("Moved file(s) to '" + (destination || "Home") + "'.", 3000);
+                    }
+                }
                 window.clearSelection();
                 itemsToMove = [];
                 if (typeof refreshFileList === "function") refreshFileList();
                 fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
                 window.closeMoveDialog();
-                        }
-                    }
-                    else { failed.push(filename); }
-                    moveNext(index + 1);
-                })
-                .catch(function () {
-                    failed.push(filename);
-                    moveNext(index + 1);
-                });
-        }
-
-        moveNext(0);
+            })
+            .catch(function () {
+                if (typeof showToast === "function") showToast("Failed to move file(s).", 4000);
+                window.closeMoveDialog();
+            });
     };
 
-    window.cancelSelectedUpload = function () {
+window.cancelSelectedUpload = function () {
         if (typeof cancelAllUploads === "function") {
             cancelAllUploads();
         }
@@ -2568,6 +2566,21 @@
             e.stopPropagation();
         }
     });
+
+    // Generic context menu opener (for empty space right-click)
+    window.showGenericContextMenu = function (x, y) {
+        if (typeof x !== 'number') x = 200;
+        if (typeof y !== 'number') y = 200;
+        var menu = document.getElementById("contextMenu");
+        if (!menu) return;
+        var genericOps = document.getElementById("genericMenuOptions");
+        var itemOps = document.getElementById("itemMenuOptions");
+        if (genericOps) genericOps.style.display = "block";
+        if (itemOps) itemOps.style.display = "none";
+        menu.style.left = x + "px";
+        menu.style.top = y + "px";
+        menu.style.display = "block";
+    };
 
     window.showToast = function (message, duration) {
         if (!message) return;
@@ -3452,63 +3465,7 @@
     };
 
     // buildTrayItemHtml, wireTrayItemListeners, buildHeaderActionsHtml, and wireHeaderActions are provided by upload-tray-renderer.js module
-                    window.resumeAllUploads();
-                }
-            });
-        }
-        var expandBtn = actionsContainer.querySelector(".header-expand-btn");
-        if (expandBtn) {
-            expandBtn.addEventListener("click", function (e) {
-                e.stopPropagation();
-                window.uploadManagerExpanded = !window.uploadManagerExpanded;
-                renderUploadTray();
-            });
-        }
-        var expandDockBtn = actionsContainer.querySelector(".header-expand-dock-btn");
-        if (expandDockBtn) {
-            expandDockBtn.addEventListener("click", function (e) {
-                e.stopPropagation();
-                window.uploadManagerExpanded = !window.uploadManagerExpanded;
-                renderUploadTray();
-            });
-        }
-        var closeBtn = actionsContainer.querySelector(".close-panel-btn");
-        if (closeBtn) {
-            closeBtn.addEventListener("click", function (e) {
-                e.stopPropagation();
-                if (window.uploadQueue) {
-                    var hasActive = window.uploadQueue.some(function (i) {
-                        return i.status === 'uploading' || i.status === 'queued' || i.status === 'processing' || i.status === 'paused';
-                    });
-                    if (!hasActive) {
-                        // Clear finished completed items immediately
-                        if (window._trayAutoDismissTimer) {
-                            clearTimeout(window._trayAutoDismissTimer);
-                            window._trayAutoDismissTimer = null;
-                        }
-                        window.uploadQueue = window.uploadQueue.filter(function (item) {
-                            return item.status !== 'completed' && item.status !== 'deleted';
-                        });
-                        renderUploadTray();
-                        return;
-                    }
-                }
-                if (typeof window.cancelAllUploads === "function") {
-                    window.cancelAllUploads();
-                }
-            });
-        }
-        var openMenuBtn = actionsContainer.querySelector(".open-menu-btn");
-        if (openMenuBtn) {
-            openMenuBtn.addEventListener("click", function (e) {
-                e.stopPropagation();
-                var rect = this.getBoundingClientRect();
-                if (typeof window.showGenericContextMenu === "function") {
-                    window.showGenericContextMenu(rect.left - 120, rect.top - 110);
-                }
-            });
-        }
-    }
+
     window.navigateToPathAndSelect = function (targetPath, filename) {
         currentFolderPath = targetPath || "";
         prototypeSelectedItems = [];

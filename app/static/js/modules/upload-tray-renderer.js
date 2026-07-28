@@ -127,7 +127,71 @@
                 }
             });
         }
+        var expandBtn = actionsContainer.querySelector(".header-expand-btn");
+        if (expandBtn) {
+            expandBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                window.uploadManagerExpanded = !window.uploadManagerExpanded;
+                if (typeof window.renderUploadTray === "function") {
+                    window.renderUploadTray();
+                } else if (typeof renderUploadTray === "function") {
+                    renderUploadTray();
+                }
+            });
+        }
+        var expandDockBtn = actionsContainer.querySelector(".header-expand-dock-btn");
+        if (expandDockBtn) {
+            expandDockBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                window.uploadManagerExpanded = !window.uploadManagerExpanded;
+                if (typeof window.renderUploadTray === "function") {
+                    window.renderUploadTray();
+                } else if (typeof renderUploadTray === "function") {
+                    renderUploadTray();
+                }
+            });
+        }
+        var closeBtn = actionsContainer.querySelector(".close-panel-btn");
+        if (closeBtn) {
+            closeBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                if (window.uploadQueue) {
+                    var hasActive = window.uploadQueue.some(function (i) {
+                        return i.status === 'uploading' || i.status === 'queued' || i.status === 'processing' || i.status === 'paused';
+                    });
+                    if (!hasActive) {
+                        if (window._trayAutoDismissTimer) {
+                            clearTimeout(window._trayAutoDismissTimer);
+                            window._trayAutoDismissTimer = null;
+                        }
+                        window.uploadQueue = window.uploadQueue.filter(function (item) {
+                            return item.status !== 'completed' && item.status !== 'deleted';
+                        });
+                        if (typeof window.renderUploadTray === "function") {
+                            window.renderUploadTray();
+                        } else if (typeof renderUploadTray === "function") {
+                            renderUploadTray();
+                        }
+                        return;
+                    }
+                }
+                if (typeof window.cancelAllUploads === "function") {
+                    window.cancelAllUploads();
+                }
+            });
+        }
+        var openMenuBtn = actionsContainer.querySelector(".open-menu-btn");
+        if (openMenuBtn) {
+            openMenuBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                var rect = this.getBoundingClientRect();
+                if (typeof window.showGenericContextMenu === "function") {
+                    window.showGenericContextMenu(rect.left - 120, rect.top - 110);
+                }
+            });
+        }
     }
+
 
     function wireTrayItemListeners(el, item) {
         if (!el || !item) return;
