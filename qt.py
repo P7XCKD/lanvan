@@ -124,7 +124,7 @@ class Suite:
     def test_ui_and_viewmode_integrity(self):
         HEAD("UI, VIEW MODE & UPLOAD TRAY INTEGRITY")
         combined_js = ""
-        for f in sorted(JS_DIR.glob("*.js")):
+        for f in sorted(JS_DIR.rglob("*.js")):
             combined_js += f"\n/*---{f.name}---*/\n"+f.read_text(encoding="utf-8",errors="ignore")
 
         # 1. Check view mode state persistence & instant toggle
