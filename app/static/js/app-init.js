@@ -59,8 +59,18 @@
 
     var currentFolderPath = "Home";
     Object.defineProperty(window, 'currentFolderPath', {
-        get: function () { return currentFolderPath; },
-        set: function (val) { currentFolderPath = val; },
+        get: function () {
+            if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState) {
+                return window.LanvanStore.getState().currentFolder || "";
+            }
+            return currentFolderPath;
+        },
+        set: function (val) {
+            currentFolderPath = val;
+            if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.dispatch) {
+                window.LanvanStore.dispatch("NAVIGATE_FOLDER", { folderPath: val }, "HIGH");
+            }
+        },
         configurable: true
     });
 
@@ -197,7 +207,19 @@
      * Render files in prototype #nasFileList from the same data production uses.
      * @param {string[]} files - Array of filenames from production API
      */
-    var lastFilesData = [];
+    function getDiskFileMetadata(filename, folderPath) {
+        if (!filename) return null;
+        var path = folderPath || (typeof window.lanvanStore !== 'undefined' && window.lanvanStore.getState ? window.lanvanStore.getState().currentFolder : (window.currentFolderPath || ""));
+        var cache = (window.FileRepository && typeof window.FileRepository.getFolderCache === 'function')
+            ? window.FileRepository.getFolderCache(path)
+            : [];
+        return (cache || []).find(function (f) {
+            if (!f) return false;
+            var fn = typeof f === 'string' ? f : f.name;
+            return fn && fn.trim().toLowerCase() === String(filename).trim().toLowerCase();
+        }) || null;
+    }
+
     var lastRenderedFiles = [];
     window.activeTab = "file";
 
@@ -324,7 +346,7 @@
                 var fn = typeof item === "string" ? item : item.name;
                 if (!fn) continue;
 
-                var meta = (typeof item === "string") ? lastFilesData.find(function (f) { return f && f.name === item; }) : item;
+                var meta = (typeof item === "string") ? getDiskFileMetadata(item) : item;
 
                 // ASSERTION: Fallback cache check
                 if (fileSource.startsWith("fallback_")) {
@@ -967,6 +989,21 @@
      * Handle item click — toggle selection.
      */
     var prototypeSelectedItems = [];
+    Object.defineProperty(window, 'prototypeSelectedItems', {
+        get: function () {
+            if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState) {
+                return window.LanvanStore.getState().selection || prototypeSelectedItems;
+            }
+            return prototypeSelectedItems;
+        },
+        set: function (val) {
+            prototypeSelectedItems = Array.isArray(val) ? val : [];
+            if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.dispatch) {
+                window.LanvanStore.dispatch("SET_SELECTION", { files: prototypeSelectedItems }, "NORMAL");
+            }
+        },
+        configurable: true
+    });
 
     function handleListItemClick(item, index, files) {
         var name = files[index];
@@ -1286,8 +1323,8 @@
             if (listEl) {
                 isFolder = listEl.getAttribute("data-is-folder") === "1";
             }
-            if (!isFolder && Array.isArray(lastFilesData)) {
-                var foundMeta = lastFilesData.find(function (f) { return f && f.name === targetItem; });
+            if (!isFolder) {
+                var foundMeta = getDiskFileMetadata(targetItem);
                 if (foundMeta && (foundMeta.isFolder || foundMeta.is_dir)) isFolder = true;
             }
 
@@ -1330,7 +1367,7 @@
         })
             .then(function (res) {
                 if (!res.ok) {
-                    if (res.status === 404 && (typeof lastFilesData === "undefined" || items.length >= (lastFilesData || []).length)) {
+                    if (res.status === 404) {
                         window.location.href = "/download-all";
                         return null;
                     }
@@ -1481,9 +1518,9 @@
                     break;
                 }
             }
-            if (!isFolder && Array.isArray(lastFilesData)) {
-                var foundData = lastFilesData.find(function (f) { return f && f.name === filename; });
-                if (foundData) isFolder = !!foundData.isFolder;
+            if (!isFolder) {
+                var foundData = getDiskFileMetadata(filename);
+                if (foundData) isFolder = !!(foundData.isFolder || foundData.is_dir);
             }
 
             var formData = new FormData();
@@ -1524,8 +1561,8 @@
         if (listEl) {
             isFolder = listEl.getAttribute("data-is-folder") === "1";
         }
-        if (!isFolder && Array.isArray(lastFilesData)) {
-            var foundMeta = lastFilesData.find(function (f) { return f && f.name === filename; });
+        if (!isFolder) {
+            var foundMeta = getDiskFileMetadata(filename);
             if (foundMeta && (foundMeta.isFolder || foundMeta.is_dir)) isFolder = true;
         }
 
@@ -1631,8 +1668,8 @@
             var listEl = document.querySelector('#nasFileList [data-filename="' + targetName.replace(/"/g, '&quot;') + '"]');
             if (listEl) {
                 isTargetFolder = listEl.getAttribute("data-is-folder") === "1";
-            } else if (Array.isArray(lastFilesData)) {
-                var meta = lastFilesData.find(function (f) { return f && f.name === targetName; });
+            } else {
+                var meta = getDiskFileMetadata(targetName);
                 if (meta) isTargetFolder = !!meta.isFolder;
             }
         }
@@ -2294,10 +2331,11 @@
             formData.append("parent_path", parentPath);
         }
 
-        console.log("[submitNewFolder] Sending fetch request...");
+        var repoPromise = (window.FileRepository && typeof window.FileRepository.createFolder === 'function')
+            ? window.FileRepository.createFolder(name, parentPath)
+            : fetch("/api/files/mkdir", { method: "POST", body: formData }).then(function (r) { return r.json(); });
 
-        fetch("/api/files/mkdir", { method: "POST", body: formData })
-            .then(function (r) { return r.json(); })
+        repoPromise
             .then(function (data) {
                 if (data.status === "success") {
                     if (typeof showToast === "function") showToast("Folder '" + name + "' created.", 3000);
@@ -2363,8 +2401,8 @@
             if (listEl) {
                 isFolder = listEl.getAttribute("data-is-folder") === "1";
             } else {
-                var meta = lastFilesData.find(function (f) { return f.name === oldName; });
-                if (meta) isFolder = !!meta.isFolder;
+                var meta = getDiskFileMetadata(oldName);
+                if (meta) isFolder = !!(meta.isFolder || meta.is_dir);
             }
 
             var nameToUse = "";
@@ -2415,10 +2453,12 @@
 
             var formData = new FormData();
             formData.append("filename", oldName);
-            formData.append("new_name", nameToUse);
+            var parentPath = cleanFolderPath(currentFolderPath);
+            var repoPromise = (window.FileRepository && typeof window.FileRepository.renameItem === 'function')
+                ? window.FileRepository.renameItem(oldName, nameToUse, isFolder, parentPath)
+                : fetch("/api/files/rename", { method: "POST", body: formData }).then(function (r) { return r.json(); });
 
-            fetch("/api/files/rename", { method: "POST", body: formData })
-                .then(function (r) { return r.json(); })
+            repoPromise
                 .then(function (data) {
                     if (data.status === "success") {
                         completed++;
@@ -2462,48 +2502,38 @@
 
         // Destination is the current move dialog path (strip "Home" prefix since backend uses relative paths)
         var destination = moveCurrentPath.length > 1 ? moveCurrentPath.slice(1).join("/") : "";
-
-        var completed = 0;
-        var failed = [];
-
-        function moveNext(index) {
-            if (index >= filesToMove.length) {
-                if (failed.length > 0) {
-                    if (typeof showToast === "function") showToast("Moved " + completed + " file(s). " + failed.length + " failed.", 4000);
-                } else {
-                    if (typeof showToast === "function") showToast("Moved " + completed + " file(s) to '" + (destination || "Home") + "'.", 3000);
+        var sourceFolder = cleanFolderPath(currentFolderPath);
+        var repoPromise = (window.FileRepository && typeof window.FileRepository.moveItems === 'function')
+            ? window.FileRepository.moveItems(filesToMove, destination, sourceFolder)
+            : (function () {
+                var completed = 0;
+                var failed = [];
+                function moveNext(index) {
+                    if (index >= filesToMove.length) {
+                        return Promise.resolve({ status: "success", completed: completed });
+                    }
+                    var filename = filesToMove[index];
+                    var formData = new FormData();
+                    formData.append("filename", filename);
+                    formData.append("destination", destination);
+                    return fetch("/api/files/move", { method: "POST", body: formData })
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                            if (data.status === "success") completed++; else failed.push(filename);
+                            return moveNext(index + 1);
+                        });
                 }
+                return moveNext(0);
+            })();
+
+        repoPromise
+            .then(function (data) {
+                if (typeof showToast === "function") showToast("Moved file(s) to '" + (destination || "Home") + "'.", 3000);
                 window.clearSelection();
                 itemsToMove = [];
                 if (typeof refreshFileList === "function") refreshFileList();
                 fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
                 window.closeMoveDialog();
-                return;
-            }
-
-            var filename = filesToMove[index];
-            var formData = new FormData();
-            formData.append("filename", filename);
-            formData.append("destination", destination);
-
-            fetch("/api/files/move", { method: "POST", body: formData })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (data.status === "success") {
-                        completed++;
-                        if (Array.isArray(window.uploadQueue)) {
-                            window.uploadQueue.forEach(function (qi) {
-                                var qiName = qi.fileName || qi.name || "";
-                                if (qiName === filename) {
-                                    qi.targetDir = destination || "";
-                                }
-                            });
-                            saveUploadQueueToStorage();
-                            if (typeof scheduleUploadTrayRender === "function") {
-                                scheduleUploadTrayRender();
-                            } else if (typeof renderUploadTray === "function") {
-                                renderUploadTray();
-                            }
                         }
                     }
                     else { failed.push(filename); }
@@ -3225,7 +3255,8 @@
             return;
         }
 
-        var allItems = lastFilesData || [];
+        var path = (typeof window.lanvanStore !== 'undefined' && window.lanvanStore.getState) ? window.lanvanStore.getState().currentFolder : (window.currentFolderPath || "");
+        var allItems = (window.FileRepository && typeof window.FileRepository.getFolderCache === 'function') ? window.FileRepository.getFolderCache(path) : [];
         var matches = allItems.filter(function (item) {
             if (!item || !item.name) return false;
             return item.name.toLowerCase().indexOf(q) !== -1;
@@ -4588,81 +4619,26 @@
     // =========================================================================
 
     // Fetch full file data with metadata from API (includes folders)
-    // Respects currentFolderPath for subfolder navigation
+    // Delegated to FileRepository for AbortController in-flight request cancellation
     function fetchFilesData() {
-        var cleanPath = cleanFolderPath(currentFolderPath);
-        var isSubfolder = cleanPath && cleanPath !== "Home" && cleanPath !== "";
+        var path = (typeof window.lanvanStore !== 'undefined' && window.lanvanStore.getState)
+            ? window.lanvanStore.getState().currentFolder
+            : (window.currentFolderPath || "");
 
-        if (isSubfolder) {
-            // Subfolder: use /api/folders/{folder_name}/files
-            var encodedPath = encodeURIComponent(cleanPath);
-            return fetch("/api/folders/" + encodedPath + "/files")
-                .then(function (r) {
-                    if (!r.ok) {
-                        return { files: [] };
-                    }
-                    return r.json();
-                })
-                .then(function (data) {
-                    if (data && data.files) {
-                        var folderItems = data.files.map(function (f) {
-                            return {
-                                name: f.name,
-                                size: f.size || "--",
-                                mtime: f.mtime || 0,
-                                isFolder: !!f.isFolder
-                            };
-                        });
-                        // [DIAG] Log subfolder API response
-                        console.log("[DIAG fetchFilesData] Subfolder '" + cleanPath + "' API returned files:", folderItems.map(function(f){return f.name;}));
-                        return tagFilesWithFolder(folderItems, cleanPath);
-                    }
-                    console.log("[DIAG fetchFilesData] Subfolder '" + cleanPath + "' API returned no files");
-                    return tagFilesWithFolder([], cleanPath);
-                })
-                .catch(function () { return tagFilesWithFolder([], cleanPath); });
+        if (window.FileRepository && typeof window.FileRepository.fetchFolderContents === 'function') {
+            return window.FileRepository.fetchFolderContents(path);
         }
 
-        // Root: fetch files + folders in parallel
-        var filePromise = fetch("/api/files")
-            .then(function (r) { return r.json(); })
+        // Fallback for bootstrap race before FileRepository instantiation
+        var cleanPath = cleanFolderPath(path);
+        var url = cleanPath ? ("/api/folders/" + encodeURIComponent(cleanPath) + "/files") : "/api/files";
+        return fetch(url)
+            .then(function (r) { return r.ok ? r.json() : { files: [] }; })
             .then(function (data) {
-                if (data.files_data) {
-                    lastFilesData = data.files_data;
-                }
-                // [DIAG] Log root API response
-                var rootFiles = data.files_data || data.files || [];
-                console.log("[DIAG fetchFilesData] Root API returned files:", rootFiles.map(function(f){ return typeof f === 'string' ? f : f.name; }));
-                return tagFilesWithFolder(rootFiles, "");
+                var files = (data && (data.files_data || data.files)) ? (data.files_data || data.files) : [];
+                return tagFilesWithFolder(files, cleanPath);
             })
-            .catch(function () {
-                return tagFilesWithFolder([], "");
-            });
-
-        var folderPromise = fetch("/api/folders")
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (data.folders) {
-                    // Convert folder objects to file-like format
-                    return tagFilesWithFolder(data.folders.map(function (f) {
-                        return { name: f.name, size: f.size_formatted || "--", mtime: f.created || 0, isFolder: true };
-                    }), "");
-                }
-                return tagFilesWithFolder([], "");
-            })
-            .catch(function () {
-                return tagFilesWithFolder([], "");
-            });
-
-        return Promise.all([filePromise, folderPromise]).then(function (results) {
-            var files = results[0];
-            var folders = results[1];
-            // Folders first, then files (matching prototype)
-            var combined = tagFilesWithFolder(folders.concat(files), "");
-            // [DIAG] Log final combined result with __folderPath
-            console.log("[DIAG fetchFilesData] Combined result __folderPath:", combined.__folderPath, "| Files:", combined.map(function(f){ return f.name; }));
-            return combined;
-        });
+            .catch(function () { return tagFilesWithFolder([], cleanPath); });
     }
 
     // Render QR code in sidebar using production QR API

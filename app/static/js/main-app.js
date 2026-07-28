@@ -330,11 +330,22 @@ let encryptionKey = null;
 let isEncryptionEnabled = false;
 let fetchInterceptorActive = false;
 
-//  Upload Manager System - Make globally accessible
-// Start empty; server history loaded asynchronously below
-if (!Array.isArray(window.uploadQueue)) {
-  window.uploadQueue = [];
-}
+let _rawUploadQueue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
+Object.defineProperty(window, 'uploadQueue', {
+  get: function () {
+    if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState) {
+      return window.LanvanStore.getState().uploadQueue || _rawUploadQueue;
+    }
+    return _rawUploadQueue;
+  },
+  set: function (val) {
+    _rawUploadQueue = Array.isArray(val) ? val : [];
+    if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.dispatch) {
+      window.LanvanStore.dispatch("SYNC_QUEUE", { queue: _rawUploadQueue }, "NORMAL");
+    }
+  },
+  configurable: true
+});
 let uploadQueue = window.uploadQueue; // Local reference
 let uploadIdCounter = uploadQueue.reduce((max, item) => Math.max(max, item.id || 0), 0);
 

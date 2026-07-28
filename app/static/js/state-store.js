@@ -98,6 +98,10 @@
         return this.actionQueue.dispatch(type, payload, priority);
     };
 
+    LanvanStore.prototype.getState = function () {
+        return this.state;
+    };
+
     LanvanStore.prototype.subscribe = function (listener) {
         if (typeof listener === 'function') {
             this.listeners.push(listener);
@@ -178,6 +182,8 @@
                 cancelItem.status = 'CANCELLED';
                 cancelItem.error = 'Cancelled by user';
             }
+        } else if (action.type === 'SYNC_QUEUE') {
+            return (action.payload.queue || []).slice();
         }
         return queue;
     }

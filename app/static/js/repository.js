@@ -93,6 +93,58 @@
         }
     };
 
+    FileRepository.prototype.createFolder = function (folderName, parentPath) {
+        var formData = new FormData();
+        formData.append("folder_name", folderName);
+        if (parentPath) formData.append("parent_path", parentPath);
+        var self = this;
+        return fetch("/api/files/mkdir", { method: "POST", body: formData })
+            .then(function (res) {
+                if (!res.ok) throw new Error("HTTP error " + res.status);
+                return res.json();
+            })
+            .then(function (data) {
+                self.invalidateCache(parentPath);
+                return data;
+            });
+    };
+
+    FileRepository.prototype.renameItem = function (oldName, newName, isFolder, parentPath) {
+        var formData = new FormData();
+        formData.append("old_name", oldName);
+        formData.append("new_name", newName);
+        formData.append("is_folder", isFolder ? "true" : "false");
+        if (parentPath) formData.append("parent_path", parentPath);
+        var self = this;
+        return fetch("/api/files/rename", { method: "POST", body: formData })
+            .then(function (res) {
+                if (!res.ok) throw new Error("HTTP error " + res.status);
+                return res.json();
+            })
+            .then(function (data) {
+                self.invalidateCache(parentPath);
+                return data;
+            });
+    };
+
+    FileRepository.prototype.moveItems = function (files, targetFolder, sourceFolder) {
+        var formData = new FormData();
+        formData.append("target_folder", targetFolder);
+        if (sourceFolder) formData.append("source_folder", sourceFolder);
+        files.forEach(function (f) { formData.append("files", f); });
+        var self = this;
+        return fetch("/api/files/move", { method: "POST", body: formData })
+            .then(function (res) {
+                if (!res.ok) throw new Error("HTTP error " + res.status);
+                return res.json();
+            })
+            .then(function (data) {
+                self.invalidateCache(sourceFolder);
+                self.invalidateCache(targetFolder);
+                return data;
+            });
+    };
+
     // Instantiate FileRepository
     var repoInstance = new FileRepository(window.LanvanStore);
     window.FileRepository = repoInstance;
