@@ -18,40 +18,73 @@
         var pct = typeof uploadProgress === 'number' ? Math.min(100, Math.max(0, uploadProgress)) : 0;
         var hasActiveUpload = !!(isUploading);
         var sizeStr = size || "--";
-        var progressBarHtml = '';
-        var subtitleHtml = '';
-
-        if (isFolder && subtitle) {
-            subtitleHtml = '<div class="item-subtitle">' + subtitle + '</div>';
+        if (uploadStatus === 'completed' || (pct >= 100 && uploadStatus !== 'uploading' && uploadStatus !== 'paused')) {
+            isUploading = false;
         }
 
-        if (hasActiveUpload) {
-            var statusText = pct > 0 ? 'Uploading' : 'Queued';
-            progressBarHtml =
-                '<div class="upload-row-progress">' +
-                '<div class="upload-row-progress-label">' + statusText + ' &bull; ' + pct + '%</div>' +
-                '<div class="progress-bar-container">' +
-                '<div class="progress-bar-fill" style="width: ' + pct + '%;"></div>' +
-                '</div>' +
-                '</div>';
+        var dateText = dateStr || "--";
+        var subtitleText = subtitle || (isFolder ? "Folder" : "File");
+        if (isUploading) {
+            var statusLabel = uploadStatus === 'paused' ? 'Paused' : (uploadStatus === 'queued' ? 'Queued' : 'Uploading');
+            subtitleText = pct + "% • " + statusLabel;
         }
+
+        var displaySize = isFolder ? "-" : sizeStr;
+        var progressBarHtml = isUploading
+            ? '<div class="row-progress-bar" style="position:absolute; top:0; bottom:0; left:0; background:rgba(59, 130, 246, 0.08); width:' + pct + '%; transition:width 0.25s ease-out; pointer-events:none; z-index:1;"></div>'
+            : '';
+
+        var actionsHtml = '';
+        if (isUploading) {
+            var playPauseBtn = '';
+            var svgPlay = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+            var svgPause = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+            var svgClose = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+
+            if (uploadStatus === 'paused') {
+                playPauseBtn = '<button class="btn-icon" title="Resume upload" data-action="resume-upload" data-upload-id="' + uploadId + '" style="display:inline-flex;align-items:center;justify-content:center;">' +
+                    svgPlay +
+                    '</button>';
+            } else {
+                playPauseBtn = '<button class="btn-icon" title="Pause upload" data-action="pause-upload" data-upload-id="' + uploadId + '" style="display:inline-flex;align-items:center;justify-content:center;">' +
+                    svgPause +
+                    '</button>';
+            }
+            actionsHtml = playPauseBtn +
+                '<button class="btn-icon" title="Cancel upload" data-action="cancel-upload" data-upload-id="' + uploadId + '" style="display:inline-flex;align-items:center;justify-content:center;">' +
+                svgClose +
+                '</button>';
+        } else {
+            actionsHtml =
+                '<button class="btn-icon hover-btn" title="Download" data-action="download" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '">' +
+                '<i data-lucide="download" style="width:16px;height:16px;"></i>' +
+                '</button>' +
+                (isFolder ? '' :
+                    '<button class="btn-icon hover-btn" title="Rename" data-action="rename" data-filename="' + escName + '">' +
+                    '<i data-lucide="edit-2" style="width:16px;height:16px;"></i>' +
+                    '</button>'
+                ) +
+                '<button class="btn-icon" title="More actions" data-action="menu" data-filename="' + escName + '">' +
+                '<i data-lucide="more-vertical" style="width:16px;height:16px;"></i>' +
+                '</button>';
+        }
+
+        var displayDate = isUploading ? (uploadStatus === 'paused' ? 'Paused' : (uploadStatus === 'queued' ? 'Queued' : 'Uploading')) : dateText;
 
         return (
-            '<div class="m3-list-item' + (isUploading ? ' uploading' : '') + '" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '">' +
-            '<div class="file-name-cell">' +
+            '<div class="m3-list-item' + (isUploading ? ' uploading' : '') + '" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '" style="' + (isUploading ? 'position:relative; overflow:hidden;' : '') + '">' +
+            progressBarHtml +
+            '<div class="file-name-cell" style="position:relative; z-index:2;">' +
             '<div class="avatar-icon ' + itemInfo.avatarClass + '"><i data-lucide="' + itemInfo.iconName + '"></i></div>' +
             '<div class="item-main">' +
             '<div class="item-title">' + escName + '</div>' +
-            subtitleHtml +
-            progressBarHtml +
+            '<div class="item-subtitle">' + subtitleText + '</div>' +
             '</div>' +
             '</div>' +
-            '<div class="item-date">' + (dateStr || '--') + '</div>' +
-            '<div class="item-size">' + sizeStr + '</div>' +
-            '<div class="row-actions">' +
-            '<button class="btn-icon" title="More actions" data-action="menu" data-filename="' + escName + '">' +
-            '<i data-lucide="more-vertical"></i>' +
-            '</button>' +
+            '<div class="item-date" style="position:relative; z-index:2;">' + displayDate + '</div>' +
+            '<div class="item-size" style="position:relative; z-index:2;">' + displaySize + '</div>' +
+            '<div class="row-actions" style="position:relative; z-index:2;">' +
+            actionsHtml +
             '</div>' +
             '</div>'
         );
