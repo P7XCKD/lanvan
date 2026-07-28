@@ -75,7 +75,9 @@
     });
 
     window.getCurrentFolderPath = function () {
-        var p = currentFolderPath || "";
+        var p = (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState)
+            ? (window.LanvanStore.getState().currentFolder || currentFolderPath || "")
+            : (currentFolderPath || "");
         return (p === "Home" || p === "Home/") ? "" : p;
     };
 
@@ -312,11 +314,12 @@
 
         // DELEGATE TO PROJECTION LAYER (THE GOLDEN INVARIANT)
         // Exactly one code path produces VisibleFiles[]
-        var storeState = window.LanvanStore ? Object.assign({}, window.LanvanStore.state) : { currentFolder: normCurrentDir, uploadQueue: window.uploadQueue || [], pendingOps: {} };
+        var storeState = window.LanvanStore ? Object.assign({}, window.LanvanStore.state) : { currentFolder: normCurrentDir, pendingOps: {} };
         var liveUploadQueue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
         storeState.currentFolder = normCurrentDir;
-        if (!Array.isArray(storeState.uploadQueue) || liveUploadQueue.length > storeState.uploadQueue.length) {
-            storeState.uploadQueue = liveUploadQueue;
+        storeState.uploadQueue = liveUploadQueue;
+        if (!storeState.pendingOps) {
+            storeState.pendingOps = {};
         }
 
         // [DIAG] Log what's being passed to the projection layer

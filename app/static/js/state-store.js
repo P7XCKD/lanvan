@@ -143,7 +143,7 @@
 
     // Domain Reducer: Folder Navigation
     function FolderReducer(currentFolder, action) {
-        if (action.type === 'NAVIGATION') {
+        if (action.type === 'NAVIGATION' || action.type === 'NAVIGATE_FOLDER') {
             var raw = action.payload.folderPath || "";
             return raw.replace(/^Home\/?/, "").replace(/^Home$/, "");
         }

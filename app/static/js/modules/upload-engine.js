@@ -37,9 +37,6 @@
       if (item.xhr) { try { item.xhr.abort(); } catch (e) {} }
     }
 
-    if (typeof window.triggerInstantUIUpdate === 'function') {
-      window.triggerInstantUIUpdate();
-    }
   }
 
   function resumeUploadItem(uploadId) {

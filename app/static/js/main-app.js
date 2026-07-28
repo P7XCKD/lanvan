@@ -333,15 +333,12 @@ let fetchInterceptorActive = false;
 let _rawUploadQueue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
 Object.defineProperty(window, 'uploadQueue', {
   get: function () {
-    if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState) {
-      return window.LanvanStore.getState().uploadQueue || _rawUploadQueue;
-    }
     return _rawUploadQueue;
   },
   set: function (val) {
     _rawUploadQueue = Array.isArray(val) ? val : [];
-    if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.dispatch) {
-      window.LanvanStore.dispatch("SYNC_QUEUE", { queue: _rawUploadQueue }, "NORMAL");
+    if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.state) {
+      window.LanvanStore.state.uploadQueue = _rawUploadQueue;
     }
   },
   configurable: true
@@ -1659,9 +1656,6 @@ function cancelUpload(uploadId) {
 
   // Force immediate UI update to show cancel status
   updateUploadItem(uploadItem);
-  if (typeof window.triggerInstantUIUpdate === "function") {
-    window.triggerInstantUIUpdate();
-  }
 
   const itemSize = window.getItemSize(uploadItem);
   const itemProg = window.getItemProgress(uploadItem);
@@ -1707,10 +1701,6 @@ function cancelUpload(uploadId) {
   if (!hasActiveUploads) {
     showClearCompletedButton();
     updateUploadManager();
-  }
-
-  if (typeof window.triggerInstantUIUpdate === 'function') {
-    window.triggerInstantUIUpdate();
   }
 }
 
