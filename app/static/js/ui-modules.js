@@ -1224,7 +1224,9 @@ async function uploadFolder(files) {
       if (typeof refreshFileListManually === 'function') {
         refreshFileListManually();
       }
-      if (typeof fetchFilesData === 'function' && typeof renderPrototypeFileList === 'function') {
+      if (typeof window.requestSafeVisibleFilesRefresh === 'function') {
+        window.requestSafeVisibleFilesRefresh(120);
+      } else if (typeof fetchFilesData === 'function' && typeof renderPrototypeFileList === 'function') {
         fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
       }
     } catch (error) {
@@ -1270,7 +1272,9 @@ async function uploadSingleFolder(folderName, files) {
       if (typeof refreshFileListManually === 'function') {
         refreshFileListManually();
       }
-      if (typeof fetchFilesData === 'function' && typeof renderPrototypeFileList === 'function') {
+      if (typeof window.requestSafeVisibleFilesRefresh === 'function') {
+        window.requestSafeVisibleFilesRefresh(120);
+      } else if (typeof fetchFilesData === 'function' && typeof renderPrototypeFileList === 'function') {
         fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
       }
       if (typeof loadFolders === 'function') loadFolders();

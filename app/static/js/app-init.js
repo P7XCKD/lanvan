@@ -60,10 +60,13 @@
     var currentFolderPath = "Home";
     Object.defineProperty(window, 'currentFolderPath', {
         get: function () {
+            if (currentFolderPath) {
+                return currentFolderPath;
+            }
             if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState) {
                 return window.LanvanStore.getState().currentFolder || "";
             }
-            return currentFolderPath;
+            return "";
         },
         set: function (val) {
             currentFolderPath = val;
@@ -75,9 +78,9 @@
     });
 
     window.getCurrentFolderPath = function () {
-        var p = (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState)
-            ? (window.LanvanStore.getState().currentFolder || currentFolderPath || "")
-            : (currentFolderPath || "");
+        var p = currentFolderPath || ((typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState)
+            ? (window.LanvanStore.getState().currentFolder || "")
+            : "");
         return (p === "Home" || p === "Home/") ? "" : p;
     };
 
@@ -1217,7 +1220,11 @@
                 window._contextMenuTarget = "";
                 window.clearSelection();
                 if (typeof refreshFileList === "function") refreshFileList();
-                fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+                if (typeof window.requestSafeVisibleFilesRefresh === "function") {
+                    window.requestSafeVisibleFilesRefresh(120);
+                } else if (typeof fetchFilesData === "function") {
+                    fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+                }
                 return;
             }
 
@@ -2035,8 +2042,12 @@
                         isCreatingFolderInMove = false;
                         renderMoveFolderContents();
                     } else {
-                        fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
                         if (typeof refreshFileList === "function") refreshFileList();
+                        if (typeof window.requestSafeVisibleFilesRefresh === "function") {
+                            window.requestSafeVisibleFilesRefresh(120);
+                        } else if (typeof fetchFilesData === "function") {
+                            fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+                        }
                     }
                 } else {
                     if (typeof showToast === "function") showToast(data.msg || "Failed to create folder.", 4000);
@@ -2080,7 +2091,11 @@
                 }
                 window._contextMenuTarget = "";
                 window.clearSelection();
-                fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+                if (typeof window.requestSafeVisibleFilesRefresh === "function") {
+                    window.requestSafeVisibleFilesRefresh(120);
+                } else if (typeof fetchFilesData === "function") {
+                    fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+                }
                 return;
             }
 
@@ -2234,7 +2249,11 @@
                 window.clearSelection();
                 itemsToMove = [];
                 if (typeof refreshFileList === "function") refreshFileList();
-                fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+                if (typeof window.requestSafeVisibleFilesRefresh === "function") {
+                    window.requestSafeVisibleFilesRefresh(120);
+                } else if (typeof fetchFilesData === "function") {
+                    fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+                }
                 window.closeMoveDialog();
             })
             .catch(function () {
@@ -4177,12 +4196,34 @@ window.cancelSelectedUpload = function () {
     // Trigger instant file list refresh after upload completes
     function triggerInstantRefresh() {
         fetchFilesData().then(function (filesData) {
+            var hasVisibleFiles = Array.isArray(filesData) && filesData.length > 0;
+            var hasExistingView = Array.isArray(lastRenderedFiles) && lastRenderedFiles.length > 0;
+
+            // Avoid wiping the current folder view on a transient empty refresh.
+            // The server can lag behind completion events by a moment, especially
+            // when another upload is still in flight.
+            if (!hasVisibleFiles && hasExistingView) {
+                return;
+            }
+
             renderPrototypeFileList(filesData);
         });
         if (typeof refreshFileList === "function") {
             refreshFileList();
         }
     }
+    window.triggerInstantRefresh = triggerInstantRefresh;
+
+    window.requestSafeVisibleFilesRefresh = function (delayMs) {
+        var waitMs = typeof delayMs === "number" ? delayMs : 150;
+        setTimeout(function () {
+            if (typeof window.triggerInstantRefresh === "function") {
+                window.triggerInstantRefresh();
+            } else if (typeof refreshFileList === "function") {
+                refreshFileList();
+            }
+        }, waitMs);
+    };
 
     function init() {
         window.uploadTrayDocked = true;
@@ -4426,10 +4467,18 @@ window.cancelSelectedUpload = function () {
             if (!item || !item.fileName) return;
 
             if (item.status === 'completed') {
-                if (typeof window.triggerInstantUIUpdate === 'function') {
-                    window.triggerInstantUIUpdate();
-                } else if (typeof lastRenderedFiles !== 'undefined') {
-                    renderPrototypeFileList(lastRenderedFiles);
+                var hasOtherActiveUploads = Array.isArray(window.uploadQueue) && window.uploadQueue.some(function (qi) {
+                    return qi && qi.id !== item.id && (qi.status === 'uploading' || qi.status === 'queued' || qi.status === 'processing' || qi.status === 'paused');
+                });
+
+                if (!hasOtherActiveUploads) {
+                    setTimeout(function () {
+                        if (typeof triggerInstantRefresh === 'function') {
+                            triggerInstantRefresh();
+                        } else if (typeof refreshFileList === 'function') {
+                            refreshFileList();
+                        }
+                    }, 150);
                 }
                 return;
             }

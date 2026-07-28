@@ -142,7 +142,7 @@
                         }
                     }
                 }
-            } else if (['queued', 'uploading', 'processing', 'paused', 'completed'].indexOf(String(item.status).toLowerCase()) !== -1) {
+            } else if (['queued', 'uploading', 'processing', 'paused', 'completed', 'cancelled'].indexOf(String(item.status).toLowerCase()) !== -1) {
                 // Subfolder upload batch in current view
                 var rootFolder = relDir.split("/")[0];
                 if (rootFolder) {
@@ -152,15 +152,27 @@
                             uploadedBytes: 0,
                             hasUploading: false,
                             hasPaused: false,
+                            hasCancelled: false,
                             allCompleted: true,
                             items: []
                         };
                     }
-                    var bytesDone = (item.status === 'completed') ? fileSize : (item.bytesUploaded || 0);
+                    var itemStatus = String(item.status).toLowerCase();
+                    var bytesDone = (itemStatus === 'completed') ? fileSize : (item.bytesUploaded || 0);
                     activeFolderMap[rootFolder].totalBytes += fileSize;
                     activeFolderMap[rootFolder].uploadedBytes += bytesDone;
-                    if (item.status === 'uploading' || item.status === 'processing' || item.status === 'queued') {
+                    if (itemStatus === 'uploading' || itemStatus === 'processing' || itemStatus === 'queued') {
                         activeFolderMap[rootFolder].allCompleted = false;
+                    }
+                    if (itemStatus === 'cancelled') {
+                        activeFolderMap[rootFolder].hasCancelled = true;
+                        activeFolderMap[rootFolder].allCompleted = false;
+                    }
+                    if (itemStatus === 'uploading' || itemStatus === 'processing') {
+                        activeFolderMap[rootFolder].hasUploading = true;
+                    }
+                    if (itemStatus === 'paused') {
+                        activeFolderMap[rootFolder].hasPaused = true;
                     }
                     activeFolderMap[rootFolder].items.push(item);
                 }
@@ -170,12 +182,14 @@
         // 4. Synthesize active folder rows
         Object.keys(activeFolderMap).forEach(function (folderName) {
             var finfo = activeFolderMap[folderName];
-            if (!finfo.allCompleted) {
+            if (!finfo.allCompleted || finfo.hasCancelled) {
                 var folderPct = finfo.totalBytes > 0 ? Math.min(99, Math.round((finfo.uploadedBytes / finfo.totalBytes) * 100)) : 0;
                 var existingFolder = normalizedDiskFiles.find(function (f) { return f && f.name === folderName && f.isFolder; });
+                var folderStatus = finfo.hasUploading ? 'uploading' : (finfo.hasPaused ? 'paused' : (finfo.hasCancelled ? 'cancelled' : 'queued'));
                 if (existingFolder) {
                     existingFolder.uploading = true;
                     existingFolder.uploadProgress = folderPct;
+                    existingFolder.uploadStatus = folderStatus;
                     existingFolder.uploadId = finfo.items[0] ? finfo.items[0].id : null;
                 } else {
                     var alreadyInActive = activeUploads.find(function (f) { return f.name === folderName && f.isFolder; });
@@ -187,6 +201,7 @@
                             isFolder: true,
                             uploading: true,
                             uploadProgress: folderPct,
+                            uploadStatus: folderStatus,
                             uploadId: finfo.items[0] ? finfo.items[0].id : null
                         });
                     }

@@ -225,11 +225,10 @@ function initUploadWebSocket() {
         const payload = JSON.parse(event.data);
         if (payload.type === 'file_list_updated' || payload.type === 'upload_complete') {
           console.log('[WS UPLOAD] 🔄 Received real-time sync event across devices:', payload);
-          if (typeof refreshFileList === 'function') refreshFileList();
-          if (typeof fetchFilesData === 'function') {
-            fetchFilesData().then(function (fd) {
-              if (typeof renderPrototypeFileList === 'function') renderPrototypeFileList(fd);
-            });
+          if (typeof window.requestSafeVisibleFilesRefresh === 'function') {
+            window.requestSafeVisibleFilesRefresh(120);
+          } else if (typeof refreshFileList === 'function') {
+            refreshFileList();
           }
         }
       } catch (e) { }
@@ -1606,7 +1605,11 @@ function performUIUpdate(uploadItem, forceUpdate = false) {
   }
 
   // Trigger main view (Grid cards & List rows) progress sync
-  if (typeof window.triggerInstantUIUpdate === 'function') {
+  if (uploadItem.status === 'completed') {
+    if (typeof window.requestSafeVisibleFilesRefresh === 'function') {
+      window.requestSafeVisibleFilesRefresh(120);
+    }
+  } else if (typeof window.triggerInstantUIUpdate === 'function') {
     window.triggerInstantUIUpdate();
   }
 }
