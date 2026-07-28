@@ -647,6 +647,10 @@
     function buildListItem(name, info, size, date, subtitle, isFolder, isUploading, uploadProgress, uploadId, uploadStatus) {
         var escName = escapeHtml(name);
         var sizeStr = size || "--";
+        if (uploadStatus === 'completed' || (uploadProgress >= 100 && uploadStatus !== 'uploading' && uploadStatus !== 'paused')) {
+            isUploading = false;
+        }
+
         var dateStr = date || "--";
         var subtitleText = subtitle || (isFolder ? "Folder" : "File");
         if (isUploading) {
@@ -721,6 +725,9 @@
     function buildGridItem(name, info, size, date, subtitle, isFolder, isUploading, uploadProgress, uploadId, uploadStatus) {
         var escName = escapeHtml(name);
         var ext = name.split(".").pop().toLowerCase();
+        if (uploadStatus === 'completed' || (uploadProgress >= 100 && uploadStatus !== 'uploading' && uploadStatus !== 'paused')) {
+            isUploading = false;
+        }
 
         var uploadStatusLabel = uploadStatus === 'paused' ? 'Paused' : 'Uploading';
         var progressBarHtml = isUploading
@@ -3735,7 +3742,7 @@
             metaText = sizeStr + " • " + label;
             fillStyle = 'background: rgba(220, 38, 38, 0.06); width: 100%;';
             actionHtml = '<span style="color: #dc2626; font-size:0.75rem; font-weight:600; margin-right: 8px;">' + label + '</span>';
-        } else if (item.status === 'completed') {
+        } else if (item.status === 'completed' || (pct >= 100 && item.status !== 'uploading' && item.status !== 'paused')) {
             var timeStr = item.uploadTime ? item.uploadTime + "s" : "completed";
             metaText = sizeStr + " • Completed (" + timeStr + ")";
             fillStyle = 'background: rgba(24, 128, 56, 0.08); width: 100%;';
@@ -4364,7 +4371,7 @@
                     fillStyle = 'rgba(220, 38, 38, 0.12)';
                     pct = 100;
                     actionHtml = '<span style="color: #dc2626; display: flex; align-items: center; margin-right: 8px;"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></span>';
-                } else if (item.status === 'completed') {
+                } else if (item.status === 'completed' || (pct >= 100 && item.status !== 'uploading' && item.status !== 'paused')) {
                     var timeStr = item.uploadTime ? item.uploadTime + "s" : "completed";
                     metaText = sizeStr + " • Completed (" + timeStr + ")";
                     fillStyle = 'rgba(24, 128, 56, 0.08)';
@@ -4963,6 +4970,16 @@
         // Clean event-driven DOM progress updater (no setInterval polling)
         window.updatePrototypeRowProgress = function (item) {
             if (!item || !item.fileName) return;
+
+            if (item.status === 'completed') {
+                if (typeof window.triggerInstantUIUpdate === 'function') {
+                    window.triggerInstantUIUpdate();
+                } else if (typeof lastRenderedFiles !== 'undefined') {
+                    renderPrototypeFileList(lastRenderedFiles);
+                }
+                return;
+            }
+
             var container = document.getElementById("nasFileList");
             if (!container) return;
 
@@ -4976,11 +4993,11 @@
                 if (row) {
                     var subtitleCell = row.querySelector('.item-subtitle');
                     if (subtitleCell) {
-                        subtitleCell.textContent = progress + "% • " + (item.status === 'paused' ? 'Paused' : 'Uploading');
+                        subtitleCell.textContent = progress + "% • " + (item.status === 'paused' ? 'Paused' : (item.status === 'processing' ? 'Processing' : 'Uploading'));
                     }
                     var dateCell = row.querySelector('.item-date');
                     if (dateCell) {
-                        dateCell.textContent = item.status === 'paused' ? 'Paused' : 'Uploading';
+                        dateCell.textContent = item.status === 'paused' ? 'Paused' : (item.status === 'processing' ? 'Processing' : 'Uploading');
                     }
                     var bar = row.querySelector('.row-progress-bar');
                     if (bar) {
@@ -5001,7 +5018,9 @@
                         }
                     }
                 } else {
-                    if (typeof lastRenderedFiles !== 'undefined') {
+                    if (typeof window.triggerInstantUIUpdate === 'function') {
+                        window.triggerInstantUIUpdate();
+                    } else if (typeof lastRenderedFiles !== 'undefined') {
                         renderPrototypeFileList(lastRenderedFiles);
                     }
                 }
@@ -5018,16 +5037,6 @@
                 renderPrototypeFileList(lastRenderedFiles);
             }
             startUploadTrayPolling();
-            var checkInterval = setInterval(function () {
-                var queue = window.uploadQueue || [];
-                var activeCount = queue.filter(function (item) {
-                    return item.status === "uploading" || item.status === "queued" || item.status === "processing" || item.status === "paused";
-                }).length;
-                if (activeCount === 0) {
-                    clearInterval(checkInterval);
-                    setTimeout(triggerInstantRefresh, 500);
-                }
-            }, 500);
         };
 
         // Render empty manager on load so it is visible by default

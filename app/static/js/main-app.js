@@ -77,6 +77,10 @@ if (typeof show_clipboard_only !== 'undefined' && show_clipboard_only) {
         clearTimeout(connectTimeout);
         wsConnectAttempts = 0; // Reset on success
         window.log.network('Clipboard WebSocket connected');
+        if (clipboardPollingInterval) {
+          clearInterval(clipboardPollingInterval);
+          clipboardPollingInterval = null;
+        }
 
         // Start health check for Safari
         if (window.isiOSSafari) {
@@ -126,9 +130,12 @@ if (typeof show_clipboard_only !== 'undefined' && show_clipboard_only) {
   }
 
   // Polling fallback for Safari
+  let clipboardPollingInterval = null;
   function startPollingMode() {
+    if (clipboardPollingInterval) return;
     window.log.info('Starting polling fallback for clipboard');
-    setInterval(() => {
+    clipboardPollingInterval = setInterval(() => {
+      if (document.hidden) return;
       if (typeof refreshClipboardHistory === 'function') {
         refreshClipboardHistory();
       }
@@ -1496,8 +1503,8 @@ function performUIUpdate(uploadItem, forceUpdate = false) {
   // Immediately and smoothly refresh recent cards & file list upon individual file completion
   if (uploadItem.status === 'completed' && !uploadItem._prototypeRefreshed) {
     uploadItem._prototypeRefreshed = true;
-    if (typeof fetchFilesData === 'function' && typeof renderPrototypeFileList === 'function') {
-      fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+    if (typeof window.triggerInstantUIUpdate === 'function') {
+      window.triggerInstantUIUpdate();
     } else if (typeof refreshFileList === 'function') {
       refreshFileList();
     }
@@ -2730,7 +2737,7 @@ function startAutoRefresh() {
 
   // Set up polling every 5 seconds to check for file changes
   autoRefreshInterval = setInterval(async () => {
-    if (!autoRefreshActive) return;
+    if (!autoRefreshActive || document.hidden) return;
 
     // Only refresh files when file section is active, not when in clipboard mode
     if (currentActiveSection !== 'file') {
@@ -3031,6 +3038,10 @@ function showShutdownWarning(message, countdown) {
 function handleServerShutdown(reason = 'Server has been shut down', gracefulTime = 0) {
   if (serverShutdown) return; // Prevent multiple notifications
   serverShutdown = true;
+  if (shutdownCheckInterval) {
+    clearInterval(shutdownCheckInterval);
+    shutdownCheckInterval = null;
+  }
 
   // Stop all uploads immediately with proper feedback
   if (uploadQueue.length > 0) {

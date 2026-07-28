@@ -101,11 +101,13 @@
                 });
 
                 var status = String(item.status || '').toLowerCase();
+                var itemPct = Math.round(item.progress || 0);
+
                 if (status === 'queued' || status === 'uploading' || status === 'processing' || status === 'paused') {
                     if (existingItem) {
                         existingItem.uploading = true;
-                        existingItem.uploadProgress = Math.round(item.progress || 0);
-                        existingItem.uploadStatus = item.status;
+                        existingItem.uploadProgress = itemPct;
+                        existingItem.uploadStatus = status;
                         existingItem.uploadId = item.id;
                     } else {
                         activeUploads.push({
@@ -114,20 +116,30 @@
                             mtime: Math.floor(Date.now() / 1000),
                             isFolder: false,
                             uploading: true,
-                            uploadProgress: Math.round(item.progress || 0),
-                            uploadStatus: item.status,
+                            uploadProgress: itemPct,
+                            uploadStatus: status,
                             uploadId: item.id
                         });
                     }
-                } else if (status === 'completed' && !existingItem) {
-                    var alreadyAdded = activeUploads.find(function (f) { return f.name === itemName; });
-                    if (!alreadyAdded) {
-                        activeUploads.push({
-                            name: itemName,
-                            size: formatProjectionSize(fileSize),
-                            mtime: Math.floor(Date.now() / 1000),
-                            isFolder: false
-                        });
+                } else if (status === 'completed') {
+                    if (existingItem) {
+                        existingItem.uploading = false;
+                        existingItem.uploadProgress = 100;
+                        existingItem.uploadStatus = 'completed';
+                    } else {
+                        // Newly completed upload not yet in disk files API response
+                        var alreadyInDisk = normalizedDiskFiles.find(function (f) { return f && f.name === itemName; });
+                        if (!alreadyInDisk) {
+                            normalizedDiskFiles.push({
+                                name: itemName,
+                                size: formatProjectionSize(fileSize),
+                                mtime: Math.floor(Date.now() / 1000),
+                                isFolder: false,
+                                uploading: false,
+                                uploadProgress: 100,
+                                uploadStatus: 'completed'
+                            });
+                        }
                     }
                 }
             } else if (['queued', 'uploading', 'processing', 'paused', 'completed'].indexOf(String(item.status).toLowerCase()) !== -1) {
