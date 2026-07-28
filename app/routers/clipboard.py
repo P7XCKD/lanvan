@@ -81,6 +81,9 @@ def save_clipboard_history():
 
             save_data['items'].append(save_item)
 
+        # Ensure directory exists before writing
+        CLIPBOARD_FOLDER.mkdir(parents=True, exist_ok=True)
+
         # Write to file atomically
         temp_file = CLIPBOARD_HISTORY_FILE.with_suffix('.tmp')
         with open(temp_file, 'w', encoding='utf-8') as f:

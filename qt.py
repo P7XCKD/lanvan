@@ -184,9 +184,10 @@ class Suite:
         self._ck("getItemName" in main_app or "window.getItemName" in main_app, "getItemName defensive getter defined", "defensive-getters")
         self._ck("getItemProgress" in main_app or "window.getItemProgress" in main_app, "getItemProgress defensive getter defined", "defensive-getters")
 
-        # Defensive usage in app-init
-        self._ck("window.getItemSize" in app_init, "getItemSize safely invoked in prototype adapter", "defensive-getters")
-        self._ck("window.getItemName" in app_init, "getItemName safely invoked in prototype adapter", "defensive-getters")
+        # Defensive usage in upload tray renderer module
+        tray_renderer = (JS_DIR / "modules" / "upload-tray-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "upload-tray-renderer.js").exists() else app_init
+        self._ck("getItemSize" in tray_renderer or "window.getItemSize" in app_init, "getItemSize safely invoked in tray renderer adapter", "defensive-getters")
+        self._ck("getItemName" in tray_renderer or "window.getItemName" in app_init, "getItemName safely invoked in tray renderer adapter", "defensive-getters")
 
     def test_declarative_ui_pattern(self):
         HEAD("DECLARATIVE UI RENDERING & SINGLE SOURCE OF TRUTH (§2)")

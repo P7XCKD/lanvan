@@ -8,100 +8,158 @@
     'use strict';
 
     function buildTrayItemHtml(item) {
-        var fn = item.fileName || item.name || "File";
-        var escName = typeof escapeHtml === 'function' ? escapeHtml(fn) : fn;
-        var isPaused = item.status === "paused";
-        var isProcessing = item.status === "processing";
-        var isCompleted = item.status === "completed";
-        var isDeleted = item.status === "deleted";
+        var pct = Math.round(typeof window.getItemProgress === "function" ? window.getItemProgress(item) : (item.progress || 0));
+        var rawName = typeof window.getItemName === "function" ? window.getItemName(item) : (item.fileName || item.name || "File");
+        var name = typeof escapeHtml === "function" ? escapeHtml(rawName) : rawName;
+        var rawSize = typeof window.getItemSize === "function" ? window.getItemSize(item) : (item.fileSize || 0);
+        var sizeStr = typeof formatSize === "function" ? formatSize(rawSize) : (rawSize + " B");
 
-        var statusClass = isCompleted ? "status-completed" : (isPaused ? "status-paused" : (isProcessing ? "status-processing" : "status-uploading"));
-        var statusLabel = isCompleted ? "Completed" : (isPaused ? "Paused" : (isProcessing ? "Processing" : "Uploading"));
-        var pct = typeof item.progress === 'number' ? Math.min(100, Math.max(0, Math.round(item.progress))) : (isCompleted ? 100 : 0);
+        var metaText = "";
+        var fillStyle = "";
+        var actionHtml = "";
 
-        var actionControl = '';
-        if (isCompleted || isDeleted) {
-            actionControl = '<span class="upload-toast-cancel-text" data-upload-id="' + item.id + '" style="color:var(--text-muted); cursor:pointer;">&times;</span>';
-        } else if (isPaused) {
-            actionControl = '<span class="upload-toast-resume-text" data-upload-id="' + item.id + '" style="color:var(--primary); cursor:pointer; font-weight:600; margin-right:8px;">Resume</span>' +
-                '<span class="upload-toast-cancel-text" data-upload-id="' + item.id + '" style="color:var(--text-muted); cursor:pointer;">&times;</span>';
+        if (item.status === 'deleted' || item.status === 'cancelled') {
+            var label = item.status === 'deleted' ? 'Deleted' : 'Cancelled';
+            metaText = sizeStr + " • " + label;
+            fillStyle = 'background: rgba(220, 38, 38, 0.06); width: 100%;';
+            actionHtml = '<span style="color: #dc2626; font-size:0.75rem; font-weight:600; margin-right: 8px;">' + label + '</span>';
+        } else if (item.status === 'completed' || (pct >= 100 && item.status !== 'uploading' && item.status !== 'paused')) {
+            var timeStr = item.uploadTime ? item.uploadTime + "s" : "completed";
+            metaText = sizeStr + " • Completed (" + timeStr + ")";
+            fillStyle = 'background: rgba(24, 128, 56, 0.08); width: 100%;';
+            actionHtml = '<span style="color: var(--green); display: inline-flex; align-items: center; justify-content: center; margin-right: 8px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span>';
+        } else if (item.status === 'paused') {
+            metaText = sizeStr + " • " + pct + "% (Paused)";
+            fillStyle = 'background: rgba(234, 179, 8, 0.12); width: ' + pct + '%;';
+            actionHtml = '<button type="button" class="upload-toast-resume-text" data-upload-id="' + item.id + '" title="Resume upload" style="background:none; border:none; color:var(--primary, #3b82f6); cursor:pointer; font-weight:500; font-size:0.8rem; margin-right:8px; padding:2px 4px;">' +
+                '<span>Resume</span>' +
+                '</button>' +
+                '<button type="button" class="upload-toast-cancel-text" data-upload-id="' + item.id + '" title="Cancel upload">' +
+                '<span>Cancel</span>' +
+                '</button>';
+        } else if (item.status === 'queued') {
+            metaText = sizeStr + " • Queued";
+            fillStyle = 'background: transparent; width: 0%;';
+            actionHtml = '<button type="button" class="upload-toast-cancel-text" data-upload-id="' + item.id + '" title="Cancel upload">' +
+                '<span>Cancel</span>' +
+                '</button>';
         } else {
-            actionControl = '<span class="upload-toast-cancel-text" data-upload-id="' + item.id + '" style="color:var(--text-muted); cursor:pointer;">Cancel</span>';
+            metaText = sizeStr + " • " + pct + "%";
+            fillStyle = 'background: rgba(59, 130, 246, 0.08); width: ' + pct + '%;';
+            actionHtml = '<button type="button" class="upload-toast-cancel-text" data-upload-id="' + item.id + '" title="Cancel upload">' +
+                '<span>Cancel</span>' +
+                '</button>';
         }
 
-        return (
-            '<div class="upload-toast-item ' + statusClass + '" id="toast-item-' + item.id + '" data-upload-id="' + item.id + '">' +
-            '<div class="upload-toast-item-head">' +
-            '<div class="upload-toast-item-name" title="' + escName + '">' + escName + '</div>' +
-            '<div class="upload-toast-actions">' + actionControl + '</div>' +
-            '</div>' +
-            '<div class="upload-toast-item-progress-track">' +
-            '<div class="upload-toast-item-progress-fill" style="width:' + pct + '%;"></div>' +
-            '</div>' +
-            '<div class="upload-toast-item-sub">' + statusLabel + ' &bull; ' + pct + '%</div>' +
-            '</div>'
-        );
+        var completedClass = (item.status === 'completed') ? ' completed-toast' : (item.status === 'deleted' ? ' deleted-toast' : '');
+        var cursorStyle = (item.status === 'completed' || item.status === 'deleted') ? ' cursor: pointer;' : '';
+        var itemTargetDir = item.targetDir || "";
+
+        return '<div class="upload-toast' + completedClass + '" id="toast-item-' + item.id + '" style="position:relative; overflow:hidden;' + cursorStyle + '" data-target-dir="' + (typeof escapeHtml === "function" ? escapeHtml(itemTargetDir) : itemTargetDir) + '" data-filename="' + name + '">' +
+            '<div class="toast-progress-bar" style="position:absolute; top:0; bottom:0; left:0; ' + fillStyle + ' transition:width 0.2s ease-out; pointer-events:none; z-index:1;"></div>' +
+            '<div class="upload-toast-top" style="position:relative; z-index:2; width:100%;">' +
+            '<div class="upload-toast-title">' +
+            '<span class="upload-toast-filename" title="' + name + '">' + name + "</span>" +
+            '<span class="upload-toast-meta">' + metaText + "</span>" +
+            "</div>" +
+            '<div class="upload-toast-actions">' +
+            actionHtml +
+            "</div>" +
+            "</div>" +
+            "</div>";
     }
 
-    function buildHeaderActionsHtml(isAllCompleted, pausedCount, isExpanded, totalCount, isDocked) {
-        var playPauseBtn = '';
-        if (!isAllCompleted && totalCount > 0) {
-            if (pausedCount > 0) {
-                playPauseBtn = '<button class="btn-icon header-action-btn" data-action="resume-all" title="Resume All Uploads" style="width:24px;height:24px;padding:0;margin-right:4px;">' +
-                    '<i data-lucide="play" style="width:14px;height:14px;"></i>' +
-                    '</button>';
+    function buildHeaderActionsHtml(isAllCompleted, pausedCount, expanded, totalCount, docked) {
+        var toggleHtml = "";
+        var actionBtnHtml = "";
+
+        var svgChevronDown = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+        var svgChevronUp = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+        var svgPlay = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+        var svgPause = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+        var svgClose = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+        var svgPlus = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
+
+        if (totalCount > 0) {
+            var chevronSvg = expanded ? svgChevronDown : svgChevronUp;
+            var chevronBtn = '<button type="button" class="upload-toast-header-btn header-expand-btn" title="Toggle detailed list" style="display:inline-flex; align-items:center; justify-content:center;">' +
+                chevronSvg +
+                '</button>';
+
+            if (isAllCompleted) {
+                toggleHtml = chevronBtn;
             } else {
-                playPauseBtn = '<button class="btn-icon header-action-btn" data-action="pause-all" title="Pause All Uploads" style="width:24px;height:24px;padding:0;margin-right:4px;">' +
-                    '<i data-lucide="pause" style="width:14px;height:14px;"></i>' +
-                    '</button>';
+                var playPauseBtn = "";
+                if (pausedCount > 0) {
+                    playPauseBtn = '<button type="button" class="upload-toast-header-btn header-playpause-btn" title="Resume all uploads" data-action="resume" style="display:inline-flex; align-items:center; justify-content:center;">' +
+                        svgPlay +
+                        '</button>';
+                } else {
+                    playPauseBtn = '<button type="button" class="upload-toast-header-btn header-playpause-btn" title="Pause all uploads" data-action="pause" style="display:inline-flex; align-items:center; justify-content:center;">' +
+                        svgPause +
+                        '</button>';
+                }
+                toggleHtml = playPauseBtn + chevronBtn;
             }
+            actionBtnHtml = '<button type="button" class="upload-toast-header-btn close-panel-btn" title="Cancel all uploads and close" style="display:inline-flex; align-items:center; justify-content:center;">' +
+                svgClose +
+                '</button>';
+        } else {
+            actionBtnHtml = '<button type="button" class="upload-toast-header-btn open-menu-btn" title="Upload or Create" style="display:inline-flex; align-items:center; justify-content:center;">' +
+                svgPlus +
+                '</button>';
         }
 
-        var chevronIcon = isExpanded ? 'chevron-down' : 'chevron-up';
-        var toggleBtn = '<button class="btn-icon header-action-btn" data-action="toggle-expand" title="' + (isExpanded ? 'Collapse' : 'Expand') + '" style="width:24px;height:24px;padding:0;">' +
-            '<i data-lucide="' + chevronIcon + '" style="width:14px;height:14px;"></i>' +
-            '</button>';
-
-        return playPauseBtn + toggleBtn;
+        return toggleHtml + actionBtnHtml;
     }
 
     function wireHeaderActions(actionsContainer) {
         if (!actionsContainer) return;
-        var btnPause = actionsContainer.querySelector('[data-action="pause-all"]');
-        if (btnPause) {
-            btnPause.onclick = function (e) {
+        var playPauseBtn = actionsContainer.querySelector(".header-playpause-btn");
+        if (playPauseBtn) {
+            playPauseBtn.addEventListener("click", function (e) {
                 e.stopPropagation();
-                if (typeof window.pauseAllUploads === 'function') window.pauseAllUploads();
-            };
-        }
-        var btnResume = actionsContainer.querySelector('[data-action="resume-all"]');
-        if (btnResume) {
-            btnResume.onclick = function (e) {
-                e.stopPropagation();
-                if (typeof window.resumeAllUploads === 'function') window.resumeAllUploads();
-            };
+                var action = this.getAttribute("data-action");
+                if (action === "pause") {
+                    if (typeof window.pauseAllUploads === 'function') window.pauseAllUploads();
+                } else {
+                    if (typeof window.resumeAllUploads === 'function') window.resumeAllUploads();
+                }
+            });
         }
     }
 
-    function wireTrayItemListeners(itemEl, item) {
-        if (!itemEl || !item) return;
-        var cancelBtn = itemEl.querySelector(".upload-toast-cancel-text");
-        if (cancelBtn) {
-            cancelBtn.onclick = function (e) {
+    function wireTrayItemListeners(el, item) {
+        if (!el || !item) return;
+        var cancelBtn = el.querySelector(".upload-toast-cancel-text");
+        if (cancelBtn && !cancelBtn.__cancelWired) {
+            cancelBtn.__cancelWired = true;
+            cancelBtn.addEventListener("click", function (e) {
                 e.stopPropagation();
                 if (typeof window.cancelUpload === "function") {
                     window.cancelUpload(item.id);
                 }
-            };
+            });
         }
-        var resumeBtn = itemEl.querySelector(".upload-toast-resume-text");
-        if (resumeBtn) {
-            resumeBtn.onclick = function (e) {
+        var resumeBtn = el.querySelector(".upload-toast-resume-text");
+        if (resumeBtn && !resumeBtn.__resumeWired) {
+            resumeBtn.__resumeWired = true;
+            resumeBtn.addEventListener("click", function (e) {
                 e.stopPropagation();
                 if (typeof window.resumeUpload === "function") {
                     window.resumeUpload(item.id);
                 }
-            };
+            });
+        }
+        if (item.status === 'completed' && !el.__navWired) {
+            el.__navWired = true;
+            el.style.cursor = "pointer";
+            el.addEventListener("click", function (e) {
+                if (e.target.closest("button") || e.target.closest(".upload-toast-actions")) return;
+                if (typeof window.navigateToPathAndSelect === "function") {
+                    window.navigateToPathAndSelect(item.targetDir || "", item.fileName || item.name || "");
+                }
+            });
         }
     }
 
@@ -111,5 +169,10 @@
         wireHeaderActions: wireHeaderActions,
         wireTrayItemListeners: wireTrayItemListeners
     };
+
+    window.buildTrayItemHtml = buildTrayItemHtml;
+    window.buildHeaderActionsHtml = buildHeaderActionsHtml;
+    window.wireHeaderActions = wireHeaderActions;
+    window.wireTrayItemListeners = wireTrayItemListeners;
 
 })(window);
