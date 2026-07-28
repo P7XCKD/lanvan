@@ -18,32 +18,37 @@
         var pct = typeof uploadProgress === 'number' ? Math.min(100, Math.max(0, uploadProgress)) : 0;
         var hasActiveUpload = !!(isUploading);
         var sizeStr = size || "--";
-        var statusLabel = uploadStatus || "";
-        var itemId = uploadId ? 'upload-' + uploadId : '';
-
         var progressBarHtml = '';
+        var subtitleHtml = '';
+
+        if (isFolder && subtitle) {
+            subtitleHtml = '<div class="item-subtitle">' + subtitle + '</div>';
+        }
+
         if (hasActiveUpload) {
             var statusText = pct > 0 ? 'Uploading' : 'Queued';
             progressBarHtml =
-                '<div class="upload-row-progress" style="margin-top: 6px; padding: 4px 8px; background: rgba(59, 130, 246, 0.06); border-radius: 6px;">' +
-                '<div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 3px;">' +
-                '<span>' + statusText + ' &bull; ' + pct + '%</span>' +
-                '</div>' +
-                '<div class="progress-bar-container" style="height: 4px; background: rgba(0, 0, 0, 0.1); border-radius: 2px; overflow: hidden;">' +
-                '<div class="progress-bar-fill" style="width: ' + pct + '%; height: 100%; background: var(--primary, #3b82f6); transition: width 0.2s ease;"></div>' +
+                '<div class="upload-row-progress">' +
+                '<div class="upload-row-progress-label">' + statusText + ' &bull; ' + pct + '%</div>' +
+                '<div class="progress-bar-container">' +
+                '<div class="progress-bar-fill" style="width: ' + pct + '%;"></div>' +
                 '</div>' +
                 '</div>';
         }
 
         return (
             '<div class="m3-list-item' + (isUploading ? ' uploading' : '') + '" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '">' +
+            '<div class="file-name-cell">' +
             '<div class="avatar-icon ' + itemInfo.avatarClass + '"><i data-lucide="' + itemInfo.iconName + '"></i></div>' +
-            '<div class="item-details">' +
+            '<div class="item-main">' +
             '<div class="item-title">' + escName + '</div>' +
-            '<div class="item-subtitle">' + sizeStr + '</div>' +
+            subtitleHtml +
             progressBarHtml +
             '</div>' +
-            '<div class="item-actions">' +
+            '</div>' +
+            '<div class="item-date">' + (dateStr || '--') + '</div>' +
+            '<div class="item-size">' + sizeStr + '</div>' +
+            '<div class="row-actions">' +
             '<button class="btn-icon" title="More actions" data-action="menu" data-filename="' + escName + '">' +
             '<i data-lucide="more-vertical"></i>' +
             '</button>' +
