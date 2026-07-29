@@ -71,7 +71,9 @@
             selection: [],
             pendingOps: {},
             lastAction: null,
-            navigationGeneration: 0
+            navigationGeneration: 0,
+            repositoryGeneration: 0,
+            uploadGeneration: 0
         };
         this.listeners = [];
     }
@@ -99,7 +101,9 @@
             selection: this.state.selection.slice(),
             pendingOps: Object.assign({}, this.state.pendingOps),
             lastAction: action,
-            navigationGeneration: this.state.navigationGeneration
+            navigationGeneration: this.state.navigationGeneration,
+            repositoryGeneration: this.state.repositoryGeneration,
+            uploadGeneration: this.state.uploadGeneration
         };
 
         // Reducer Transformations
@@ -130,6 +134,7 @@
                     } else {
                         nextState.uploadQueue.push(newItem);
                     }
+                    nextState.uploadGeneration = (this.state.uploadGeneration || 0) + 1;
                 }
                 break;
 
@@ -142,11 +147,13 @@
                     targetItem.status = normStatus;
                     if (typeof payload.progress === 'number') targetItem.progress = payload.progress;
                     if (payload.error !== undefined) targetItem.error = payload.error;
+                    nextState.uploadGeneration = (this.state.uploadGeneration || 0) + 1;
                 }
                 break;
 
             case 'BATCH_UPDATE_UPLOADS':
                 if (Array.isArray(payload.items)) {
+                    var changed = false;
                     for (var bi = 0; bi < payload.items.length; bi++) {
                         var upd = payload.items[bi];
                         if (!upd || !upd.id) continue;
@@ -157,8 +164,12 @@
                                 bt.status = ns;
                                 if (typeof upd.progress === 'number') bt.progress = upd.progress;
                                 if (upd.error !== undefined) bt.error = upd.error;
+                                changed = true;
                             }
                         }
+                    }
+                    if (changed) {
+                        nextState.uploadGeneration = (this.state.uploadGeneration || 0) + 1;
                     }
                 }
                 break;
@@ -169,6 +180,7 @@
                 var cancelItem = cancelItemIndex >= 0 ? nextState.uploadQueue[cancelItemIndex] : null;
                 if (cancelItem && isValidTransition(cancelItem.status, 'CANCELLED')) {
                     nextState.uploadQueue.splice(cancelItemIndex, 1);
+                    nextState.uploadGeneration = (this.state.uploadGeneration || 0) + 1;
                 }
                 break;
 
@@ -176,12 +188,25 @@
                 nextState.uploadQueue = nextState.uploadQueue.filter(function (item) {
                     return item && item.status !== 'COMPLETED' && item.status !== 'DELETED';
                 });
+                nextState.uploadGeneration = (this.state.uploadGeneration || 0) + 1;
                 break;
 
             case 'SYNC_QUEUE':
                 if (Array.isArray(payload.queue)) {
                     nextState.uploadQueue = payload.queue.slice();
+                    nextState.uploadGeneration = (this.state.uploadGeneration || 0) + 1;
                 }
+<parameter name="task_progress">- [x] Phase 0 — UI Contract (document only)
+- [x] Phase 1 — Single Source of Truth (Store hardened, duplicate currentFolderPath removed, generation counters added)
+- [x] Phase 2 — Immutable State Pipeline (projection no longer mutates inputs)
+- [x] Phase 3 — Deterministic Projection (no Date.now(), no global reads, UPPERCASE throughout)
+- [x] Phase 4 — Render Coordinator (module created, rAF batching, fast ViewModel hash, skip identical renders)
+- [ ] Phase 5 — Atomic UI Transactions
+- [ ] Phase 6 — UI Invariants
+- [ ] Phase 7 — Performance Invariants
+- [ ] Phase 8 — Self-Healing & Runtime Verification
+- [ ] Phase 9 — Chaos Testing
+- [ ] Phase 10 — Release Gate</parameter>
                 break;
 
             case 'SET_SELECTION':

@@ -189,7 +189,7 @@
                 normalizedDiskFiles.push({
                     name: subFolderName,
                     size: formatSize(sFolder.totalBytes),
-                    mtime: 0, // Sentinel: unknown mtime (deterministic)
+                    mtime: null, // Unknown mtime — deterministic sentinel
                     isFolder: true,
                     uploading: sFolder.hasUploading,
                     uploadProgress: folderProgress,

@@ -7,6 +7,26 @@
 (function (window) {
     'use strict';
 
+    /**
+     * Build a fast, deterministic hash of the ViewModel.
+     * Does NOT use JSON.stringify — uses structural fields only.
+     */
+    function buildViewModelHashFast(viewModel, currentFolder) {
+        var parts = [currentFolder || ''];
+        for (var i = 0; i < viewModel.length; i++) {
+            var f = viewModel[i];
+            if (!f) continue;
+            parts.push(
+                f.name || '',
+                f.isFolder ? 'd' : 'f',
+                f.uploading ? 'u' : '-',
+                f.uploadStatus || '',
+                Math.round((f.uploadProgress || 0) * 10) / 10
+            );
+        }
+        return parts.join('|');
+    }
+
     function RenderScheduler(store, projection, repo) {
         this.store = store;
         this.projection = projection;
@@ -15,6 +35,7 @@
         this.renderRequested = false;
         this.isRendering = false;
         this.lastValidViewModel = null;
+        this._lastViewModelHash = '';
         this.rendererFn = null;
 
         var self = this;
@@ -59,6 +80,15 @@
             var state = this.store ? this.store.state : {};
             var diskFiles = this.repo ? this.repo.getFolderCache(state.currentFolder) : [];
             viewModel = this.projection.buildCurrentFolderViewModel(state, diskFiles);
+
+            // Skip render if ViewModel is structurally identical to last render.
+            // Uses a fast incremental hash — NOT JSON.stringify.
+            var newHash = buildViewModelHashFast(viewModel, state.currentFolder);
+            if (newHash === this._lastViewModelHash && this.lastValidViewModel) {
+                this.isRendering = false;
+                return;
+            }
+            this._lastViewModelHash = newHash;
             this.lastValidViewModel = viewModel;
         } catch (err) {
             console.error("  [PROJECTION ERROR] Render fallback activated:", err);
