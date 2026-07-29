@@ -85,6 +85,15 @@
     item.status = 'cancelled';
     item.error = 'Cancelled by user';
 
+    if (Array.isArray(window.uploadQueue)) {
+      var idx = window.uploadQueue.findIndex(function (q) {
+        return q && String(q.id) === String(uploadId);
+      });
+      if (idx !== -1) {
+        window.uploadQueue.splice(idx, 1);
+      }
+    }
+
     if (typeof window.triggerInstantUIUpdate === 'function') {
       window.triggerInstantUIUpdate();
     }

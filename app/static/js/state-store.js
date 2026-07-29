@@ -103,10 +103,12 @@
 
             case 'CANCEL_UPLOAD':
                 var cancelId = payload.id;
-                var cancelItem = nextState.uploadQueue.find(function (i) { return String(i.id) === String(cancelId); });
+                var cancelItemIndex = nextState.uploadQueue.findIndex(function (i) { return String(i.id) === String(cancelId); });
+                var cancelItem = cancelItemIndex >= 0 ? nextState.uploadQueue[cancelItemIndex] : null;
                 if (cancelItem && isValidTransition(cancelItem.status, 'CANCELLED')) {
                     cancelItem.status = 'CANCELLED';
                     cancelItem.error = 'Cancelled by user';
+                    nextState.uploadQueue.splice(cancelItemIndex, 1);
                 }
                 break;
 

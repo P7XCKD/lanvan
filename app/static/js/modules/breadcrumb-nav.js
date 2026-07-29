@@ -47,14 +47,6 @@
                             window.prototypeSelectedItems = [];
                         }
                         if (typeof updateSelectionToolbar === "function") updateSelectionToolbar();
-                        renderBreadcrumbs();
-                        if (typeof window.requestSafeVisibleFilesRefresh === "function") {
-                            window.requestSafeVisibleFilesRefresh(120);
-                        } else if (typeof fetchFilesData === "function" && typeof renderPrototypeFileList === "function") {
-                            fetchFilesData().then(function (filesData) {
-                                renderPrototypeFileList(filesData);
-                            });
-                        }
                     };
                 })(i);
                 bItem.style.cursor = "pointer";

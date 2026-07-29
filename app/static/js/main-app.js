@@ -1681,7 +1681,22 @@ function cancelUpload(uploadId) {
   uploadItem.error = 'Cancelled by user';
   console.log(`[LANVAN UPLOAD] ❌ Upload cancelled: ${fileName}`);
 
-  // Force immediate UI update to show cancel status
+  // Remove the cancelled upload from the shared queue immediately so the projection
+  // stops seeing it as a visible item on the next render pass.
+  if (Array.isArray(currentQueue)) {
+    const queueIndex = currentQueue.findIndex(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
+    if (queueIndex !== -1) {
+      currentQueue.splice(queueIndex, 1);
+    }
+    if (window.uploadQueue !== currentQueue && Array.isArray(window.uploadQueue)) {
+      const windowIndex = window.uploadQueue.findIndex(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
+      if (windowIndex !== -1) {
+        window.uploadQueue.splice(windowIndex, 1);
+      }
+    }
+  }
+
+  // Force immediate UI update after the queue has been cleaned up.
   updateUploadItem(uploadItem);
 
   const itemSize = window.getItemSize(uploadItem);

@@ -70,13 +70,10 @@
     var currentFolderPath = "Home";
     Object.defineProperty(window, 'currentFolderPath', {
         get: function () {
-            if (currentFolderPath) {
-                return currentFolderPath;
-            }
             if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState) {
                 return window.LanvanStore.getState().currentFolder || "";
             }
-            return "";
+            return currentFolderPath || "";
         },
         set: function (val) {
             currentFolderPath = val;
@@ -88,9 +85,9 @@
     });
 
     window.getCurrentFolderPath = function () {
-        var p = currentFolderPath || ((typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState)
+        var p = ((typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState)
             ? (window.LanvanStore.getState().currentFolder || "")
-            : "");
+            : currentFolderPath || "");
         return (p === "Home" || p === "Home/") ? "" : p;
     };
 
@@ -254,8 +251,13 @@
 
     function renderPrototypeFileList(files, renderReason) {
         if (typeof window !== "undefined") window.renderPrototypeFileList = renderPrototypeFileList;
-        var normCurrentDir = cleanFolderPath(currentFolderPath);
+        var normCurrentDir = cleanFolderPath((typeof window.getCurrentFolderPath === "function")
+            ? window.getCurrentFolderPath()
+            : currentFolderPath);
         var reason = renderReason || "render_prototype";
+        var container = document.getElementById("nasFileList");
+        var filePanelMeta = document.getElementById("filePanelMeta");
+        if (!container) return;
 
         // Scope file cache strictly by target folder path via FileRepository
         if (files) {
@@ -310,7 +312,7 @@
         // Hide Recents (Quick Access) if inside a subfolder
         var quickContainer = document.getElementById("quickAccessContainer");
         if (quickContainer) {
-            if (currentFolderPath && currentFolderPath !== "Home" && currentFolderPath !== "") {
+            if (normCurrentDir && normCurrentDir !== "") {
                 quickContainer.style.display = "none";
             } else {
                 quickContainer.style.display = ""; // Reset
@@ -432,6 +434,41 @@
             return sortDirection === "asc" ? comparison : -comparison;
         });
 
+        var savedViewModeForSignature = "grid";
+        try {
+            savedViewModeForSignature = localStorage.getItem("lanvan_view_mode") || "grid";
+        } catch (e) { }
+
+        var renderSignature = [
+            normCurrentDir,
+            savedViewModeForSignature,
+            typeFilter,
+            searchQuery,
+            normalizedFiles.map(function (f) {
+                if (!f) return "";
+                return [
+                    f.name || "",
+                    f.isFolder ? 1 : 0,
+                    f.uploading ? 1 : 0,
+                    Math.round((f.uploadProgress || 0) * 10) / 10,
+                    f.uploadStatus || "",
+                    f.size || "",
+                    f.mtime || 0
+                ].join("|");
+            }).join("||")
+        ].join("::");
+
+        var isStillShowingLoadingShell = false;
+        try {
+            isStillShowingLoadingShell = !!container.querySelector(".loading-shell") ||
+                /Loading files\.\.\./i.test(container.textContent || "");
+        } catch (e) { }
+
+        if (window._prototypeRenderHasPainted && window._lastPrototypeRenderSignature === renderSignature && !isStillShowingLoadingShell) {
+            return;
+        }
+        window._lastPrototypeRenderSignature = renderSignature;
+
         // Sync dropdown checkmarks and header arrows
         updateSortCheckmarks();
         updateSortHeaderArrows();
@@ -443,16 +480,11 @@
                 : "";
         }
 
-        var savedViewMode = "grid";
-        try {
-            savedViewMode = localStorage.getItem("lanvan_view_mode") || "grid";
-        } catch (e) { }
-
         var fileTableHead = document.getElementById("fileTableHead");
         var listBtn = document.getElementById("listViewBtn");
         var gridBtn = document.getElementById("gridViewBtn");
 
-        if (savedViewMode === "grid") {
+        if (savedViewModeForSignature === "grid") {
             container.classList.add("grid-mode");
             if (fileTableHead) fileTableHead.style.display = "none";
             if (gridBtn) gridBtn.classList.add("active");
@@ -467,14 +499,9 @@
         if (!normalizedFiles || normalizedFiles.length === 0) {
             prototypeSelectedItems = [];
             window._contextMenuTarget = "";
-            updateSelectionToolbar();
 
             // Hide file table header when list is empty to prevent DOM overlap
             if (fileTableHead) fileTableHead.style.display = "none";
-
-            // Render quick access cards (empty when normalizedFiles is 0)
-            renderQuickAccess(originalFilesForQuickAccess
-                .filter(function (f) { return !f.isFolder && !f.uploading; }));
 
             var queue = window.uploadQueue || [];
             var activeUploadsCount = queue.filter(function (item) {
@@ -518,7 +545,15 @@
                     '</div>' +
                     '</div>';
             }
+            window._prototypeRenderHasPainted = true;
             refreshLucideIcons(container);
+            updateSelectionToolbar();
+            try {
+                renderQuickAccess(originalFilesForQuickAccess
+                    .filter(function (f) { return !f.isFolder && !f.uploading; }));
+            } catch (e) {
+                console.error("[LANVAN UI] Quick access render failed during empty-state paint:", e);
+            }
             return;
         }
 
@@ -590,6 +625,7 @@
                 );
             }
         }
+        window._prototypeRenderHasPainted = true;
         // Preserve existing ALREADY-LOADED video and image previews to eliminate blank flickers
         var existingPreviews = {};
         var existingItems = container.querySelectorAll(".m3-list-item");
@@ -643,8 +679,12 @@
         updateSelectionToolbar();
 
         // Also render quick access cards (only non-folders)
-        renderQuickAccess(originalFilesForQuickAccess
-            .filter(function (f) { return !f.isFolder && !f.uploading; }));
+        try {
+            renderQuickAccess(originalFilesForQuickAccess
+                .filter(function (f) { return !f.isFolder && !f.uploading; }));
+        } catch (e) {
+            console.error("[LANVAN UI] Quick access render failed during file-list paint:", e);
+        }
 
         refreshLucideIcons(container);
     }
@@ -814,30 +854,29 @@
         }
         lastFolderNavTime = now;
 
-        var base = currentFolderPath;
+        var base = (typeof window.getCurrentFolderPath === "function")
+            ? window.getCurrentFolderPath()
+            : currentFolderPath;
         if (base === "Home") base = "";
+        base = cleanFolderPath(base);
 
         // Allow navigating to subfolders with the same name (e.g. "SameTest/SameTest")
         // Only prevent the no-op case where we'd navigate into the exact same path
         var newPath = base ? (base + "/" + folderName) : folderName;
-        if (newPath === currentFolderPath) {
+        if (newPath === cleanFolderPath((typeof window.getCurrentFolderPath === "function") ? window.getCurrentFolderPath() : currentFolderPath)) {
             return;
         }
 
-        currentFolderPath = newPath;
-        if (window.history && typeof window.history.replaceState === "function") {
-            try {
-                var newUrl = window.location.pathname + "?folder=" + encodeURIComponent(newPath);
-                window.history.replaceState({ folder: newPath }, "", newUrl);
-            } catch (e) { }
-        }
-        console.log("%c[LANVAN UI] 📂 Navigating into folder: '%s'", "color:#3b82f6; font-weight:bold;", currentFolderPath);
+        console.log("%c[LANVAN UI] 📂 Navigating into folder: '%s'", "color:#3b82f6; font-weight:bold;", newPath);
         prototypeSelectedItems = [];
         updateSelectionToolbar();
-        renderBreadcrumbs();
-        fetchFilesData().then(function (fd) {
-            renderPrototypeFileList(fd);
-        });
+
+        window.currentFolderPath = newPath;
+        if (window.history && typeof window.history.replaceState === "function") {
+            try {
+                window.history.replaceState({ folder: newPath }, "", window.location.pathname);
+            } catch (e) { }
+        }
     }
 
     /**
@@ -3058,7 +3097,9 @@
             return;
         }
 
-        var path = (typeof window.lanvanStore !== 'undefined' && window.lanvanStore.getState) ? window.lanvanStore.getState().currentFolder : (window.currentFolderPath || "");
+        var path = (typeof window.getCurrentFolderPath === "function")
+            ? window.getCurrentFolderPath()
+            : (window.currentFolderPath || "");
         var allItems = (window.FileRepository && typeof window.FileRepository.getFolderCache === 'function') ? window.FileRepository.getFolderCache(path) : [];
         var matches = allItems.filter(function (item) {
             if (!item || !item.name) return false;
@@ -3134,7 +3175,7 @@
                 hideSearchAutocomplete();
 
                 if (folder) {
-                    currentFolderPath = fname;
+                    window.currentFolderPath = fname;
                     prototypeSelectedItems = [];
                     updateSelectionToolbar();
                     fetchFilesData().then(function (fd) {
@@ -3558,7 +3599,7 @@
     // buildTrayItemHtml, wireTrayItemListeners, buildHeaderActionsHtml, and wireHeaderActions are provided by upload-tray-renderer.js module
 
     window.navigateToPathAndSelect = function (targetPath, filename) {
-        currentFolderPath = targetPath || "";
+        window.currentFolderPath = targetPath || "";
         prototypeSelectedItems = [];
         updateSelectionToolbar();
         renderBreadcrumbs();
@@ -4087,7 +4128,10 @@
 
         // Hide Recents (Quick Access) on mobile screens OR inside a subfolder OR on Recent view
         var tab = window.activeTab || "file";
-        if (window.innerWidth <= 550 || (currentFolderPath && currentFolderPath !== "Home" && currentFolderPath !== "") || tab === "recent") {
+        var activeFolder = (typeof window.getCurrentFolderPath === "function")
+            ? window.getCurrentFolderPath()
+            : (typeof currentFolderPath !== "undefined" ? currentFolderPath : "");
+        if (window.innerWidth <= 550 || (activeFolder && activeFolder !== "Home" && activeFolder !== "") || tab === "recent") {
             container.style.display = "none";
             return;
         }
@@ -4184,8 +4228,8 @@
     // Fetch full file data with metadata from API (includes folders)
     // Delegated to FileRepository for AbortController in-flight request cancellation
     function fetchFilesData() {
-        var path = (typeof window.lanvanStore !== 'undefined' && window.lanvanStore.getState)
-            ? window.lanvanStore.getState().currentFolder
+        var path = (typeof window.getCurrentFolderPath === "function")
+            ? window.getCurrentFolderPath()
             : (window.currentFolderPath || "");
 
         if (window.FileRepository && typeof window.FileRepository.fetchFolderContents === 'function') {
@@ -4282,7 +4326,12 @@
 
     window.requestSafeVisibleFilesRefresh = function (delayMs) {
         var waitMs = typeof delayMs === "number" ? delayMs : 150;
-        setTimeout(function () {
+        if (window._safeVisibleFilesRefreshTimer) {
+            clearTimeout(window._safeVisibleFilesRefreshTimer);
+            window._safeVisibleFilesRefreshTimer = null;
+        }
+        window._safeVisibleFilesRefreshTimer = setTimeout(function () {
+            window._safeVisibleFilesRefreshTimer = null;
             if (typeof window.triggerInstantRefresh === "function") {
                 window.triggerInstantRefresh();
             } else if (typeof refreshFileList === "function") {
@@ -4297,7 +4346,12 @@
             var urlParams = new URLSearchParams(window.location.search);
             var folderParam = urlParams.get("folder");
             if (folderParam) {
-                currentFolderPath = cleanFolderPath(folderParam);
+                window.currentFolderPath = cleanFolderPath(folderParam);
+                if (window.history && typeof window.history.replaceState === "function") {
+                    try {
+                        window.history.replaceState({ folder: window.currentFolderPath }, "", window.location.pathname);
+                    } catch (e) { }
+                }
             }
         } catch (e) { }
         // Restore upload queue from server (clears on server restart = clears on data clear)
@@ -4624,7 +4678,7 @@
             if (window.LanvanStore) {
                 window.LanvanStore.dispatch("SET_CURRENT_FOLDER", { folderPath: cleanFolder });
             } else {
-                currentFolderPath = cleanFolder;
+                window.currentFolderPath = cleanFolder;
                 if (window.FileRepository) {
                     window.FileRepository.fetchFolderContents(cleanFolder).then(function (fd) {
                         renderPrototypeFileList(fd, "manual_navigation");

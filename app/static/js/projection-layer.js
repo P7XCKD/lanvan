@@ -95,9 +95,13 @@
                     return f && !f.isFolder && f.name.trim().toLowerCase() === itemName.trim().toLowerCase();
                 });
 
-                if (status === 'queued' || status === 'uploading' || status === 'processing' || status === 'paused' || status === 'cancelled') {
+                if (status === 'cancelled') {
+                    continue;
+                }
+
+                if (status === 'queued' || status === 'uploading' || status === 'processing' || status === 'paused') {
                     if (existingItem) {
-                        existingItem.uploading = (status !== 'cancelled');
+                        existingItem.uploading = true;
                         existingItem.uploadProgress = itemPct;
                         existingItem.uploadStatus = status;
                         existingItem.uploadId = item.id;
@@ -107,7 +111,7 @@
                             size: formatSize(fileSize),
                             mtime: Math.floor(Date.now() / 1000),
                             isFolder: false,
-                            uploading: (status !== 'cancelled'),
+                            uploading: true,
                             uploadProgress: itemPct,
                             uploadStatus: status,
                             uploadId: item.id
