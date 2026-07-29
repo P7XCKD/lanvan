@@ -60,6 +60,7 @@
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/lanvan.css') }}?v={{ cache_version }}">
     {% block page_styles %}{% endblock %}
     <script src="{{ request.url_for('static', path='js/resource-loader.js') }}?v={{ cache_version }}"> </script>
+    <script src="{{ request.url_for('static', path='js/upload-status.js') }}?v={{ cache_version }}"> </script>
     <script src="/static/js/lucide.min.js"></script>
     <script>document.addEventListener("DOMContentLoaded", () => lucide.createIcons());</script>
 

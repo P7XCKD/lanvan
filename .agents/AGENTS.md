@@ -168,9 +168,22 @@ Whenever encountering repetitive errors, circular loops, structural ambiguities,
 
 ---
 
-## 19. Unidirectional Architecture & The Golden Invariant (Mandatory Standard)
-- **The Golden Invariant**: There shall be exactly one code path that produces `VisibleFiles[]`. No component, reducer, repository, WebSocket handler, upload manager, or renderer may create, modify, append to, or filter visible file lists outside the Projection Layer.
-- **Pure Reducers**: Reducers must be pure functions `(oldState, action) => newState`. Reducers must NEVER fetch network requests, call other reducers, dispatch actions, render UI, or touch the DOM.
-- **Stateless Renderer**: The Renderer is write-only `render(viewModel)`. It must NEVER read global variables (`window.currentFolder`, `window.uploadQueue`, `window.lastFilesData`) or compute state from DOM queries.
-- **Strict Fast-Path Boundaries**: Fast-Path progress updates may ONLY modify progress bar width, speed text, and ETA text on existing DOM rows in-place. Fast-Path MAY NEVER create rows, remove rows, reorder rows, switch folders, or modify `VisibleFiles[]`.
-- **Repository Isolation**: `FileRepository` owns HTTP fetches, WebSockets, cache invalidation, and `AbortController` request cancellation. It communicates exclusively by dispatching actions to `ActionQueue`. It must NEVER trigger renders or touch the DOM directly.
+## 19. Unidirectional Architecture & The 5 Golden Invariants (Mandatory Standard)
+
+### The 8 Architectural Invariants:
+1. **Store is Only Mutable State**: The Store is the only mutable application state.
+2. **Repository Owns Filesystem Data**: Repository owns all server and filesystem data.
+3. **Projection is Pure**: Projection is a pure function: `(Store State, Repository Snapshot) => ViewModel`.
+4. **Renderer Never Mutates State**: Renderer is strictly write-only `render(viewModel)` and never mutates application state.
+5. **No Component Global Mutations**: UI components never mutate global variables.
+6. **Navigation via Store Actions**: Navigation always occurs through Store actions (`SET_CURRENT_FOLDER`).
+7. **Network Updates Repository**: Network events update Repository, not the Renderer directly.
+8. **Rendering is Consequence of Store**: Rendering is always a consequence of Store changes (`UI = f(State)`).
+
+---
+
+## 20. Executable Architectural Guard Policies (Mandatory Standard)
+- **Folder Identity Payload Traveling**: Every file list payload MUST carry explicit folder identity (`payload.__folderPath` or `payload.folderPath`). Renders MUST reject payloads where `payload.folderPath !== currentFolderPath`.
+- **Cache Array Immutability**: `FileRepository.prototype.getFolderCache` MUST return a shallow clone (`cached.slice()`) so downstream renders can never mutate repository cache references.
+- **Cancellation UI Policy**: Cancelled upload items MUST remain visible in the active folder view with status label `'Cancelled'` and subtitle `'0% • Cancelled'` until the user navigates, clears history, or manually dismisses items.
+- **Structural vs. Visual Update Boundary**: Full renders (`renderPrototypeFileList`) are strictly restricted to structural changes (row addition, row deletion, folder navigation, view switching). High-frequency transfer ticks (progress %, speed, ETA) MUST strictly use in-place fast-path updates (`_doInstantUIUpdate`).

@@ -7,8 +7,8 @@
   'use strict';
 
   // Authoritative State Repository
-  if (!window.uploadQueue) {
-    window.uploadQueue = [];
+  if (!window.uploadQueue && window.LanvanStore) {
+    window.uploadQueue = window.LanvanStore.getState().uploadQueue;
   }
 
   function getQueueItem(uploadId) {
@@ -29,12 +29,12 @@
         var f = window.getItemFolder ? window.getItemFolder(i) : "";
         if (f === folder && (i.status === 'uploading' || i.status === 'queued')) {
           i.status = 'paused';
-          if (i.xhr) { try { i.xhr.abort(); } catch (e) {} }
+          if (i.xhr) { try { i.xhr.abort(); } catch (e) { } }
         }
       });
     } else if (item.status === 'uploading' || item.status === 'queued') {
       item.status = 'paused';
-      if (item.xhr) { try { item.xhr.abort(); } catch (e) {} }
+      if (item.xhr) { try { item.xhr.abort(); } catch (e) { } }
     }
 
   }
@@ -71,7 +71,7 @@
     var item = getQueueItem(uploadId);
     if (!item) return;
 
-    if (item.xhr) { try { item.xhr.abort(); } catch (e) {} }
+    if (item.xhr) { try { item.xhr.abort(); } catch (e) { } }
 
     var fileName = window.getItemName ? window.getItemName(item) : "";
     var targetDir = window.getItemFolder ? window.getItemFolder(item) : "";
@@ -79,7 +79,7 @@
       var formData = new FormData();
       formData.append("filename", fileName);
       if (targetDir) formData.append("parent_path", targetDir);
-      fetch("/api/cancel-upload", { method: "POST", body: formData }).catch(function () {});
+      fetch("/api/cancel-upload", { method: "POST", body: formData }).catch(function () { });
     }
 
     item.status = 'cancelled';

@@ -3607,6 +3607,11 @@ html[data-view-mode="list"] #gridViewBtn {
 /* ==========================================================================
    GOOGLE DRIVE STYLE FULL-SCREEN DARK PREVIEW LIGHTBOX
    ========================================================================== */
+.gdrive-preview-overlay,
+.gdrive-preview-overlay * {
+    pointer-events: none !important;
+}
+
 .gdrive-preview-overlay {
     position: fixed !important;
     top: 0 !important;
@@ -3617,7 +3622,7 @@ html[data-view-mode="list"] #gridViewBtn {
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     z-index: 10000 !important;
-    display: flex;
+    display: none !important;
     align-items: center;
     justify-content: center;
     padding: 0;
@@ -3627,6 +3632,25 @@ html[data-view-mode="list"] #gridViewBtn {
     -webkit-user-select: none !important;
     -moz-user-select: none !important;
     -ms-user-select: none !important;
+}
+
+.gdrive-preview-overlay.active,
+.gdrive-preview-overlay[style*="display: flex"]:not([style*="display: none"]),
+.gdrive-preview-overlay[style*="display: block"]:not([style*="display: none"]) {
+    display: flex !important;
+    pointer-events: auto !important;
+}
+
+.gdrive-preview-overlay.active *,
+.gdrive-preview-overlay[style*="display: flex"]:not([style*="display: none"]) *,
+.gdrive-preview-overlay[style*="display: block"]:not([style*="display: none"]) * {
+    pointer-events: auto !important;
+}
+
+.gdrive-preview-overlay[style*="display: none"],
+.gdrive-preview-overlay[style*="display: none"] * {
+    display: none !important;
+    pointer-events: none !important;
 }
 
 [data-theme="light"] .gdrive-preview-overlay {

@@ -35,10 +35,11 @@
                 // Clickable — navigate to that level
                 (function (idx) {
                     bItem.onclick = function () {
-                        if (idx === 0) {
-                            window.currentFolderPath = "Home";
-                        } else {
-                            window.currentFolderPath = fullParts.slice(1, idx + 1).join("/");
+                        var targetPath = (idx === 0) ? "" : fullParts.slice(1, idx + 1).join("/");
+                        if (typeof window.navigateToFolder === "function") {
+                            window.navigateToFolder(targetPath);
+                        } else if (window.LanvanStore) {
+                            window.LanvanStore.dispatch("SET_CURRENT_FOLDER", { folderPath: targetPath });
                         }
                         if (typeof window.clearSelection === "function") {
                             window.clearSelection();

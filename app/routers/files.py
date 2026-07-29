@@ -308,41 +308,56 @@ def should_ignore_file(filename: str) -> bool:
 def get_file_list():
     UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
     retry_pending_deletions()
-    return sorted([
-        {
-            "name": f.name,
-            "size": format_size(f.stat().st_size),
-            "mtime": f.stat().st_mtime
-        }
-        for f in UPLOAD_FOLDER.iterdir() 
-        if f.is_file() and not f.name.endswith('.tmp') and not should_ignore_file(f.name)
-    ], key=lambda x: x["mtime"], reverse=True)
+    items = []
+    for f in UPLOAD_FOLDER.iterdir():
+        if f.name.startswith('.') or f.name.endswith('.tmp') or should_ignore_file(f.name):
+            continue
+        if f.is_dir():
+            items.append({
+                "name": f.name,
+                "size": "--",
+                "mtime": f.stat().st_mtime,
+                "isFolder": True
+            })
+        elif f.is_file():
+            items.append({
+                "name": f.name,
+                "size": format_size(f.stat().st_size),
+                "mtime": f.stat().st_mtime,
+                "isFolder": False
+            })
+    return sorted(items, key=lambda x: x["mtime"], reverse=True)
 
 async def get_file_list_async():
-    """
-    [START] Async file list with yielding for large directories
-     RACE CONDITION FIX: Filter out .tmp files to prevent downloading partial uploads
-     Qt.py FILTER: Hide qt.py generated test files from listings
-    """
     UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
     retry_pending_deletions()
-    files = []
+    items = []
     file_count = 0
     
     for f in UPLOAD_FOLDER.iterdir():
-        if f.is_file() and not f.name.endswith('.tmp') and not should_ignore_file(f.name):  #  Filter out temporary files and qt.py test files
-            files.append({
+        if f.name.startswith('.') or f.name.endswith('.tmp') or should_ignore_file(f.name):
+            continue
+        if f.is_dir():
+            items.append({
+                "name": f.name,
+                "size": "--",
+                "mtime": f.stat().st_mtime,
+                "isFolder": True
+            })
+            file_count += 1
+        elif f.is_file():
+            items.append({
                 "name": f.name,
                 "size": format_size(f.stat().st_size),
-                "mtime": f.stat().st_mtime
+                "mtime": f.stat().st_mtime,
+                "isFolder": False
             })
             file_count += 1
             
-            # Yield every 50 files to prevent blocking on large directories
-            if file_count % 50 == 0:
-                await asyncio.sleep(0.01)  # OPTIMIZED: 10ms instead of 1ms
+        if file_count % 50 == 0:
+            await asyncio.sleep(0.01)
     
-    return sorted(files, key=lambda x: x["mtime"], reverse=True)
+    return sorted(items, key=lambda x: x["mtime"], reverse=True)
 
 def get_unique_filename(directory: Path, filename: str) -> str:
     base = Path(filename).stem
@@ -1788,7 +1803,19 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
                 cleanup_temp_file_for_filename(filename, target_parent)
                 return JSONResponse(content={"status": "success", "msg": "File deleted successfully"})
 
-        if file_path.is_file():
+        if file_path.is_dir():
+            await get_stream_manager().cancel_and_await_cleanup(file_path)
+            gc.collect()
+            def handle_remove_readonly(func, p, exc):
+                import stat
+                try:
+                    os.chmod(p, stat.S_IWRITE)
+                    func(p)
+                except Exception:
+                    pass
+            shutil.rmtree(file_path, onerror=handle_remove_readonly)
+            return JSONResponse(content={"status": "success", "msg": "Folder deleted successfully"})
+        elif file_path.is_file():
             await get_stream_manager().cancel_and_await_cleanup(file_path)
             retry_delays = [0.0, 0.05, 0.1, 0.2]
             deleted = False
@@ -2929,7 +2956,15 @@ async def delete_folder(folder_path: str):
             return JSONResponse(status_code=403, content={"status": "error", "msg": "Access denied"})
         
         if not folder_path_obj.exists() or not folder_path_obj.is_dir():
-            return JSONResponse(status_code=404, content={"status": "error", "msg": "Folder not found"})
+            target_name = parts[-1]
+            found = False
+            for candidate in UPLOAD_FOLDER.rglob(target_name):
+                if candidate.is_dir():
+                    folder_path_obj = candidate
+                    found = True
+                    break
+            if not found:
+                return JSONResponse(content={"status": "success", "msg": "Folder deleted successfully"})
         
         # Cancel any active streams for files inside this folder hierarchy
         await get_stream_manager().cancel_and_await_cleanup(folder_path_obj)

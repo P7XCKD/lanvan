@@ -281,11 +281,31 @@ function initFileEventsWebSocket() {
         const payload = JSON.parse(event.data);
         if (payload.type === 'file_change') {
           console.log('[WS FILE EVENTS] ⚡ Real-time file system mutation event received across devices:', payload);
-          if (typeof window.requestFileListRefresh === 'function') {
-            window.requestFileListRefresh(100);
-          } else if (typeof refreshFileList === 'function') {
-            refreshFileList();
+          if (window.FileRepository && typeof window.FileRepository.invalidateCache === 'function') {
+            window.FileRepository.invalidateCache();
           }
+          var delTarget = payload.path || payload.target_dir || "";
+          if (delTarget) {
+            if (window._recentlyCreatedFolders) delete window._recentlyCreatedFolders[delTarget];
+            if (typeof lastRenderedFiles !== 'undefined' && Array.isArray(lastRenderedFiles)) {
+              lastRenderedFiles = lastRenderedFiles.filter(function (f) {
+                var fn = typeof f === 'string' ? f : (f ? f.name : '');
+                return fn !== delTarget && fn.trim().toLowerCase() !== delTarget.trim().toLowerCase();
+              });
+            }
+            var container = document.getElementById("nasFileList");
+            if (container) {
+              var rows = container.querySelectorAll(".m3-list-item");
+              for (var r = 0; r < rows.length; r++) {
+                var rowFn = rows[r].getAttribute("data-filename");
+                if (rowFn === delTarget || (rowFn && rowFn.trim().toLowerCase() === delTarget.trim().toLowerCase())) {
+                  rows[r].remove();
+                }
+              }
+            }
+          }
+          _activeRefreshPromise = null;
+          refreshFileList('ws_file_change');
         }
       } catch (e) { }
     };
@@ -717,7 +737,7 @@ function createUploadItem(file, uploadId) {
   if (file.webkitRelativePath && file.webkitRelativePath.includes('/')) {
     const relParts = file.webkitRelativePath.replace(/\\/g, '/').split('/');
     const relDir = relParts.slice(0, -1).join('/');
-    finalTargetDir = relDir; // Folder uploads create their structure starting at root
+    finalTargetDir = baseFolder ? (baseFolder + '/' + relDir) : relDir;
   } else if (file._explicitTargetDir !== undefined) {
     finalTargetDir = file._explicitTargetDir;
   }
@@ -734,23 +754,27 @@ function createUploadItem(file, uploadId) {
     endTime: null,
     bytesUploaded: 0,
     speed: 0,
-    targetDir: finalTargetDir
+    timeRemaining: null,
+    error: null,
+    targetDir: finalTargetDir,
+    parent_path: finalTargetDir,
+    xhr: null
   };
 }
 
 function addToUploadQueue(files) {
-  console.log("%c[LANVAN UPLOAD] 📥 Queued %d file(s) | Active Folder: '%s'", "color:#8b5cf6; font-weight:bold; font-size:12px;", files.length, window.currentFolderPath || "Home (Root)");
+  const baseActiveFolder = (typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "")).replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
+  console.log("%c[LANVAN UPLOAD] 📥 Queued %d file(s) | Active Folder: '%s'", "color:#8b5cf6; font-weight:bold; font-size:12px;", files.length, baseActiveFolder || "Home (Root)");
 
   // Pre-create subfolder paths on server disk for directory uploads
   const createdFolderPaths = new Set();
   for (let file of files) {
     if (file && file.webkitRelativePath && file.webkitRelativePath.includes('/')) {
       const relParts = file.webkitRelativePath.replace(/\\/g, '/').split('/');
-      let currAccum = "";
+      let currAccum = baseActiveFolder;
       for (let i = 0; i < relParts.length - 1; i++) {
         const folderName = relParts[i];
-        const baseCur = "";
-        const parentPath = i === 0 ? baseCur : currAccum;
+        const parentPath = currAccum;
         currAccum = currAccum ? `${currAccum}/${folderName}` : folderName;
         const fullFolderKey = currAccum;
 
@@ -761,7 +785,7 @@ function addToUploadQueue(files) {
           if (parentPath) {
             formData.append("parent_path", parentPath);
           }
-          fetch("/api/files/mkdir", { method: "POST", body: formData }).catch(() => {});
+          fetch("/api/files/mkdir", { method: "POST", body: formData }).catch(() => { });
         }
       }
     }
@@ -1621,7 +1645,7 @@ function cancelUpload(uploadId) {
 
   // Abort the target item if in progress
   if (uploadItem.xhr) {
-    try { uploadItem.xhr.abort(); } catch (err) {}
+    try { uploadItem.xhr.abort(); } catch (err) { }
   }
 
   // Trigger server-side cleanup of .tmp files & chunks
@@ -1721,7 +1745,7 @@ function pauseUpload(uploadId) {
       if (fName === folderName && (item.status === 'uploading' || item.status === 'queued' || item.status === 'processing')) {
         item.status = 'paused';
         if (item.xhr) {
-          try { item.xhr.abort(); } catch (err) {}
+          try { item.xhr.abort(); } catch (err) { }
         }
         updateUploadItem(item);
       }
@@ -1731,7 +1755,7 @@ function pauseUpload(uploadId) {
     uploadItem.status = 'paused';
     window.uploadManagerExpanded = true;
     if (uploadItem.xhr) {
-      try { uploadItem.xhr.abort(); } catch (err) {}
+      try { uploadItem.xhr.abort(); } catch (err) { }
     }
     updateUploadItem(uploadItem);
   }
@@ -1910,7 +1934,7 @@ function removeCompletedUpload(itemId) {
 function startNextUpload() {
   // Resolve ghost items restored from JSON storage without binary File handles
   // BUT only when this is NOT a test scenario (items without a .file AND without specific test IDs)
-  var isTesting = uploadQueue.some(function(item) {
+  var isTesting = uploadQueue.some(function (item) {
     return item && item.id >= 100 && item.id <= 200 && !item.file;
   });
   if (!isTesting) {
@@ -1928,8 +1952,8 @@ function startNextUpload() {
     return;
   }
 
-  // Find all queued items that can be uploaded
-  const queuedItems = uploadQueue.filter(item => item.status === 'queued');
+  // Find all queued items that can be uploaded (must have a File handle)
+  const queuedItems = uploadQueue.filter(item => item.status === 'queued' && item.file);
 
   if (queuedItems.length === 0) {
     console.log(' No queued uploads found');
@@ -2705,7 +2729,7 @@ async function refreshFileList(reason = 'manual_or_api') {
     }
 
     const data = await response.json();
-    const files = data.files || [];
+    const files = data.files_data || data.files || [];
     updateFileDisplay(files);
 
     logStructuredState(reason, lastCount, files.length);
@@ -3510,7 +3534,7 @@ function setupEventListeners() {
               writable: false,
               configurable: true
             });
-          } catch (err) {}
+          } catch (err) { }
           resolve([file]);
         }, () => resolve([]));
       });
@@ -5469,6 +5493,7 @@ window.showQRSuccess = showQRSuccess;
 window.tryFallbackQR = tryFallbackQR;
 window.showOfflineQR = showOfflineQR;
 window.refreshFileListManually = refreshFileListManually;
+window.refreshFileList = refreshFileList;
 window.toggleSettingsMenu = toggleSettingsMenu;
 window.cancelAllUploads = cancelAllUploads;
 window.clearAllFiles = clearAllFiles;

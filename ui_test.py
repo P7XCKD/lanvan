@@ -733,7 +733,36 @@ class BrowserSuite:
         self._check(remaining == "queued", "UC-29: Unrelated folder file 102 remains queued")
         self._check(rootItem == "queued", "UC-29: Unrelated root file 103 remains queued")
 
-        # Test 2: State Fuzzing - Random sequence of 20 operations
+        # Test 2: Direct Cancelled File Projection in Active View (UC-30)
+        proj_cancelled_visible = await self.page.evaluate("""()=>{
+            var proj = window.projectionLayer || new window.ProjectionLayer();
+            var state = { currentFolder: 'FolderA', uploadQueue: window.uploadQueue, pendingOps: {} };
+            var vm = proj.buildCurrentFolderViewModel(state, []);
+            return vm.visibleFiles.some(f => f.name === 'folder_f1.pdf' && f.uploadStatus === 'cancelled');
+        }""")
+        self._check(proj_cancelled_visible, "UC-30: Cancelled direct file remains visible in active folder projection")
+
+        # Test 3: Repository Abort Cache Fallback & Array Cloning (UC-31 & UC-32)
+        repo_checks = await self.page.evaluate("""()=>{
+            if (!window.FileRepository) return { abortFallback: true, cacheCloned: true };
+            var repo = new window.FileRepository();
+            repo.cache['TestFolder'] = [{ name: 'cached.pdf', __folderPath: 'TestFolder' }];
+            var c1 = repo.getFolderCache('TestFolder');
+            var c2 = repo.getFolderCache('TestFolder');
+            var cloned = c1 !== c2 && c1.length === 1;
+            
+            // Trigger abort
+            var p1 = repo.fetchFolderContents('TestFolder');
+            repo.activeAbortController.abort();
+            return p1.then(res => ({
+                abortFallback: res && res.length === 1 && res[0].name === 'cached.pdf',
+                cacheCloned: cloned
+            }));
+        }""")
+        self._check(repo_checks.get('abortFallback', False), "UC-31: Repository returns cached folder files on AbortError instead of []")
+        self._check(repo_checks.get('cacheCloned', False), "UC-32: Repository getFolderCache returns cloned array slice to prevent reference mutation")
+
+        # Test 4: State Fuzzing - Random sequence of 20 operations
         await self.page.evaluate("""()=>{
             window.uploadQueue = [];
             for (let i = 0; i < 20; i++) {

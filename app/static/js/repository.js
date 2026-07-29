@@ -1,160 +1,104 @@
 /**
- * Lanvan Unidirectional Architecture: File Repository Layer
- * Manages HTTP fetches, WebSockets, AbortController request cancellation, and disk caching.
- * Communicates exclusively by dispatching actions to ActionQueue. NEVER touches DOM directly.
+ * Lanvan Data & Repository Layer (repository.js)
+ * Manages HTTP fetches, WebSockets, in-flight AbortController cancellation, and disk caching.
+ * Sole owner of server file cache.
  */
 
 (function (window) {
     'use strict';
 
-    function FileRepository(store) {
-        this.store = store;
-        this.activeAbortController = null;
-        this.cache = {}; // Keyed by cleanFolderPath
-    }
-
-    function cleanRepositoryFolderPath(path) {
+    function cleanPath(path) {
         if (!path) return "";
-        return String(path).replace(/\\/g, "/").replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "").replace(/^\/+|\/+$/g, "");
+        var cleaned = String(path).replace(/\\/g, "/").replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
+        cleaned = cleaned.replace(/^\/+|\/+$/g, "");
+        return (cleaned === "Home (Root)" || cleaned === "Home" || cleaned === "Home/") ? "" : cleaned;
     }
 
-    function tagRepositoryFiles(files, folderPath) {
+    function tagFiles(files, folderPath) {
         var list = Array.isArray(files) ? files : [];
+        var targetPath = cleanPath(folderPath);
+        for (var i = 0; i < list.length; i++) {
+            var item = list[i];
+            if (item && typeof item === 'object') {
+                item.isFolder = !!(item.isFolder || item.is_dir || item.is_folder);
+            }
+        }
         try {
             Object.defineProperty(list, "__folderPath", {
-                value: cleanRepositoryFolderPath(folderPath),
+                value: targetPath,
                 enumerable: false,
                 configurable: true
             });
         } catch (e) {
-            list.__folderPath = cleanRepositoryFolderPath(folderPath);
+            list.__folderPath = targetPath;
         }
         return list;
     }
 
-    FileRepository.prototype.fetchFolderContents = function (folderPath) {
-        var cleanPath = cleanRepositoryFolderPath(folderPath);
-        
-        // 1. Abort stale in-flight fetch request if user navigated
-        if (this.activeAbortController) {
-            try {
-                this.activeAbortController.abort();
-            } catch (e) {}
-        }
-
-        this.activeAbortController = new AbortController();
-        var signal = this.activeAbortController.signal;
-
-        var url = cleanPath 
-            ? "/api/folders/" + encodeURIComponent(cleanPath) + "/files"
-            : "/api/files";
-
-        var self = this;
-
-        return fetch(url, { signal: signal })
-            .then(function (res) {
-                if (!res.ok) throw new Error("HTTP error " + res.status);
-                return res.json();
-            })
-            .then(function (data) {
-                var filesData = tagRepositoryFiles((data && (data.files_data || data.files)) ? (data.files_data || data.files) : [], cleanPath);
-                self.cache[cleanPath] = filesData;
-
-                // Dispatch action to Store (Never touch DOM or trigger render directly!)
-                if (window.LanvanStore) {
-                    window.LanvanStore.dispatch("DISK_FILES_LOADED", {
-                        folderPath: cleanPath,
-                        files: filesData
-                    }, "HIGH");
-                }
-                return filesData;
-            })
-            .catch(function (err) {
-                if (err.name === 'AbortError') {
-                    console.log("[REPOSITORY] Stale fetch request aborted for path: '" + cleanPath + "'");
-                } else {
-                    console.error("[REPOSITORY ERROR] Failed to fetch folder contents for '" + cleanPath + "':", err);
-                }
-                return [];
-            });
-    };
+    function FileRepository() {
+        this.cache = {};
+        this.activeAbortController = null;
+    }
 
     FileRepository.prototype.getFolderCache = function (folderPath) {
-        var cleanPath = cleanRepositoryFolderPath(folderPath);
-        return this.cache[cleanPath] || tagRepositoryFiles([], cleanPath);
+        var target = cleanPath(folderPath);
+        var cached = this.cache[target] || tagFiles([], target);
+        return Array.isArray(cached) ? cached.slice() : [];
+    };
+
+    FileRepository.prototype.setFolderCache = function (folderPath, files) {
+        var target = cleanPath(folderPath);
+        var tagged = tagFiles(files, target);
+        this.cache[target] = tagged;
+        return tagged.slice();
     };
 
     FileRepository.prototype.invalidateCache = function (folderPath) {
         if (folderPath === undefined) {
             this.cache = {};
         } else {
-            var cleanPath = cleanRepositoryFolderPath(folderPath);
-            delete this.cache[cleanPath];
+            delete this.cache[cleanPath(folderPath)];
         }
     };
 
-    FileRepository.prototype.createFolder = function (folderName, parentPath) {
-        var formData = new FormData();
-        formData.append("folder_name", folderName);
-        if (parentPath) formData.append("parent_path", parentPath);
+    FileRepository.prototype.fetchFolderContents = function (folderPath) {
+        var target = cleanPath(folderPath);
+
+        // Abort stale fetch if user navigated
+        if (this.activeAbortController) {
+            try { this.activeAbortController.abort(); } catch (e) {}
+        }
+
+        this.activeAbortController = new AbortController();
+        var signal = this.activeAbortController.signal;
+
+        var url = target
+            ? "/api/folders/" + encodeURIComponent(target) + "/files"
+            : "/api/files";
+
         var self = this;
-        return fetch("/api/files/mkdir", { method: "POST", body: formData })
+        return fetch(url, { signal: signal })
             .then(function (res) {
                 if (!res.ok) throw new Error("HTTP error " + res.status);
                 return res.json();
             })
             .then(function (data) {
-                self.invalidateCache(parentPath);
-                return data;
-            });
-    };
-
-    FileRepository.prototype.renameItem = function (oldName, newName, isFolder, parentPath) {
-        var formData = new FormData();
-        formData.append("old_name", oldName);
-        formData.append("new_name", newName);
-        formData.append("is_folder", isFolder ? "true" : "false");
-        if (parentPath) formData.append("parent_path", parentPath);
-        var self = this;
-        return fetch("/api/files/rename", { method: "POST", body: formData })
-            .then(function (res) {
-                if (!res.ok) throw new Error("HTTP error " + res.status);
-                return res.json();
+                var rawFiles = (data && (data.files_data || data.files)) ? (data.files_data || data.files) : [];
+                var tagged = tagFiles(rawFiles, target);
+                self.cache[target] = tagged;
+                return tagged;
             })
-            .then(function (data) {
-                self.invalidateCache(parentPath);
-                return data;
+            .catch(function (err) {
+                if (err.name === 'AbortError') {
+                    console.log("[REPOSITORY] Fetch request aborted for path: '" + target + "'");
+                } else {
+                    console.error("[REPOSITORY ERROR] Failed to fetch folder contents for '" + target + "':", err);
+                }
+                return self.getFolderCache(target);
             });
     };
 
-    FileRepository.prototype.moveItems = function (files, targetFolder, sourceFolder) {
-        var formData = new FormData();
-        formData.append("target_folder", targetFolder);
-        if (sourceFolder) formData.append("source_folder", sourceFolder);
-        files.forEach(function (f) { formData.append("files", f); });
-        var self = this;
-        return fetch("/api/files/move", { method: "POST", body: formData })
-            .then(function (res) {
-                if (!res.ok) throw new Error("HTTP error " + res.status);
-                return res.json();
-            })
-            .then(function (data) {
-                self.invalidateCache(sourceFolder);
-                self.invalidateCache(targetFolder);
-                return data;
-            });
-    };
-
-    // Instantiate FileRepository
-    var repoInstance = new FileRepository(window.LanvanStore);
+    var repoInstance = new FileRepository();
     window.FileRepository = repoInstance;
-
-    // Register with DevTools
-    if (window.__LANVAN_DEVTOOLS__) {
-        window.__LANVAN_DEVTOOLS__.dumpRepository = function () {
-            console.log("=== LANVAN REPOSITORY CACHE ===", repoInstance.cache);
-            return repoInstance.cache;
-        };
-    }
 
 })(window);

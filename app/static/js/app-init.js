@@ -31,11 +31,21 @@
     if (typeof updateFileDisplay === "function" && !updateFileDisplay.__prototypeWrapped) {
         const _originalUpdateFileDisplay = updateFileDisplay;
         updateFileDisplay = function (files) {
-            fetchFilesData().then(function (fd) {
-                renderPrototypeFileList(fd);
-            }).catch(function (err) {
-                console.error("fetchFilesData error:", err);
-            });
+            var normCurrentDir = cleanFolderPath(currentFolderPath);
+            if (Array.isArray(files)) {
+                var taggedFolder = getTaggedFolderPath(files);
+                if (taggedFolder !== null && taggedFolder !== normCurrentDir) {
+                    console.warn("[UPDATE FILE DISPLAY] Ignoring stale payload for folder '" + taggedFolder + "' while active view is '" + normCurrentDir + "'.");
+                    return;
+                }
+                renderPrototypeFileList(tagFilesWithFolder(files, normCurrentDir));
+            } else {
+                fetchFilesData().then(function (fd) {
+                    renderPrototypeFileList(fd);
+                }).catch(function (err) {
+                    console.error("fetchFilesData error:", err);
+                });
+            }
         };
         updateFileDisplay.__prototypeWrapped = true;
         window.updateFileDisplay = updateFileDisplay;
@@ -132,6 +142,9 @@
                     return response;
                 })
                 .catch(function (error) {
+                    if (error && (error.name === 'AbortError' || error.message === 'signal is aborted without reason')) {
+                        throw error;
+                    }
                     console.error("[Network Error] Fetch connection failed for URL: " + url + ". Error: ", error);
                     throw error;
                 });
@@ -159,17 +172,27 @@
      * @param {string[]} files - Array of filenames from production API
      */
     function getDiskFileMetadata(filename, folderPath) {
-
         if (!filename) return null;
         var path = folderPath || (typeof window.lanvanStore !== 'undefined' && window.lanvanStore.getState ? window.lanvanStore.getState().currentFolder : (window.currentFolderPath || ""));
         var cache = (window.FileRepository && typeof window.FileRepository.getFolderCache === 'function')
             ? window.FileRepository.getFolderCache(path)
             : [];
-        return (cache || []).find(function (f) {
+        var match = (cache || []).find(function (f) {
             if (!f) return false;
             var fn = typeof f === 'string' ? f : f.name;
             return fn && fn.trim().toLowerCase() === String(filename).trim().toLowerCase();
-        }) || null;
+        });
+        if (match) {
+            if (typeof match === 'object') {
+                return Object.assign({}, match, {
+                    isFolder: !!(match.isFolder || match.is_dir || match.is_folder || (window._recentlyCreatedFolders && window._recentlyCreatedFolders[filename]))
+                });
+            } else if (typeof match === 'string') {
+                var isF = !!(window._recentlyCreatedFolders && window._recentlyCreatedFolders[match]);
+                return { name: match, size: "--", mtime: 0, isFolder: isF };
+            }
+        }
+        return match || null;
     }
 
     var lastRenderedFiles = [];
@@ -233,34 +256,41 @@
         var normCurrentDir = cleanFolderPath(currentFolderPath);
         var reason = renderReason || "render_prototype";
 
-        // Scope file cache strictly by target folder path to prevent Home files from leaking into subfolder views
+        // Scope file cache strictly by target folder path via FileRepository
         if (files) {
             var taggedFolderPath = getTaggedFolderPath(files);
-            var targetFolderOfFiles = taggedFolderPath !== null ? taggedFolderPath : (normCurrentDir ? null : "");
 
-            if (targetFolderOfFiles === null) {
-                console.warn("[CACHE GUARD] Refusing unscoped file list while active view is '" + normCurrentDir + "'. Rendering cached files for the active folder instead.");
-                files = folderFilesCache[normCurrentDir] || tagFilesWithFolder([], normCurrentDir);
-                targetFolderOfFiles = normCurrentDir;
-            }
-
-            files = tagFilesWithFolder(files, targetFolderOfFiles);
-            folderFilesCache[targetFolderOfFiles] = files;
-
-            // CACHE GUARD: If incoming files belong to a DIFFERENT folder than the currently active view, save to cache but DO NOT render for current view!
-            if (targetFolderOfFiles !== normCurrentDir) {
-                console.warn("[CACHE GUARD] Incoming files belong to folder '" + targetFolderOfFiles + "' but active view is '" + normCurrentDir + "'. Saved to cache for '" + targetFolderOfFiles + "'. Using cached files for '" + normCurrentDir + "'.");
-                files = folderFilesCache[normCurrentDir] || tagFilesWithFolder([], normCurrentDir);
+            // If incoming payload has explicit tagged folder path, save it ONLY to its tagged folder cache
+            if (taggedFolderPath !== null) {
+                if (window.FileRepository) {
+                    window.FileRepository.setFolderCache(taggedFolderPath, files);
+                }
+                if (taggedFolderPath !== normCurrentDir) {
+                    console.warn("[CACHE GUARD] Incoming payload belongs to '" + taggedFolderPath + "' but active view is '" + normCurrentDir + "'. Rendering active folder cache instead.");
+                    files = window.FileRepository ? window.FileRepository.getFolderCache(normCurrentDir) : tagFilesWithFolder([], normCurrentDir);
+                }
+            } else {
+                // Untagged payload: assume active folder ONLY if current folder is root Home ("")
+                if (normCurrentDir !== "") {
+                    console.warn("[CACHE GUARD] Rejecting untagged payload while viewing subfolder '" + normCurrentDir + "'. Rendering active folder cache instead.");
+                    files = window.FileRepository ? window.FileRepository.getFolderCache(normCurrentDir) : tagFilesWithFolder([], normCurrentDir);
+                } else {
+                    files = tagFilesWithFolder(files, "");
+                    if (window.FileRepository) {
+                        window.FileRepository.setFolderCache("", files);
+                    }
+                }
             }
             lastRenderedFiles = files;
         }
 
         var fileSource = "explicit_arg";
-        if (!files) {
-            if (folderFilesCache[normCurrentDir]) {
-                files = folderFilesCache[normCurrentDir];
+        if (!files || (Array.isArray(files) && files.length === 0)) {
+            var cachedRepoFiles = window.FileRepository ? window.FileRepository.getFolderCache(normCurrentDir) : [];
+            if (cachedRepoFiles && cachedRepoFiles.length > 0) {
+                files = cachedRepoFiles;
                 fileSource = "folder_cache_" + (normCurrentDir || "root");
-            } else {
+            } else if (!files) {
                 files = tagFilesWithFolder([], normCurrentDir);
                 fileSource = "empty_folder_init";
             }
@@ -306,11 +336,20 @@
                     console.error("   WHO: renderPrototypeFileList | FROM: " + fileSource + " | WHY: files parameter was undefined/null during render!");
                 }
 
+                var isFolderFlag = false;
+                if (meta) {
+                    isFolderFlag = !!(meta.isFolder || meta.is_dir || meta.is_folder);
+                } else if (typeof item === "object") {
+                    isFolderFlag = !!(item.isFolder || item.is_dir || item.is_folder);
+                } else if (window._recentlyCreatedFolders && window._recentlyCreatedFolders[fn]) {
+                    isFolderFlag = true;
+                }
+
                 normalizedFiles.push({
                     name: fn,
                     size: meta ? meta.size : "--",
                     mtime: meta ? meta.mtime : 0,
-                    isFolder: meta ? !!meta.isFolder : false
+                    isFolder: isFolderFlag
                 });
             }
         }
@@ -325,30 +364,23 @@
             storeState.pendingOps = {};
         }
 
-        // [DIAG] Log what's being passed to the projection layer
-        console.log("[DIAG Projection Input] normCurrentDir:", normCurrentDir);
-        console.log("[DIAG Projection Input] files.__folderPath:", files && files.__folderPath);
-        console.log("[DIAG Projection Input] files content:", files ? files.map(function(f){ return f && f.name; }) : "null");
-        console.log("[DIAG Projection Input] uploadQueue active items:", liveUploadQueue.filter(function(q){ return q && (q.status === 'uploading' || q.status === 'queued' || q.status === 'completed'); }).map(function(q){ return q.fileName + " -> " + (q.targetDir || '?'); }));
+        var traceId = Math.random().toString(36).substring(2, 7);
+        console.log("🛠️ [TRACE @" + traceId + " @ app-init.js:348] renderPrototypeFileList triggered | Reason: " + reason + " | Folder: '" + (normCurrentDir || "Home") + "'");
+        console.log("   ↳ Disk Payload: " + (files ? files.length : 0) + " items | Active Queue: " + liveUploadQueue.length + " items");
 
         var projectionEngine = window.projectionLayer || (typeof window.ProjectionLayer === 'function' ? new window.ProjectionLayer() : window.ProjectionLayer);
-        var viewModel = projectionEngine ? projectionEngine.buildCurrentFolderViewModel(storeState, files) : { visibleFiles: normalizedFiles, activeUploads: [] };
+        var viewModel = projectionEngine ? projectionEngine.buildCurrentFolderViewModel(storeState, files) : normalizedFiles;
 
-        var activeUploads = viewModel.activeUploads || [];
-        normalizedFiles = viewModel.visibleFiles || [];
+        normalizedFiles = Array.isArray(viewModel) ? viewModel : (viewModel.visibleFiles || []);
+        var activeUploads = (viewModel && Array.isArray(viewModel.activeUploads)) ? viewModel.activeUploads : [];
         var originalFilesForQuickAccess = normalizedFiles.slice();
 
-        // PROJECTION LAYER INSTRUMENTATION
-        console.log("========================");
-        console.log("Current Folder: " + (normCurrentDir || "Home"));
-        console.log("[PROJECTION LAYER] Visible Files: " + JSON.stringify(normalizedFiles.map(function(f){ return f.name; })));
-        console.log("Reason: " + reason);
-        console.log("========================");
+        console.log("✨ [TRACE @" + traceId + " @ app-init.js:364] View Model Ready | Visible Count: " + normalizedFiles.length + " | Files: [" + normalizedFiles.map(function (f) { return f.name + (f.isFolder ? '(dir)' : '(file)'); }).join(", ") + "]");
 
         // ASSERTIONS: Verify every dynamically merged active upload in current view
-        activeUploads.forEach(function(item) {
+        activeUploads.forEach(function (item) {
             if (!item || !item.name) return;
-            var qi = (window.uploadQueue || []).find(function(q){ return q && window.getItemName(q) === item.name; });
+            var qi = (window.uploadQueue || []).find(function (q) { return q && window.getItemName(q) === item.name; });
             if (qi) {
                 var itemDir = cleanFolderPath(window.getItemFolder(qi));
                 if (itemDir !== normCurrentDir) {
@@ -493,15 +525,39 @@
         var html = "";
         for (var i = 0; i < normalizedFiles.length; i++) {
             var fileData = normalizedFiles[i];
-            var name = fileData.name;
+            if (typeof fileData === 'string') {
+                fileData = { name: fileData };
+            }
+            var name = fileData.name || "";
+            if (!name) continue;
+
+            // Fallback to FileRepository cache for full size/date metadata if missing
+            var repoCache = window.FileRepository ? window.FileRepository.getFolderCache(normCurrentDir) : [];
+            if ((!fileData.size && !fileData.mtime && !fileData.modified) && repoCache.length > 0) {
+                var cachedMatch = repoCache.find(function (c) {
+                    return c && typeof c === 'object' && c.name === name;
+                });
+                if (cachedMatch) {
+                    fileData = Object.assign({}, cachedMatch, fileData);
+                }
+            }
+
+            var isFolderItem = !!(fileData.isFolder || fileData.is_dir || fileData.is_folder);
             var ext = name.split(".").pop().toLowerCase();
-            var info = fileData.isFolder
+            var info = isFolderItem
                 ? { avatarClass: "avatar-folder", iconName: "folder" }
                 : getFileTypeInfo(name, ext);
-            var size = fileData.size || "--";
-            var dateStr = "--";
-            var subtitle = fileData.isFolder ? "Folder" : "File";
-            if (fileData.mtime) {
+            var rawSize = fileData.size || fileData.size_formatted || fileData.formatted_size;
+            if (!rawSize && typeof fileData.size_bytes === 'number') {
+                rawSize = formatSize(fileData.size_bytes);
+            }
+            if (!rawSize && typeof fileData.fileSize === 'number') {
+                rawSize = formatSize(fileData.fileSize);
+            }
+            var size = isFolderItem ? "-" : (rawSize || "--");
+            var dateStr = fileData.modified || fileData.date || fileData.dateStr || fileData.modified_formatted || "--";
+            var subtitle = isFolderItem ? "Folder" : "File";
+            if (dateStr === "--" && fileData.mtime) {
                 var d = new Date(fileData.mtime * 1000);
                 dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
             }
@@ -512,7 +568,7 @@
                     size,
                     dateStr,
                     subtitle,
-                    !!fileData.isFolder,
+                    isFolderItem,
                     !!fileData.uploading,
                     fileData.uploadProgress || 0,
                     fileData.uploadId,
@@ -525,7 +581,7 @@
                     size,
                     dateStr,
                     subtitle,
-                    !!fileData.isFolder,
+                    isFolderItem,
                     !!fileData.uploading,
                     fileData.uploadProgress || 0,
                     fileData.uploadId,
@@ -768,6 +824,12 @@
         }
 
         currentFolderPath = newPath;
+        if (window.history && typeof window.history.replaceState === "function") {
+            try {
+                var newUrl = window.location.pathname + "?folder=" + encodeURIComponent(newPath);
+                window.history.replaceState({ folder: newPath }, "", newUrl);
+            } catch (e) { }
+        }
         console.log("%c[LANVAN UI] 📂 Navigating into folder: '%s'", "color:#3b82f6; font-weight:bold;", currentFolderPath);
         prototypeSelectedItems = [];
         updateSelectionToolbar();
@@ -1219,6 +1281,9 @@
                 }
                 window._contextMenuTarget = "";
                 window.clearSelection();
+                if (window.FileRepository && typeof window.FileRepository.invalidateCache === "function") {
+                    window.FileRepository.invalidateCache(currentFolderPath);
+                }
                 if (typeof refreshFileList === "function") refreshFileList();
                 if (typeof window.requestSafeVisibleFilesRefresh === "function") {
                     window.requestSafeVisibleFilesRefresh(120);
@@ -1229,6 +1294,9 @@
             }
 
             var filename = itemsToDelete[index];
+            if (window._recentlyCreatedFolders) {
+                delete window._recentlyCreatedFolders[filename];
+            }
 
             // Abort active upload transfers & mark queue items as deleted immediately
             window._cancelledFilesMap = window._cancelledFilesMap || {};
@@ -1247,7 +1315,7 @@
                     var qiFolder = (qi.targetDir || qi.parent_path || qi.folder || "").replace(/^Home\/?/, "");
                     if (qiName === basename || qiName === filename || qiFolder === filename || qiFolder.startsWith(filename + "/")) {
                         if (qi.xhr) {
-                            try { qi.xhr.abort(); } catch (err) {}
+                            try { qi.xhr.abort(); } catch (err) { }
                         }
                         qi.status = 'deleted';
                         qi.error = 'Deleted by user';
@@ -2009,6 +2077,9 @@
         console.log("[submitNewFolder] Folder name:", name);
         if (!name) return;
 
+        window._recentlyCreatedFolders = window._recentlyCreatedFolders || {};
+        window._recentlyCreatedFolders[name] = true;
+
         var formData = new FormData();
         formData.append("folder_name", name);
 
@@ -2262,7 +2333,7 @@
             });
     };
 
-window.cancelSelectedUpload = function () {
+    window.cancelSelectedUpload = function () {
         if (typeof cancelAllUploads === "function") {
             cancelAllUploads();
         }
@@ -2378,6 +2449,7 @@ window.cancelSelectedUpload = function () {
         var modal = document.getElementById("previewModal");
         if (modal) {
             modal.style.display = "none";
+            modal.style.pointerEvents = "none";
             var bodyEl = document.getElementById("previewBody");
             if (bodyEl) {
                 var mediaEls = bodyEl.querySelectorAll("video, audio, iframe");
@@ -2535,6 +2607,7 @@ window.cancelSelectedUpload = function () {
                 '</a>' +
                 '</div>';
             modal.style.display = "flex";
+            modal.style.pointerEvents = "auto";
             refreshLucideIcons(bodyEl);
         }
     };
@@ -3370,6 +3443,7 @@ window.cancelSelectedUpload = function () {
 
                     if (item.status === 'uploading' || item.status === 'processing') rd.hasUploading = true;
                     if (item.status === 'paused') rd.hasPaused = true;
+                    if (item.status === 'cancelled') rd.hasCancelled = true;
                 });
 
                 // Pass 2: Update DOM rows with aggregated progress
@@ -3379,17 +3453,11 @@ window.cancelSelectedUpload = function () {
                     var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
                     if (!row) return;
 
-                    // Handle cancelled items
-                    if (rd.hasCancelled && !rd.hasUploading && !rd.hasPaused && rd.itemCount === 1) {
-                        row.remove();
-                        return;
-                    }
-
                     // Calculate aggregated progress
                     var progress = rd.totalBytes > 0 ? Math.round((rd.uploadedBytes / rd.totalBytes) * 100) : 0;
                     progress = Math.min(progress, 100);
-                    var statusLabel = rd.hasPaused ? 'Paused' : (rd.hasUploading ? 'Uploading' : 'Queued');
-                    var statusKey = rd.hasPaused ? 'paused' : (rd.hasUploading ? 'uploading' : 'queued');
+                    var statusLabel = rd.hasPaused ? 'Paused' : (rd.hasUploading ? 'Uploading' : (rd.hasCancelled ? 'Cancelled' : 'Queued'));
+                    var statusKey = rd.hasPaused ? 'paused' : (rd.hasUploading ? 'uploading' : (rd.hasCancelled ? 'cancelled' : 'queued'));
 
                     // Update subtitle text
                     var subtitleCell = row.querySelector('.item-subtitle');
@@ -3684,10 +3752,8 @@ window.cancelSelectedUpload = function () {
             if (!window._trayAutoDismissTimer) {
                 window._trayAutoDismissTimer = setTimeout(function () {
                     window._trayAutoDismissTimer = null;
-                    if (window.uploadQueue) {
-                        window.uploadQueue = window.uploadQueue.filter(function (item) {
-                            return item.status !== 'completed' && item.status !== 'deleted' && item.status !== 'cancelled';
-                        });
+                    if (window.LanvanStore) {
+                        window.LanvanStore.dispatch("CLEAR_COMPLETED_UPLOADS");
                         renderUploadTray();
                     }
                 }, 5000);
@@ -3703,10 +3769,9 @@ window.cancelSelectedUpload = function () {
         activeUploads.forEach(function (item) {
             if (item && (item.status === 'deleted' || item.status === 'cancelled') && !item._dismissTimer) {
                 item._dismissTimer = setTimeout(function () {
-                    if (window.uploadQueue) {
-                        window.uploadQueue = window.uploadQueue.filter(function (i) {
-                            return i && (i.id != item.id);
-                        });
+                    if (window.LanvanStore) {
+                        var curQueue = window.LanvanStore.getState().uploadQueue.filter(function (i) { return i && i.id != item.id; });
+                        window.LanvanStore.dispatch("SYNC_QUEUE", { queue: curQueue });
                         renderUploadTray();
                     }
                 }, 2000);
@@ -4227,36 +4292,45 @@ window.cancelSelectedUpload = function () {
 
     function init() {
         window.uploadTrayDocked = true;
+        try {
+            var urlParams = new URLSearchParams(window.location.search);
+            var folderParam = urlParams.get("folder");
+            if (folderParam) {
+                currentFolderPath = folderParam;
+            }
+        } catch (e) { }
         // Restore upload queue from server (clears on server restart = clears on data clear)
         fetch("/api/upload-history")
             .then(function (r) { return r.json(); })
             .then(function (restoredQueue) {
-                if (Array.isArray(restoredQueue) && restoredQueue.length > 0) {
-                    restoredQueue.forEach(function (item) {
+                var queueList = Array.isArray(restoredQueue) ? restoredQueue : ((restoredQueue && restoredQueue.queue) ? restoredQueue.queue : []);
+                if (queueList.length > 0) {
+                    queueList.forEach(function (item) {
                         if (item.status === "uploading" || item.status === "queued") {
                             item.status = "paused";
                         }
                     });
-                    window.uploadQueue = restoredQueue;
-                    // Also sync localStorage to match server
-                    try { localStorage.setItem("lanvan_upload_queue", JSON.stringify(restoredQueue)); } catch (e) { }
+                    if (window.LanvanStore) {
+                        window.LanvanStore.dispatch("SYNC_QUEUE", { queue: queueList });
+                    }
+                    try { localStorage.setItem("lanvan_upload_queue", JSON.stringify(queueList)); } catch (e) { }
                     startUploadTrayPolling();
                     renderUploadTray();
                 } else {
-                    // Server returned empty - clear localStorage too
                     try { localStorage.removeItem("lanvan_upload_queue"); } catch (e) { }
-                    window.uploadQueue = window.uploadQueue || [];
+                    if (window.LanvanStore) {
+                        window.LanvanStore.dispatch("SYNC_QUEUE", { queue: [] });
+                    }
                     renderUploadTray();
                 }
             })
             .catch(function () {
-                // Fallback: try localStorage if server unreachable
                 try {
                     var stored = localStorage.getItem("lanvan_upload_queue");
                     if (stored) {
                         var q = JSON.parse(stored);
-                        if (Array.isArray(q)) {
-                            window.uploadQueue = q;
+                        if (Array.isArray(q) && window.LanvanStore) {
+                            window.LanvanStore.dispatch("SYNC_QUEUE", { queue: q });
                             startUploadTrayPolling();
                         }
                     }
@@ -4541,6 +4615,44 @@ window.cancelSelectedUpload = function () {
             }
             startUploadTrayPolling();
         };
+
+        // Define authoritative navigation helper
+        window.navigateToFolder = function (folderPath) {
+            var cleanFolder = String(folderPath || "").replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
+            console.log("📂 [LANVAN UI] Navigating to folder: '" + (cleanFolder || "Home") + "'");
+            if (window.LanvanStore) {
+                window.LanvanStore.dispatch("SET_CURRENT_FOLDER", { folderPath: cleanFolder });
+            } else {
+                currentFolderPath = cleanFolder;
+                if (window.FileRepository) {
+                    window.FileRepository.fetchFolderContents(cleanFolder).then(function (fd) {
+                        renderPrototypeFileList(fd, "manual_navigation");
+                    });
+                }
+            }
+        };
+
+        // Subscribe to Store for Navigation Invariant
+        if (window.LanvanStore && typeof window.LanvanStore.subscribe === 'function') {
+            window.LanvanStore.subscribe(function (state, action) {
+                if (!action) return;
+                if (action.type === 'SET_CURRENT_FOLDER' || action.type === 'NAVIGATE_FOLDER' || action.type === 'NAVIGATION') {
+                    var targetFolder = state.currentFolder || "";
+                    currentFolderPath = targetFolder;
+                    console.log("🛠️ [TRACE @ app-init.js:4580] Store Subscription Triggered Navigation -> '" + (targetFolder || "Home") + "'");
+                    
+                    if (window.FileRepository && typeof window.FileRepository.fetchFolderContents === 'function') {
+                        window.FileRepository.fetchFolderContents(targetFolder).then(function (fd) {
+                            renderPrototypeFileList(fd, "store_navigation");
+                        }).catch(function (err) {
+                            console.error("  Error fetching folder contents on navigation:", err);
+                        });
+                    } else {
+                        renderPrototypeFileList(null, "store_navigation");
+                    }
+                }
+            });
+        }
 
         // Render empty manager on load so it is visible by default
         renderUploadTray();

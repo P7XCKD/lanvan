@@ -171,8 +171,11 @@ test_log_*.txt
 # Documentation builds
 docs/_build/
 
-# Playwright browser test downloads
+# Playwright browser test downloads and E2E test artifacts
 test downloads/
+test downlaods/
+testing/e2e/artifacts/
+testing/e2e/test_files/
 
 # Local configuration overrides
 config.local.py
@@ -186,7 +189,6 @@ settings.local.py
 !.agents/
 !.agents/AGENTS.md
 
-test downlaods/
 scratch/
 android/.gradle/
 *.apk

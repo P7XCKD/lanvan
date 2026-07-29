@@ -164,9 +164,12 @@
                             clearTimeout(window._trayAutoDismissTimer);
                             window._trayAutoDismissTimer = null;
                         }
-                        window.uploadQueue = window.uploadQueue.filter(function (item) {
-                            return item.status !== 'completed' && item.status !== 'deleted';
-                        });
+                        if (window.LanvanStore) {
+                            window.LanvanStore.dispatch("CLEAR_COMPLETED_UPLOADS");
+                        }
+                        if (typeof window.triggerInstantUIUpdate === "function") {
+                            window.triggerInstantUIUpdate();
+                        }
                         if (typeof window.renderUploadTray === "function") {
                             window.renderUploadTray();
                         } else if (typeof renderUploadTray === "function") {

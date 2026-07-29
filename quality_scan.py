@@ -249,7 +249,56 @@ class QualityScanner:
         self.check_13_hardcoded_layout_math()
         self.check_14_clipboard_mkdir()
         self.check_15_async_state_mutations()
+        self.check_19_projection_cancelled_handling()
+        self.check_20_repository_cache_cloning()
+        self.check_21_abort_fallback_cached()
+        self.check_22_update_file_display_folder_guard()
         return self.findings
+
+    def check_19_projection_cancelled_handling(self):
+        """Rule 19: Projection Layer direct file cancellation handling guard."""
+        self.total_scans += 1
+        proj_file = JS_DIR / "projection-layer.js"
+        if not proj_file.exists(): return
+        content = proj_file.read_text(encoding="utf-8", errors="ignore")
+        if 'status === \'cancelled\'' not in content or '\'cancelled\'' not in content:
+            self.add_finding("R19-PRJ", "High", "Projection Layer", proj_file, 106,
+                             "Projection Layer relDir === '' does not handle 'cancelled' status, causing direct cancelled uploads to vanish from UI.",
+                             "if (status === 'queued' ...)")
+
+    def check_20_repository_cache_cloning(self):
+        """Rule 20: Repository cache array cloning guard."""
+        self.total_scans += 1
+        repo_file = JS_DIR / "repository.js"
+        if not repo_file.exists(): return
+        content = repo_file.read_text(encoding="utf-8", errors="ignore")
+        if '.slice()' not in content:
+            self.add_finding("R20-CLO", "High", "Cache Mutation", repo_file, 82,
+                             "getFolderCache does not clone cached array with .slice(), risking downstream reference mutations.",
+                             "return this.cache[cleanPath]")
+
+    def check_21_abort_fallback_cached(self):
+        """Rule 21: AbortError fallback to cached folder contents guard."""
+        self.total_scans += 1
+        repo_file = JS_DIR / "repository.js"
+        if not repo_file.exists(): return
+        content = repo_file.read_text(encoding="utf-8", errors="ignore")
+        if 'self.getFolderCache(' not in content:
+            self.add_finding("R21-ABT", "High", "Abort Corruption", repo_file, 78,
+                             "fetchFolderContents returns empty array [] on AbortError instead of self.getFolderCache(), causing screen wipes.",
+                             "return []")
+
+    def check_22_update_file_display_folder_guard(self):
+        """Rule 22: UpdateFileDisplay folder identity guard."""
+        self.total_scans += 1
+        app_file = JS_DIR / "app-init.js"
+        if not app_file.exists(): return
+        content = app_file.read_text(encoding="utf-8", errors="ignore")
+        if 'UPDATE FILE DISPLAY' not in content or 'taggedFolder !== normCurrentDir' not in content:
+            self.add_finding("R22-IDG", "High", "Folder Identity", app_file, 34,
+                             "updateFileDisplay wrapper does not verify folder identity before rendering, allowing cross-folder payload leaks.",
+                             "updateFileDisplay = function (files)")
+
 
 def generate_report(findings, total_scans):
     by_severity = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0}

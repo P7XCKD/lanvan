@@ -1,33 +1,21 @@
 /**
- * Lanvan Unidirectional Architecture: Projection Layer
- * Only ProjectionLayer may create VisibleFiles[]. Violation of this rule is a bug.
- * Pure function: Transforms Store State and Repository Disk Files into a ViewModel.
+ * Lanvan Pure Projection Engine (projection-layer.js)
+ * Pure Function: (storeState, diskFiles) => viewModel
+ * Merges server disk files and active upload queue items for currentFolder with ZERO side effects.
  */
 
 (function (window) {
     'use strict';
 
-    function cleanProjectionFolderPath(path) {
+    function cleanFolderPath(path) {
         if (!path) return "";
         var cleaned = String(path).replace(/\\/g, "/").replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
         cleaned = cleaned.replace(/^\/+|\/+$/g, "");
-        if (cleaned === "Home (Root)" || cleaned === "Home" || cleaned === "Home/") return "";
-        return cleaned;
+        return (cleaned === "Home (Root)" || cleaned === "Home" || cleaned === "Home/") ? "" : cleaned;
     }
 
-    function getRelativeItemDir(itemDir, normCurrentDir) {
-        var cleanItem = cleanProjectionFolderPath(itemDir);
-        var cleanCurrent = cleanProjectionFolderPath(normCurrentDir);
-        if (!cleanCurrent) return cleanItem;
-        if (cleanItem === cleanCurrent) return "";
-        if (cleanItem.startsWith(cleanCurrent + "/")) {
-            return cleanItem.substring(cleanCurrent.length + 1);
-        }
-        return null;
-    }
-
-    function formatProjectionSize(bytes) {
-        if (bytes === 0 || !bytes) return '0 B';
+    function formatSize(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
         var k = 1024;
         var sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
         var i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -37,232 +25,180 @@
     function ProjectionLayer() {}
 
     ProjectionLayer.prototype.buildCurrentFolderViewModel = function (storeState, diskFiles) {
-        var currentFolder = cleanProjectionFolderPath(storeState ? storeState.currentFolder : "");
-        var rawDiskFiles = diskFiles || [];
-        var uploadQueue = (storeState && storeState.uploadQueue) ? storeState.uploadQueue : [];
-        var pendingOps = (storeState && storeState.pendingOps) ? storeState.pendingOps : {};
+        var startTime = performance.now();
+        var currentFolder = cleanFolderPath(storeState ? storeState.currentFolder : "");
+        var rawDiskFiles = Array.isArray(diskFiles) ? diskFiles : [];
+        var uploadQueue = storeState && Array.isArray(storeState.uploadQueue) ? storeState.uploadQueue : [];
+        var pendingOps = storeState && storeState.pendingOps ? storeState.pendingOps : {};
 
-        // 1. Normalize Disk Files (and validate target folder scope if tagged)
         var normalizedDiskFiles = [];
-        var hasFolderTag = rawDiskFiles && rawDiskFiles.__folderPath !== undefined;
-        var targetFolderOfDiskFiles = hasFolderTag ? cleanProjectionFolderPath(rawDiskFiles.__folderPath) : "";
+        var taggedPath = rawDiskFiles.__folderPath !== undefined ? cleanFolderPath(rawDiskFiles.__folderPath) : currentFolder;
 
-        if (!hasFolderTag && currentFolder) {
-            console.error("  [PROJECTION GUARD] Rejected unscoped disk files while projecting subfolder '" + currentFolder + "'. Disk files must carry __folderPath.");
-            rawDiskFiles = [];
-        }
-
-        if (targetFolderOfDiskFiles === currentFolder) {
+        // 1. Process Server Disk Files (strictly matching target folder scope)
+        if (taggedPath === currentFolder) {
             for (var i = 0; i < rawDiskFiles.length; i++) {
                 var df = rawDiskFiles[i];
                 if (!df) continue;
-                var fn = typeof df === "string" ? df : df.name;
-                if (!fn) continue;
+                var fileName = typeof df === 'string' ? df : df.name;
+                if (!fileName) continue;
+
+                // Check pending delete status
+                var isPendingDelete = Object.keys(pendingOps).some(function (opId) {
+                    var op = pendingOps[opId];
+                    return op && op.type === 'DELETE' && op.fileName === fileName;
+                });
+                if (isPendingDelete) continue;
+
+                var isFolderVal = false;
+                if (typeof df === 'string') {
+                    var cachedRepo = window.FileRepository ? window.FileRepository.getFolderCache(currentFolder) : [];
+                    var matchRepo = cachedRepo.find(function (c) {
+                        return c && typeof c === 'object' && c.name === fileName && (c.isFolder || c.is_dir || c.is_folder);
+                    });
+                    isFolderVal = !!matchRepo || !!(window._recentlyCreatedFolders && window._recentlyCreatedFolders[fileName]);
+                } else {
+                    isFolderVal = !!(df.isFolder || df.is_dir || df.is_folder || (window._recentlyCreatedFolders && window._recentlyCreatedFolders[fileName]));
+                }
+
                 normalizedDiskFiles.push({
-                    name: fn,
-                    size: typeof df === "string" ? "--" : (df.size || "--"),
-                    mtime: typeof df === "string" ? 0 : (df.mtime || 0),
-                    isFolder: typeof df === "string" ? false : !!df.isFolder,
-                    targetDir: targetFolderOfDiskFiles
+                    name: fileName,
+                    size: typeof df === 'string' ? '--' : (df.size || '--'),
+                    mtime: typeof df === 'string' ? 0 : (df.mtime || 0),
+                    isFolder: isFolderVal,
+                    uploading: false,
+                    uploadProgress: 100,
+                    uploadStatus: 'completed'
                 });
             }
-        } else {
-            console.warn("  [PROJECTION GUARD] Suppressed rawDiskFiles from wrong folder! Raw disk files folder: '" + targetFolderOfDiskFiles + "' | currentFolder: '" + currentFolder + "'");
         }
 
-        // 2. Filter out items pending deletion
-        normalizedDiskFiles = normalizedDiskFiles.filter(function (f) {
-            var isPendingDelete = Object.keys(pendingOps).some(function (opId) {
-                var op = pendingOps[opId];
-                return op && op.type === 'DELETE' && op.fileName === f.name;
-            });
-            return !isPendingDelete;
-        });
-
-        // 3. Process active uploads & synthetic root folders for current view
-        var activeUploads = [];
+        // 2. Process Upload Queue Items
         var activeFolderMap = {};
-
-        uploadQueue.forEach(function (item) {
-            if (!item) return;
+        var activeNameMap = activeFolderMap;
+        for (var j = 0; j < uploadQueue.length; j++) {
+            var item = uploadQueue[j];
+            if (!item) continue;
             var itemName = item.fileName || (item.file && item.file.name) || item.name;
-            if (!itemName) return;
+            if (!itemName) continue;
 
-            var rawDir = item.targetDir || item.parent_path || item.folder || "";
-            var relDir = getRelativeItemDir(rawDir, currentFolder);
-            if (relDir === null) return; // Belongs to a completely different folder view!
-
+            var targetDir = cleanFolderPath(item.targetDir || item.parent_path || "");
+            var status = String(item.status || 'QUEUED').toLowerCase();
+            if (status === 'deleted') continue;
+            var itemPct = Math.round(item.progress || 0);
             var fileSize = item.fileSize || (item.file && item.file.size) || 0;
 
-            if (relDir === "") {
-                // Direct file in current view
+            if (targetDir === currentFolder) {
+                // Direct file in active viewport (skip if item itself is marked as folder)
+                if (item.isFolder || (item.file && item.file.isFolder)) continue;
+
                 var existingItem = normalizedDiskFiles.find(function (f) {
                     return f && !f.isFolder && f.name.trim().toLowerCase() === itemName.trim().toLowerCase();
                 });
 
-                var status = String(item.status || '').toLowerCase();
-                var itemPct = Math.round(item.progress || 0);
-
-                if (status === 'queued' || status === 'uploading' || status === 'processing' || status === 'paused') {
+                if (status === 'queued' || status === 'uploading' || status === 'processing' || status === 'paused' || status === 'cancelled') {
                     if (existingItem) {
-                        existingItem.uploading = true;
+                        existingItem.uploading = (status !== 'cancelled');
                         existingItem.uploadProgress = itemPct;
                         existingItem.uploadStatus = status;
                         existingItem.uploadId = item.id;
                     } else {
-                        activeUploads.push({
+                        normalizedDiskFiles.push({
                             name: itemName,
-                            size: formatProjectionSize(fileSize),
+                            size: formatSize(fileSize),
                             mtime: Math.floor(Date.now() / 1000),
                             isFolder: false,
-                            uploading: true,
+                            uploading: (status !== 'cancelled'),
                             uploadProgress: itemPct,
                             uploadStatus: status,
                             uploadId: item.id
                         });
                     }
-                } else if (status === 'completed') {
-                    if (existingItem) {
-                        existingItem.uploading = false;
-                        existingItem.uploadProgress = 100;
-                        existingItem.uploadStatus = 'completed';
-                    } else {
-                        // Newly completed upload not yet in disk files API response
-                        var alreadyInDisk = normalizedDiskFiles.find(function (f) { return f && f.name === itemName; });
-                        if (!alreadyInDisk) {
-                            normalizedDiskFiles.push({
-                                name: itemName,
-                                size: formatProjectionSize(fileSize),
-                                mtime: Math.floor(Date.now() / 1000),
-                                isFolder: false,
-                                uploading: false,
-                                uploadProgress: 100,
-                                uploadStatus: 'completed'
-                            });
-                        }
-                    }
                 }
-            } else if (['queued', 'uploading', 'processing', 'paused', 'completed', 'cancelled'].indexOf(String(item.status).toLowerCase()) !== -1) {
-                // Subfolder upload batch in current view
-                var rootFolder = relDir.split("/")[0];
-                if (rootFolder) {
-                    if (!activeFolderMap[rootFolder]) {
-                        activeFolderMap[rootFolder] = {
+            } else if (targetDir.startsWith(currentFolder ? (currentFolder + "/") : "")) {
+                // Subfolder upload batch: calculate synthetic root folder row
+                var relPath = currentFolder ? targetDir.substring(currentFolder.length + 1) : targetDir;
+                var subFolder = relPath.split("/")[0];
+                if (subFolder && subFolder !== currentFolder) {
+                    if (!activeFolderMap[subFolder]) {
+                        activeFolderMap[subFolder] = {
+                            name: subFolder,
                             totalBytes: 0,
                             uploadedBytes: 0,
                             hasUploading: false,
-                            hasPaused: false,
-                            hasCancelled: false,
-                            allCompleted: true,
                             items: []
                         };
                     }
-                    var itemStatus = String(item.status).toLowerCase();
-                    var bytesDone = (itemStatus === 'completed') ? fileSize : (item.bytesUploaded || 0);
-                    activeFolderMap[rootFolder].totalBytes += fileSize;
-                    activeFolderMap[rootFolder].uploadedBytes += bytesDone;
-                    if (itemStatus === 'uploading' || itemStatus === 'processing' || itemStatus === 'queued') {
-                        activeFolderMap[rootFolder].allCompleted = false;
+                    var bytesDone = (status === 'completed') ? fileSize : (item.bytesUploaded || 0);
+                    activeFolderMap[subFolder].totalBytes += fileSize;
+                    activeFolderMap[subFolder].uploadedBytes += bytesDone;
+                    if (status === 'uploading' || status === 'processing' || status === 'queued') {
+                        activeFolderMap[subFolder].hasUploading = true;
                     }
-                    if (itemStatus === 'cancelled') {
-                        activeFolderMap[rootFolder].hasCancelled = true;
-                        activeFolderMap[rootFolder].allCompleted = false;
-                    }
-                    if (itemStatus === 'uploading' || itemStatus === 'processing') {
-                        activeFolderMap[rootFolder].hasUploading = true;
-                    }
-                    if (itemStatus === 'paused') {
-                        activeFolderMap[rootFolder].hasPaused = true;
-                    }
-                    activeFolderMap[rootFolder].items.push(item);
+                    activeFolderMap[subFolder].items.push(item);
                 }
             }
-        });
+        }
 
-        // 4. Synthesize active folder rows
-        Object.keys(activeFolderMap).forEach(function (folderName) {
-            var finfo = activeFolderMap[folderName];
-            if (!finfo.allCompleted || finfo.hasCancelled) {
-                var folderPct = finfo.totalBytes > 0 ? Math.min(99, Math.round((finfo.uploadedBytes / finfo.totalBytes) * 100)) : 0;
-                var existingFolder = normalizedDiskFiles.find(function (f) { return f && f.name === folderName && f.isFolder; });
-                var folderStatus = finfo.hasUploading ? 'uploading' : (finfo.hasPaused ? 'paused' : (finfo.hasCancelled ? 'cancelled' : 'queued'));
-                if (existingFolder) {
-                    existingFolder.uploading = true;
-                    existingFolder.uploadProgress = folderPct;
-                    existingFolder.uploadStatus = folderStatus;
-                    existingFolder.uploadId = finfo.items[0] ? finfo.items[0].id : null;
-                } else {
-                    var alreadyInActive = activeUploads.find(function (f) { return f.name === folderName && f.isFolder; });
-                    if (!alreadyInActive) {
-                        activeUploads.push({
-                            name: folderName,
-                            size: formatProjectionSize(finfo.uploadedBytes) + " / " + formatProjectionSize(finfo.totalBytes),
-                            mtime: Math.floor(Date.now() / 1000),
-                            isFolder: true,
-                            uploading: true,
-                            uploadProgress: folderPct,
-                            uploadStatus: folderStatus,
-                            uploadId: finfo.items[0] ? finfo.items[0].id : null
-                        });
-                    }
-                }
-            }
-        });
-
-        // 5. Deduplicate and merge active uploads + remaining unique disk files
-        var activeNameMap = {};
-        activeUploads.forEach(function (au) {
-            if (au && au.name) {
-                var k = (au.isFolder ? "folder:" : "file:") + au.name.trim().toLowerCase();
-                activeNameMap[k] = true;
-            }
-        });
-
-        var filteredDiskFiles = normalizedDiskFiles.filter(function (nf) {
-            if (!nf || !nf.name) return false;
-            var k = (nf.isFolder ? "folder:" : "file:") + nf.name.trim().toLowerCase();
-            return !activeNameMap[k];
-        });
-
-        var visibleFiles = activeUploads.concat(filteredDiskFiles);
-
-        // 6. Development Invariant Assertions (Assert dynamically merged active queue items)
-        activeUploads.forEach(function (item) {
-            var qi = uploadQueue.find(function (q) {
-                var qName = q.fileName || (q.file && q.file.name) || q.name;
-                return qName === item.name;
+        // 3. Synthesize Synthetic Root Folder Rows for Active Batches
+        Object.keys(activeFolderMap).forEach(function (subFolderName) {
+            var sFolder = activeFolderMap[subFolderName];
+            var existingFolder = normalizedDiskFiles.find(function (f) {
+                return f && f.isFolder && f.name.trim().toLowerCase() === subFolderName.trim().toLowerCase();
             });
-            if (qi) {
-                var itemDir = cleanProjectionFolderPath(qi.targetDir || qi.parent_path || qi.folder || "");
-                if (itemDir !== currentFolder) {
-                    console.error("  [PROJECTION ASSERTION FAILED] File from wrong folder projected! File: '" + item.name + "' | Item targetDir: '" + itemDir + "' | currentFolder: '" + currentFolder + "'");
+
+            var folderProgress = sFolder.totalBytes > 0 ? Math.round((sFolder.uploadedBytes / sFolder.totalBytes) * 100) : 0;
+            if (existingFolder) {
+                if (sFolder.hasUploading) {
+                    existingFolder.uploading = true;
+                    existingFolder.uploadProgress = folderProgress;
+                    existingFolder.uploadStatus = 'uploading';
+                }
+            } else {
+                normalizedDiskFiles.push({
+                    name: subFolderName,
+                    size: formatSize(sFolder.totalBytes),
+                    mtime: Math.floor(Date.now() / 1000),
+                    isFolder: true,
+                    uploading: sFolder.hasUploading,
+                    uploadProgress: folderProgress,
+                    uploadStatus: sFolder.hasUploading ? 'uploading' : (folderProgress >= 100 ? 'completed' : 'queued')
+                });
+            }
+        });
+
+        // 4. Strict Deduplication: Prefer folder entries over file entries if names match
+        var deduplicatedFiles = [];
+        var seenNameKeys = {};
+        normalizedDiskFiles.forEach(function (f) {
+            if (!f || !f.name) return;
+            var key = f.name.trim().toLowerCase();
+            if (!seenNameKeys[key]) {
+                seenNameKeys[key] = f;
+                deduplicatedFiles.push(f);
+            } else if (f.isFolder && !seenNameKeys[key].isFolder) {
+                var idx = deduplicatedFiles.indexOf(seenNameKeys[key]);
+                if (idx !== -1) {
+                    deduplicatedFiles[idx] = f;
+                    seenNameKeys[key] = f;
                 }
             }
         });
 
-        return {
-            currentFolder: currentFolder,
-            visibleFiles: visibleFiles,
-            activeUploads: activeUploads,
-            selection: ((storeState && storeState.selection) ? storeState.selection : []).slice(),
-            timestamp: Date.now()
-        };
+        // 5. Sort: Folders first (by name), then files (by name)
+        deduplicatedFiles.sort(function (a, b) {
+            if (a.isFolder !== b.isFolder) {
+                return a.isFolder ? -1 : 1;
+            }
+            return String(a.name).localeCompare(String(b.name));
+        });
+
+        var execDuration = (performance.now() - startTime).toFixed(2);
+        console.log("🔍 [TRACE @ projection-layer.js:160] Projection Complete | Exec: " + execDuration + "ms | Items: " + deduplicatedFiles.length + " | Visible: [" + deduplicatedFiles.map(function(d){ return d.name + (d.isFolder ? '(dir)' : '(file)'); }).join(", ") + "]");
+
+        return deduplicatedFiles;
     };
 
     var projectionInstance = new ProjectionLayer();
-    window.ProjectionLayer = ProjectionLayer;
-    window.projectionLayer = projectionInstance;
-
-    // DevTools hook
-    if (window.__LANVAN_DEVTOOLS__) {
-        window.__LANVAN_DEVTOOLS__.dumpProjection = function () {
-            var vm = projectionInstance.buildCurrentFolderViewModel(
-                window.LanvanStore ? window.LanvanStore.state : {},
-                window.FileRepository ? window.FileRepository.getFolderCache() : []
-            );
-            console.log("=== LANVAN PROJECTION VIEW MODEL ===", vm);
-            return vm;
-        };
-    }
+    window.ProjectionLayer = projectionInstance;
 
 })(window);
