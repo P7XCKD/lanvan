@@ -1643,12 +1643,12 @@ function cancelUpload(uploadId) {
   const uploadItem = currentQueue.find(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
   if (!uploadItem) return;
 
-  // Abort the target item if in progress
+  // 1. Abort XHR (side-effect, must happen before state change)
   if (uploadItem.xhr) {
     try { uploadItem.xhr.abort(); } catch (err) { }
   }
 
-  // Trigger server-side cleanup of .tmp files & chunks
+  // 2. Server cleanup (fire-and-forget, does not block UI)
   const fileName = window.getItemName(uploadItem);
   const targetDir = window.getItemFolder(uploadItem);
   if (fileName && fileName !== 'Unknown') {
@@ -1663,7 +1663,6 @@ function cancelUpload(uploadId) {
         window._cancelledFilesMap['Home/' + cleanDir + '/' + fileName] = true;
       }
     }
-
     const formData = new FormData();
     formData.append("filename", fileName);
     if (targetDir) formData.append("parent_path", targetDir);
@@ -1676,34 +1675,10 @@ function cancelUpload(uploadId) {
       .catch(e => { });
   }
 
-  // Set status to cancelled for THIS SPECIFIC ITEM ONLY
-  uploadItem.status = 'cancelled';
-  uploadItem.error = 'Cancelled by user';
-  console.log(`[LANVAN UPLOAD] ❌ Upload cancelled: ${fileName}`);
-
-  // Remove the cancelled upload from the shared queue immediately so the projection
-  // stops seeing it as a visible item on the next render pass.
-  if (Array.isArray(currentQueue)) {
-    const queueIndex = currentQueue.findIndex(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
-    if (queueIndex !== -1) {
-      currentQueue.splice(queueIndex, 1);
-    }
-    if (window.uploadQueue !== currentQueue && Array.isArray(window.uploadQueue)) {
-      const windowIndex = window.uploadQueue.findIndex(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
-      if (windowIndex !== -1) {
-        window.uploadQueue.splice(windowIndex, 1);
-      }
-    }
-  }
-
-  // Force immediate UI update after the queue has been cleaned up.
-  updateUploadItem(uploadItem);
-
+  // 3. Log cancelled upload stats
   const itemSize = window.getItemSize(uploadItem);
   const itemProg = window.getItemProgress(uploadItem);
-  console.log(` Upload cancelled: ${fileName} at ${itemProg.toFixed(1)}%`);
-
-  // Log cancelled upload with detailed stats safely
+  console.log(`[LANVAN UPLOAD] ❌ Upload cancelled: ${fileName} at ${itemProg.toFixed(1)}%`);
   const cancelledStats = {
     type: 'Cancelled Upload',
     filename: fileName,
@@ -1728,18 +1703,29 @@ function cancelUpload(uploadId) {
   };
   saveStatsToLog(cancelledStats);
 
-  // End this upload and start the next one immediately
-  endUpload();
+  // 4. ATOMIC STATE TRANSITION: Dispatch through Store — single gate.
+  //    Store validates the transition, removes from queue, increments generation.
+  //    Subscribers → RenderScheduler → single render with final state.
+  if (window.LanvanStore) {
+    window.LanvanStore.dispatch('CANCEL_UPLOAD', { id: uploadId });
+  }
 
-  // Start the next upload in queue (if any)
+  // 5. Side effects after state is committed
+  endUpload();
   setTimeout(() => {
     startNextUpload();
   }, 100);
 
-  const hasActiveUploads = uploadQueue.some(item =>
-    item && (item.status === 'uploading' || item.status === 'queued' || item.status === 'paused')
-  );
-
+  // Check for remaining active uploads using canonical Store state, not local queue
+  // (local queue may be stale after Store dispatch spliced the cancelled item)
+  function isActiveStatus(s) {
+    var upper = String(s || '').toUpperCase();
+    return upper === 'UPLOADING' || upper === 'QUEUED' || upper === 'PAUSED';
+  }
+  var currentStateQueue = window.LanvanStore ? window.LanvanStore.getState().uploadQueue : uploadQueue;
+  const hasActiveUploads = currentStateQueue.some(function(item) {
+    return item && isActiveStatus(item.status);
+  });
   if (!hasActiveUploads) {
     showClearCompletedButton();
     updateUploadManager();
