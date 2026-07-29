@@ -135,7 +135,7 @@
 
     var schedulerInstance = new RenderScheduler(
         window.LanvanStore,
-        window.projectionLayer,
+        window.ProjectionLayer,
         window.FileRepository
     );
     window.RenderScheduler = schedulerInstance;

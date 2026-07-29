@@ -67,8 +67,9 @@
     // 2. PROTOTYPE RENDERERS — Consume production data, output prototype DOM
     // =========================================================================
 
-    // currentFolderPath is owned exclusively by state-store.js.
-    // This module reads from the Store, never writes directly.
+    // currentFolderPath is owned exclusively by state-store.js via its Object.defineProperty setter.
+    // This local variable mirrors the Store value for fast read access within this module.
+    var currentFolderPath = "Home";
     window.getCurrentFolderPath = function () {
         var p = "";
         if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState) {

@@ -27,7 +27,6 @@
     function normalizeStatus(status) {
         if (!status) return 'QUEUED';
         var upper = String(status).toUpperCase();
-        // Map known legacy lowercase values
         var LEGACY_MAP = {
             'QUEUED': 'QUEUED',
             'UPLOADING': 'UPLOADING',
@@ -50,17 +49,6 @@
         if (normCurr === normNext) return true;
         var allowed = UPLOAD_TRANSITIONS[normCurr] || [];
         return allowed.indexOf(normNext) !== -1;
-<parameter name="task_progress">- [x] Phase 0 — UI Contract (document only)
-- [ ] Phase 1 — Single Source of Truth
-- [ ] Phase 2 — Immutable State Pipeline
-- [ ] Phase 3 — Deterministic Projection
-- [ ] Phase 4 — Render Coordinator
-- [ ] Phase 5 — Atomic UI Transactions
-- [ ] Phase 6 — UI Invariants
-- [ ] Phase 7 — Performance Invariants
-- [ ] Phase 8 — Self-Healing & Runtime Verification
-- [ ] Phase 9 — Chaos Testing
-- [ ] Phase 10 — Release Gate</parameter>
     }
 
     // 2. Central Store Definition
@@ -196,17 +184,6 @@
                     nextState.uploadQueue = payload.queue.slice();
                     nextState.uploadGeneration = (this.state.uploadGeneration || 0) + 1;
                 }
-<parameter name="task_progress">- [x] Phase 0 — UI Contract (document only)
-- [x] Phase 1 — Single Source of Truth (Store hardened, duplicate currentFolderPath removed, generation counters added)
-- [x] Phase 2 — Immutable State Pipeline (projection no longer mutates inputs)
-- [x] Phase 3 — Deterministic Projection (no Date.now(), no global reads, UPPERCASE throughout)
-- [x] Phase 4 — Render Coordinator (module created, rAF batching, fast ViewModel hash, skip identical renders)
-- [ ] Phase 5 — Atomic UI Transactions
-- [ ] Phase 6 — UI Invariants
-- [ ] Phase 7 — Performance Invariants
-- [ ] Phase 8 — Self-Healing & Runtime Verification
-- [ ] Phase 9 — Chaos Testing
-- [ ] Phase 10 — Release Gate</parameter>
                 break;
 
             case 'SET_SELECTION':
