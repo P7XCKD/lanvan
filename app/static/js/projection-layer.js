@@ -24,12 +24,26 @@
 
     function ProjectionLayer() {}
 
+    /**
+     * PROJECTION CONTRACT:
+     * Pure function: (storeState, diskFiles) => ViewModel
+     * - Never mutates inputs (clones before modifying)
+     * - Never reads global state (all data via parameters)
+     * - Deterministic: same inputs always produce same output
+     * - Date.now() is NEVER used for mtime (use 0 as sentinel)
+     */
     ProjectionLayer.prototype.buildCurrentFolderViewModel = function (storeState, diskFiles) {
         var startTime = performance.now();
         var currentFolder = cleanFolderPath(storeState ? storeState.currentFolder : "");
         var rawDiskFiles = Array.isArray(diskFiles) ? diskFiles : [];
         var uploadQueue = storeState && Array.isArray(storeState.uploadQueue) ? storeState.uploadQueue : [];
         var pendingOps = storeState && storeState.pendingOps ? storeState.pendingOps : {};
+
+        // Normalize status to UPPERCASE for comparison (Store uses UPPERCASE now)
+        function normStatus(s) {
+            if (!s) return 'QUEUED';
+            return String(s).toUpperCase();
+        }
 
         var normalizedDiskFiles = [];
         var taggedPath = rawDiskFiles.__folderPath !== undefined ? cleanFolderPath(rawDiskFiles.__folderPath) : currentFolder;
@@ -51,13 +65,11 @@
 
                 var isFolderVal = false;
                 if (typeof df === 'string') {
-                    var cachedRepo = window.FileRepository ? window.FileRepository.getFolderCache(currentFolder) : [];
-                    var matchRepo = cachedRepo.find(function (c) {
-                        return c && typeof c === 'object' && c.name === fileName && (c.isFolder || c.is_dir || c.is_folder);
-                    });
-                    isFolderVal = !!matchRepo || !!(window._recentlyCreatedFolders && window._recentlyCreatedFolders[fileName]);
+                    // Use the diskFiles parameter itself for folder detection — already a Repository snapshot
+                    // No global window.FileRepository read needed
+                    isFolderVal = false;
                 } else {
-                    isFolderVal = !!(df.isFolder || df.is_dir || df.is_folder || (window._recentlyCreatedFolders && window._recentlyCreatedFolders[fileName]));
+                    isFolderVal = !!(df.isFolder || df.is_dir || df.is_folder);
                 }
 
                 normalizedDiskFiles.push({
@@ -67,14 +79,14 @@
                     isFolder: isFolderVal,
                     uploading: false,
                     uploadProgress: 100,
-                    uploadStatus: 'completed'
+                    uploadStatus: 'COMPLETED'
                 });
             }
         }
 
-        // 2. Process Upload Queue Items
+        // 2. Process Upload Queue Items — NEVER mutate normalizedDiskFiles items in-place
+        var uploadOverlayItems = []; // New array for overlay items, merged after
         var activeFolderMap = {};
-        var activeNameMap = activeFolderMap;
         for (var j = 0; j < uploadQueue.length; j++) {
             var item = uploadQueue[j];
             if (!item) continue;
@@ -82,8 +94,8 @@
             if (!itemName) continue;
 
             var targetDir = cleanFolderPath(item.targetDir || item.parent_path || "");
-            var status = String(item.status || 'QUEUED').toLowerCase();
-            if (status === 'deleted') continue;
+            var status = normStatus(item.status);
+            if (status === 'DELETED' || status === 'CANCELLED') continue;
             var itemPct = Math.round(item.progress || 0);
             var fileSize = item.fileSize || (item.file && item.file.size) || 0;
 
@@ -91,25 +103,29 @@
                 // Direct file in active viewport (skip if item itself is marked as folder)
                 if (item.isFolder || (item.file && item.file.isFolder)) continue;
 
-                var existingItem = normalizedDiskFiles.find(function (f) {
-                    return f && !f.isFolder && f.name.trim().toLowerCase() === itemName.trim().toLowerCase();
-                });
-
-                if (status === 'cancelled') {
-                    continue;
+                var existingIdx = -1;
+                for (var ei = 0; ei < normalizedDiskFiles.length; ei++) {
+                    var f = normalizedDiskFiles[ei];
+                    if (f && !f.isFolder && f.name.trim().toLowerCase() === itemName.trim().toLowerCase()) {
+                        existingIdx = ei;
+                        break;
+                    }
                 }
 
-                if (status === 'queued' || status === 'uploading' || status === 'processing' || status === 'paused') {
-                    if (existingItem) {
-                        existingItem.uploading = true;
-                        existingItem.uploadProgress = itemPct;
-                        existingItem.uploadStatus = status;
-                        existingItem.uploadId = item.id;
+                if (status === 'QUEUED' || status === 'UPLOADING' || status === 'PROCESSING' || status === 'PAUSED') {
+                    if (existingIdx >= 0) {
+                        // Clone the existing item before modifying (immutability)
+                        var clone = Object.assign({}, normalizedDiskFiles[existingIdx]);
+                        clone.uploading = true;
+                        clone.uploadProgress = itemPct;
+                        clone.uploadStatus = status;
+                        clone.uploadId = item.id;
+                        normalizedDiskFiles[existingIdx] = clone;
                     } else {
-                        normalizedDiskFiles.push({
+                        uploadOverlayItems.push({
                             name: itemName,
                             size: formatSize(fileSize),
-                            mtime: Math.floor(Date.now() / 1000),
+                            mtime: 0, // Sentinel: unknown mtime (deterministic)
                             isFolder: false,
                             uploading: true,
                             uploadProgress: itemPct,
@@ -132,10 +148,10 @@
                             items: []
                         };
                     }
-                    var bytesDone = (status === 'completed') ? fileSize : (item.bytesUploaded || 0);
+                    var bytesDone = (status === 'COMPLETED') ? fileSize : (item.bytesUploaded || 0);
                     activeFolderMap[subFolder].totalBytes += fileSize;
                     activeFolderMap[subFolder].uploadedBytes += bytesDone;
-                    if (status === 'uploading' || status === 'processing' || status === 'queued') {
+                    if (status === 'UPLOADING' || status === 'PROCESSING' || status === 'QUEUED') {
                         activeFolderMap[subFolder].hasUploading = true;
                     }
                     activeFolderMap[subFolder].items.push(item);
@@ -143,29 +159,41 @@
             }
         }
 
+        // Append overlay items (uploads without existing disk file)
+        for (var oi = 0; oi < uploadOverlayItems.length; oi++) {
+            normalizedDiskFiles.push(uploadOverlayItems[oi]);
+        }
+
         // 3. Synthesize Synthetic Root Folder Rows for Active Batches
         Object.keys(activeFolderMap).forEach(function (subFolderName) {
             var sFolder = activeFolderMap[subFolderName];
-            var existingFolder = normalizedDiskFiles.find(function (f) {
-                return f && f.isFolder && f.name.trim().toLowerCase() === subFolderName.trim().toLowerCase();
-            });
+            var existingIdx = -1;
+            for (var fi = 0; fi < normalizedDiskFiles.length; fi++) {
+                var f = normalizedDiskFiles[fi];
+                if (f && f.isFolder && f.name.trim().toLowerCase() === subFolderName.trim().toLowerCase()) {
+                    existingIdx = fi;
+                    break;
+                }
+            }
 
             var folderProgress = sFolder.totalBytes > 0 ? Math.round((sFolder.uploadedBytes / sFolder.totalBytes) * 100) : 0;
-            if (existingFolder) {
+            if (existingIdx >= 0) {
                 if (sFolder.hasUploading) {
-                    existingFolder.uploading = true;
-                    existingFolder.uploadProgress = folderProgress;
-                    existingFolder.uploadStatus = 'uploading';
+                    var fClone = Object.assign({}, normalizedDiskFiles[existingIdx]);
+                    fClone.uploading = true;
+                    fClone.uploadProgress = folderProgress;
+                    fClone.uploadStatus = 'UPLOADING';
+                    normalizedDiskFiles[existingIdx] = fClone;
                 }
             } else {
                 normalizedDiskFiles.push({
                     name: subFolderName,
                     size: formatSize(sFolder.totalBytes),
-                    mtime: Math.floor(Date.now() / 1000),
+                    mtime: 0, // Sentinel: unknown mtime (deterministic)
                     isFolder: true,
                     uploading: sFolder.hasUploading,
                     uploadProgress: folderProgress,
-                    uploadStatus: sFolder.hasUploading ? 'uploading' : (folderProgress >= 100 ? 'completed' : 'queued')
+                    uploadStatus: sFolder.hasUploading ? 'UPLOADING' : (folderProgress >= 100 ? 'COMPLETED' : 'QUEUED')
                 });
             }
         });

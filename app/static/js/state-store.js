@@ -19,11 +19,48 @@
         'DELETED': []
     };
 
+    /**
+     * Normalize any status string to UPPERCASE. This is the single gate
+     * that prevents the Store/queue divergence bug where main-app.js writes
+     * lowercase statuses ('cancelled') that the FSM cannot validate.
+     */
+    function normalizeStatus(status) {
+        if (!status) return 'QUEUED';
+        var upper = String(status).toUpperCase();
+        // Map known legacy lowercase values
+        var LEGACY_MAP = {
+            'QUEUED': 'QUEUED',
+            'UPLOADING': 'UPLOADING',
+            'PROCESSING': 'PROCESSING',
+            'PAUSED': 'PAUSED',
+            'FAILED': 'FAILED',
+            'RETRYING': 'RETRYING',
+            'COMPLETED': 'COMPLETED',
+            'CANCELLED': 'CANCELLED',
+            'DELETED': 'DELETED',
+            'ERROR': 'FAILED'
+        };
+        return LEGACY_MAP[upper] || upper;
+    }
+
     function isValidTransition(curr, next) {
         if (!curr) return true;
-        if (curr === next) return true;
-        var allowed = UPLOAD_TRANSITIONS[curr] || [];
-        return allowed.indexOf(next) !== -1;
+        var normCurr = normalizeStatus(curr);
+        var normNext = normalizeStatus(next);
+        if (normCurr === normNext) return true;
+        var allowed = UPLOAD_TRANSITIONS[normCurr] || [];
+        return allowed.indexOf(normNext) !== -1;
+<parameter name="task_progress">- [x] Phase 0 — UI Contract (document only)
+- [ ] Phase 1 — Single Source of Truth
+- [ ] Phase 2 — Immutable State Pipeline
+- [ ] Phase 3 — Deterministic Projection
+- [ ] Phase 4 — Render Coordinator
+- [ ] Phase 5 — Atomic UI Transactions
+- [ ] Phase 6 — UI Invariants
+- [ ] Phase 7 — Performance Invariants
+- [ ] Phase 8 — Self-Healing & Runtime Verification
+- [ ] Phase 9 — Chaos Testing
+- [ ] Phase 10 — Release Gate</parameter>
     }
 
     // 2. Central Store Definition
@@ -33,7 +70,8 @@
             uploadQueue: [],
             selection: [],
             pendingOps: {},
-            lastAction: null
+            lastAction: null,
+            navigationGeneration: 0
         };
         this.listeners = [];
     }
@@ -60,7 +98,8 @@
             uploadQueue: this.state.uploadQueue.slice(),
             selection: this.state.selection.slice(),
             pendingOps: Object.assign({}, this.state.pendingOps),
-            lastAction: action
+            lastAction: action,
+            navigationGeneration: this.state.navigationGeneration
         };
 
         // Reducer Transformations
@@ -69,7 +108,11 @@
             case 'NAVIGATE_FOLDER':
             case 'NAVIGATION':
                 var rawFolder = payload.folderPath !== undefined ? payload.folderPath : (payload.folder || "");
-                nextState.currentFolder = String(rawFolder).replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
+                var newFolder = String(rawFolder).replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
+                if (newFolder !== this.state.currentFolder) {
+                    nextState.navigationGeneration = this.state.navigationGeneration + 1;
+                }
+                nextState.currentFolder = newFolder;
                 break;
 
             case 'ADD_UPLOAD_ITEM':
@@ -79,7 +122,7 @@
                     var existingIdx = nextState.uploadQueue.findIndex(function (i) { return String(i.id) === String(item.id); });
                     var newItem = Object.assign({}, item, {
                         targetDir: item.targetDir !== undefined ? item.targetDir : "",
-                        status: item.status || 'QUEUED',
+                        status: normalizeStatus(item.status),
                         progress: typeof item.progress === 'number' ? item.progress : 0
                     });
                     if (existingIdx >= 0) {
@@ -91,13 +134,32 @@
                 break;
 
             case 'UPDATE_UPLOAD_STATUS':
-                var id = payload.id;
-                var nextStatus = payload.status;
-                var target = nextState.uploadQueue.find(function (i) { return String(i.id) === String(id); });
-                if (target && isValidTransition(target.status, nextStatus)) {
-                    target.status = nextStatus;
-                    if (typeof payload.progress === 'number') target.progress = payload.progress;
-                    if (payload.error !== undefined) target.error = payload.error;
+                var updateId = payload.id;
+                var rawStatus = payload.status;
+                var normStatus = normalizeStatus(rawStatus);
+                var targetItem = nextState.uploadQueue.find(function (i) { return String(i.id) === String(updateId); });
+                if (targetItem && isValidTransition(targetItem.status, normStatus)) {
+                    targetItem.status = normStatus;
+                    if (typeof payload.progress === 'number') targetItem.progress = payload.progress;
+                    if (payload.error !== undefined) targetItem.error = payload.error;
+                }
+                break;
+
+            case 'BATCH_UPDATE_UPLOADS':
+                if (Array.isArray(payload.items)) {
+                    for (var bi = 0; bi < payload.items.length; bi++) {
+                        var upd = payload.items[bi];
+                        if (!upd || !upd.id) continue;
+                        var bt = nextState.uploadQueue.find(function (i) { return String(i.id) === String(upd.id); });
+                        if (bt) {
+                            var ns = normalizeStatus(upd.status || bt.status);
+                            if (isValidTransition(bt.status, ns)) {
+                                bt.status = ns;
+                                if (typeof upd.progress === 'number') bt.progress = upd.progress;
+                                if (upd.error !== undefined) bt.error = upd.error;
+                            }
+                        }
+                    }
                 }
                 break;
 
@@ -106,15 +168,13 @@
                 var cancelItemIndex = nextState.uploadQueue.findIndex(function (i) { return String(i.id) === String(cancelId); });
                 var cancelItem = cancelItemIndex >= 0 ? nextState.uploadQueue[cancelItemIndex] : null;
                 if (cancelItem && isValidTransition(cancelItem.status, 'CANCELLED')) {
-                    cancelItem.status = 'CANCELLED';
-                    cancelItem.error = 'Cancelled by user';
                     nextState.uploadQueue.splice(cancelItemIndex, 1);
                 }
                 break;
 
             case 'CLEAR_COMPLETED_UPLOADS':
                 nextState.uploadQueue = nextState.uploadQueue.filter(function (item) {
-                    return item && item.status !== 'completed' && item.status !== 'deleted';
+                    return item && item.status !== 'COMPLETED' && item.status !== 'DELETED';
                 });
                 break;
 

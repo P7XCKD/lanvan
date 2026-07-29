@@ -67,27 +67,13 @@
     // 2. PROTOTYPE RENDERERS — Consume production data, output prototype DOM
     // =========================================================================
 
-    var currentFolderPath = "Home";
-    Object.defineProperty(window, 'currentFolderPath', {
-        get: function () {
-            if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState) {
-                return window.LanvanStore.getState().currentFolder || "";
-            }
-            return currentFolderPath || "";
-        },
-        set: function (val) {
-            currentFolderPath = val;
-            if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.dispatch) {
-                window.LanvanStore.dispatch("NAVIGATE_FOLDER", { folderPath: val }, "HIGH");
-            }
-        },
-        configurable: true
-    });
-
+    // currentFolderPath is owned exclusively by state-store.js.
+    // This module reads from the Store, never writes directly.
     window.getCurrentFolderPath = function () {
-        var p = ((typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState)
-            ? (window.LanvanStore.getState().currentFolder || "")
-            : currentFolderPath || "");
+        var p = "";
+        if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState) {
+            p = window.LanvanStore.getState().currentFolder || "";
+        }
         return (p === "Home" || p === "Home/") ? "" : p;
     };
 

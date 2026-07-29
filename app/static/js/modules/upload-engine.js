@@ -6,10 +6,8 @@
 (function (window) {
   'use strict';
 
-  // Authoritative State Repository
-  if (!window.uploadQueue && window.LanvanStore) {
-    window.uploadQueue = window.LanvanStore.getState().uploadQueue;
-  }
+  // Authoritative State Repository — Store is the single source of truth.
+  // Do NOT reassign window.uploadQueue; read from Store directly.
 
   function getQueueItem(uploadId) {
     if (!window.uploadQueue) return null;
@@ -85,16 +83,14 @@
     item.status = 'cancelled';
     item.error = 'Cancelled by user';
 
-    if (Array.isArray(window.uploadQueue)) {
-      var idx = window.uploadQueue.findIndex(function (q) {
-        return q && String(q.id) === String(uploadId);
-      });
-      if (idx !== -1) {
-        window.uploadQueue.splice(idx, 1);
-      }
+    // Dispatch through Store — single source of truth for queue mutations
+    if (window.LanvanStore) {
+      window.LanvanStore.dispatch('CANCEL_UPLOAD', { id: uploadId });
     }
 
-    if (typeof window.triggerInstantUIUpdate === 'function') {
+    if (typeof window.RenderCoordinator !== 'undefined' && window.RenderCoordinator.requestRender) {
+      window.RenderCoordinator.requestRender('upload_cancelled');
+    } else if (typeof window.triggerInstantUIUpdate === 'function') {
       window.triggerInstantUIUpdate();
     }
   }
