@@ -197,6 +197,24 @@
 
         this.state = nextState;
 
+        // INVARIANT GUARD (DEBUG only): Verify upload state machine integrity.
+        // Every upload item must have exactly one valid UPPERCASE status.
+        if (window.DEBUG_MODE) {
+            var seenIds = {};
+            for (var vi = 0; vi < this.state.uploadQueue.length; vi++) {
+                var vItem = this.state.uploadQueue[vi];
+                if (!vItem || !vItem.id) continue;
+                var vStatus = vItem.status;
+                if (!vStatus || vStatus !== vStatus.toUpperCase()) {
+                    console.error('[INVARIANT FAILED] Upload item has invalid status: ' + vStatus, vItem);
+                }
+                if (seenIds[vItem.id]) {
+                    console.error('[INVARIANT FAILED] Duplicate upload ID in queue: ' + vItem.id);
+                }
+                seenIds[vItem.id] = true;
+            }
+        }
+
         // Synchronize legacy window properties safely for backward compatibility
         try {
             window.uploadQueue = this.state.uploadQueue;

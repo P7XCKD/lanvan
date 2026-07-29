@@ -74,6 +74,7 @@
 
                 normalizedDiskFiles.push({
                     name: fileName,
+                    identity: (taggedPath || currentFolder) + '/' + fileName,
                     size: typeof df === 'string' ? '--' : (df.size || '--'),
                     mtime: typeof df === 'string' ? 0 : (df.mtime || 0),
                     isFolder: isFolderVal,
@@ -103,12 +104,26 @@
                 // Direct file in active viewport (skip if item itself is marked as folder)
                 if (item.isFolder || (item.file && item.file.isFolder)) continue;
 
+                // Match by identity (full path), not just display name.
+                // Two files with the same name in different subfolders are distinct objects.
+                var uplIdentity = targetDir + '/' + itemName;
                 var existingIdx = -1;
                 for (var ei = 0; ei < normalizedDiskFiles.length; ei++) {
                     var f = normalizedDiskFiles[ei];
-                    if (f && !f.isFolder && f.name.trim().toLowerCase() === itemName.trim().toLowerCase()) {
+                    if (f && !f.isFolder && f.identity === uplIdentity) {
                         existingIdx = ei;
                         break;
+                    }
+                }
+                // Fallback: name-only match if identity didn't hit (handles legacy disk items without identity field)
+                if (existingIdx === -1) {
+                    if (window.DEBUG_MODE) console.warn('[PROJECTION] Identity fallback: disk item matched by name-only for "' + itemName + '" — add identity field');
+                    for (var ei = 0; ei < normalizedDiskFiles.length; ei++) {
+                        var f = normalizedDiskFiles[ei];
+                        if (f && !f.isFolder && f.name.trim().toLowerCase() === itemName.trim().toLowerCase()) {
+                            existingIdx = ei;
+                            break;
+                        }
                     }
                 }
 
@@ -124,8 +139,9 @@
                     } else {
                         uploadOverlayItems.push({
                             name: itemName,
+                            identity: targetDir + '/' + itemName,
                             size: formatSize(fileSize),
-                            mtime: 0, // Sentinel: unknown mtime (deterministic)
+                            mtime: null, // Unknown mtime — deterministic sentinel
                             isFolder: false,
                             uploading: true,
                             uploadProgress: itemPct,
@@ -167,12 +183,27 @@
         // 3. Synthesize Synthetic Root Folder Rows for Active Batches
         Object.keys(activeFolderMap).forEach(function (subFolderName) {
             var sFolder = activeFolderMap[subFolderName];
+            // Match synthetic folder to existing disk folder by identity (full path),
+            // not just display name. Two folders with the same name in different
+            // contexts have different identities and must never collide.
+            var subFolderIdentity = currentFolder + '/' + subFolderName;
             var existingIdx = -1;
             for (var fi = 0; fi < normalizedDiskFiles.length; fi++) {
                 var f = normalizedDiskFiles[fi];
-                if (f && f.isFolder && f.name.trim().toLowerCase() === subFolderName.trim().toLowerCase()) {
+                if (f && f.isFolder && f.identity === subFolderIdentity) {
                     existingIdx = fi;
                     break;
+                }
+            }
+            // Fallback: name-only match for legacy items without identity field
+            if (existingIdx === -1) {
+                if (window.DEBUG_MODE) console.warn('[PROJECTION] Identity fallback: folder matched by name-only for "' + subFolderName + '" — add identity field');
+                for (var fi = 0; fi < normalizedDiskFiles.length; fi++) {
+                    var f = normalizedDiskFiles[fi];
+                    if (f && f.isFolder && f.name.trim().toLowerCase() === subFolderName.trim().toLowerCase()) {
+                        existingIdx = fi;
+                        break;
+                    }
                 }
             }
 
@@ -188,6 +219,7 @@
             } else {
                 normalizedDiskFiles.push({
                     name: subFolderName,
+                    identity: currentFolder + '/' + subFolderName,
                     size: formatSize(sFolder.totalBytes),
                     mtime: null, // Unknown mtime — deterministic sentinel
                     isFolder: true,
@@ -198,20 +230,27 @@
             }
         });
 
-        // 4. Strict Deduplication: Prefer folder entries over file entries if names match
+        // 4. Strict Deduplication: Every ViewModel item has a unique identity.
+        //    Use identity (full filesystem path) as the primary key — never display name alone.
+        //    If two items share an identity, prefer folder over file.
         var deduplicatedFiles = [];
-        var seenNameKeys = {};
+        var seenIdentities = {};
         normalizedDiskFiles.forEach(function (f) {
             if (!f || !f.name) return;
-            var key = f.name.trim().toLowerCase();
-            if (!seenNameKeys[key]) {
-                seenNameKeys[key] = f;
+            var id = f.identity;
+            if (!id) {
+                if (window.DEBUG_MODE) console.warn('[PROJECTION] Identity fallback: dedup item has no identity field for "' + f.name + '"');
+                id = currentFolder + '/' + f.name;
+            }
+            if (!seenIdentities[id]) {
+                seenIdentities[id] = f;
                 deduplicatedFiles.push(f);
-            } else if (f.isFolder && !seenNameKeys[key].isFolder) {
-                var idx = deduplicatedFiles.indexOf(seenNameKeys[key]);
+            } else if (f.isFolder && !seenIdentities[id].isFolder) {
+                // Same identity but folder trumps file
+                var idx = deduplicatedFiles.indexOf(seenIdentities[id]);
                 if (idx !== -1) {
                     deduplicatedFiles[idx] = f;
-                    seenNameKeys[key] = f;
+                    seenIdentities[id] = f;
                 }
             }
         });
@@ -223,6 +262,24 @@
             }
             return String(a.name).localeCompare(String(b.name));
         });
+
+        // INVARIANT GUARD (DEBUG only): Verify ViewModel integrity.
+        // No duplicate identities, no invalid statuses.
+        if (window.DEBUG_MODE) {
+            var vmIdentities = {};
+            for (var vi = 0; vi < deduplicatedFiles.length; vi++) {
+                var vf = deduplicatedFiles[vi];
+                if (!vf || !vf.name) continue;
+                var vid = vf.identity || currentFolder + '/' + vf.name;
+                if (vmIdentities[vid]) {
+                    console.error('[INVARIANT FAILED] Duplicate identity in ViewModel: ' + vid, vf, vmIdentities[vid]);
+                }
+                vmIdentities[vid] = vf;
+                if (vf.uploading && vf.uploadStatus !== vf.uploadStatus.toUpperCase()) {
+                    console.error('[INVARIANT FAILED] Non-UPPERCASE uploadStatus in ViewModel: ' + vf.uploadStatus, vf);
+                }
+            }
+        }
 
         var execDuration = (performance.now() - startTime).toFixed(2);
         console.log("🔍 [TRACE @ projection-layer.js:160] Projection Complete | Exec: " + execDuration + "ms | Items: " + deduplicatedFiles.length + " | Visible: [" + deduplicatedFiles.map(function(d){ return d.name + (d.isFolder ? '(dir)' : '(file)'); }).join(", ") + "]");
