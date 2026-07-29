@@ -2745,7 +2745,21 @@ async function refreshFileList(reason = 'manual_or_api') {
 
     const data = await response.json();
     const files = data.files_data || data.files || [];
-    updateFileDisplay(files);
+
+    // Cache in Repository (single source of truth for disk state)
+    if (window.FileRepository && typeof window.FileRepository.setFolderCache === 'function') {
+      var currentFolder = (typeof window.getCurrentFolderPath === 'function')
+        ? window.getCurrentFolderPath()
+        : '';
+      window.FileRepository.setFolderCache(currentFolder, files);
+    }
+
+    // Delegate rendering to the unidirectional pipeline
+    if (window.RenderScheduler && typeof window.RenderScheduler.requestRender === 'function') {
+      window.RenderScheduler.requestRender();
+    } else {
+      updateFileDisplay(files);
+    }
 
     logStructuredState(reason, lastCount, files.length);
   } catch (error) {

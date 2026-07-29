@@ -3363,14 +3363,22 @@
         window.uploadManagerExpanded = false;
     }
 
+    // Thin wrapper — delegates to the unidirectional render pipeline.
+    // Existing callers continue to work unchanged during migration.
     var _instantUIUpdateScheduled = false;
     window.triggerInstantUIUpdate = function () {
         if (_instantUIUpdateScheduled) return;
         _instantUIUpdateScheduled = true;
-        requestAnimationFrame(function () {
-            _instantUIUpdateScheduled = false;
-            _doInstantUIUpdate();
-        });
+        // Prefer RenderScheduler (Store→Projection→Renderer pipeline).
+        // Falls back to legacy rAF path if scheduler unavailable.
+        if (window.RenderScheduler && typeof window.RenderScheduler.requestRender === 'function') {
+            window.RenderScheduler.requestRender('instant_update');
+        } else {
+            requestAnimationFrame(function () {
+                _instantUIUpdateScheduled = false;
+                _doInstantUIUpdate();
+            });
+        }
     };
 
     function _doInstantUIUpdate() {
@@ -4697,6 +4705,14 @@
 
         // Render empty manager on load so it is visible by default
         renderUploadTray();
+
+        // Wire the RenderScheduler to the prototype renderer so the
+        // unidirectional Store→Projection→Renderer pipeline is complete.
+        if (window.RenderScheduler && typeof window.RenderScheduler.setRenderer === 'function') {
+            window.RenderScheduler.setRenderer(function(viewModel) {
+                renderPrototypeFileList(viewModel, 'scheduler');
+            });
+        }
 
         console.log("[app-init] Prototype UI adapter initialized. " +
             "Wrapped updateFileDisplay=" + (typeof updateFileDisplay === "function") +
