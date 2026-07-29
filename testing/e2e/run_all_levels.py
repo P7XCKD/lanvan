@@ -30,12 +30,18 @@ async def main():
     args = parser.parse_args()
 
     suites = [
-        ("01_smoke", "Level 1: Real User UI Smoke Tests"),
-        ("02_navigation_chaos", "Level 4: Real UI Navigation Chaos Tests"),
-        ("03_upload_chaos", "Level 3: Upload Chaos & Queue State Tests"),
-        ("05_network_browser_chaos", "Level 5: Network & Browser Chaos Tests"),
-        ("07_multitab", "Level 7: Multi-Tab Real-Time Sync Tests"),
-        ("10_chaos_monkey", "Level 10: Unscripted Real UI Chaos Monkey")
+        ("01_smoke", "Phase 1: Real User UI Smoke Tests"),
+        ("02_navigation_chaos", "Phase 1 & 2: Real UI Navigation Chaos Tests"),
+        ("03_upload_lifecycle", "Phase 3: Upload Lifecycle Validation"),
+        ("04_repository_races", "Phase 4: Controlled Repository Network Races"),
+        ("05_projection_integrity", "Phase 5: Pure Projection Layer Integrity"),
+        ("07_cross_tab_sync", "Phase 6: Comprehensive Cross-Tab Convergence"),
+        ("08_network_chaos_advanced", "Phase 7: Advanced Network Chaos & Recovery"),
+        ("09_long_running_chaos", "Phase 8: Seeded Long-Running Chaos"),
+        ("11_resource_leak_guard", "Phase 9: Portable Resource Leak Guard"),
+        ("10_architectural_invariants", "Phase 10: Executable Architectural Invariants"),
+        ("12_failure_injection", "Phase 11: Systematic Failure Injection"),
+        ("10_chaos_monkey", "Phase 12: Unscripted Real UI Chaos Monkey")
     ]
 
     all_passed = True

@@ -199,6 +199,7 @@
     };
 
     var projectionInstance = new ProjectionLayer();
+    projectionInstance.projectViewModel = projectionInstance.buildCurrentFolderViewModel;
     window.ProjectionLayer = projectionInstance;
 
 })(window);

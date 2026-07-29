@@ -424,6 +424,7 @@ function shouldProcessFileSelection(files) {
  * Function to determine optimal concurrency for uploads
  */
 function getOptimalConcurrency() {
+  if (typeof window !== "undefined") window.getOptimalConcurrency = getOptimalConcurrency;
   // Get average network speed from recent samples
   if (networkSpeedSamples.length === 0) {
     return LANVAN_CONFIG.CONCURRENT.NETWORK_MEDIUM;

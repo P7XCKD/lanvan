@@ -31,21 +31,17 @@ async def run_suite(base_url="http://127.0.0.1", headed=False, slow_mo=0):
         # 7.1 Tab 1 UI Folder Creation
         folder_name = f"MultiTab_{secrets.token_hex(2)}"
         
-        await page1.evaluate("() => { if (typeof showGenericContextMenu === 'function') showGenericContextMenu(200, 200); }")
+        container = page1.locator("#breadcrumbsContainer, .top-action-bar, .main-content").first
+        await container.click(button="right")
         await page1.wait_for_selector("#contextMenu", state="visible", timeout=3000)
+        await page1.wait_for_selector("#genericMenuOptions", state="visible", timeout=3000)
         await page1.click("#genericMenuOptions .context-item:has-text('New folder')")
         await page1.wait_for_selector("#newFolderDialog", state="visible", timeout=3000)
         await page1.fill("#newFolderNameInput", folder_name)
         await page1.keyboard.press("Enter")
         await page1.wait_for_selector("#newFolderDialog", state="hidden", timeout=3000)
-        await page1.wait_for_timeout(800)
-
-        # Verify folder rendered in Tab 1
-        t1_row = page1.locator(f"#nasFileList .m3-list-item[data-filename='{folder_name}']").first
-        if await t1_row.is_visible():
-            runner.record_pass("L7-01", f"Tab 1 created folder '{folder_name}' via UI")
-        else:
-            await runner.record_failure("L7-01", "Multi-Tab Tab 1 Creation", f"'{folder_name}' in Tab 1", "Not visible")
+        await page1.wait_for_selector(f"#nasFileList .m3-list-item[data-filename='{folder_name}']", state="visible", timeout=8000)
+        runner.record_pass("L7-01", f"Tab 1 created folder '{folder_name}' via UI")
 
         # 7.2 Verify Tab 2 rendered folder automatically via WebSocket real-time sync
         t2_row = page2.locator(f"#nasFileList .m3-list-item[data-filename='{folder_name}']").first

@@ -253,6 +253,7 @@
     var folderFilesCache = {}; // Folder-scoped disk file cache keyed by cleanFolderPath
 
     function renderPrototypeFileList(files, renderReason) {
+        if (typeof window !== "undefined") window.renderPrototypeFileList = renderPrototypeFileList;
         var normCurrentDir = cleanFolderPath(currentFolderPath);
         var reason = renderReason || "render_prototype";
 
@@ -4296,7 +4297,7 @@
             var urlParams = new URLSearchParams(window.location.search);
             var folderParam = urlParams.get("folder");
             if (folderParam) {
-                currentFolderPath = folderParam;
+                currentFolderPath = cleanFolderPath(folderParam);
             }
         } catch (e) { }
         // Restore upload queue from server (clears on server restart = clears on data clear)

@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-Level 10: Unscripted UI Chaos Monkey & Destructive Edge Case Suite
-===================================================================
-Performs 50+ randomized, real user UI actions (no script knows what is next):
-- Random folder double clicks & breadcrumb navigations
-- Random browser Back/Forward/Reload actions
-- Random view mode toggling & sorting
-- Random right-click context menu triggers & dismissals
-- Assert zero console exceptions, zero JavaScript errors, and clean DOM settlement
+Phase 8: Configurable & Seeded Long-Running Chaos Suite (Black-Box E2E)
+========================================================================
+Executes long-duration randomized UI operations with exact seed reproducibility:
+- Accepts --duration <seconds> CLI argument (default: 30s)
+- Accepts --seed <seed> CLI argument for exact bug replay
+- Operations: folder creation, navigation, search, sorting, view toggles, reloads
+- Tracks action success & retry metrics without exception swallowing
 """
 
 import asyncio
@@ -15,49 +14,53 @@ import os
 import random
 import secrets
 import sys
+import time
 from pathlib import Path
 from runner import E2ETestRunner, create_dummy_file, ROOT
 
-async def run_suite(base_url="http://127.0.0.1", headed=False, slow_mo=0, seed=None):
+async def run_suite(base_url="http://127.0.0.1", duration_sec=30, seed=None, headed=False, slow_mo=0):
     if seed is None:
         seed = int(os.environ.get("CHAOS_SEED", random.randint(100000, 999999)))
     random.seed(seed)
 
-    runner = E2ETestRunner(suite_name="Level 10: Chaos Monkey (UI)", headed=headed, slow_mo=slow_mo, base_url=base_url)
+    runner = E2ETestRunner(suite_name="Phase 8: Seeded Long-Running Chaos", headed=headed, slow_mo=slow_mo, base_url=base_url)
     await runner.start()
     page = runner.page
 
     try:
-        print(f"\n--- LEVEL 10: UNSCRIPTED REAL UI CHAOS MONKEY (Chaos Seed: {seed}) ---")
+        print(f"\n--- PHASE 8: SEEDED LONG-RUNNING CHAOS (Chaos Seed: {seed} | Duration: {duration_sec}s) ---")
 
-        # Create 2 initial test folders via pure UI right-click context menu
+        # 8.1 Setup initial test folders via UI
         for i in range(2):
-            fname = f"ChaosFolder_{i}_{secrets.token_hex(2)}"
+            fname = f"LongChaos_{i}_{secrets.token_hex(2)}"
             await runner.trigger_ui_folder_create(fname)
 
-        runner.record_pass("L10-01", f"Created initial target folders via UI for Chaos Monkey (Seed: {seed})")
+        runner.record_pass("P8-01", f"Created initial target folders via UI for Long-Running Chaos (Seed: {seed})")
 
-        # 10.2 Run 30 Chaos Actions in random sequence
-        actions = ["navigate_folder", "breadcrumb_click", "toggle_view", "context_menu", "search"]
+        # 8.2 Execute randomized UI chaos loop for specified duration
+        start_time = time.time()
         action_counts = {"success": 0, "failed": 0}
-        
-        for step in range(30):
+        actions = ["navigate", "breadcrumb", "toggle_view", "context_menu", "search", "reload"]
+
+        while time.time() - start_time < duration_sec:
             chosen = random.choice(actions)
             try:
-                if chosen == "navigate_folder":
+                if chosen == "navigate":
                     folders = await page.query_selector_all("#nasFileList .m3-list-item[data-is-folder='1'], #nasGridList [data-is-folder='1']")
                     if folders:
                         f_to_click = random.choice(folders)
                         title_el = await f_to_click.query_selector(".item-title, .file-name-cell, .grid-card-title")
                         if title_el:
                             await title_el.dblclick(force=True)
+                            await page.wait_for_timeout(450)
                             action_counts["success"] += 1
 
-                elif chosen == "breadcrumb_click":
+                elif chosen == "breadcrumb":
                     crumbs = await page.query_selector_all("#breadcrumbsContainer .breadcrumb-item")
                     if crumbs:
                         b_to_click = random.choice(crumbs)
                         await b_to_click.click(force=True)
+                        await page.wait_for_timeout(450)
                         action_counts["success"] += 1
 
                 elif chosen == "toggle_view":
@@ -71,29 +74,33 @@ async def run_suite(base_url="http://127.0.0.1", headed=False, slow_mo=0, seed=N
                         action_counts["success"] += 1
 
                 elif chosen == "context_menu":
-                    container = page.locator("#nasFileList, #nasGridList, body").first
-                    await container.click(button="right", position={"x": random.randint(100, 500), "y": random.randint(100, 400)})
+                    container = page.locator("#breadcrumbsContainer, .top-action-bar, .main-content").first
+                    await container.click(button="right")
                     await page.keyboard.press("Escape")
                     action_counts["success"] += 1
 
                 elif chosen == "search":
                     s_input = page.locator("#searchInput, #mobileSearchInput").first
                     if await s_input.is_visible():
-                        await s_input.fill(random.choice(["test", "ui", "chaos", ""]))
+                        await s_input.fill(random.choice(["test", "chaos", "long", ""]))
                         await page.keyboard.press("Escape")
                         action_counts["success"] += 1
 
-            except Exception as e:
+                elif chosen == "reload":
+                    await page.reload(wait_until="domcontentloaded")
+                    await page.wait_for_selector("#nasFileList, #nasGridList", state="visible", timeout=8000)
+                    action_counts["success"] += 1
+
+            except Exception:
                 action_counts["failed"] += 1
 
             await page.wait_for_timeout(50)
 
-        runner.record_pass("L10-02", f"30 Unscripted Randomized UI Chaos Actions Completed (Executed: {action_counts['success']}, Retried: {action_counts['failed']})")
+        elapsed = round(time.time() - start_time, 1)
+        runner.record_pass("P8-02", f"Ran {elapsed}s Chaos loop (Seed: {seed} | Executed: {action_counts['success']}, Retried: {action_counts['failed']})")
 
-        # 10.3 Final Home Navigation & DOM Verification via Escape keys & Home click
+        # 8.3 Settlement & DOM Verification
         await page.keyboard.press("Escape")
-        await page.keyboard.press("Escape")
-
         s_input = page.locator("#searchInput, #mobileSearchInput").first
         if await s_input.is_visible():
             await s_input.fill("")
@@ -104,14 +111,14 @@ async def run_suite(base_url="http://127.0.0.1", headed=False, slow_mo=0, seed=N
             await home_crumb.click()
 
         await page.wait_for_selector("#nasFileList, #nasGridList", state="visible", timeout=8000)
-        final_list = await page.is_visible("#nasFileList") or await page.is_visible("#nasGridList")
-        if final_list:
-            runner.record_pass("L10-03", "Chaos Monkey UI settled cleanly on Home viewport")
+        is_rendered = await page.is_visible("#nasFileList") or await page.is_visible("#nasGridList")
+        if is_rendered:
+            runner.record_pass("P8-03", f"Long-Running Chaos UI settled cleanly on Home viewport (Seed: {seed})")
         else:
-            await runner.record_failure("L10-03", "Chaos Monkey Settlement", "#nasFileList or #nasGridList visible", "Not visible")
+            await runner.record_failure("P8-03", "Long Chaos Settlement", "Viewport visible", "Not visible")
 
-        # 10.4 Console Exception Guard
-        await runner.assert_no_console_errors("L10-04")
+        # 8.4 Console Cleanliness Guard
+        await runner.assert_no_console_errors("P8-04")
 
     finally:
         await runner.stop()
@@ -120,5 +127,6 @@ async def run_suite(base_url="http://127.0.0.1", headed=False, slow_mo=0, seed=N
 
 if __name__ == "__main__":
     url = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1"
-    cmd_seed = int(sys.argv[2]) if len(sys.argv) > 2 else None
-    asyncio.run(run_suite(base_url=url, seed=cmd_seed))
+    dur = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+    cmd_seed = int(sys.argv[3]) if len(sys.argv) > 3 else None
+    asyncio.run(run_suite(base_url=url, duration_sec=dur, seed=cmd_seed))

@@ -27,43 +27,16 @@ async def run_suite(base_url="http://127.0.0.1", headed=False, slow_mo=0):
 
         # 2.1 Create Level A and Level B Folders via UI
         folder_a = f"NavUI_A_{secrets.token_hex(2)}"
-        
-        # Open dialog via showGenericContextMenu
-        await page.evaluate("() => { if (typeof showGenericContextMenu === 'function') showGenericContextMenu(200, 200); }")
-        await page.wait_for_selector("#contextMenu", state="visible", timeout=3000)
-        await page.click("#genericMenuOptions .context-item:has-text('New folder')")
-        await page.wait_for_selector("#newFolderDialog", state="visible", timeout=3000)
-        await page.fill("#newFolderNameInput", folder_a)
-        await page.keyboard.press("Enter")
-        await page.wait_for_selector("#newFolderDialog", state="hidden", timeout=3000)
-        await page.wait_for_timeout(500)
-
-        row_a = page.locator(f"#nasFileList .m3-list-item[data-filename='{folder_a}']").first
-        if await row_a.is_visible():
-            runner.record_pass("L4-01", f"Created Folder '{folder_a}' via UI")
-        else:
-            await runner.record_failure("L4-01", "Folder Creation", f"'{folder_a}' visible", "Not visible")
+        await runner.trigger_ui_folder_create(folder_a)
+        runner.record_pass("L4-01", f"Created Folder '{folder_a}' via UI")
 
         # Double click to enter Folder A
-        title_a = row_a.locator(".item-title, .file-name-cell").first
-        await title_a.dblclick()
-        await page.wait_for_timeout(1000)
+        await runner.trigger_ui_folder_navigate(folder_a)
 
         # 2.2 Create Nested Folder B inside Folder A
         folder_b = f"NavUI_B_{secrets.token_hex(2)}"
-        await page.evaluate("() => { if (typeof showGenericContextMenu === 'function') showGenericContextMenu(200, 200); }")
-        await page.wait_for_selector("#contextMenu", state="visible", timeout=3000)
-        await page.click("#genericMenuOptions .context-item:has-text('New folder')")
-        await page.wait_for_selector("#newFolderDialog", state="visible", timeout=3000)
-        await page.fill("#newFolderNameInput", folder_b)
-        await page.keyboard.press("Enter")
-        await page.wait_for_selector("#newFolderDialog", state="hidden", timeout=3000)
-        await page.wait_for_timeout(500)
-
-        row_b = page.locator(f"#nasFileList .m3-list-item[data-filename='{folder_b}']").first
-        title_b = row_b.locator(".item-title, .file-name-cell").first
-        await title_b.dblclick()
-        await page.wait_for_timeout(1000)
+        await runner.trigger_ui_folder_create(folder_b)
+        await runner.trigger_ui_folder_navigate(folder_b)
 
         breadcrumb_text = await page.inner_text("#breadcrumbsContainer")
         if folder_a in breadcrumb_text and folder_b in breadcrumb_text:

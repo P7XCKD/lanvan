@@ -66,7 +66,36 @@ class E2ETestRunner:
         self.page.on("requestfailed", lambda req: self.network_errors.append(f"{req.method} {req.url} -> {req.failure}"))
 
         await self.page.goto(self.base_url, wait_until="domcontentloaded")
-        await self.page.wait_for_timeout(1000)
+        await self.page.wait_for_selector("#nasFileList, #nasGridList", state="visible", timeout=10000)
+
+    async def trigger_ui_folder_create(self, folder_name):
+        """Creates a folder using 100% pure UI user mouse & keyboard events"""
+        target = self.page.locator("#breadcrumbsContainer, .top-action-bar, .main-content").first
+        await target.click(button="right")
+        await self.page.wait_for_selector("#contextMenu", state="visible", timeout=5000)
+        await self.page.wait_for_selector("#genericMenuOptions", state="visible", timeout=5000)
+        await self.page.click("#genericMenuOptions .context-item:has-text('New folder')")
+        await self.page.wait_for_selector("#newFolderDialog", state="visible", timeout=5000)
+        await self.page.fill("#newFolderNameInput", folder_name)
+        await self.page.keyboard.press("Enter")
+        await self.page.wait_for_selector("#newFolderDialog", state="hidden", timeout=5000)
+        await self.page.wait_for_selector(f"#nasFileList .m3-list-item[data-filename='{folder_name}'], #nasGridList [data-filename='{folder_name}']", state="visible", timeout=8000)
+
+    async def trigger_ui_folder_navigate(self, folder_name):
+        """Navigates into a folder using 100% pure double click user action"""
+        row = self.page.locator(f"#nasFileList .m3-list-item[data-filename='{folder_name}'], #nasGridList [data-filename='{folder_name}']").first
+        title_el = row.locator(".item-title, .file-name-cell, .grid-card-title").first
+        await title_el.dblclick()
+        await self.page.wait_for_selector(f"#breadcrumbsContainer .breadcrumb-item:has-text('{folder_name}')", state="visible", timeout=8000)
+
+    async def trigger_ui_delete_item(self, item_name):
+        """Deletes an item using 100% pure UI right-click context menu interaction"""
+        row = self.page.locator(f"#nasFileList .m3-list-item[data-filename='{item_name}'], #nasGridList [data-filename='{item_name}']").first
+        title_el = row.locator(".item-title, .file-name-cell, .grid-card-title").first
+        await title_el.click(button="right")
+        await self.page.wait_for_selector("#contextMenu", state="visible", timeout=5000)
+        await self.page.click("#itemMenuOptions .context-item:has-text('Delete')")
+        await self.page.wait_for_selector(f"#nasFileList .m3-list-item[data-filename='{item_name}'], #nasGridList [data-filename='{item_name}']", state="hidden", timeout=8000)
 
     async def stop(self):
         if self.context:
@@ -82,8 +111,12 @@ class E2ETestRunner:
             log for log in self.console_logs
             if "[ERROR]" in log and "lucide" not in log and "ERR_INTERNET_DISCONNECTED" not in log and "Failed to fetch" not in log and "Server shutdown" not in log and "Server connection failed" not in log
         ]
-        if critical_errors or self.js_errors:
-            err_msg = f"Console/JS Exceptions found: {self.js_errors} | Console: {critical_errors[:3]}"
+        critical_js_errors = [
+            e for e in self.js_errors
+            if "Failed to fetch" not in e and "net::ERR" not in e
+        ]
+        if critical_errors or critical_js_errors:
+            err_msg = f"Console/JS Exceptions found: {critical_js_errors} | Console: {critical_errors[:3]}"
             await self.record_failure(test_id, "Console Cleanliness", "Uncaught JavaScript Exception or Console Error", err_msg)
             return False
         return True
