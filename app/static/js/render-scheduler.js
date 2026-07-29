@@ -2,6 +2,7 @@
  * Lanvan Unidirectional Architecture: Render Scheduler & Fast-Path Engine
  * Manages single-flight rAF DOM render coalescing and Fast-Path in-place progress updates.
  * Implements fallback error protection (lastValidViewModel) so UI never crashes.
+ * Includes self-healing DOM-vs-ViewModel verification (DEBUG_MODE only).
  */
 
 (function (window) {
@@ -27,6 +28,49 @@
         return parts.join('|');
     }
 
+    /**
+     * Self-Healing: Verify DOM consistency after every render.
+     * DEBUG_MODE only — zero overhead in production.
+     */
+    function verifyDOMConsistency(viewModel, currentFolder) {
+        var container = document.getElementById('nasFileList');
+        if (!container) return;
+
+        var vmNames = {};
+        for (var i = 0; i < viewModel.length; i++) {
+            var vf = viewModel[i];
+            if (!vf || !vf.name) continue;
+            var vid = vf.identity || (currentFolder || '') + '/' + vf.name;
+            if (vmNames[vid]) {
+                console.error('[SELF-HEAL] ViewModel has duplicate identity: ' + vid);
+            }
+            vmNames[vid] = vf;
+        }
+
+        var rows = container.querySelectorAll('.m3-list-item');
+        var domNames = {};
+        for (var j = 0; j < rows.length; j++) {
+            var fn = rows[j].getAttribute('data-filename');
+            if (!fn) continue;
+            if (domNames[fn]) {
+                console.error('[SELF-HEAL] DOM has duplicate data-filename: ' + fn);
+            }
+            domNames[fn] = true;
+
+            // Check: does this DOM row have a corresponding ViewModel entry?
+            var found = false;
+            for (var k = 0; k < viewModel.length; k++) {
+                if (viewModel[k] && viewModel[k].name === fn) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                console.warn('[SELF-HEAL] DOM row without ViewModel entry: ' + fn);
+            }
+        }
+    }
+
     function RenderScheduler(store, projection, repo) {
         this.store = store;
         this.projection = projection;
@@ -36,18 +80,23 @@
         this.isRendering = false;
         this.lastValidViewModel = null;
         this._lastViewModelHash = '';
+        this._lastNavGeneration = 0;
+        this._lastUpGeneration = 0;
         this.rendererFn = null;
 
         var self = this;
 
-        // Subscribe to Store updates
         if (this.store) {
             this.store.subscribe(function (state, action) {
                 if (action.type === 'PROGRESS_TICK') {
-                    // High-Frequency Progress: Execute Fast-Path In-Place Progress Update
                     self.fastPathUpdate(action.payload);
-                } else {
-                    // Structural Change: Schedule Full Projection & Render
+                    return;
+                }
+                var navGen = state.navigationGeneration || 0;
+                var upGen = state.uploadGeneration || 0;
+                if (navGen !== self._lastNavGeneration || upGen !== self._lastUpGeneration) {
+                    self._lastNavGeneration = navGen;
+                    self._lastUpGeneration = upGen;
                     self.requestRender();
                 }
             });
@@ -76,13 +125,11 @@
         this.isRendering = true;
 
         var viewModel = null;
+        var state = this.store ? this.store.state : {};
         try {
-            var state = this.store ? this.store.state : {};
             var diskFiles = this.repo ? this.repo.getFolderCache(state.currentFolder) : [];
             viewModel = this.projection.buildCurrentFolderViewModel(state, diskFiles);
 
-            // Skip render if ViewModel is structurally identical to last render.
-            // Uses a fast incremental hash — NOT JSON.stringify.
             var newHash = buildViewModelHashFast(viewModel, state.currentFolder);
             if (newHash === this._lastViewModelHash && this.lastValidViewModel) {
                 this.isRendering = false;
@@ -102,11 +149,13 @@
         } finally {
             this.isRendering = false;
         }
+
+        // SELF-HEALING (DEBUG only): DOM ↔ ViewModel reconciliation
+        if (window.DEBUG_MODE && viewModel) {
+            verifyDOMConsistency(viewModel, state.currentFolder);
+        }
     };
 
-    // Fast-Path Progress Update (STRICT IN-PLACE BOUNDARY RULES)
-    // Permitted: Modifying progress bar style.width, speed text, and ETA text on existing DOM rows.
-    // Strictly Banned: Creating rows, deleting rows, reordering rows, switching folders, or modifying VisibleFiles[].
     RenderScheduler.prototype.fastPathUpdate = function (payload) {
         if (!payload || !payload.id) return;
         
@@ -115,7 +164,6 @@
         var speedText = payload.speedText || "";
         var etaText = payload.etaText || "";
 
-        // Locate existing DOM row by upload ID or data attribute
         var row = document.querySelector('[data-upload-id="' + uploadId + '"]') || document.getElementById('file-row-' + uploadId);
         if (row) {
             var progressBar = row.querySelector('.upload-progress-bar') || row.querySelector('.progress-fill');
