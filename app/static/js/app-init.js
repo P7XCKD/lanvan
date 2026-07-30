@@ -3364,21 +3364,24 @@
         window.uploadManagerExpanded = false;
     }
 
-    // Thin wrapper — delegates to the unidirectional render pipeline.
-    // Existing callers continue to work unchanged during migration.
+    // Delegates to the canonical RenderScheduler pipeline.
+    // RenderScheduler handles rAF coalescing, single-flight guard, and hash-based dedup.
+    // Upload tray updates are separate from the file-list render pipeline.
     var _instantUIUpdateScheduled = false;
     window.triggerInstantUIUpdate = function () {
         if (_instantUIUpdateScheduled) return;
         _instantUIUpdateScheduled = true;
-        // Prefer RenderScheduler (Store→Projection→Renderer pipeline).
-        // Falls back to legacy rAF path if scheduler unavailable.
+        // Reset debounce on next frame — RenderScheduler has its own coalescing
+        requestAnimationFrame(function () { _instantUIUpdateScheduled = false; });
+        // Canonical pipeline: Store → Repository → Scheduler → Projection → Renderer
         if (window.RenderScheduler && typeof window.RenderScheduler.requestRender === 'function') {
             window.RenderScheduler.requestRender('instant_update');
-        } else {
-            requestAnimationFrame(function () {
-                _instantUIUpdateScheduled = false;
-                _doInstantUIUpdate();
-            });
+        }
+        // Upload tray is independent of file-list render — update it directly
+        if (typeof window.scheduleUploadTrayRender === "function") {
+            window.scheduleUploadTrayRender();
+        } else if (typeof renderUploadTray === "function") {
+            renderUploadTray();
         }
     };
 
@@ -4298,23 +4301,11 @@
         dialogBox.appendChild(img);
     }
 
-    // Trigger instant file list refresh after upload completes
+    // Delegates to the canonical rendering pipeline.
+    // refreshFileList fetches API → writes Repository → triggers Scheduler → Projection → Renderer.
     function triggerInstantRefresh() {
-        fetchFilesData().then(function (filesData) {
-            var hasVisibleFiles = Array.isArray(filesData) && filesData.length > 0;
-            var hasExistingView = Array.isArray(lastRenderedFiles) && lastRenderedFiles.length > 0;
-
-            // Avoid wiping the current folder view on a transient empty refresh.
-            // The server can lag behind completion events by a moment, especially
-            // when another upload is still in flight.
-            if (!hasVisibleFiles && hasExistingView) {
-                return;
-            }
-
-            renderPrototypeFileList(filesData);
-        });
         if (typeof refreshFileList === "function") {
-            refreshFileList();
+            refreshFileList('instant_refresh');
         }
     }
     window.triggerInstantRefresh = triggerInstantRefresh;
