@@ -1347,7 +1347,7 @@
                         if (qi.xhr) {
                             try { qi.xhr.abort(); } catch (err) { }
                         }
-                        qi.status = 'deleted';
+                        qi.status = 'DELETED';
                         qi.error = 'Deleted by user';
                     }
                 });
@@ -3568,7 +3568,7 @@
                 } else if (typeof window.pauseUploadItem === "function") {
                     window.pauseUploadItem(item.id);
                 } else {
-                    item.status = "paused";
+                    item.status = "PAUSED";
                     if (item.xhr) { try { item.xhr.abort(); } catch (e) { } }
                 }
             }
@@ -3586,7 +3586,7 @@
                 } else if (typeof window.resumeUploadItem === "function") {
                     window.resumeUploadItem(item.id);
                 } else {
-                    item.status = "uploading";
+                    item.status = "UPLOADING";
                 }
             }
         });
@@ -4348,7 +4348,7 @@
                 if (queueList.length > 0) {
                     queueList.forEach(function (item) {
                         if (item.status === "UPLOADING" || item.status === "QUEUED") {
-                            item.status = "paused";
+                            item.status = "PAUSED";
                         }
                     });
                     if (window.LanvanStore) {

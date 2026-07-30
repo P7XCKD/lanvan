@@ -367,7 +367,7 @@ fetch("/api/upload-history")
     if (Array.isArray(restoredQueue) && restoredQueue.length > 0) {
       restoredQueue.forEach(item => {
         if (item.status === 'UPLOADING' || item.status === 'QUEUED') {
-          item.status = 'paused';
+          item.status = 'PAUSED';
         }
       });
       // Merge into the shared array reference
@@ -389,7 +389,7 @@ fetch("/api/upload-history")
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
           parsed.forEach(item => {
-            if (item.status === 'UPLOADING' || item.status === 'QUEUED') item.status = 'paused';
+            if (item.status === 'UPLOADING' || item.status === 'QUEUED') item.status = 'PAUSED';
           });
           uploadQueue.length = 0;
           parsed.forEach(item => uploadQueue.push(item));
@@ -1935,7 +1935,7 @@ function startNextUpload() {
         if (window.LanvanStore) {
           window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: item.id, status: 'COMPLETED', progress: 100 });
         } else {
-          item.status = 'completed';
+          item.status = 'COMPLETED';
           item.progress = 100;
         }
       }
@@ -2007,7 +2007,7 @@ function startUploadWithManager(uploadItem) {
   if (window.LanvanStore) {
     window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: uploadItem.id, status: 'UPLOADING' });
   } else {
-    uploadItem.status = 'uploading';
+    uploadItem.status = 'UPLOADING';
   }
 
   // Initialize upload timing and progress
@@ -2071,7 +2071,7 @@ function uploadSingleFileWithProgress(uploadItem) {
       if (progress >= 100) {
         const fileSizeMB = uploadItem.file.size / (1024 * 1024);
         if (fileSizeMB > 10) {
-          uploadItem.status = 'processing';
+          uploadItem.status = 'PROCESSING';
           console.log(` Upload complete - Setting ${uploadItem.fileName} to processing status immediately`);
           const statusText = document.getElementById(`status-${uploadItem.id}`);
           const speedText = document.getElementById(`speed-${uploadItem.id}`);
@@ -2096,8 +2096,8 @@ function uploadSingleFileWithProgress(uploadItem) {
     if (xhr.status === 200) {
       // Show processing status for files > 10MB (if not already set)
       const fileSizeMB = uploadItem.file.size / (1024 * 1024);
-      if (fileSizeMB > 10 && uploadItem.status !== 'processing') {
-        uploadItem.status = 'processing';
+      if (fileSizeMB > 10 && uploadItem.status !== 'PROCESSING') {
+        uploadItem.status = 'PROCESSING';
         console.log(` Setting ${uploadItem.fileName} to processing status`);
         const statusText = document.getElementById(`status-${uploadItem.id}`);
         const speedText = document.getElementById(`speed-${uploadItem.id}`);
@@ -2112,13 +2112,13 @@ function uploadSingleFileWithProgress(uploadItem) {
 
         // Show processing for a moment before marking complete
         setTimeout(() => {
-          uploadItem.status = 'completed';
+          uploadItem.status = 'COMPLETED';
           uploadItem.progress = 100;
           updateUploadItem(uploadItem);
           updateUploadManager(); // Update manager to show completed count
         }, 1500); // 1.5 second processing indicator
       } else {
-        uploadItem.status = 'completed';
+        uploadItem.status = 'COMPLETED';
         uploadItem.progress = 100;
         updateUploadItem(uploadItem);
         updateUploadManager(); // Update manager to show completed count
@@ -2230,7 +2230,7 @@ function uploadSingleFileWithProgress(uploadItem) {
         updateUploadManager(); // Update the display to show completed count
       }
     } else {
-      uploadItem.status = 'error';
+      uploadItem.status = 'FAILED';
       uploadItem.error = `Upload failed: ${xhr.status}`;
       updateUploadItem(uploadItem);
       endUpload();
@@ -2280,7 +2280,7 @@ function uploadSingleFileWithProgress(uploadItem) {
 
         //  Show completion summary even with errors
         const successfulUploads = uploadQueue.filter(item => item.status === 'COMPLETED').length;
-        const failedUploads = uploadQueue.filter(item => item.status === 'ERROR').length;
+        const failedUploads = uploadQueue.filter(item => item.status === 'FAILED' || item.status === 'ERROR').length;
         if (successfulUploads > 0) {
           showToast(` Upload session complete: ${successfulUploads} successful, ${failedUploads} failed`, 6000);
         }
@@ -2292,7 +2292,7 @@ function uploadSingleFileWithProgress(uploadItem) {
   });
 
   xhr.addEventListener('error', () => {
-    uploadItem.status = 'error';
+    uploadItem.status = 'FAILED';
     uploadItem.error = 'Network error';
     updateUploadItem(uploadItem);
     endUpload();
@@ -2324,7 +2324,7 @@ function uploadSingleFileWithProgress(uploadItem) {
       fileExtension: uploadItem.fileName.split('.').pop()?.toLowerCase() || 'unknown',
       uploadMethod: uploadItem.totalChunks ? 'Chunked (Network Error)' : 'Direct (Network Error)',
       supportsResume: uploadItem.totalChunks ? true : false,
-      status: 'network_error' // Add status field for network error uploads
+      status: 'FAILED' // Add status field for network error uploads
     };
     saveStatsToLog(networkErrorStats);
 
@@ -2343,7 +2343,7 @@ function uploadSingleFileWithProgress(uploadItem) {
 
   xhr.addEventListener('abort', () => {
     if (uploadItem.status !== 'paused') {
-      uploadItem.status = 'cancelled';
+      uploadItem.status = 'CANCELLED';
       updateUploadItem(uploadItem);
       endUpload();
     }
@@ -2386,7 +2386,7 @@ async function uploadLargeFileChunked(uploadItem) {
     } else {
       uploadItem.uploadedChunks = 0;
     }
-    uploadItem.status = 'uploading';
+    uploadItem.status = 'UPLOADING';
 
     var startChunk = 0;
     if (uploadItem.currentChunkIndex !== undefined && uploadItem.currentChunkIndex > 0) {
@@ -2441,7 +2441,7 @@ async function uploadLargeFileChunked(uploadItem) {
       if (!success) {
         // Only set error if not paused/cancelled
         if (uploadItem.status === 'UPLOADING') {
-          uploadItem.status = 'error';
+          uploadItem.status = 'FAILED';
           uploadItem.error = `Failed to upload chunk ${chunkIndex + 1}`;
           updateUploadItem(uploadItem);
           showToast(` Chunk upload failed: ${uploadItem.fileName} (chunk ${chunkIndex + 1})`, 5000);
@@ -2478,8 +2478,8 @@ async function uploadLargeFileChunked(uploadItem) {
 
   } catch (error) {
     // Only handle errors if not paused (pausing can cause AbortError)
-    if (uploadItem.status !== 'paused' && uploadItem.status !== 'cancelled') {
-      uploadItem.status = 'error';
+    if (uploadItem.status !== 'PAUSED' && uploadItem.status !== 'paused' && uploadItem.status !== 'CANCELLED' && uploadItem.status !== 'cancelled') {
+      uploadItem.status = 'FAILED';
       uploadItem.error = `Chunked upload failed: ${error.message}`;
       updateUploadItem(uploadItem);
       showToast(` Chunked upload failed: ${uploadItem.fileName}`, 5000);
@@ -2553,7 +2553,7 @@ async function finalizeChunkedUpload(uploadItem) {
         const assemblyMethod = response.assembly_method || 'traditional chunk combination';
 
         // Show appropriate processing status
-        uploadItem.status = 'processing';
+        uploadItem.status = 'PROCESSING';
         const statusText = document.getElementById(`status-${uploadItem.id}`);
         const speedText = document.getElementById(`speed-${uploadItem.id}`);
 
@@ -2561,7 +2561,7 @@ async function finalizeChunkedUpload(uploadItem) {
           if (statusText) statusText.textContent = ' Streaming assembly completed';
           if (speedText) speedText.textContent = 'Optimized processing';
           // Streaming is much faster, show completion sooner
-          uploadItem.status = 'completed';
+          uploadItem.status = 'COMPLETED';
           uploadItem.progress = 100;
           updateUploadItem(uploadItem);
 
@@ -2576,7 +2576,7 @@ async function finalizeChunkedUpload(uploadItem) {
 
           // Traditional processing takes longer
           const processAsync = () => {
-            uploadItem.status = 'completed';
+            uploadItem.status = 'COMPLETED';
             uploadItem.progress = 100;
             updateUploadItem(uploadItem);
           };
@@ -3102,7 +3102,7 @@ function handleServerShutdown(reason = 'Server has been shut down', gracefulTime
     uploadQueue.forEach(item => {
       if (item.xhr) item.xhr.abort();
       if (item.currentXhr) item.currentXhr.abort();
-      item.status = 'cancelled';
+      item.status = 'CANCELLED';
       item.error = 'Server shutdown';
     });
     updateUploadManager();
