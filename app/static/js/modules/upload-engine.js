@@ -54,7 +54,7 @@
       window.uploadQueue.forEach(function (i) {
         if (!i) return;
         var f = window.getItemFolder ? window.getItemFolder(i) : "";
-        if (f === folder && i.status === 'PAUSED' || i.status === 'PAUSED') {
+        if (f === folder && (i.status === 'PAUSED' || i.status === 'PAUSED')) {
           idsToResume.push(i);
         }
       });

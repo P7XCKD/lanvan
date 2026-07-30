@@ -41,7 +41,8 @@ async def main():
         ("11_resource_leak_guard", "Phase 9: Portable Resource Leak Guard"),
         ("10_architectural_invariants", "Phase 10: Executable Architectural Invariants"),
         ("12_failure_injection", "Phase 11: Systematic Failure Injection"),
-        ("10_chaos_monkey", "Phase 12: Unscripted Real UI Chaos Monkey")
+        ("10_chaos_monkey", "Phase 12: Unscripted Real UI Chaos Monkey"),
+        ("13_resume_operator_precedence", "Phase 13: Dedicated Resume Operator Precedence Regression")
     ]
 
     all_passed = True
