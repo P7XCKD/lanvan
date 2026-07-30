@@ -1526,13 +1526,16 @@ function performUIUpdate(uploadItem, forceUpdate = false) {
     window.updatePrototypeRowProgress(uploadItem);
   }
 
-  // Immediately and smoothly refresh recent cards & file list upon individual file completion
+  // Upon individual file completion, refresh through canonical pipeline
+  // (API → Repository → Scheduler → Projection). Avoids flicker from
+  // triggerInstantUIUpdate which renders stale Repository cache before
+  // the server confirms the file exists on disk.
   if (uploadItem.status === 'completed' && !uploadItem._prototypeRefreshed) {
     uploadItem._prototypeRefreshed = true;
-    if (typeof window.triggerInstantUIUpdate === 'function') {
+    if (typeof refreshFileList === 'function') {
+      refreshFileList('upload_completed');
+    } else if (typeof window.triggerInstantUIUpdate === 'function') {
       window.triggerInstantUIUpdate();
-    } else if (typeof refreshFileList === 'function') {
-      refreshFileList();
     }
   }
 
@@ -2739,6 +2742,7 @@ async function refreshFileList(reason = 'manual_or_api') {
 
     const data = await response.json();
     const files = data.files_data || data.files || [];
+    console.log("[FLICKER-TRACE] 🔄 refreshFileList | API returned " + files.length + " items | Reason: " + (reason || "unknown"));
 
     // Cache in Repository (single source of truth for disk state)
     if (window.FileRepository && typeof window.FileRepository.setFolderCache === 'function') {

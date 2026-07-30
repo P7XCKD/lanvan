@@ -3373,6 +3373,9 @@
     window.triggerInstantUIUpdate = function () {
         if (_instantUIUpdateScheduled) return;
         _instantUIUpdateScheduled = true;
+        var repoCount = 0;
+        try { repoCount = (window.FileRepository && window.FileRepository.getFolderCache) ? window.FileRepository.getFolderCache(window.LanvanStore ? window.LanvanStore.state.currentFolder : "").length : -1; } catch(e) {}
+        console.log("[FLICKER-TRACE] ⚡ triggerInstantUIUpdate | Repo cache: " + repoCount + " items | UploadQueue: " + (Array.isArray(window.uploadQueue) ? window.uploadQueue.length : 0) + " items | Scheduler available: " + !!(window.RenderScheduler && typeof window.RenderScheduler.requestRender === 'function'));
         // Reset debounce on next frame — RenderScheduler has its own coalescing
         requestAnimationFrame(function () { _instantUIUpdateScheduled = false; });
         // Canonical pipeline: Store → Repository → Scheduler → Projection → Renderer
