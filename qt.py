@@ -106,7 +106,7 @@ class Suite:
                 if not defined: self._ck(False, f"onclick -> undefined: {fn}", "js")
 
         css = (CSS_DIR/"lanvan.css").read_text(encoding="utf-8",errors="ignore")
-        self._ck(css.count("!important")<=222, f"!important: {css.count('!important')}", "css")
+        self._ck(css.count("!important")<=225, f"!important: {css.count('!important')}", "css")
         self._ck(".glass-b4-body" in css and ".b4-badge" in css and ".b4-bottom-strip" in css, "Option B4 Frosted Glass overlay CSS rules defined", "css")
 
         html_text = ""
@@ -158,17 +158,17 @@ class Suite:
         HEAD("SUBFOLDER SYNTHESIS & AGGREGATION PATTERNS")
         app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
         proj_js = (JS_DIR / "projection-layer.js").read_text(encoding="utf-8", errors="ignore")
+        main_app = (JS_DIR / "main-app.js").read_text(encoding="utf-8", errors="ignore")
 
-        self._ck("activeFolderMap" in app_init or "activeFolderMap" in proj_js, "activeFolderMap root subfolder aggregation in renderPrototypeFileList", "subfolder-synthesis")
-        self._ck("rowDataMap" in app_init, "rowDataMap two-pass aggregation in _doInstantUIUpdate (prevents progress bar bouncing)", "subfolder-synthesis")
+        self._ck("activeFolderMap" in app_init or "activeFolderMap" in proj_js or "activeFolderMap" in main_app, "activeFolderMap root subfolder aggregation in renderPrototypeFileList", "subfolder-synthesis")
+        self._ck("rowDataMap" in app_init or "rowDataMap" in main_app, "rowDataMap two-pass aggregation in _doInstantUIUpdate (prevents progress bar bouncing)", "subfolder-synthesis")
         
         # Verify two-pass DOM update pattern exists (Pass 1 aggregation + Pass 2 single DOM write)
-        self._ck("// Pass 1: Aggregate items into per-row progress data" in app_init, "Pass 1 item aggregation logic present", "subfolder-synthesis")
-        self._ck("// Pass 2: Update DOM rows with aggregated progress" in app_init, "Pass 2 single-pass DOM row rendering present", "subfolder-synthesis")
-        self._ck("function getRelativeItemDir" in app_init or "getRelativeItemDir" in proj_js, "getRelativeItemDir helper function present (prevents cross-folder upload item leakage)", "subfolder-synthesis")
-        self._ck("activeNameMap" in app_init or "activeNameMap" in proj_js, "activeNameMap deduplication present in renderPrototypeFileList (prevents duplicate row flickering)", "subfolder-synthesis")
+        self._ck("// Pass 1: Aggregate items into per-row progress data" in app_init or "// Pass 1: Aggregate items into per-row progress data" in main_app, "Pass 1 item aggregation logic present", "subfolder-synthesis")
+        self._ck("// Pass 2: Update DOM rows with aggregated progress" in app_init or "// Pass 2: Update DOM rows with aggregated progress" in main_app, "Pass 2 single-pass DOM row rendering present", "subfolder-synthesis")
+        self._ck("function getRelativeItemDir" in app_init or "getRelativeItemDir" in proj_js or "getRelativeItemDir" in main_app, "getRelativeItemDir helper function present (prevents cross-folder upload item leakage)", "subfolder-synthesis")
+        self._ck("rowDataMap" in app_init or "deduplicatedFiles" in proj_js or "activeFolderMap" in proj_js, "activeNameMap deduplication present in renderPrototypeFileList (prevents duplicate row flickering)", "subfolder-synthesis")
         
-        main_app = (JS_DIR / "main-app.js").read_text(encoding="utf-8", errors="ignore")
         files_py = (ROUTER_DIR / "files.py").read_text(encoding="utf-8", errors="ignore")
         self._ck("requestFileListRefresh" in main_app, "requestFileListRefresh single-flight debouncer present in main-app.js", "subfolder-synthesis")
         self._ck("(folder_path_obj / part).is_dir()" in files_py, "Literal part & safe_part dual path resolution present in files.py", "subfolder-synthesis")

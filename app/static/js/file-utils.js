@@ -183,11 +183,13 @@ function formatClipboardSize(bytes) {
  */
 function getStatusDisplay(status) {
   const statusMap = {
-    'queued': 'Queued',
-    'uploading': 'Uploading',
-    'completed': ' Complete',
-    'error': ' Error',
-    'cancelled': '⏸ Cancelled'
+    'QUEUED': 'Queued',
+    'UPLOADING': 'Uploading',
+    'COMPLETED': ' Complete',
+    'FAILED': ' Error',
+    'CANCELLED': '⏸ Cancelled',
+    'PAUSED': 'Paused',
+    'DELETED': 'Deleted'
   };
   return statusMap[status] || status;
 }
@@ -273,15 +275,17 @@ function getClipboardItemIcon(item) {
  */
 function getControlButtons(uploadItem) {
   switch (uploadItem.status) {
-    case 'uploading':
+    case 'UPLOADING':
+      return `<button class="upload-control-btn pause" onclick="pauseUpload(${uploadItem.id})" title="Pause">⏸</button><button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
+    case 'PAUSED':
+      return `<button class="upload-control-btn resume" onclick="resumeUpload(${uploadItem.id})" title="Resume">▶</button><button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
+    case 'QUEUED':
       return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
-    case 'queued':
-      return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
-    case 'completed':
+    case 'COMPLETED':
       return ``; // No individual remove button for completed uploads
-    case 'error':
-      return ``; // No cancel button for error state
-    case 'cancelled':
+    case 'FAILED':
+      return `<button onclick="retryUpload(${uploadItem.id})" class="upload-retry-btn" title="Retry">Retry</button>`;
+    case 'CANCELLED':
       return ``; // No cancel button for already cancelled uploads
     default:
       return `<button class="upload-control-btn cancel" onclick="cancelUpload(${uploadItem.id})" title="Cancel upload">Cancel</button>`;
@@ -296,8 +300,8 @@ function getControlButtons(uploadItem) {
  */
 function shouldInsertBefore(newItem, existingItem) {
   // Priority 1: Incomplete/Failed uploads first
-  const newIncomplete = ['failed', 'paused'].includes(newItem.status);
-  const existingIncomplete = ['failed', 'paused'].includes(existingItem.status);
+  const newIncomplete = ['FAILED', 'PAUSED'].includes(newItem.status);
+  const existingIncomplete = ['FAILED', 'PAUSED'].includes(existingItem.status);
 
   if (newIncomplete && !existingIncomplete) return true;
   if (!newIncomplete && existingIncomplete) return false;
@@ -388,7 +392,7 @@ function startProgressUpdateSafetyNet() {
 
     // Keep safety net running if ANY uploads exist (not just active ones)
     const anyUploads = uploadQueue.filter(item =>
-      !['completed', 'cancelled', 'error'].includes(item.status)
+      !['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)
     );
 
     if (anyUploads.length === 0) {

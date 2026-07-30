@@ -434,7 +434,7 @@ function startProgressUpdateSafetyNet() {
 
     // Keep safety net running if ANY uploads exist (not just active ones)
     const anyUploads = uploadQueue.filter(item =>
-      !['completed', 'cancelled', 'error'].includes(item.status)
+      !['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)
     );
 
     if (anyUploads.length === 0) {
@@ -685,12 +685,13 @@ function formatFileSize(bytes) {
 
 function getStatusDisplay(status) {
   const statusMap = {
-    'queued': ' Queued',
-    'uploading': ' Uploading',
-    'paused': ' Paused',
-    'completed': ' Completed',
-    'error': ' Failed',
-    'cancelled': ' Cancelled'
+    'QUEUED': ' Queued',
+    'UPLOADING': ' Uploading',
+    'PAUSED': ' Paused',
+    'COMPLETED': ' Completed',
+    'FAILED': ' Failed',
+    'CANCELLED': ' Cancelled',
+    'DELETED': ' Deleted'
   };
   return statusMap[status] || status;
 }
@@ -708,7 +709,7 @@ function getControlButtons(uploadItem) {
           `;
   } else if (uploadItem.status === 'COMPLETED') {
     return `<button onclick="removeUpload(${uploadItem.id})" class="upload-remove-btn"></button>`;
-  } else if (uploadItem.status === 'ERROR') {
+  } else if (uploadItem.status === 'FAILED') {
     return `<button onclick="retryUpload(${uploadItem.id})" class="upload-retry-btn"></button>
               <button onclick="removeUpload(${uploadItem.id})" class="upload-remove-btn"></button>`;
   }
@@ -1337,11 +1338,11 @@ function updateUploadManager() {
   const uploadQueue_element = document.getElementById('uploadQueue');
 
   const activeUploads = uploadQueue.filter(item =>
-    ['queued', 'uploading', 'paused'].includes(item.status)
+    ['QUEUED', 'UPLOADING', 'PAUSED'].includes(item.status)
   ).length;
 
   const completedUploads = uploadQueue.filter(item =>
-    ['completed', 'cancelled', 'error'].includes(item.status)
+    ['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)
   ).length;
 
   const currentlyUploading = uploadQueue.filter(item => item.status === 'UPLOADING').length;
@@ -1370,15 +1371,16 @@ function sortAndRenderUploadQueue() {
   const queue = document.getElementById('uploadQueue');
   if (!queue) return;
 
-  // Sort upload queue: uploading > paused > queued > completed > error > cancelled
+  // Sort upload queue: UPLOADING > PAUSED > QUEUED > COMPLETED > FAILED > CANCELLED > DELETED
   const sortedQueue = [...uploadQueue].sort((a, b) => {
     const statusPriority = {
-      'uploading': 1,
-      'paused': 2,
-      'queued': 3,
-      'completed': 4,
-      'error': 5,
-      'cancelled': 6
+      'UPLOADING': 1,
+      'PAUSED': 2,
+      'QUEUED': 3,
+      'COMPLETED': 4,
+      'FAILED': 5,
+      'CANCELLED': 6,
+      'DELETED': 7
     };
 
     const aPriority = statusPriority[a.status] || 999;
@@ -1389,7 +1391,7 @@ function sortAndRenderUploadQueue() {
     }
 
     // Within same status, sort by creation time (newest first for active, oldest first for completed)
-    if (['uploading', 'paused', 'queued'].includes(a.status)) {
+    if (['UPLOADING', 'PAUSED', 'QUEUED'].includes(a.status)) {
       return b.uploadId - a.uploadId; // Newer active uploads first
     } else {
       return a.uploadId - b.uploadId; // Older completed uploads first
@@ -1483,9 +1485,9 @@ function updateUploadItem(uploadItem, forceUpdate = false) {
   const isImportantUpdate =
     uploadItem.status === 'UPLOADING' ||
     uploadItem.status === 'CANCELLED' ||
-    uploadItem.status === 'ERROR' ||
+    uploadItem.status === 'FAILED' ||
     uploadItem.status === 'PROCESSING' ||
-    uploadItem.progress === 100;
+    uploadItem.status === 'PAUSED';
 
   // Use requestIdleCallback for non-critical updates to prevent blocking
   // But NEVER throttle progress updates for actively uploading files OR force updates
@@ -1794,13 +1796,13 @@ function resumeUpload(uploadId) {
 
 function cancelAllUploads() {
   const itemsBeingCancelled = uploadQueue.filter(item =>
-    ['queued', 'uploading', 'paused'].includes(item.status)
+    ['QUEUED', 'UPLOADING', 'PAUSED'].includes(item.status)
   );
 
   console.log(` Cancelling ${itemsBeingCancelled.length} active uploads...`);
 
   uploadQueue.forEach(item => {
-    if (['queued', 'uploading', 'paused'].includes(item.status)) {
+    if (['QUEUED', 'UPLOADING', 'PAUSED'].includes(item.status)) {
       cancelUpload(item.id);
     }
   });
@@ -1822,7 +1824,7 @@ function cancelAllUploads() {
 
 function showClearCompletedButton() {
   const completedItems = uploadQueue.filter(item =>
-    item && ['completed', 'cancelled', 'error'].includes(item.status)
+    item && ['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)
   );
 
   if (completedItems.length === 0) return;
@@ -1850,7 +1852,7 @@ function showClearCompletedButton() {
 function clearCompletedUploads() {
   // Remove completed, cancelled, and error items from DOM and queue
   const itemsToRemove = uploadQueue.filter(item =>
-    ['completed', 'cancelled', 'error'].includes(item.status)
+    ['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)
   );
 
   itemsToRemove.forEach(item => {
@@ -1862,12 +1864,12 @@ function clearCompletedUploads() {
 
   // Filter out completed items from queue
   uploadQueue = uploadQueue.filter(item =>
-    !['completed', 'cancelled', 'error'].includes(item.status)
+    !['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)
   );
 
   // Hide clear button if no more items to clear
   const clearBtn = document.getElementById('clearCompletedBtn');
-  if (clearBtn && uploadQueue.filter(item => ['completed', 'cancelled', 'error'].includes(item.status)).length === 0) {
+  if (clearBtn && uploadQueue.filter(item => ['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)).length === 0) {
     clearBtn.style.display = 'none';
   }
 
@@ -1890,7 +1892,7 @@ function removeCompletedUpload(itemId) {
   }
 
   // Only allow removal of completed, cancelled, or error items
-  if (!['completed', 'cancelled', 'error'].includes(item.status)) {
+  if (!['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)) {
     console.warn(` Cannot remove upload ${itemId} with status: ${item.status}`);
     return;
   }
@@ -1911,7 +1913,7 @@ function removeCompletedUpload(itemId) {
 
   // If this was the last completed item, hide the clear all button
   const clearBtn = document.getElementById('clearCompletedBtn');
-  if (clearBtn && uploadQueue.filter(item => ['completed', 'cancelled', 'error'].includes(item.status)).length === 0) {
+  if (clearBtn && uploadQueue.filter(item => ['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)).length === 0) {
     clearBtn.style.display = 'none';
   }
 

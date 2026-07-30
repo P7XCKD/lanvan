@@ -260,6 +260,24 @@ These are the existing architectural guarantees. Do not violate them.
 12. Structural vs Visual Updates: Full renders only for structural changes. Progress/ETA ticks use in-place fast-path updates only.
 
 ========================
+TESTING STANDARDS
+========================
+
+Regression tests MUST NOT be white-box unit tests of helper functions.
+
+Regression tests MUST verify real application behavior.
+
+Rules for regression tests:
+
+1. MUST assert real DOM state, markup, and element visibility.
+2. MUST simulate real user actions (e.g. clicking buttons in DOM).
+3. MUST verify real Store state changes resulting from UI actions.
+4. MUST test full workflows (e.g. upload error -> retry button -> retry state transition).
+5. MUST verify pure projection contracts against actual ViewModel outputs.
+6. MUST NEVER pass by calling internal JavaScript helper functions directly without asserting DOM/Store effects.
+7. Fixture helpers may prepare initial application state, but they must never replace or reimplement production business logic. User workflows must execute through the application's real event handlers whenever a production interaction exists.
+
+========================
 MANDATORY PRACTICES
 ========================
 
