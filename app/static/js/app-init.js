@@ -639,6 +639,7 @@
             }
         }
 
+        console.log("%c[FLICKER-TRACE] 💥 container.innerHTML WRITE | Timestamp: " + performance.now().toFixed(1) + "ms | HTML length: " + html.length + " chars | Items in HTML: " + (html.match(/m3-list-item/g) || []).length);
         container.innerHTML = html;
 
         // Re-insert loaded preview elements to keep video/image frames smooth without reloading

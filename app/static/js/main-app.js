@@ -2732,8 +2732,13 @@ function logStructuredState(reason, beforeCount, afterCount) {
 window.logStructuredState = logStructuredState;
 
 // Dynamic file list refresh function
+var _REFRESH_GEN_COUNTER = 0;
 async function refreshFileList(reason = 'manual_or_api') {
   try {
+    var _genId = ++_REFRESH_GEN_COUNTER;
+    var _caller = (new Error()).stack.split("\n")[2].trim();
+    console.log("%c[FLICKER-TRACE] 🔄 refreshFileList #" + _genId + " | Reason: " + (reason || "unknown") + " | Caller: " + _caller + " | Timestamp: " + performance.now().toFixed(1) + "ms");
+    
     const lastCount = typeof lastFileCount !== "undefined" ? lastFileCount : 0;
     const response = await fetch(getCurrentFileListEndpoint());
     if (!response.ok) {
@@ -2742,7 +2747,7 @@ async function refreshFileList(reason = 'manual_or_api') {
 
     const data = await response.json();
     const files = data.files_data || data.files || [];
-    console.log("[FLICKER-TRACE] 🔄 refreshFileList | API returned " + files.length + " items | Reason: " + (reason || "unknown"));
+    console.log("[FLICKER-TRACE] refreshFileList #" + _genId + " | API returned " + files.length + " items");
 
     // Cache in Repository (single source of truth for disk state)
     if (window.FileRepository && typeof window.FileRepository.setFolderCache === 'function') {

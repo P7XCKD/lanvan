@@ -110,6 +110,7 @@
     };
 
     RenderScheduler.prototype.requestRender = function () {
+        console.log("%c[FLICKER-TRACE] 📣 RenderScheduler.requestRender() | Timestamp: " + performance.now().toFixed(1) + "ms | Already requested: " + this.renderRequested);
         if (this.renderRequested) return;
         this.renderRequested = true;
 
@@ -128,7 +129,7 @@
         var state = this.store ? this.store.state : {};
         try {
             var diskFiles = this.repo ? this.repo.getFolderCache(state.currentFolder) : [];
-            console.log("[FLICKER-TRACE] 🖼️ Scheduler.executeRender | Repo cache: " + (Array.isArray(diskFiles) ? diskFiles.length : 0) + " items | Store uploadQueue: " + (state.uploadQueue ? state.uploadQueue.length : 0) + " items | uploadGen: " + (state.uploadGeneration || 0) + " | navGen: " + (state.navigationGeneration || 0));
+            console.log("%c[FLICKER-TRACE] 🖼️ Scheduler.executeRender | Timestamp: " + performance.now().toFixed(1) + "ms | Repo cache: " + (Array.isArray(diskFiles) ? diskFiles.length : 0) + " items | Store uploadQueue: " + (state.uploadQueue ? state.uploadQueue.length : 0) + " items | uploadGen: " + (state.uploadGeneration || 0) + " | navGen: " + (state.navigationGeneration || 0));
             viewModel = this.projection.buildCurrentFolderViewModel(state, diskFiles);
 
             var newHash = buildViewModelHashFast(viewModel, state.currentFolder);
