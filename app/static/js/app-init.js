@@ -4310,6 +4310,8 @@
     }
     window.triggerInstantRefresh = triggerInstantRefresh;
 
+    // Debounced refresh that routes through the canonical pipeline.
+    // Preserves identical debounce timing and coalescing behavior.
     window.requestSafeVisibleFilesRefresh = function (delayMs) {
         var waitMs = typeof delayMs === "number" ? delayMs : 150;
         if (window._safeVisibleFilesRefreshTimer) {
@@ -4318,10 +4320,8 @@
         }
         window._safeVisibleFilesRefreshTimer = setTimeout(function () {
             window._safeVisibleFilesRefreshTimer = null;
-            if (typeof window.triggerInstantRefresh === "function") {
-                window.triggerInstantRefresh();
-            } else if (typeof refreshFileList === "function") {
-                refreshFileList();
+            if (typeof refreshFileList === "function") {
+                refreshFileList('safe_visible_refresh');
             }
         }, waitMs);
     };
