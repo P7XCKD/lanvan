@@ -53,14 +53,14 @@
         var tagged = tagFiles(files, target);
         var prevCount = this.cache[target] ? (Array.isArray(this.cache[target]) ? this.cache[target].length : -1) : -1;
         var newCount = Array.isArray(tagged) ? tagged.length : 0;
-        var caller = (new Error()).stack.split("\n")[2].trim();
+        var caller = ((new Error()).stack || "").split("\n")[2] || "";
         console.log("%c[FLICKER-TRACE] 📝 Repository.setFolderCache | Folder: '" + (target || "(root)") + "' | Old: " + prevCount + " → New: " + newCount + " | Timestamp: " + performance.now().toFixed(1) + "ms | Caller: " + caller);
         this.cache[target] = tagged;
         return tagged.slice();
     };
 
     FileRepository.prototype.invalidateCache = function (folderPath) {
-        var caller = (new Error()).stack.split("\n")[2].trim();
+        var caller = ((new Error()).stack || "").split("\n")[2] || "";
         if (folderPath === undefined) {
             console.log("%c[FLICKER-TRACE] 🗑️ Repository.invalidateCache(ALL) | Cleared entire cache | Timestamp: " + performance.now().toFixed(1) + "ms | Caller: " + caller);
             this.cache = {};

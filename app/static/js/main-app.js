@@ -2724,7 +2724,7 @@ var _REFRESH_GEN_COUNTER = 0;
 async function refreshFileList(reason = 'manual_or_api') {
   try {
     var _genId = ++_REFRESH_GEN_COUNTER;
-    var _caller = (new Error()).stack.split("\n")[2].trim();
+    var _caller = ((new Error()).stack || "").split("\n")[2] || "";
     console.log("%c[FLICKER-TRACE] 🔄 refreshFileList #" + _genId + " | Reason: " + (reason || "unknown") + " | Caller: " + _caller + " | Timestamp: " + performance.now().toFixed(1) + "ms");
     
     const lastCount = typeof lastFileCount !== "undefined" ? lastFileCount : 0;
