@@ -1752,21 +1752,21 @@ function pauseUpload(uploadId) {
       if (!item) return;
       const fName = window.getItemFolder ? window.getItemFolder(item) : "";
       if (fName === folderName && (item.status === 'uploading' || item.status === 'queued' || item.status === 'processing')) {
-        item.status = 'paused';
-        if (item.xhr) {
-          try { item.xhr.abort(); } catch (err) { }
+        // Abort XHR before state change
+        if (item.xhr) { try { item.xhr.abort(); } catch (err) { } }
+        // Dispatch through Store — FSM validates, increments uploadGeneration
+        if (window.LanvanStore) {
+          window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: item.id, status: 'PAUSED' });
         }
-        updateUploadItem(item);
       }
     });
     window.uploadManagerExpanded = true;
   } else if (uploadItem.status === 'uploading' || uploadItem.status === 'queued' || uploadItem.status === 'processing') {
-    uploadItem.status = 'paused';
-    window.uploadManagerExpanded = true;
-    if (uploadItem.xhr) {
-      try { uploadItem.xhr.abort(); } catch (err) { }
+    if (uploadItem.xhr) { try { uploadItem.xhr.abort(); } catch (err) { } }
+    if (window.LanvanStore) {
+      window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: uploadId, status: 'PAUSED' });
     }
-    updateUploadItem(uploadItem);
+    window.uploadManagerExpanded = true;
   }
 
   console.log(`Paused upload ${uploadId}`);
@@ -1787,14 +1787,16 @@ function resumeUpload(uploadId) {
       if (!item) return;
       const fName = window.getItemFolder(item);
       if (fName === folderName && item.status === 'paused') {
-        item.status = 'uploading';
-        updateUploadItem(item);
+        if (window.LanvanStore) {
+          window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: item.id, status: 'UPLOADING' });
+        }
         uploadLargeFileChunked(item);
       }
     });
   } else if (uploadItem.status === 'paused') {
-    uploadItem.status = 'uploading';
-    updateUploadItem(uploadItem);
+    if (window.LanvanStore) {
+      window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: uploadId, status: 'UPLOADING' });
+    }
     uploadLargeFileChunked(uploadItem);
   }
 
@@ -1949,8 +1951,12 @@ function startNextUpload() {
   if (!isTesting) {
     uploadQueue.forEach(item => {
       if ((item.status === 'queued' || item.status === 'paused') && !item.file) {
-        item.status = 'completed';
-        item.progress = 100;
+        if (window.LanvanStore) {
+          window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: item.id, status: 'COMPLETED', progress: 100 });
+        } else {
+          item.status = 'completed';
+          item.progress = 100;
+        }
       }
     });
   }
@@ -2014,7 +2020,13 @@ function startNextUpload() {
 }
 
 function startUploadWithManager(uploadItem) {
-  uploadItem.status = 'uploading';
+  // Dispatch through Store so FSM validates the transition,
+  // uploadGeneration increments, and RenderScheduler triggers.
+  if (window.LanvanStore) {
+    window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: uploadItem.id, status: 'UPLOADING' });
+  } else {
+    uploadItem.status = 'uploading';
+  }
 
   // Initialize upload timing and progress
   uploadItem.startTime = Date.now();

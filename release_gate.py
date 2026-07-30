@@ -94,6 +94,11 @@ def main():
                 f"chaos seed={s}",
                 [sys.executable, "testing/e2e/14_adversarial_chaos.py", args.url, "--seed", str(s)],
                 check_chaos)))
+        # Also run identity chaos test
+        results.append(("Identity Chaos", run_gate(
+            "identity chaos",
+            [sys.executable, "testing/e2e/13_identity_chaos.py", args.url],
+            check_chaos)))
 
     passed = sum(1 for _, ok in results if ok)
     failed = sum(1 for _, ok in results if not ok)

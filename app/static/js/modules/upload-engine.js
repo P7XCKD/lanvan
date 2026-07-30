@@ -22,19 +22,26 @@
 
     var folder = window.getItemFolder ? window.getItemFolder(item) : "";
     if (folder) {
+      var idsToPause = [];
       window.uploadQueue.forEach(function (i) {
         if (!i) return;
         var f = window.getItemFolder ? window.getItemFolder(i) : "";
-        if (f === folder && (i.status === 'uploading' || i.status === 'queued')) {
-          i.status = 'paused';
+        if (f === folder && (i.status === 'UPLOADING' || i.status === 'QUEUED' || i.status === 'uploading' || i.status === 'queued')) {
           if (i.xhr) { try { i.xhr.abort(); } catch (e) { } }
+          idsToPause.push(i.id);
         }
       });
-    } else if (item.status === 'uploading' || item.status === 'queued') {
-      item.status = 'paused';
+      for (var p = 0; p < idsToPause.length; p++) {
+        if (window.LanvanStore) {
+          window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: idsToPause[p], status: 'PAUSED' });
+        }
+      }
+    } else if (item.status === 'UPLOADING' || item.status === 'QUEUED' || item.status === 'uploading' || item.status === 'queued') {
       if (item.xhr) { try { item.xhr.abort(); } catch (e) { } }
+      if (window.LanvanStore) {
+        window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: uploadId, status: 'PAUSED' });
+      }
     }
-
   }
 
   function resumeUploadItem(uploadId) {
@@ -43,18 +50,27 @@
 
     var folder = window.getItemFolder ? window.getItemFolder(item) : "";
     if (folder) {
+      var idsToResume = [];
       window.uploadQueue.forEach(function (i) {
         if (!i) return;
         var f = window.getItemFolder ? window.getItemFolder(i) : "";
-        if (f === folder && i.status === 'paused') {
-          i.status = 'uploading';
-          if (typeof window.uploadLargeFileChunked === 'function') {
-            window.uploadLargeFileChunked(i);
-          }
+        if (f === folder && i.status === 'PAUSED' || i.status === 'paused') {
+          idsToResume.push(i);
         }
       });
-    } else if (item.status === 'paused') {
-      item.status = 'uploading';
+      for (var r = 0; r < idsToResume.length; r++) {
+        var ri = idsToResume[r];
+        if (window.LanvanStore) {
+          window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: ri.id, status: 'UPLOADING' });
+        }
+        if (typeof window.uploadLargeFileChunked === 'function') {
+          window.uploadLargeFileChunked(ri);
+        }
+      }
+    } else if (item.status === 'PAUSED' || item.status === 'paused') {
+      if (window.LanvanStore) {
+        window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: uploadId, status: 'UPLOADING' });
+      }
       if (typeof window.uploadLargeFileChunked === 'function') {
         window.uploadLargeFileChunked(item);
       }
@@ -80,17 +96,13 @@
       fetch("/api/cancel-upload", { method: "POST", body: formData }).catch(function () { });
     }
 
-    item.status = 'cancelled';
-    item.error = 'Cancelled by user';
-
-    // Dispatch through Store — single source of truth for queue mutations
+    // Dispatch through Store — single source of truth for queue mutations.
+    // Store validates transition, removes from queue, increments generation.
     if (window.LanvanStore) {
       window.LanvanStore.dispatch('CANCEL_UPLOAD', { id: uploadId });
     }
 
-    if (typeof window.RenderCoordinator !== 'undefined' && window.RenderCoordinator.requestRender) {
-      window.RenderCoordinator.requestRender('upload_cancelled');
-    } else if (typeof window.triggerInstantUIUpdate === 'function') {
+    if (typeof window.triggerInstantUIUpdate === 'function') {
       window.triggerInstantUIUpdate();
     }
   }

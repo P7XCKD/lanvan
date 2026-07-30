@@ -186,7 +186,10 @@
             // Match synthetic folder to existing disk folder by identity (full path),
             // not just display name. Two folders with the same name in different
             // contexts have different identities and must never collide.
-            var subFolderIdentity = currentFolder + '/' + subFolderName;
+            // Construct identity consistently: no leading slash for Home directory.
+            // The disk folder at Home has identity "FolderName" (no leading slash),
+            // so the synthetic folder must match that exactly.
+            var subFolderIdentity = currentFolder ? (currentFolder + '/' + subFolderName) : subFolderName;
             var existingIdx = -1;
             for (var fi = 0; fi < normalizedDiskFiles.length; fi++) {
                 var f = normalizedDiskFiles[fi];
