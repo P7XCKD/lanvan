@@ -246,15 +246,12 @@
         var filePanelMeta = document.getElementById("filePanelMeta");
         if (!container) return;
 
-        // Scope file cache strictly by target folder path via FileRepository
+        // Repository writes belong exclusively to refreshFileList() (main-app.js:2757)
+        // and fetchFolderContents() (repository.js:89). The renderer must only read.
         if (files) {
             var taggedFolderPath = getTaggedFolderPath(files);
 
-            // If incoming payload has explicit tagged folder path, save it ONLY to its tagged folder cache
             if (taggedFolderPath !== null) {
-                if (window.FileRepository) {
-                    window.FileRepository.setFolderCache(taggedFolderPath, files);
-                }
                 if (taggedFolderPath !== normCurrentDir) {
                     console.warn("[CACHE GUARD] Incoming payload belongs to '" + taggedFolderPath + "' but active view is '" + normCurrentDir + "'. Rendering active folder cache instead.");
                     files = window.FileRepository ? window.FileRepository.getFolderCache(normCurrentDir) : tagFilesWithFolder([], normCurrentDir);
@@ -266,9 +263,6 @@
                     files = window.FileRepository ? window.FileRepository.getFolderCache(normCurrentDir) : tagFilesWithFolder([], normCurrentDir);
                 } else {
                     files = tagFilesWithFolder(files, "");
-                    if (window.FileRepository) {
-                        window.FileRepository.setFolderCache("", files);
-                    }
                 }
             }
             lastRenderedFiles = files;
