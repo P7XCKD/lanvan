@@ -282,8 +282,10 @@ function initFileEventsWebSocket() {
         if (payload.type === 'file_change') {
           console.log('[WS FILE EVENTS] ⚡ Real-time file system mutation event received across devices:', payload);
           // Invalidate stale cache — canonical refresh pipeline handles DOM updates
+          // Invalidate only the affected folder (scoped, matching delete handler at app-init.js:1321)
+          var affectedFolder = payload.target_dir || payload.path || "";
           if (window.FileRepository && typeof window.FileRepository.invalidateCache === 'function') {
-            window.FileRepository.invalidateCache();
+            window.FileRepository.invalidateCache(affectedFolder);
           }
           // Clean up recently-created folder tracking (ephemeral, no DOM mutation)
           var delTarget = payload.path || payload.target_dir || "";
@@ -1526,18 +1528,9 @@ function performUIUpdate(uploadItem, forceUpdate = false) {
     window.updatePrototypeRowProgress(uploadItem);
   }
 
-  // Upon individual file completion, refresh through canonical pipeline
-  // (API → Repository → Scheduler → Projection). Avoids flicker from
-  // triggerInstantUIUpdate which renders stale Repository cache before
-  // the server confirms the file exists on disk.
-  if (uploadItem.status === 'completed' && !uploadItem._prototypeRefreshed) {
-    uploadItem._prototypeRefreshed = true;
-    if (typeof refreshFileList === 'function') {
-      refreshFileList('upload_completed');
-    } else if (typeof window.triggerInstantUIUpdate === 'function') {
-      window.triggerInstantUIUpdate();
-    }
-  }
+  // Individual file completion is handled by the XHR load handler (main-app.js:2203)
+  // and the Store subscriber → Scheduler pipeline. This duplicate refresh path is removed
+  // to eliminate flicker from redundant DOM rebuilds.
 
   const now = Date.now();
   lastUIUpdate[uploadItem.id] = now;
@@ -2198,14 +2191,9 @@ function uploadSingleFileWithProgress(uploadItem) {
         // All uploads complete - show clear button but DON'T auto-refresh files
         showClearCompletedButton();
 
-        //  Refresh file list immediately across prototype and production views
+        //  Refresh file list through canonical Scheduler pipeline
         setTimeout(() => {
           if (typeof refreshFileList === 'function') refreshFileList();
-          if (typeof fetchFilesData === 'function') {
-            fetchFilesData().then(function (fd) {
-              if (typeof renderPrototypeFileList === 'function') renderPrototypeFileList(fd);
-            });
-          }
         }, 100); // Small delay to ensure server has processed all files
 
         //  Show final completion toast for all uploads without creating batch log entry
