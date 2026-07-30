@@ -355,7 +355,15 @@ Object.defineProperty(window, 'uploadQueue', {
     return _rawUploadQueue;
   },
   set: function (val) {
+    // Normalize all statuses to UPPERCASE before Store ingestion.
+    // This is the single gate that prevents lowercase statuses
+    // ('completed', 'cancelled') from contaminating the Store.
     _rawUploadQueue = Array.isArray(val) ? val : [];
+    for (var i = 0; i < _rawUploadQueue.length; i++) {
+      if (_rawUploadQueue[i] && _rawUploadQueue[i].status) {
+        _rawUploadQueue[i].status = _rawUploadQueue[i].status.toUpperCase();
+      }
+    }
     if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.state) {
       window.LanvanStore.state.uploadQueue = _rawUploadQueue;
     }
