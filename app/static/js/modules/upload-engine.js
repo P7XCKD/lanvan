@@ -26,7 +26,7 @@
       window.uploadQueue.forEach(function (i) {
         if (!i) return;
         var f = window.getItemFolder ? window.getItemFolder(i) : "";
-        if (f === folder && (i.status === 'UPLOADING' || i.status === 'QUEUED' || i.status === 'uploading' || i.status === 'queued')) {
+        if (f === folder && (i.status === 'UPLOADING' || i.status === 'QUEUED' || i.status === 'UPLOADING' || i.status === 'QUEUED')) {
           if (i.xhr) { try { i.xhr.abort(); } catch (e) { } }
           idsToPause.push(i.id);
         }
@@ -36,7 +36,7 @@
           window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: idsToPause[p], status: 'PAUSED' });
         }
       }
-    } else if (item.status === 'UPLOADING' || item.status === 'QUEUED' || item.status === 'uploading' || item.status === 'queued') {
+    } else if (item.status === 'UPLOADING' || item.status === 'QUEUED' || item.status === 'UPLOADING' || item.status === 'QUEUED') {
       if (item.xhr) { try { item.xhr.abort(); } catch (e) { } }
       if (window.LanvanStore) {
         window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: uploadId, status: 'PAUSED' });
@@ -54,7 +54,7 @@
       window.uploadQueue.forEach(function (i) {
         if (!i) return;
         var f = window.getItemFolder ? window.getItemFolder(i) : "";
-        if (f === folder && i.status === 'PAUSED' || i.status === 'paused') {
+        if (f === folder && i.status === 'PAUSED' || i.status === 'PAUSED') {
           idsToResume.push(i);
         }
       });
@@ -67,7 +67,7 @@
           window.uploadLargeFileChunked(ri);
         }
       }
-    } else if (item.status === 'PAUSED' || item.status === 'paused') {
+    } else if (item.status === 'PAUSED' || item.status === 'PAUSED') {
       if (window.LanvanStore) {
         window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: uploadId, status: 'UPLOADING' });
       }

@@ -494,7 +494,7 @@
 
             var queue = window.uploadQueue || [];
             var activeUploadsCount = queue.filter(function (item) {
-                return item.status === "uploading" || item.status === "queued" || item.status === "processing" || item.status === "paused";
+                return item.status === "UPLOADING" || item.status === "QUEUED" || item.status === "PROCESSING" || item.status === "PAUSED";
             }).length;
 
             if (searchQuery) {
@@ -3397,7 +3397,7 @@
             var missingRow = false;
 
             window.uploadQueue.forEach(function (item) {
-                if (item && (item.status === 'queued' || item.status === 'uploading' || item.status === 'processing' || item.status === 'paused')) {
+                if (item && (item.status === 'QUEUED' || item.status === 'UPLOADING' || item.status === 'PROCESSING' || item.status === 'PAUSED')) {
                     var itemName = item.fileName || (item.file && item.file.name) || item.name;
                     var rawDir = item.targetDir || item.parent_path || item.folder || "";
                     var relDir = getRelativeItemDir(rawDir, normCurrentDir);
@@ -3419,8 +3419,8 @@
                 }
             });
 
-            var hasCancelled = window.uploadQueue.some(function (i) { return i && i.status === 'cancelled'; });
-            var hasTimedOut = window.uploadQueue.some(function (i) { return i && i.status === 'completed' && i._dismissTimer; });
+            var hasCancelled = window.uploadQueue.some(function (i) { return i && i.status === 'CANCELLED'; });
+            var hasTimedOut = window.uploadQueue.some(function (i) { return i && i.status === 'COMPLETED' && i._dismissTimer; });
 
             // Skip full re-render if the only missing rows are cancelled items (already handled by row.remove below)
             if (missingRow && hasCancelled && !hasTimedOut) {
@@ -3452,7 +3452,7 @@
                             isFolder: isFolder,
                             totalBytes: 0,
                             uploadedBytes: 0,
-                            status: 'queued',
+                            status: 'QUEUED',
                             hasCancelled: false,
                             hasUploading: false,
                             hasPaused: false,
@@ -3463,14 +3463,14 @@
                     var rd = rowDataMap[checkName];
                     rd.itemCount++;
 
-                    if (item.status === 'cancelled') {
+                    if (item.status === 'CANCELLED') {
                         rd.hasCancelled = true;
                         return;
                     }
 
                     var fileSize = item.fileSize || (item.file && item.file.size) || 0;
                     var bytesDone = 0;
-                    if (item.status === 'completed') {
+                    if (item.status === 'COMPLETED') {
                         bytesDone = fileSize;
                     } else {
                         bytesDone = item.bytesUploaded || 0;
@@ -3481,9 +3481,9 @@
                     rd.totalBytes += fileSize;
                     rd.uploadedBytes += bytesDone;
 
-                    if (item.status === 'uploading' || item.status === 'processing') rd.hasUploading = true;
-                    if (item.status === 'paused') rd.hasPaused = true;
-                    if (item.status === 'cancelled') rd.hasCancelled = true;
+                    if (item.status === 'UPLOADING' || item.status === 'PROCESSING') rd.hasUploading = true;
+                    if (item.status === 'PAUSED') rd.hasPaused = true;
+                    if (item.status === 'CANCELLED') rd.hasCancelled = true;
                 });
 
                 // Pass 2: Update DOM rows with aggregated progress
@@ -3562,7 +3562,7 @@
     window.pauseAllUploads = function () {
         var queue = window.uploadQueue || [];
         queue.forEach(function (item) {
-            if (item && (item.status === "uploading" || item.status === "queued" || item.status === "processing")) {
+            if (item && (item.status === "UPLOADING" || item.status === "QUEUED" || item.status === "PROCESSING")) {
                 if (typeof window.pauseUpload === "function") {
                     window.pauseUpload(item.id);
                 } else if (typeof window.pauseUploadItem === "function") {
@@ -3580,7 +3580,7 @@
     window.resumeAllUploads = function () {
         var queue = window.uploadQueue || [];
         queue.forEach(function (item) {
-            if (item && item.status === "paused") {
+            if (item && item.status === "PAUSED") {
                 if (typeof window.resumeUpload === "function") {
                     window.resumeUpload(item.id);
                 } else if (typeof window.resumeUploadItem === "function") {
@@ -3693,7 +3693,7 @@
 
         var queue = window.uploadQueue || [];
         var activeUploads = queue.filter(function (item) {
-            return item.status === "uploading" || item.status === "queued" || item.status === "processing" || item.status === "paused" || item.status === "completed" || item.status === "deleted";
+            return item.status === "UPLOADING" || item.status === "QUEUED" || item.status === "PROCESSING" || item.status === "PAUSED" || item.status === "COMPLETED" || item.status === "DELETED";
         });
 
         // Make sure stack is always active/visible
@@ -3730,10 +3730,10 @@
         // 4. Deleted
         activeUploads.sort(function (a, b) {
             function getCategoryScore(item) {
-                if (item.status === 'uploading' || item.status === 'processing') return 1;
-                if (item.status === 'queued' || item.status === 'paused') return 2;
-                if (item.status === 'completed') return 3;
-                if (item.status === 'deleted') return 4;
+                if (item.status === 'UPLOADING' || item.status === 'PROCESSING') return 1;
+                if (item.status === 'QUEUED' || item.status === 'PAUSED') return 2;
+                if (item.status === 'COMPLETED') return 3;
+                if (item.status === 'DELETED') return 4;
                 return 5;
             }
 
@@ -3771,18 +3771,18 @@
 
         // Calculations
         var totalCount = activeUploads.length;
-        var activePendingCount = activeUploads.filter(function (item) { return item.status === "uploading" || item.status === "processing" || item.status === "queued"; }).length;
-        var pausedCount = activeUploads.filter(function (item) { return item.status === "paused"; }).length;
-        var completedOrDeletedCount = activeUploads.filter(function (item) { return item.status === "completed" || item.status === "deleted"; }).length;
+        var activePendingCount = activeUploads.filter(function (item) { return item.status === "UPLOADING" || item.status === "PROCESSING" || item.status === "QUEUED"; }).length;
+        var pausedCount = activeUploads.filter(function (item) { return item.status === "PAUSED"; }).length;
+        var completedOrDeletedCount = activeUploads.filter(function (item) { return item.status === "COMPLETED" || item.status === "DELETED"; }).length;
         var isAllCompleted = totalCount > 0 && completedOrDeletedCount === totalCount && pausedCount === 0 && activePendingCount === 0;
 
         // Cap completed/deleted display to recent 5 items max to prevent tray overflow
         if (completedOrDeletedCount > 5) {
             var activePendingItems = activeUploads.filter(function (item) {
-                return item.status === "uploading" || item.status === "processing" || item.status === "queued" || item.status === "paused";
+                return item.status === "UPLOADING" || item.status === "PROCESSING" || item.status === "QUEUED" || item.status === "PAUSED";
             });
             var completedItems = activeUploads.filter(function (item) {
-                return item.status === "completed" || item.status === "deleted";
+                return item.status === "COMPLETED" || item.status === "DELETED";
             }).slice(0, 5);
             activeUploads = activePendingItems.concat(completedItems);
         }
@@ -3807,7 +3807,7 @@
 
         // Auto-remove individual deleted or cancelled items from tray after 2 seconds
         activeUploads.forEach(function (item) {
-            if (item && (item.status === 'deleted' || item.status === 'cancelled') && !item._dismissTimer) {
+            if (item && (item.status === 'DELETED' || item.status === 'CANCELLED') && !item._dismissTimer) {
                 item._dismissTimer = setTimeout(function () {
                     if (window.LanvanStore) {
                         var curQueue = window.LanvanStore.getState().uploadQueue.filter(function (i) { return i && i.id != item.id; });
@@ -3832,10 +3832,10 @@
         var uploadedBytesAll = 0;
 
         allQueueItems.forEach(function (item) {
-            if (!item || item.status === 'deleted' || item.status === 'cancelled') return;
+            if (!item || item.status === 'DELETED' || item.status === 'CANCELLED') return;
             var sz = item.fileSize || (item.file && item.file.size) || 0;
             totalBytesAll += sz;
-            if (item.status === 'completed') {
+            if (item.status === 'COMPLETED') {
                 uploadedBytesAll += sz;
             } else {
                 var bytesDone = item.bytesUploaded || 0;
@@ -3913,7 +3913,7 @@
                 if (!e.target.closest(".upload-toast-header-actions")) {
                     var queue = window.uploadQueue || [];
                     var hasItems = queue.some(function (item) {
-                        return item && (item.status === "uploading" || item.status === "queued" || item.status === "processing" || item.status === "paused" || item.status === "completed" || item.status === "deleted");
+                        return item && (item.status === "UPLOADING" || item.status === "QUEUED" || item.status === "PROCESSING" || item.status === "PAUSED" || item.status === "COMPLETED" || item.status === "DELETED");
                     });
                     if (!hasItems) return; // Do not expand when empty
 
@@ -3999,18 +3999,18 @@
                 var fillStyle = "";
                 var actionHtml = "";
 
-                if (item.status === 'deleted') {
+                if (item.status === 'DELETED') {
                     metaText = sizeStr;
                     fillStyle = 'rgba(220, 38, 38, 0.12)';
                     pct = 100;
                     actionHtml = '<span style="color: #dc2626; display: flex; align-items: center; margin-right: 8px;"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></span>';
-                } else if (item.status === 'completed' || (pct >= 100 && item.status !== 'uploading' && item.status !== 'paused')) {
+                } else if (item.status === 'COMPLETED' || (pct >= 100 && item.status !== 'uploading' && item.status !== 'paused')) {
                     var timeStr = item.uploadTime ? item.uploadTime + "s" : "completed";
                     metaText = sizeStr + " • Completed (" + timeStr + ")";
                     fillStyle = 'rgba(24, 128, 56, 0.08)';
                     pct = 100;
                     actionHtml = '<span style="color: var(--green); display: flex; align-items: center; margin-right: 8px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>';
-                } else if (item.status === 'queued') {
+                } else if (item.status === 'QUEUED') {
                     metaText = sizeStr + " • Queued";
                     fillStyle = 'transparent';
                     pct = 0;
@@ -4029,7 +4029,7 @@
                     if (progressFill.style.background !== fillStyle) progressFill.style.background = fillStyle;
                 }
 
-                if (item.status === 'completed' || item.status === 'deleted') {
+                if (item.status === 'COMPLETED' || item.status === 'DELETED') {
                     var actionsContainer = itemEl.querySelector(".upload-toast-actions");
                     if (actionsContainer && actionsContainer.querySelector(".upload-toast-cancel-text")) {
                         actionsContainer.innerHTML = actionHtml;
@@ -4091,7 +4091,7 @@
         uploadTrayInterval = setInterval(function () {
             var queue = window.uploadQueue || [];
             var activeCount = queue.filter(function (item) {
-                return item.status === "uploading" || item.status === "queued" || item.status === "processing" || item.status === "paused";
+                return item.status === "UPLOADING" || item.status === "QUEUED" || item.status === "PROCESSING" || item.status === "PAUSED";
             }).length;
             if (activeCount === 0) {
                 renderUploadTray(); // One final render to show completion
@@ -4347,7 +4347,7 @@
                 var queueList = Array.isArray(restoredQueue) ? restoredQueue : ((restoredQueue && restoredQueue.queue) ? restoredQueue.queue : []);
                 if (queueList.length > 0) {
                     queueList.forEach(function (item) {
-                        if (item.status === "uploading" || item.status === "queued") {
+                        if (item.status === "UPLOADING" || item.status === "QUEUED") {
                             item.status = "paused";
                         }
                     });
@@ -4581,9 +4581,9 @@
         window.updatePrototypeRowProgress = function (item) {
             if (!item || !item.fileName) return;
 
-            if (item.status === 'completed') {
+            if (item.status === 'COMPLETED') {
                 var hasOtherActiveUploads = Array.isArray(window.uploadQueue) && window.uploadQueue.some(function (qi) {
-                    return qi && qi.id !== item.id && (qi.status === 'uploading' || qi.status === 'queued' || qi.status === 'processing' || qi.status === 'paused');
+                    return qi && qi.id !== item.id && (qi.status === 'UPLOADING' || qi.status === 'QUEUED' || qi.status === 'PROCESSING' || qi.status === 'PAUSED');
                 });
 
                 if (!hasOtherActiveUploads) {
@@ -4611,11 +4611,11 @@
                 if (row) {
                     var subtitleCell = row.querySelector('.item-subtitle');
                     if (subtitleCell) {
-                        subtitleCell.textContent = progress + "% • " + (item.status === 'paused' ? 'Paused' : (item.status === 'processing' ? 'Processing' : 'Uploading'));
+                        subtitleCell.textContent = progress + "% • " + (item.status === 'PAUSED' ? 'Paused' : (item.status === 'PROCESSING' ? 'Processing' : 'Uploading'));
                     }
                     var dateCell = row.querySelector('.item-date');
                     if (dateCell) {
-                        dateCell.textContent = item.status === 'paused' ? 'Paused' : (item.status === 'processing' ? 'Processing' : 'Uploading');
+                        dateCell.textContent = item.status === 'PAUSED' ? 'Paused' : (item.status === 'PROCESSING' ? 'Processing' : 'Uploading');
                     }
                     var bar = row.querySelector('.row-progress-bar');
                     if (bar) {
@@ -4625,7 +4625,7 @@
                     var playPauseBtn = row.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
                     if (playPauseBtn) {
                         var currentAction = playPauseBtn.getAttribute("data-action");
-                        if (item.status === 'paused' && currentAction === 'pause-upload') {
+                        if (item.status === 'PAUSED' && currentAction === 'pause-upload') {
                             playPauseBtn.setAttribute("data-action", "resume-upload");
                             playPauseBtn.setAttribute("title", "Resume upload");
                             playPauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play"><polygon points="6 3 20 12 6 21 6 3"/></svg>';

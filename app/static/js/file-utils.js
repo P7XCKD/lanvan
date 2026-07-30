@@ -369,7 +369,7 @@ function startProgressUpdateSafetyNet() {
   progressUpdateInterval = setInterval(() => {
     // Include ALL uploads that should show progress (uploading OR processing)
     const activeUploads = uploadQueue.filter(item =>
-      (item.status === 'uploading' || item.status === 'processing') &&
+      (item.status === 'UPLOADING' || item.status === 'PROCESSING') &&
       item.progress !== undefined && item.progress < 100
     );
 

@@ -11,11 +11,11 @@
     var progress = Math.round(window.getItemProgress ? window.getItemProgress(item) : (item.progress || 0));
     var subtitleCell = row.querySelector('.item-subtitle');
     if (subtitleCell) {
-      subtitleCell.textContent = progress + "% • " + (item.status === 'paused' ? 'Paused' : 'Uploading');
+      subtitleCell.textContent = progress + "% • " + (item.status === 'PAUSED' ? 'Paused' : 'Uploading');
     }
     var dateCell = row.querySelector('.item-date');
     if (dateCell) {
-      dateCell.textContent = item.status === 'paused' ? 'Paused' : 'Uploading';
+      dateCell.textContent = item.status === 'PAUSED' ? 'Paused' : 'Uploading';
     }
     var bar = row.querySelector('.row-progress-bar');
     if (bar) {

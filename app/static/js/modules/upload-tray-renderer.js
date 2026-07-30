@@ -18,17 +18,17 @@
         var fillStyle = "";
         var actionHtml = "";
 
-        if (item.status === 'deleted' || item.status === 'cancelled') {
-            var label = item.status === 'deleted' ? 'Deleted' : 'Cancelled';
+        if (item.status === 'DELETED' || item.status === 'CANCELLED') {
+            var label = item.status === 'DELETED' ? 'Deleted' : 'Cancelled';
             metaText = sizeStr + " • " + label;
             fillStyle = 'background: rgba(220, 38, 38, 0.06); width: 100%;';
             actionHtml = '<span style="color: #dc2626; font-size:0.75rem; font-weight:600; margin-right: 8px;">' + label + '</span>';
-        } else if (item.status === 'completed' || (pct >= 100 && item.status !== 'uploading' && item.status !== 'paused')) {
+        } else if (item.status === 'COMPLETED' || (pct >= 100 && item.status !== 'uploading' && item.status !== 'paused')) {
             var timeStr = item.uploadTime ? item.uploadTime + "s" : "completed";
             metaText = sizeStr + " • Completed (" + timeStr + ")";
             fillStyle = 'background: rgba(24, 128, 56, 0.08); width: 100%;';
             actionHtml = '<span style="color: var(--green); display: inline-flex; align-items: center; justify-content: center; margin-right: 8px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span>';
-        } else if (item.status === 'paused') {
+        } else if (item.status === 'PAUSED') {
             metaText = sizeStr + " • " + pct + "% (Paused)";
             fillStyle = 'background: rgba(234, 179, 8, 0.12); width: ' + pct + '%;';
             actionHtml = '<button type="button" class="upload-toast-resume-text" data-upload-id="' + item.id + '" title="Resume upload" style="background:none; border:none; color:var(--primary, #3b82f6); cursor:pointer; font-weight:500; font-size:0.8rem; margin-right:8px; padding:2px 4px;">' +
@@ -37,7 +37,7 @@
                 '<button type="button" class="upload-toast-cancel-text" data-upload-id="' + item.id + '" title="Cancel upload">' +
                 '<span>Cancel</span>' +
                 '</button>';
-        } else if (item.status === 'queued') {
+        } else if (item.status === 'QUEUED') {
             metaText = sizeStr + " • Queued";
             fillStyle = 'background: transparent; width: 0%;';
             actionHtml = '<button type="button" class="upload-toast-cancel-text" data-upload-id="' + item.id + '" title="Cancel upload">' +
@@ -51,8 +51,8 @@
                 '</button>';
         }
 
-        var completedClass = (item.status === 'completed') ? ' completed-toast' : (item.status === 'deleted' ? ' deleted-toast' : '');
-        var cursorStyle = (item.status === 'completed' || item.status === 'deleted') ? ' cursor: pointer;' : '';
+        var completedClass = (item.status === 'COMPLETED') ? ' completed-toast' : (item.status === 'DELETED' ? ' deleted-toast' : '');
+        var cursorStyle = (item.status === 'COMPLETED' || item.status === 'DELETED') ? ' cursor: pointer;' : '';
         var itemTargetDir = item.targetDir || "";
 
         return '<div class="upload-toast' + completedClass + '" id="toast-item-' + item.id + '" style="position:relative; overflow:hidden;' + cursorStyle + '" data-target-dir="' + (typeof escapeHtml === "function" ? escapeHtml(itemTargetDir) : itemTargetDir) + '" data-filename="' + name + '">' +
@@ -157,7 +157,7 @@
                 e.stopPropagation();
                 if (window.uploadQueue) {
                     var hasActive = window.uploadQueue.some(function (i) {
-                        return i.status === 'uploading' || i.status === 'queued' || i.status === 'processing' || i.status === 'paused';
+                        return i.status === 'UPLOADING' || i.status === 'QUEUED' || i.status === 'PROCESSING' || i.status === 'PAUSED';
                     });
                     if (!hasActive) {
                         if (window._trayAutoDismissTimer) {
@@ -218,7 +218,7 @@
                 }
             });
         }
-        if (item.status === 'completed' && !el.__navWired) {
+        if (item.status === 'COMPLETED' && !el.__navWired) {
             el.__navWired = true;
             el.style.cursor = "pointer";
             el.addEventListener("click", function (e) {
