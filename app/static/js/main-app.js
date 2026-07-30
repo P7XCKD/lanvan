@@ -281,30 +281,17 @@ function initFileEventsWebSocket() {
         const payload = JSON.parse(event.data);
         if (payload.type === 'file_change') {
           console.log('[WS FILE EVENTS] ⚡ Real-time file system mutation event received across devices:', payload);
+          // Invalidate stale cache — canonical refresh pipeline handles DOM updates
           if (window.FileRepository && typeof window.FileRepository.invalidateCache === 'function') {
             window.FileRepository.invalidateCache();
           }
+          // Clean up recently-created folder tracking (ephemeral, no DOM mutation)
           var delTarget = payload.path || payload.target_dir || "";
-          if (delTarget) {
-            if (window._recentlyCreatedFolders) delete window._recentlyCreatedFolders[delTarget];
-            if (typeof lastRenderedFiles !== 'undefined' && Array.isArray(lastRenderedFiles)) {
-              lastRenderedFiles = lastRenderedFiles.filter(function (f) {
-                var fn = typeof f === 'string' ? f : (f ? f.name : '');
-                return fn !== delTarget && fn.trim().toLowerCase() !== delTarget.trim().toLowerCase();
-              });
-            }
-            var container = document.getElementById("nasFileList");
-            if (container) {
-              var rows = container.querySelectorAll(".m3-list-item");
-              for (var r = 0; r < rows.length; r++) {
-                var rowFn = rows[r].getAttribute("data-filename");
-                if (rowFn === delTarget || (rowFn && rowFn.trim().toLowerCase() === delTarget.trim().toLowerCase())) {
-                  rows[r].remove();
-                }
-              }
-            }
+          if (delTarget && window._recentlyCreatedFolders) {
+            delete window._recentlyCreatedFolders[delTarget];
           }
           _activeRefreshPromise = null;
+          // Canonical pipeline: API → Repository → Scheduler → Projection → Renderer
           refreshFileList('ws_file_change');
         }
       } catch (e) { }
@@ -1968,7 +1955,8 @@ function startNextUpload() {
   }
 
   // Find all queued items that can be uploaded (must have a File handle)
-  const queuedItems = uploadQueue.filter(item => item.status === 'queued' && item.file);
+  // Accept both 'queued' and 'QUEUED' (setter normalizes to UPPERCASE)
+  const queuedItems = uploadQueue.filter(item => (item.status === 'queued' || item.status === 'QUEUED') && item.file);
 
   if (queuedItems.length === 0) {
     console.log(' No queued uploads found');

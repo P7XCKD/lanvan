@@ -345,21 +345,29 @@
         }
 
         // DELEGATE TO PROJECTION LAYER (THE GOLDEN INVARIANT)
-        // Exactly one code path produces VisibleFiles[]
-        var storeState = window.LanvanStore ? Object.assign({}, window.LanvanStore.state) : { currentFolder: normCurrentDir, pendingOps: {} };
-        var liveUploadQueue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
-        storeState.currentFolder = normCurrentDir;
-        storeState.uploadQueue = liveUploadQueue;
-        if (!storeState.pendingOps) {
-            storeState.pendingOps = {};
+        // The Scheduler already runs Projection before calling the renderer.
+        // When called from the Scheduler, `files` is already a pre-projected ViewModel.
+        var viewModel;
+        if (reason === 'scheduler' && Array.isArray(files) && files.length > 0 && files[0].hasOwnProperty('uploading')) {
+            // Already projected by Scheduler: API → Repository → Scheduler → Projection → Renderer
+            viewModel = files;
+        } else {
+            // Legacy callers: run Projection inline (temporary until all callers consolidated)
+            var storeState = window.LanvanStore ? Object.assign({}, window.LanvanStore.state) : { currentFolder: normCurrentDir, pendingOps: {} };
+            var liveUploadQueue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
+            storeState.currentFolder = normCurrentDir;
+            storeState.uploadQueue = liveUploadQueue;
+            if (!storeState.pendingOps) {
+                storeState.pendingOps = {};
+            }
+            var projectionEngine = window.projectionLayer || (typeof window.ProjectionLayer === 'function' ? new window.ProjectionLayer() : window.ProjectionLayer);
+            viewModel = projectionEngine ? projectionEngine.buildCurrentFolderViewModel(storeState, files) : normalizedFiles;
+
+            var traceId = Math.random().toString(36).substring(2, 7);
+            console.log("🛠️ [TRACE @" + traceId + " @ app-init.js:348] renderPrototypeFileList triggered | Reason: " + reason + " | Folder: '" + (normCurrentDir || "Home") + "'");
+            console.log("   ↳ Disk Payload: " + (files ? files.length : 0) + " items | Active Queue: " + liveUploadQueue.length + " items");
+            console.log("✨ [TRACE @" + traceId + " @ app-init.js:364] View Model Ready | Visible Count: " + (Array.isArray(viewModel) ? viewModel.length : 0) + " | Files: [" + (Array.isArray(viewModel) ? viewModel.map(function (f) { return f.name + (f.isFolder ? '(dir)' : '(file)'); }).join(", ") : "?") + "]");
         }
-
-        var traceId = Math.random().toString(36).substring(2, 7);
-        console.log("🛠️ [TRACE @" + traceId + " @ app-init.js:348] renderPrototypeFileList triggered | Reason: " + reason + " | Folder: '" + (normCurrentDir || "Home") + "'");
-        console.log("   ↳ Disk Payload: " + (files ? files.length : 0) + " items | Active Queue: " + liveUploadQueue.length + " items");
-
-        var projectionEngine = window.projectionLayer || (typeof window.ProjectionLayer === 'function' ? new window.ProjectionLayer() : window.ProjectionLayer);
-        var viewModel = projectionEngine ? projectionEngine.buildCurrentFolderViewModel(storeState, files) : normalizedFiles;
 
         normalizedFiles = Array.isArray(viewModel) ? viewModel : (viewModel.visibleFiles || []);
         var activeUploads = (viewModel && Array.isArray(viewModel.activeUploads)) ? viewModel.activeUploads : [];
@@ -1896,9 +1904,7 @@
         updateSortCheckmarks();
         updateSortHeaderArrows();
 
-        fetchFilesData().then(function (fd) {
-            renderPrototypeFileList(fd);
-        });
+        refreshFileList('sort_changed');
     };
 
     window.setTypeFilter = function (type) {
@@ -1969,9 +1975,7 @@
         if (window.lucide) lucide.createIcons();
         window.clearSelection();
 
-        fetchFilesData().then(function (fd) {
-            renderPrototypeFileList(fd);
-        });
+        refreshFileList('filter_changed');
     };
 
     window.clearTypeFilter = function (event) {
@@ -2024,9 +2028,7 @@
         }
         updateSortHeaderArrows();
         updateSortCheckmarks();
-        fetchFilesData().then(function (fd) {
-            renderPrototypeFileList(fd);
-        });
+        refreshFileList('header_sort_changed');
     };
 
     // --- View Mode ---
@@ -2055,7 +2057,7 @@
         if (gridBtn) gridBtn.classList.toggle("active", mode === "grid");
 
         if (typeof lastRenderedFiles !== "undefined") {
-            renderPrototypeFileList(lastRenderedFiles);
+            triggerInstantUIUpdate();
         }
     };
 
@@ -4665,15 +4667,16 @@
                 window.LanvanStore.dispatch("SET_CURRENT_FOLDER", { folderPath: cleanFolder });
             } else {
                 window.currentFolderPath = cleanFolder;
+                // fetchFolderContents writes to Repository; Scheduler handles the render
+                // via navigationGeneration increment in Store dispatch
                 if (window.FileRepository) {
-                    window.FileRepository.fetchFolderContents(cleanFolder).then(function (fd) {
-                        renderPrototypeFileList(fd, "manual_navigation");
-                    });
+                    window.FileRepository.fetchFolderContents(cleanFolder);
                 }
             }
         };
 
         // Subscribe to Store for Navigation Invariant
+        // Store dispatch increments navigationGeneration → Scheduler subscriber fires requestRender()
         if (window.LanvanStore && typeof window.LanvanStore.subscribe === 'function') {
             window.LanvanStore.subscribe(function (state, action) {
                 if (!action) return;
@@ -4682,14 +4685,11 @@
                     currentFolderPath = targetFolder;
                     console.log("🛠️ [TRACE @ app-init.js:4580] Store Subscription Triggered Navigation -> '" + (targetFolder || "Home") + "'");
                     
+                    // fetchFolderContents writes to Repository; Scheduler handles the render
                     if (window.FileRepository && typeof window.FileRepository.fetchFolderContents === 'function') {
-                        window.FileRepository.fetchFolderContents(targetFolder).then(function (fd) {
-                            renderPrototypeFileList(fd, "store_navigation");
-                        }).catch(function (err) {
+                        window.FileRepository.fetchFolderContents(targetFolder).catch(function (err) {
                             console.error("  Error fetching folder contents on navigation:", err);
                         });
-                    } else {
-                        renderPrototypeFileList(null, "store_navigation");
                     }
                 }
             });
