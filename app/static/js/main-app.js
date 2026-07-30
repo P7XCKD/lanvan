@@ -2833,7 +2833,8 @@ function startAutoRefresh() {
       // Only update if file count changed (indicating new uploads/deletions)
       if (currentFileCount !== lastFileCount) {
         console.log(` File count changed: ${lastFileCount} → ${currentFileCount}, auto-loading...`);
-        updateFileDisplay(files);
+        // Route through canonical pipeline: API → Repository → Scheduler → Projection → Renderer
+        refreshFileList('auto_refresh');
 
         // Silently auto-load new files without showing toast notifications
         if (currentFileCount > lastFileCount) {
