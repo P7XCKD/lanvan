@@ -18,14 +18,14 @@
         var pct = typeof uploadProgress === 'number' ? Math.min(100, Math.max(0, uploadProgress)) : 0;
         var hasActiveUpload = !!(isUploading);
         var sizeStr = size || "--";
-        if (uploadStatus === 'completed' || (pct >= 100 && uploadStatus !== 'uploading' && uploadStatus !== 'paused')) {
+        if (uploadStatus === 'COMPLETED' || (pct >= 100 && uploadStatus !== 'UPLOADING' && uploadStatus !== 'PAUSED')) {
             isUploading = false;
         }
 
         var dateText = dateStr || "--";
         var subtitleText = subtitle || (isFolder ? "Folder" : "File");
         if (isUploading) {
-            var statusLabel = uploadStatus === 'paused' ? 'Paused' : (uploadStatus === 'queued' ? 'Queued' : 'Uploading');
+            var statusLabel = uploadStatus === 'PAUSED' ? 'Paused' : (uploadStatus === 'QUEUED' ? 'Queued' : 'Uploading');
             subtitleText = pct + "% • " + statusLabel;
         }
 
@@ -41,7 +41,7 @@
             var svgPause = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
             var svgClose = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
 
-            if (uploadStatus === 'paused') {
+            if (uploadStatus === 'PAUSED') {
                 playPauseBtn = '<button class="btn-icon" title="Resume upload" data-action="resume-upload" data-upload-id="' + uploadId + '" style="display:inline-flex;align-items:center;justify-content:center;">' +
                     svgPlay +
                     '</button>';
@@ -69,7 +69,7 @@
                 '</button>';
         }
 
-        var displayDate = isUploading ? (uploadStatus === 'paused' ? 'Paused' : (uploadStatus === 'queued' ? 'Queued' : 'Uploading')) : dateText;
+        var displayDate = isUploading ? (uploadStatus === 'PAUSED' ? 'Paused' : (uploadStatus === 'QUEUED' ? 'Queued' : 'Uploading')) : dateText;
 
         return (
             '<div class="m3-list-item' + (isUploading ? ' uploading' : '') + '" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '" style="' + (isUploading ? 'position:relative; overflow:hidden;' : '') + '">' +

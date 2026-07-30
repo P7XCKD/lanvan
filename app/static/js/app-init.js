@@ -919,7 +919,7 @@
             var item = queue[i];
             if (!item) continue;
             var status = item.status;
-            if (status === 'uploading' || status === 'queued' || status === 'processing' || status === 'paused') {
+            if (status === 'UPLOADING' || status === 'QUEUED' || status === 'PROCESSING' || status === 'PAUSED') {
                 var names = [
                     item.fileName,
                     item.name,
@@ -3497,7 +3497,7 @@
                     var progress = rd.totalBytes > 0 ? Math.round((rd.uploadedBytes / rd.totalBytes) * 100) : 0;
                     progress = Math.min(progress, 100);
                     var statusLabel = rd.hasPaused ? 'Paused' : (rd.hasUploading ? 'Uploading' : (rd.hasCancelled ? 'Cancelled' : 'Queued'));
-                    var statusKey = rd.hasPaused ? 'paused' : (rd.hasUploading ? 'uploading' : (rd.hasCancelled ? 'cancelled' : 'queued'));
+                    var statusKey = rd.hasPaused ? 'PAUSED' : (rd.hasUploading ? 'UPLOADING' : (rd.hasCancelled ? 'CANCELLED' : 'QUEUED'));
 
                     // Update subtitle text
                     var subtitleCell = row.querySelector('.item-subtitle');
@@ -3544,11 +3544,11 @@
                         var svgPlay = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
                         var svgPause = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
 
-                        if (statusKey === 'paused' && currentAction === 'pause-upload') {
+                        if (statusKey === 'PAUSED' && currentAction === 'pause-upload') {
                             playPauseBtn.setAttribute("data-action", "resume-upload");
                             playPauseBtn.setAttribute("title", "Resume upload");
                             playPauseBtn.innerHTML = svgPlay;
-                        } else if (statusKey !== 'paused' && currentAction === 'resume-upload') {
+                        } else if (statusKey !== 'PAUSED' && currentAction === 'resume-upload') {
                             playPauseBtn.setAttribute("data-action", "pause-upload");
                             playPauseBtn.setAttribute("title", "Pause upload");
                             playPauseBtn.innerHTML = svgPause;
@@ -4004,7 +4004,7 @@
                     fillStyle = 'rgba(220, 38, 38, 0.12)';
                     pct = 100;
                     actionHtml = '<span style="color: #dc2626; display: flex; align-items: center; margin-right: 8px;"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></span>';
-                } else if (item.status === 'COMPLETED' || (pct >= 100 && item.status !== 'uploading' && item.status !== 'paused')) {
+                } else if (item.status === 'COMPLETED' || (pct >= 100 && item.status !== 'UPLOADING' && item.status !== 'PAUSED')) {
                     var timeStr = item.uploadTime ? item.uploadTime + "s" : "completed";
                     metaText = sizeStr + " • Completed (" + timeStr + ")";
                     fillStyle = 'rgba(24, 128, 56, 0.08)';
@@ -4629,7 +4629,7 @@
                             playPauseBtn.setAttribute("data-action", "resume-upload");
                             playPauseBtn.setAttribute("title", "Resume upload");
                             playPauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play"><polygon points="6 3 20 12 6 21 6 3"/></svg>';
-                        } else if (item.status !== 'paused' && currentAction === 'resume-upload') {
+                        } else if (item.status !== 'PAUSED' && currentAction === 'resume-upload') {
                             playPauseBtn.setAttribute("data-action", "pause-upload");
                             playPauseBtn.setAttribute("title", "Pause upload");
                             playPauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pause"><rect width="4" height="16" x="6" y="4"/><rect width="4" height="16" x="14" y="4"/></svg>';

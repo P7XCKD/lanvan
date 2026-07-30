@@ -2344,7 +2344,7 @@ function uploadSingleFileWithProgress(uploadItem) {
   });
 
   xhr.addEventListener('abort', () => {
-    if (uploadItem.status !== 'paused') {
+    if (uploadItem.status !== 'PAUSED') {
       uploadItem.status = 'CANCELLED';
       updateUploadItem(uploadItem);
       endUpload();
@@ -2480,7 +2480,7 @@ async function uploadLargeFileChunked(uploadItem) {
 
   } catch (error) {
     // Only handle errors if not paused (pausing can cause AbortError)
-    if (uploadItem.status !== 'PAUSED' && uploadItem.status !== 'paused' && uploadItem.status !== 'CANCELLED' && uploadItem.status !== 'cancelled') {
+    if (uploadItem.status !== 'PAUSED' && uploadItem.status !== 'CANCELLED') {
       uploadItem.status = 'FAILED';
       uploadItem.error = `Chunked upload failed: ${error.message}`;
       updateUploadItem(uploadItem);
@@ -2864,7 +2864,7 @@ function handleUploadStart() {
 function handleUploadEnd() {
   // Only resume auto-refresh if there are no active, queued, or paused uploads
   const hasUploadsInProgress = uploadQueue.some(item =>
-    ['uploading', 'queued', 'paused'].includes(item.status)
+    ['UPLOADING', 'QUEUED', 'PAUSED'].includes(item.status)
   );
   if (hasUploadsInProgress) {
     console.log('Skipping auto-refresh resume: paused or active uploads exist in queue');
@@ -2873,7 +2873,7 @@ function handleUploadEnd() {
   // Resume auto-refresh after a short delay to allow current upload to complete
   setTimeout(() => {
     const hasUploadsInProgress2 = uploadQueue.some(item =>
-      ['uploading', 'queued', 'paused'].includes(item.status)
+      ['UPLOADING', 'QUEUED', 'PAUSED'].includes(item.status)
     );
     if (!hasUploadsInProgress2) {
       resumeAutoRefresh();
@@ -2885,7 +2885,7 @@ function handleUploadEnd() {
 window.addEventListener('beforeunload', function (e) {
   const queue = Array.isArray(window.uploadQueue) ? window.uploadQueue : (typeof uploadQueue !== 'undefined' && Array.isArray(uploadQueue) ? uploadQueue : []);
   const hasActiveUploads = queue.some(item =>
-    item && ['uploading', 'queued', 'processing', 'paused'].includes(item.status)
+    item && ['UPLOADING', 'QUEUED', 'PROCESSING', 'PAUSED'].includes(item.status)
   );
 
   if (hasActiveUploads) {
@@ -3873,7 +3873,7 @@ function autoUpload(files) {
 
   //  Log current upload queue state before adding new files
   const currentActiveUploads = uploadQueue.filter(item =>
-    ['uploading'].includes(item.status)
+    ['UPLOADING'].includes(item.status)
   ).length;
 
   console.log(` Current upload state: ${currentActiveUploads} active uploads, adding ${files.length} new files`);
