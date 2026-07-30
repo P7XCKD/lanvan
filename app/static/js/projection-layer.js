@@ -74,7 +74,7 @@
 
                 normalizedDiskFiles.push({
                     name: fileName,
-                    identity: (taggedPath || currentFolder) + '/' + fileName,
+                    identity: (taggedPath || currentFolder) ? ((taggedPath || currentFolder) + '/' + fileName) : fileName,
                     size: typeof df === 'string' ? '--' : (df.size || '--'),
                     mtime: typeof df === 'string' ? 0 : (df.mtime || 0),
                     isFolder: isFolderVal,
