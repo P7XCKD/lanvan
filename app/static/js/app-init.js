@@ -188,7 +188,8 @@
             Object.defineProperty(list, "__folderPath", {
                 value: cleanFolderPath(folderPath),
                 enumerable: false,
-                configurable: true
+                configurable: true,
+                writable: true
             });
         } catch (e) {
             list.__folderPath = cleanFolderPath(folderPath);
@@ -199,6 +200,9 @@
     function getTaggedFolderPath(files) {
         return files && files.__folderPath !== undefined ? cleanFolderPath(files.__folderPath) : null;
     }
+
+    window.tagFilesWithFolder = tagFilesWithFolder;
+    window.getTaggedFolderPath = getTaggedFolderPath;
 
     function formatSize(bytes) {
         if (typeof formatFileSize === 'function') {
@@ -237,6 +241,13 @@
     var folderFilesCache = {}; // Folder-scoped disk file cache keyed by cleanFolderPath
 
     function renderPrototypeFileList(files, renderReason) {
+        if (window.__lanvanTimelineTracker) {
+            var fCount = Array.isArray(files) ? files.length : (files ? 1 : 0);
+            window.__lanvanTimelineTracker.recordEvent("renderPrototype", "reason: " + renderReason + ", filesArg: " + fCount);
+        }
+        if (typeof window.__logF5Trace === "function") {
+            window.__logF5Trace("5. After renderPrototypeFileList() entry");
+        }
         if (typeof window !== "undefined") window.renderPrototypeFileList = renderPrototypeFileList;
         var normCurrentDir = cleanFolderPath((typeof window.getCurrentFolderPath === "function")
             ? window.getCurrentFolderPath()
@@ -633,8 +644,25 @@
             }
         }
 
-        console.log("%c[FLICKER-TRACE] 💥 container.innerHTML WRITE | Timestamp: " + performance.now().toFixed(1) + "ms | HTML length: " + html.length + " chars | Items in HTML: " + (html.match(/m3-list-item/g) || []).length);
+        var prevChildCount = container.children.length;
+        var stackTrace = (new Error()).stack || "";
+        var callerLine = stackTrace.split("\n")[2] || "";
+        console.log("[DOM-WRITE-TRACE] 💥 DOM WRITE TO #" + (container.id || "nasFileList") + "\n" +
+                    "   Timestamp: " + performance.now().toFixed(1) + "ms\n" +
+                    "   File: app-init.js:645\n" +
+                    "   Function: renderPrototypeFileList\n" +
+                    "   Caller: " + callerLine.trim() + "\n" +
+                    "   Target Element: #" + (container.id || "nasFileList") + "\n" +
+                    "   Previous Child Count: " + prevChildCount + "\n" +
+                    "   HTML Length: " + html.length + "\n" +
+                    "   Reason: " + (renderReason || "prototype_render") + "\n" +
+                    "   Call Stack:\n" + stackTrace);
+
+        var oldDomItems = Array.prototype.slice.call(container.querySelectorAll(".m3-list-item")).map(function(el) { return el.getAttribute("data-filename") || el.textContent.trim(); });
         container.innerHTML = html;
+        var newDomItems = Array.prototype.slice.call(container.querySelectorAll(".m3-list-item")).map(function(el) { return el.getAttribute("data-filename") || el.textContent.trim(); });
+
+        console.log("[DOM-WRITE-TRACE] ✅ New Child Count: " + container.children.length + " | Visible List Items: [" + newDomItems.join(", ") + "]");
 
         // Re-insert loaded preview elements to keep video/image frames smooth without reloading
         var newItems = container.querySelectorAll(".m3-list-item");
@@ -1311,9 +1339,6 @@
                 }
                 window._contextMenuTarget = "";
                 window.clearSelection();
-                if (window.FileRepository && typeof window.FileRepository.invalidateCache === "function") {
-                    window.FileRepository.invalidateCache(currentFolderPath);
-                }
                 if (typeof refreshFileList === "function") refreshFileList();
                 if (typeof window.requestSafeVisibleFilesRefresh === "function") {
                     window.requestSafeVisibleFilesRefresh(120);
@@ -4496,6 +4521,37 @@
             }
         } catch (e) { }
 
+        // F5 Trace Instrumentation Helper
+        window.__logF5Trace = function(checkpointName) {
+            try {
+                var folder = typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "");
+                var repoCount = (window.FileRepository && typeof window.FileRepository.getFolderCache === "function") 
+                    ? (window.FileRepository.getFolderCache(folder) || []).length : 0;
+                
+                var projCount = 0;
+                if (window.ProjectionLayer) {
+                    var storeState = window.LanvanStore ? Object.assign({}, window.LanvanStore.state) : { currentFolder: folder, uploadQueue: [] };
+                    storeState.currentFolder = folder;
+                    var engine = window.projectionLayer || (typeof window.ProjectionLayer === 'function' ? new window.ProjectionLayer() : window.ProjectionLayer);
+                    if (engine && engine.buildCurrentFolderViewModel) {
+                        var vm = engine.buildCurrentFolderViewModel(storeState, window.FileRepository ? window.FileRepository.getFolderCache(folder) : []);
+                        projCount = Array.isArray(vm) ? vm.length : ((vm && vm.visibleFiles) ? vm.visibleFiles.length : 0);
+                    }
+                }
+
+                var container = document.getElementById("nasFileList");
+                var domCount = container ? container.querySelectorAll(".m3-list-item").length : 0;
+
+                console.log("[F5-TRACE] 📍 Checkpoint: " + checkpointName +
+                    " | Timestamp: " + performance.now().toFixed(1) + "ms" +
+                    " | Repo count: " + repoCount +
+                    " | Projection count: " + projCount +
+                    " | DOM count: " + domCount);
+            } catch (e) {
+                console.error("[F5-TRACE] Error logging trace:", e);
+            }
+        };
+
         // Show loading state immediately
         var container = document.getElementById("nasFileList");
         if (container) {
@@ -4512,8 +4568,11 @@
             }
         }
 
+        window.__logF5Trace("1. Before fetchFilesData()");
+
         // Fetch full file data with metadata from API
         fetchFilesData().then(function (filesData) {
+            window.__logF5Trace("2. After fetchFilesData()");
             renderPrototypeFileList(filesData);
         });
 
@@ -4683,11 +4742,23 @@
                     currentFolderPath = targetFolder;
                     console.log("🛠️ [TRACE @ app-init.js:4580] Store Subscription Triggered Navigation -> '" + (targetFolder || "Home") + "'");
                     
-                    // fetchFolderContents writes to Repository; Scheduler handles the render
+                    // fetchFolderContents writes to Repository; Navigation Controller requests render upon promise resolution
                     if (window.FileRepository && typeof window.FileRepository.fetchFolderContents === 'function') {
-                        window.FileRepository.fetchFolderContents(targetFolder).catch(function (err) {
-                            console.error("  Error fetching folder contents on navigation:", err);
-                        });
+                        window.FileRepository.fetchFolderContents(targetFolder)
+                            .then(function () {
+                                var activeFolder = (typeof window.getCurrentFolderPath === 'function')
+                                    ? window.getCurrentFolderPath()
+                                    : (window.currentFolderPath || '');
+                                activeFolder = (activeFolder === 'Home' || activeFolder === 'Home/') ? '' : activeFolder;
+                                if (activeFolder === targetFolder) {
+                                    if (window.RenderScheduler && typeof window.RenderScheduler.requestRender === 'function') {
+                                        window.RenderScheduler.requestRender('nav_hydrated');
+                                    }
+                                }
+                            })
+                            .catch(function (err) {
+                                console.error("  Error fetching folder contents on navigation:", err);
+                            });
                     }
                 }
             });
@@ -4702,6 +4773,10 @@
             window.RenderScheduler.setRenderer(function(viewModel) {
                 renderPrototypeFileList(viewModel, 'scheduler');
             });
+        }
+
+        if (typeof window.refreshFileList === 'function') {
+            window.refreshFileList('bootstrap');
         }
 
         console.log("[app-init] Prototype UI adapter initialized. " +

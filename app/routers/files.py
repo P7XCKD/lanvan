@@ -810,9 +810,10 @@ async def api_files():
     """API endpoint to get current file list as JSON with full metadata"""
     try:
         files = get_file_list()
+        file_names = [f["name"] for f in files]
         return JSONResponse(content={
             "status": "success",
-            "files": [f["name"] for f in files],
+            "files": file_names,
             "files_data": files,
             "count": len(files)
         })
@@ -2684,10 +2685,13 @@ async def list_folder_contents(folder_path: str):
         # Folders first, then by mtime descending
         folders_list = sorted([f for f in files if f.get("isFolder")], key=lambda x: x["mtime"], reverse=True)
         regulars_list = sorted([f for f in files if not f.get("isFolder")], key=lambda x: x["mtime"], reverse=True)
+        all_res = folders_list + regulars_list
+
         return JSONResponse(content={
             "status": "success",
-            "files": folders_list + regulars_list,
-            "count": len(files),
+            "files": all_res,
+            "files_data": all_res,
+            "count": len(all_res),
             "folder": folder_path
         })
     except Exception as e:

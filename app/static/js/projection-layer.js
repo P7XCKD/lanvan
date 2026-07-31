@@ -33,6 +33,11 @@
      * - Date.now() is NEVER used for mtime (use 0 as sentinel)
      */
     ProjectionLayer.prototype.buildCurrentFolderViewModel = function (storeState, diskFiles) {
+        if (window.__lanvanTimelineTracker) {
+            var folder = storeState ? storeState.currentFolder : "";
+            var dCount = Array.isArray(diskFiles) ? diskFiles.length : 0;
+            window.__lanvanTimelineTracker.recordEvent("projectionBuild", "folder: '" + folder + "', diskCount: " + dCount);
+        }
         var startTime = performance.now();
         var currentFolder = cleanFolderPath(storeState ? storeState.currentFolder : "");
         var rawDiskFiles = Array.isArray(diskFiles) ? diskFiles : [];
@@ -127,24 +132,30 @@
                     }
                 }
 
-                if (status === 'QUEUED' || status === 'UPLOADING' || status === 'PROCESSING' || status === 'PAUSED') {
+                if (status === 'QUEUED' || status === 'UPLOADING' || status === 'PROCESSING' || status === 'PAUSED' || status === 'COMPLETED') {
                     if (existingIdx >= 0) {
                         // Clone the existing item before modifying (immutability)
                         var clone = Object.assign({}, normalizedDiskFiles[existingIdx]);
-                        clone.uploading = true;
-                        clone.uploadProgress = itemPct;
-                        clone.uploadStatus = status;
-                        clone.uploadId = item.id;
+                        if (status !== 'COMPLETED') {
+                            clone.uploading = true;
+                            clone.uploadProgress = itemPct;
+                            clone.uploadStatus = status;
+                            clone.uploadId = item.id;
+                        } else {
+                            clone.uploading = false;
+                            clone.uploadProgress = 100;
+                            clone.uploadStatus = 'COMPLETED';
+                        }
                         normalizedDiskFiles[existingIdx] = clone;
                     } else {
                         uploadOverlayItems.push({
                             name: itemName,
-                            identity: targetDir + '/' + itemName,
+                            identity: (targetDir ? targetDir + '/' : '') + itemName,
                             size: formatSize(fileSize),
                             mtime: null, // Unknown mtime — deterministic sentinel
                             isFolder: false,
-                            uploading: true,
-                            uploadProgress: itemPct,
+                            uploading: (status !== 'COMPLETED'),
+                            uploadProgress: (status === 'COMPLETED') ? 100 : itemPct,
                             uploadStatus: status,
                             uploadId: item.id
                         });
@@ -212,13 +223,11 @@
 
             var folderProgress = sFolder.totalBytes > 0 ? Math.round((sFolder.uploadedBytes / sFolder.totalBytes) * 100) : 0;
             if (existingIdx >= 0) {
-                if (sFolder.hasUploading) {
-                    var fClone = Object.assign({}, normalizedDiskFiles[existingIdx]);
-                    fClone.uploading = true;
-                    fClone.uploadProgress = folderProgress;
-                    fClone.uploadStatus = 'UPLOADING';
-                    normalizedDiskFiles[existingIdx] = fClone;
-                }
+                var fClone = Object.assign({}, normalizedDiskFiles[existingIdx]);
+                fClone.uploading = sFolder.hasUploading;
+                fClone.uploadProgress = folderProgress;
+                fClone.uploadStatus = sFolder.hasUploading ? 'UPLOADING' : (folderProgress >= 100 ? 'COMPLETED' : 'QUEUED');
+                normalizedDiskFiles[existingIdx] = fClone;
             } else {
                 normalizedDiskFiles.push({
                     name: subFolderName,
@@ -286,6 +295,21 @@
 
         var execDuration = (performance.now() - startTime).toFixed(2);
         console.log("🔍 [TRACE @ projection-layer.js:160] Projection Complete | Exec: " + execDuration + "ms | Items: " + deduplicatedFiles.length + " | Visible: [" + deduplicatedFiles.map(function(d){ return d.name + (d.isFolder ? '(dir)' : '(file)'); }).join(", ") + "]");
+
+        if (typeof window.tagFilesWithFolder === 'function') {
+            window.tagFilesWithFolder(deduplicatedFiles, currentFolder);
+        } else {
+            try {
+                Object.defineProperty(deduplicatedFiles, '__folderPath', {
+                    value: currentFolder,
+                    writable: true,
+                    configurable: true,
+                    enumerable: false
+                });
+            } catch (e) {
+                deduplicatedFiles.__folderPath = currentFolder;
+            }
+        }
 
         return deduplicatedFiles;
     };

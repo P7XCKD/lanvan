@@ -223,6 +223,9 @@ function initUploadWebSocket() {
     uploadWs.onmessage = function (event) {
       try {
         const payload = JSON.parse(event.data);
+        if (window.__lanvanTimelineTracker) {
+          window.__lanvanTimelineTracker.recordEvent("wsEvent", "uploadWs: " + payload.type);
+        }
         if (payload.type === 'file_list_updated' || payload.type === 'upload_complete') {
           console.log('[WS UPLOAD] 🔄 Received real-time sync event across devices:', payload);
           if (typeof window.requestSafeVisibleFilesRefresh === 'function') {
@@ -279,14 +282,11 @@ function initFileEventsWebSocket() {
     fileEventsWs.onmessage = function (event) {
       try {
         const payload = JSON.parse(event.data);
+        if (window.__lanvanTimelineTracker) {
+          window.__lanvanTimelineTracker.recordEvent("wsEvent", "fileEventsWs: " + payload.type);
+        }
         if (payload.type === 'file_change') {
           console.log('[WS FILE EVENTS] ⚡ Real-time file system mutation event received across devices:', payload);
-          // Invalidate stale cache — canonical refresh pipeline handles DOM updates
-          // Invalidate only the affected folder (scoped, matching delete handler at app-init.js:1321)
-          var affectedFolder = payload.target_dir || payload.path || "";
-          if (window.FileRepository && typeof window.FileRepository.invalidateCache === 'function') {
-            window.FileRepository.invalidateCache(affectedFolder);
-          }
           // Clean up recently-created folder tracking (ephemeral, no DOM mutation)
           var delTarget = payload.path || payload.target_dir || "";
           if (delTarget && window._recentlyCreatedFolders) {
@@ -716,6 +716,39 @@ function getControlButtons(uploadItem) {
   return '';
 }
 
+/**
+ * Canonical Path Resolver for Directory Uploads.
+ * Decoupled, stateless, generic path normalization for directory uploads.
+ * Preserves root uploads, preserves deep folder structures, and generically
+ * strips duplicated leading folder segments when uploading into an existing subfolder.
+ */
+function resolveDirectoryUploadTarget(baseActiveFolder, webkitRelativePath) {
+  var baseClean = (baseActiveFolder || "").replace(/\\/g, "/").replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
+  if (!webkitRelativePath || !webkitRelativePath.includes("/")) {
+    return baseClean;
+  }
+
+  var relParts = webkitRelativePath.replace(/\\/g, "/").split("/").filter(Boolean);
+  var dirParts = relParts.slice(0, -1);
+  if (dirParts.length === 0) {
+    return baseClean;
+  }
+
+  var baseParts = baseClean ? baseClean.split("/").filter(Boolean) : [];
+
+  if (baseParts.length > 0 && dirParts.length > 0) {
+    var lastBaseSegment = baseParts[baseParts.length - 1];
+    if (dirParts[0] === lastBaseSegment) {
+      dirParts = dirParts.slice(1);
+    }
+  }
+
+  var combinedParts = baseParts.concat(dirParts);
+  return combinedParts.join("/");
+}
+
+window.resolveDirectoryUploadTarget = resolveDirectoryUploadTarget;
+
 function createUploadItem(file, uploadId) {
   let baseFolder = (function () {
     if (typeof window.getCurrentFolderPath === "function") {
@@ -728,12 +761,9 @@ function createUploadItem(file, uploadId) {
     return p.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
   })();
 
-  // If file came from a directory upload (has webkitRelativePath), extract relative directory path
   let finalTargetDir = baseFolder;
   if (file.webkitRelativePath && file.webkitRelativePath.includes('/')) {
-    const relParts = file.webkitRelativePath.replace(/\\/g, '/').split('/');
-    const relDir = relParts.slice(0, -1).join('/');
-    finalTargetDir = baseFolder ? (baseFolder + '/' + relDir) : relDir;
+    finalTargetDir = resolveDirectoryUploadTarget(baseFolder, file.webkitRelativePath);
   } else if (file._explicitTargetDir !== undefined) {
     finalTargetDir = file._explicitTargetDir;
   }
@@ -762,26 +792,29 @@ function addToUploadQueue(files) {
   const baseActiveFolder = (typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "")).replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
   console.log("%c[LANVAN UPLOAD] 📥 Queued %d file(s) | Active Folder: '%s'", "color:#8b5cf6; font-weight:bold; font-size:12px;", files.length, baseActiveFolder || "Home (Root)");
 
-  // Pre-create subfolder paths on server disk for directory uploads
+  // Pre-create subfolder paths on server disk using Canonical Path Resolver
   const createdFolderPaths = new Set();
   for (let file of files) {
     if (file && file.webkitRelativePath && file.webkitRelativePath.includes('/')) {
-      const relParts = file.webkitRelativePath.replace(/\\/g, '/').split('/');
-      let currAccum = baseActiveFolder;
-      for (let i = 0; i < relParts.length - 1; i++) {
-        const folderName = relParts[i];
-        const parentPath = currAccum;
-        currAccum = currAccum ? `${currAccum}/${folderName}` : folderName;
-        const fullFolderKey = currAccum;
+      const fullTargetDir = resolveDirectoryUploadTarget(baseActiveFolder, file.webkitRelativePath);
+      if (fullTargetDir) {
+        const parts = fullTargetDir.split('/');
+        let currAccum = "";
+        for (let i = 0; i < parts.length; i++) {
+          const folderName = parts[i];
+          const parentPath = currAccum;
+          currAccum = currAccum ? `${currAccum}/${folderName}` : folderName;
+          const fullFolderKey = currAccum;
 
-        if (!createdFolderPaths.has(fullFolderKey)) {
-          createdFolderPaths.add(fullFolderKey);
-          const formData = new FormData();
-          formData.append("folder_name", folderName);
-          if (parentPath) {
-            formData.append("parent_path", parentPath);
+          if (!createdFolderPaths.has(fullFolderKey)) {
+            createdFolderPaths.add(fullFolderKey);
+            const formData = new FormData();
+            formData.append("folder_name", folderName);
+            if (parentPath) {
+              formData.append("parent_path", parentPath);
+            }
+            fetch("/api/files/mkdir", { method: "POST", body: formData }).catch(() => { });
           }
-          fetch("/api/files/mkdir", { method: "POST", body: formData }).catch(() => { });
         }
       }
     }
@@ -1714,7 +1747,7 @@ function cancelUpload(uploadId) {
     return upper === 'UPLOADING' || upper === 'QUEUED' || upper === 'PAUSED';
   }
   var currentStateQueue = window.LanvanStore ? window.LanvanStore.getState().uploadQueue : uploadQueue;
-  const hasActiveUploads = currentStateQueue.some(function(item) {
+  const hasActiveUploads = currentStateQueue.some(function (item) {
     return item && isActiveStatus(item.status);
   });
   if (!hasActiveUploads) {
@@ -2720,36 +2753,63 @@ function logStructuredState(reason, beforeCount, afterCount) {
 window.logStructuredState = logStructuredState;
 
 // Dynamic file list refresh function
-var _REFRESH_GEN_COUNTER = 0;
+var _REFRESH_GEN_PER_FOLDER = {};
+var _LATEST_COMPLETED_GEN_PER_FOLDER = {};
+
 async function refreshFileList(reason = 'manual_or_api') {
   try {
-    var _genId = ++_REFRESH_GEN_COUNTER;
+    var targetFolder = (typeof window.getCurrentFolderPath === 'function')
+      ? window.getCurrentFolderPath()
+      : (window.currentFolderPath || '');
+    targetFolder = (targetFolder === 'Home' || targetFolder === 'Home/') ? '' : targetFolder;
+
+    if (window.__lanvanTimelineTracker) {
+      window.__lanvanTimelineTracker.recordEvent("refreshFileList", "reason: " + reason + ", folder: '" + targetFolder + "'");
+    }
+
+    var _genId = (_REFRESH_GEN_PER_FOLDER[targetFolder] || 0) + 1;
+    _REFRESH_GEN_PER_FOLDER[targetFolder] = _genId;
+
     var _caller = ((new Error()).stack || "").split("\n")[2] || "";
-    console.log("%c[FLICKER-TRACE] 🔄 refreshFileList #" + _genId + " | Reason: " + (reason || "unknown") + " | Caller: " + _caller + " | Timestamp: " + performance.now().toFixed(1) + "ms");
-    
+    console.log("%c[FLICKER-TRACE] 🔄 refreshFileList #" + _genId + " | Folder: '" + targetFolder + "' | Reason: " + (reason || "unknown") + " | Caller: " + _caller + " | Timestamp: " + performance.now().toFixed(1) + "ms");
+
     const lastCount = typeof lastFileCount !== "undefined" ? lastFileCount : 0;
-    const response = await fetch(getCurrentFileListEndpoint());
+    const endpoint = targetFolder ? '/api/folders/' + encodeURIComponent(targetFolder) + '/files' : '/api/files';
+    const response = await fetch(endpoint);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
 
     const data = await response.json();
+
+    // Out-of-order response guard: Ignore if a newer refresh for THIS folder has completed
+    var latestCompleted = _LATEST_COMPLETED_GEN_PER_FOLDER[targetFolder] || 0;
+    if (_genId < latestCompleted) {
+      console.log(`[FLICKER-TRACE] ⚠️ Discarding stale refresh response #${_genId} for folder '${targetFolder}' (Latest completed: #${latestCompleted})`);
+      return;
+    }
+    _LATEST_COMPLETED_GEN_PER_FOLDER[targetFolder] = _genId;
+
     const files = data.files_data || data.files || [];
-    console.log("[FLICKER-TRACE] refreshFileList #" + _genId + " | API returned " + files.length + " items");
+    console.log("[FLICKER-TRACE] refreshFileList #" + _genId + " for folder '" + targetFolder + "' | API returned " + files.length + " items");
 
     // Cache in Repository (single source of truth for disk state)
     if (window.FileRepository && typeof window.FileRepository.setFolderCache === 'function') {
-      var currentFolder = (typeof window.getCurrentFolderPath === 'function')
-        ? window.getCurrentFolderPath()
-        : '';
-      window.FileRepository.setFolderCache(currentFolder, files);
+      window.FileRepository.setFolderCache(targetFolder, files);
     }
 
-    // Delegate rendering to the unidirectional pipeline
-    if (window.RenderScheduler && typeof window.RenderScheduler.requestRender === 'function') {
-      window.RenderScheduler.requestRender();
-    } else {
-      updateFileDisplay(files);
+    // Only trigger RenderScheduler if user is STILL in the target folder when response arrives
+    var activeFolder = (typeof window.getCurrentFolderPath === 'function')
+      ? window.getCurrentFolderPath()
+      : (window.currentFolderPath || '');
+    activeFolder = (activeFolder === 'Home' || activeFolder === 'Home/') ? '' : activeFolder;
+
+    if (activeFolder === targetFolder) {
+      if (window.RenderScheduler && typeof window.RenderScheduler.requestRender === 'function') {
+        window.RenderScheduler.requestRender();
+      } else {
+        updateFileDisplay(files);
+      }
     }
 
     logStructuredState(reason, lastCount, files.length);

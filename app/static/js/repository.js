@@ -44,28 +44,41 @@
         var target = cleanPath(folderPath);
         var cached = this.cache[target] || tagFiles([], target);
         var count = Array.isArray(cached) ? cached.length : 0;
-        console.log("[FLICKER-TRACE] 📂 Repository.getFolderCache | Folder: '" + (target || "(root)") + "' | Count: " + count + " | Timestamp: " + performance.now().toFixed(1) + "ms");
+        if (window.__lanvanTimelineTracker) {
+            window.__lanvanTimelineTracker.recordEvent("repoGetCache", "folder: '" + target + "', count: " + count);
+        }
         return Array.isArray(cached) ? cached.slice() : [];
     };
 
     FileRepository.prototype.setFolderCache = function (folderPath, files) {
         var target = cleanPath(folderPath);
+        var oldFiles = this.cache[target] || [];
+        var oldNames = oldFiles.map(function(f) { return typeof f === 'string' ? f : f.name; });
         var tagged = tagFiles(files, target);
-        var prevCount = this.cache[target] ? (Array.isArray(this.cache[target]) ? this.cache[target].length : -1) : -1;
-        var newCount = Array.isArray(tagged) ? tagged.length : 0;
-        var caller = ((new Error()).stack || "").split("\n")[2] || "";
-        console.log("%c[FLICKER-TRACE] 📝 Repository.setFolderCache | Folder: '" + (target || "(root)") + "' | Old: " + prevCount + " → New: " + newCount + " | Timestamp: " + performance.now().toFixed(1) + "ms | Caller: " + caller);
+        var newNames = tagged.map(function(f) { return typeof f === 'string' ? f : f.name; });
+        
         this.cache[target] = tagged;
+
+        if (window.__lanvanTimelineTracker) {
+            window.__lanvanTimelineTracker.recordEvent("repoSetCache", "folder: '" + target + "', count: " + tagged.length);
+            if (typeof window.__lanvanTimelineTracker.checkMutation === "function") {
+                window.__lanvanTimelineTracker.checkMutation("FileRepository", "setFolderCache", "repository.js", 58, "manual_or_refresh", "Repository.cache['" + target + "']", oldNames, newNames);
+            }
+        }
         return tagged.slice();
     };
 
     FileRepository.prototype.invalidateCache = function (folderPath) {
         var caller = ((new Error()).stack || "").split("\n")[2] || "";
         if (folderPath === undefined) {
-            console.log("%c[FLICKER-TRACE] 🗑️ Repository.invalidateCache(ALL) | Cleared entire cache | Timestamp: " + performance.now().toFixed(1) + "ms | Caller: " + caller);
+            if (window.__lanvanTimelineTracker) {
+                window.__lanvanTimelineTracker.recordEvent("repoSetCache", "invalidate ALL");
+            }
             this.cache = {};
         } else {
-            console.log("%c[FLICKER-TRACE] 🗑️ Repository.invalidateCache | Folder: '" + cleanPath(folderPath) + "' | Timestamp: " + performance.now().toFixed(1) + "ms | Caller: " + caller);
+            if (window.__lanvanTimelineTracker) {
+                window.__lanvanTimelineTracker.recordEvent("repoSetCache", "invalidate '" + cleanPath(folderPath) + "'");
+            }
             delete this.cache[cleanPath(folderPath)];
         }
     };
@@ -85,7 +98,6 @@
             ? "/api/folders/" + encodeURIComponent(target) + "/files"
             : "/api/files";
 
-        console.log("[FLICKER-TRACE] 🌐 Repository.fetchFolderContents START | Folder: '" + (target || "(root)") + "' | URL: " + url + " | Timestamp: " + performance.now().toFixed(1) + "ms");
         var self = this;
         return fetch(url, { signal: signal })
             .then(function (res) {
@@ -94,11 +106,19 @@
             })
             .then(function (data) {
                 var rawFiles = (data && (data.files_data || data.files)) ? (data.files_data || data.files) : [];
-                var prevCount = self.cache[target] ? (Array.isArray(self.cache[target]) ? self.cache[target].length : -1) : -1;
-                var newCount = Array.isArray(rawFiles) ? rawFiles.length : 0;
-                console.log("%c[FLICKER-TRACE] 🌐 Repository.fetchFolderContents RESULT | Folder: '" + (target || "(root)") + "' | API returned: " + newCount + " items | Old cache: " + prevCount + " → New: " + newCount + " | Timestamp: " + performance.now().toFixed(1) + "ms");
+                var oldFiles = self.cache[target] || [];
+                var oldNames = oldFiles.map(function(f) { return typeof f === 'string' ? f : f.name; });
                 var tagged = tagFiles(rawFiles, target);
+                var newNames = tagged.map(function(f) { return typeof f === 'string' ? f : f.name; });
+
                 self.cache[target] = tagged;
+
+                if (window.__lanvanTimelineTracker) {
+                    window.__lanvanTimelineTracker.recordEvent("repoSetCache", "fetchFolderContents result: '" + target + "', count: " + tagged.length);
+                    if (typeof window.__lanvanTimelineTracker.checkMutation === "function") {
+                        window.__lanvanTimelineTracker.checkMutation("FileRepository", "fetchFolderContents", "repository.js", 104, "API_fetch_response", "Repository.cache['" + target + "']", oldNames, newNames);
+                    }
+                }
                 return tagged;
             })
             .catch(function (err) {

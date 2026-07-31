@@ -6,6 +6,122 @@
 (function (window) {
     'use strict';
 
+    // =========================================================================
+    // TIMELINE TRACKER ENGINE (FORENSIC AUDIT INSTRUMENTATION ONLY)
+    // =========================================================================
+    var tracker = {
+        logs: [],
+        lastEvents: {
+            storeAction: null,
+            storeDispatch: null,
+            schedulerRequest: null,
+            schedulerExecute: null,
+            refreshFileList: null,
+            repoSetCache: null,
+            repoGetCache: null,
+            projectionBuild: null,
+            renderPrototype: null,
+            domUpdate: null,
+            wsEvent: null,
+            navEvent: null
+        },
+        stateHistory: {
+            repoNames: [],
+            projNames: [],
+            domNames: [],
+            currentFolder: "",
+            uploadQueueCount: 0
+        },
+        recordEvent: function(type, detail) {
+            var ts = performance.now().toFixed(1);
+            var entry = { ts: ts, type: type, detail: detail };
+            this.logs.push(entry);
+            this.lastEvents[type] = ts + "ms (" + (typeof detail === 'string' ? detail : JSON.stringify(detail)) + ")";
+        },
+        checkMutation: function(who, fn, file, line, reason, fieldName, oldVal, newVal) {
+            var ts = performance.now().toFixed(1);
+            var sOld = JSON.stringify(oldVal);
+            var sNew = JSON.stringify(newVal);
+            if (sOld !== sNew) {
+                console.log("[MUTATION TRACE] ⚡ " + ts + "ms | " + fieldName + " MUTATED\n" +
+                    "   OLD VALUE: " + sOld + "\n" +
+                    "   ↓\n" +
+                    "   NEW VALUE: " + sNew + "\n" +
+                    "   WHO: " + who + " | FUNCTION: " + fn + " | FILE: " + file + ":" + line + " | REASON: " + reason);
+            }
+        },
+        printSnapshot: function(label) {
+            try {
+                var ts = performance.now().toFixed(1);
+                var folder = typeof window.getCurrentFolderPath === 'function' ? window.getCurrentFolderPath() : (window.currentFolderPath || "");
+                
+                var repoItems = (window.FileRepository && typeof window.FileRepository.getFolderCache === 'function') 
+                    ? (window.FileRepository.getFolderCache(folder) || []) : [];
+                var repoNames = repoItems.map(function(f) { return typeof f === 'string' ? f : f.name; });
+
+                var projNames = [];
+                if (window.ProjectionLayer) {
+                    try {
+                        var storeState = window.LanvanStore ? Object.assign({}, window.LanvanStore.state) : { currentFolder: folder, uploadQueue: [] };
+                        storeState.currentFolder = folder;
+                        var engine = window.projectionLayer || (typeof window.ProjectionLayer === 'function' ? new window.ProjectionLayer() : window.ProjectionLayer);
+                        if (engine && engine.buildCurrentFolderViewModel) {
+                            var vm = engine.buildCurrentFolderViewModel(storeState, repoItems);
+                            var list = Array.isArray(vm) ? vm : ((vm && vm.visibleFiles) ? vm.visibleFiles : []);
+                            projNames = list.map(function(f) { return f.name; });
+                        }
+                    } catch(e) {}
+                }
+
+                var container = document.getElementById("nasFileList");
+                var domItems = container ? Array.prototype.slice.call(container.querySelectorAll(".m3-list-item")) : [];
+                var domNames = domItems.map(function(el) { return el.getAttribute("data-filename") || el.textContent.trim(); });
+
+                console.log("\n==================================================");
+                console.log("SNAPSHOT @ " + ts + "ms (" + label + ")");
+                console.log("==================================================");
+                console.log("Timestamp: " + ts + "ms");
+                console.log("Current Folder: '" + folder + "'");
+                console.log("Repository Count: " + repoNames.length);
+                console.log("Repository Names: [" + repoNames.join(", ") + "]");
+                console.log("Projection Count: " + projNames.length);
+                console.log("Projection Names: [" + projNames.join(", ") + "]");
+                console.log("DOM Count: " + domNames.length);
+                console.log("DOM Names: [" + domNames.join(", ") + "]");
+                console.log("Last Store Action: " + (this.lastEvents.storeAction || "None"));
+                console.log("Last Store Dispatch: " + (this.lastEvents.storeDispatch || "None"));
+                console.log("Last RenderScheduler.requestRender(): " + (this.lastEvents.schedulerRequest || "None"));
+                console.log("Last RenderScheduler.executeRender(): " + (this.lastEvents.schedulerExecute || "None"));
+                console.log("Last refreshFileList(): " + (this.lastEvents.refreshFileList || "None"));
+                console.log("Last Repository.setFolderCache(): " + (this.lastEvents.repoSetCache || "None"));
+                console.log("Last Repository.getFolderCache(): " + (this.lastEvents.repoGetCache || "None"));
+                console.log("Last Projection.buildCurrentFolderViewModel(): " + (this.lastEvents.projectionBuild || "None"));
+                console.log("Last renderPrototypeFileList(): " + (this.lastEvents.renderPrototype || "None"));
+                console.log("Last DOM update: " + (this.lastEvents.domUpdate || "None"));
+                console.log("Last WebSocket Event: " + (this.lastEvents.wsEvent || "None"));
+                console.log("Last Navigation Event: " + (this.lastEvents.navEvent || "None"));
+                console.log("==================================================\n");
+            } catch (err) {
+                console.error("[TIMELINE ERROR] Snapshot error:", err);
+            }
+        }
+    };
+    window.__lanvanTimelineTracker = tracker;
+
+    function scheduleSnapshots() {
+        [250, 300, 400, 500, 750, 1000, 1500, 2000, 2500].forEach(function(delay) {
+            setTimeout(function() {
+                tracker.printSnapshot("T=" + delay + "ms check");
+            }, delay);
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', scheduleSnapshots);
+    } else {
+        scheduleSnapshots();
+    }
+
     // 1. Upload State Machine Transitions
     var UPLOAD_TRANSITIONS = {
         'QUEUED': ['UPLOADING', 'PAUSED', 'CANCELLED'],
@@ -82,7 +198,13 @@
     };
 
     LanvanStore.prototype.dispatch = function (type, payload) {
+        if (window.__lanvanTimelineTracker) {
+            window.__lanvanTimelineTracker.recordEvent("storeDispatch", type + " " + JSON.stringify(payload || {}));
+            window.__lanvanTimelineTracker.recordEvent("storeAction", type);
+        }
         var action = { type: type, payload: payload || {}, timestamp: Date.now() };
+        var oldFolder = this.state.currentFolder;
+        var oldQueueCount = this.state.uploadQueue ? this.state.uploadQueue.length : 0;
         var nextState = {
             currentFolder: this.state.currentFolder,
             uploadQueue: this.state.uploadQueue.slice(),
@@ -196,6 +318,11 @@
         }
 
         this.state = nextState;
+
+        if (window.__lanvanTimelineTracker) {
+            window.__lanvanTimelineTracker.checkMutation("LanvanStore", "dispatch", "state-store.js", 311, type, "currentFolder", oldFolder, nextState.currentFolder);
+            window.__lanvanTimelineTracker.checkMutation("LanvanStore", "dispatch", "state-store.js", 311, type, "uploadQueue.length", oldQueueCount, nextState.uploadQueue.length);
+        }
 
         // INVARIANT GUARD (DEBUG only): Verify upload state machine integrity.
         // Every upload item must have exactly one valid UPPERCASE status.

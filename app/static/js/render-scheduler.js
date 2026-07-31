@@ -110,7 +110,9 @@
     };
 
     RenderScheduler.prototype.requestRender = function () {
-        console.log("%c[FLICKER-TRACE] 📣 RenderScheduler.requestRender() | Timestamp: " + performance.now().toFixed(1) + "ms | Already requested: " + this.renderRequested);
+        if (window.__lanvanTimelineTracker) {
+            window.__lanvanTimelineTracker.recordEvent("schedulerRequest", "alreadyRequested: " + this.renderRequested);
+        }
         if (this.renderRequested) return;
         this.renderRequested = true;
 
@@ -122,6 +124,9 @@
     };
 
     RenderScheduler.prototype.executeRender = function () {
+        if (window.__lanvanTimelineTracker) {
+            window.__lanvanTimelineTracker.recordEvent("schedulerExecute", "isRendering: " + this.isRendering + ", hasRenderer: " + (!!this.rendererFn));
+        }
         if (this.isRendering || !this.rendererFn) return;
         this.isRendering = true;
 
@@ -150,6 +155,10 @@
             console.error("  [RENDERER ERROR] Stateless renderer failed:", renderErr);
         } finally {
             this.isRendering = false;
+        }
+
+        if (typeof window.__logF5Trace === "function") {
+            window.__logF5Trace("4. After RenderScheduler.executeRender()");
         }
 
         // SELF-HEALING (DEBUG only): DOM ↔ ViewModel reconciliation
