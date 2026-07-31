@@ -1005,6 +1005,10 @@ async def upload_auto_file(
     if security_warnings:
         print(f"[WARN] Security warnings for upload: {'; '.join(security_warnings)}")
 
+    # [TRACE VERIFY] Log raw UploadFile.filename BEFORE any processing
+    for i, file in enumerate(files):
+        print(f"[TRACE VERIFY] Raw UploadFile.filename: file[{i}].filename='{file.filename}' | parent_path='{parent_path}'")
+
     #  Enforce encryption restrictions using centralized config
     if encrypt:
         validation = AESConfig.validate_file_for_aes(0, is_https)  # Size will be checked per file
@@ -1053,6 +1057,11 @@ async def upload_auto_file(
             resolved = UploadPathResolver.resolve(parent_path, file.filename, UPLOAD_FOLDER)
             target_dir = resolved.target_directory
             target_dir.mkdir(parents=True, exist_ok=True)
+
+            # [TRACE STEP 1] Log destination before saving
+            print(f"[TRACE STEP 1] resolve: parent_path='{parent_path}' | file.filename='{file.filename}' | target_dir='{target_dir}' | full_path='{resolved.full_path}'")
+            print(f"[TRACE STEP 1] Destination: {resolved.relative_path}")
+            print(f"[TRACE STEP 1] Absolute: {resolved.full_path.resolve()}")
 
             save_name = resolved.filename + ".enc" if encrypt else resolved.filename
             filepath = target_dir / get_unique_filename(target_dir, save_name)
@@ -1132,6 +1141,14 @@ async def upload_auto_file(
             print(f"[ERR] File {i+1} failed: {result.get('error', 'Unknown error')}")
 
     print(f"[DONE] Concurrent upload complete! {len(uploaded)} files uploaded: {uploaded}")
+
+    # [TRACE STEP 2] Verify filesystem after upload
+    for i, result in enumerate(upload_results):
+        if result.get('success'):
+            filepath = Path(result['destination'])
+            parent_dir = filepath.parent
+            print(f"[TRACE STEP 2] Verify filesystem | File saved at: '{filepath}' | os.path.exists={filepath.exists()}")
+            print(f"[TRACE STEP 2] Verify filesystem | Parent dir: '{parent_dir}' | os.path.exists={parent_dir.exists()} | os.listdir={sorted([p.name for p in parent_dir.iterdir()]) if parent_dir.exists() else 'N/A'}")
 
     if not uploaded:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
@@ -2667,6 +2684,10 @@ async def list_folder_contents(folder_path: str):
         })
     
     try:
+        # [TRACE DIAGNOSTIC] Log raw directory listing before filtering
+        raw_items = list(folder_path_obj.iterdir())
+        print(f"[TRACE] list_folder_contents: '{folder_path}' → Raw items on disk: {[f.name for f in raw_items]}")
+
         files = []
         for f in folder_path_obj.iterdir():
             if f.is_file() and not f.name.endswith('.tmp') and not should_ignore_file(f.name):
@@ -2682,6 +2703,8 @@ async def list_folder_contents(folder_path: str):
                     "mtime": f.stat().st_mtime,
                     "isFolder": True
                 })
+        # [TRACE DIAGNOSTIC] Log what the API is returning
+        print(f"[TRACE] list_folder_contents: '{folder_path}' → Filtered response: {[(f['name'], f.get('isFolder', False)) for f in files]}")
         # Folders first, then by mtime descending
         folders_list = sorted([f for f in files if f.get("isFolder")], key=lambda x: x["mtime"], reverse=True)
         regulars_list = sorted([f for f in files if not f.get("isFolder")], key=lambda x: x["mtime"], reverse=True)

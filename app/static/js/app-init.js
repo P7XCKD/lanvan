@@ -3888,16 +3888,17 @@
 
         // Calculate summary header title
         var headerTitle = "";
+        var currentActiveIndex = Math.min(totalCount, completedOrDeletedCount + (activePendingCount > 0 ? 1 : 0));
         if (totalCount === 0) {
             headerTitle = "No pending uploads";
         } else if (isAllCompleted) {
             headerTitle = "Uploads completed (" + totalCount + ")";
         } else if (pausedCount > 0 && activePendingCount === 0) {
             headerTitle = "Uploads paused (" + pausedCount + " of " + totalCount + ")";
-        } else if (pausedCount > 0 && activePendingCount > 0) {
-            headerTitle = "Uploading " + activePendingCount + " file" + (activePendingCount === 1 ? "" : "s") + " (" + pausedCount + " paused) • " + totalSpeedMB;
+        } else if (totalCount > 1) {
+            headerTitle = "Uploading " + currentActiveIndex + " of " + totalCount + " files (" + avgPct + "%) • " + totalSpeedMB;
         } else {
-            headerTitle = "Uploading " + activePendingCount + " " + (activePendingCount === 1 ? "file" : "files") + " • " + totalSpeedMB;
+            headerTitle = "Uploading 1 file • " + totalSpeedMB;
         }
 
         var headerTitleEl = stack.querySelector(".upload-toast-header-title");

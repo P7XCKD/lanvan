@@ -287,6 +287,7 @@ function initFileEventsWebSocket() {
         }
         if (payload.type === 'file_change') {
           console.log('[WS FILE EVENTS] ⚡ Real-time file system mutation event received across devices:', payload);
+          console.log("[TRACE] WebSocket event | action: '" + payload.action + "' | target_dir: '" + payload.target_dir + "' | path: '" + payload.path + "'");
           // Clean up recently-created folder tracking (ephemeral, no DOM mutation)
           var delTarget = payload.path || payload.target_dir || "";
           if (delTarget && window._recentlyCreatedFolders) {
@@ -718,9 +719,9 @@ function getControlButtons(uploadItem) {
 
 /**
  * Canonical Path Resolver for Directory Uploads.
- * Decoupled, stateless, generic path normalization for directory uploads.
- * Preserves root uploads, preserves deep folder structures, and generically
- * strips duplicated leading folder segments when uploading into an existing subfolder.
+ * Pure, stateless path resolution that preserves relative directory hierarchy exactly like a normal filesystem.
+ * Destination = Active Folder + Relative Directory from webkitRelativePath.
+ * Performs zero deduplication, zero stripping, and zero folder-name comparisons.
  */
 function resolveDirectoryUploadTarget(baseActiveFolder, webkitRelativePath) {
   var baseClean = (baseActiveFolder || "").replace(/\\/g, "/").replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
@@ -734,23 +735,111 @@ function resolveDirectoryUploadTarget(baseActiveFolder, webkitRelativePath) {
     return baseClean;
   }
 
-  var baseParts = baseClean ? baseClean.split("/").filter(Boolean) : [];
-
-  if (baseParts.length > 0 && dirParts.length > 0) {
-    var lastBaseSegment = baseParts[baseParts.length - 1];
-    if (dirParts[0] === lastBaseSegment) {
-      dirParts = dirParts.slice(1);
-    }
-  }
-
-  var combinedParts = baseParts.concat(dirParts);
-  return combinedParts.join("/");
+  var relDir = dirParts.join("/");
+  return baseClean ? (baseClean + "/" + relDir) : relDir;
 }
 
 window.resolveDirectoryUploadTarget = resolveDirectoryUploadTarget;
 
-function createUploadItem(file, uploadId) {
-  let baseFolder = (function () {
+/**
+ * Dedicated Recursive Upload Conflict Resolver.
+ * Responsibilities:
+ * - Detects recursive self-folder uploads (e.g. uploading 'Folder' while inside 'Folder' or 'Folder (1)').
+ * - Computes the next available logical numeric suffix ('Folder (1)', 'Folder (2)', 'Folder (3)').
+ * - Renames ONLY the uploaded root folder segment.
+ * - Preserves the entire nested subfolder hierarchy underneath unchanged ('Photos/Beach/image.jpg').
+ */
+function resolveRecursiveUploadTarget(baseActiveFolder, webkitRelativePath) {
+  var rawResolved = resolveDirectoryUploadTarget(baseActiveFolder, webkitRelativePath);
+  if (!baseActiveFolder || !webkitRelativePath || !webkitRelativePath.includes("/")) {
+    return rawResolved;
+  }
+
+  var baseClean = (baseActiveFolder || "").replace(/\\/g, "/").replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
+  var baseParts = baseClean ? baseClean.split("/").filter(Boolean) : [];
+  if (baseParts.length === 0) {
+    return rawResolved;
+  }
+
+  var relParts = webkitRelativePath.replace(/\\/g, "/").split("/").filter(Boolean);
+  var dirParts = relParts.slice(0, -1);
+  if (dirParts.length === 0) {
+    return rawResolved;
+  }
+
+  var rootUploadedDir = dirParts[0];
+
+  function parseFolderStemAndIndex(name) {
+    var match = name.match(/^(.+?)(?:\s+\((\d+)\))?$/);
+    if (match) {
+      return {
+        stem: match[1].trim(),
+        index: match[2] ? parseInt(match[2], 10) : 0
+      };
+    }
+    return { stem: name, index: 0 };
+  }
+
+  var uploadedRootInfo = parseFolderStemAndIndex(rootUploadedDir);
+
+  var maxChainIndex = -1;
+  var isRecursiveSelfUpload = false;
+
+  for (var i = 0; i < baseParts.length; i++) {
+    var partInfo = parseFolderStemAndIndex(baseParts[i]);
+    if (partInfo.stem.toLowerCase() === uploadedRootInfo.stem.toLowerCase()) {
+      isRecursiveSelfUpload = true;
+      if (partInfo.index > maxChainIndex) {
+        maxChainIndex = partInfo.index;
+      }
+    }
+  }
+
+  if (isRecursiveSelfUpload) {
+    var nextIndex = maxChainIndex + 1;
+    var renamedRoot = uploadedRootInfo.stem + " (" + nextIndex + ")";
+    dirParts[0] = renamedRoot;
+    var relDirRenamed = dirParts.join("/");
+    return baseClean + "/" + relDirRenamed;
+  }
+
+  return rawResolved;
+}
+
+window.resolveRecursiveUploadTarget = resolveRecursiveUploadTarget;
+
+/**
+ * Single Authoritative Path Builder for Upload Pipeline.
+ * Decides folder destination, recursive conflict numbering, and relative directory structure.
+ * No other function is allowed to modify, recompute, or overwrite target paths afterward.
+ */
+function buildUploadTarget(baseActiveFolder, file) {
+  var baseClean = (baseActiveFolder || "").replace(/\\/g, "/").replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
+
+  if (file._explicitTargetDir !== undefined && file._explicitTargetDir !== null) {
+    var explicitClean = (file._explicitTargetDir || "").replace(/\\/g, "/").replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
+    return explicitClean;
+  }
+
+  if (!file.webkitRelativePath || !file.webkitRelativePath.includes("/")) {
+    return baseClean;
+  }
+
+  var relTarget = resolveDirectoryUploadTarget(baseClean, file.webkitRelativePath);
+  var recTarget = resolveRecursiveUploadTarget(baseClean, file.webkitRelativePath);
+
+  console.log("%c[UPLOAD PIPELINE TRACE] 📍 buildUploadTarget | File: '%s' | ActiveFolder: '%s' | webkitRelativePath: '%s' | DirectoryResolver: '%s' | RecursiveResolver: '%s'",
+    "color:#10b981; font-weight:bold; font-size:11px;",
+    file.name, baseClean || "Home (Root)", file.webkitRelativePath, relTarget, recTarget
+  );
+
+  return recTarget;
+}
+
+window.buildUploadTarget = buildUploadTarget;
+
+function createUploadItem(file, uploadId, explicitBaseFolder) {
+  let baseFolder = explicitBaseFolder !== undefined ? explicitBaseFolder : (function () {
     if (typeof window.getCurrentFolderPath === "function") {
       return window.getCurrentFolderPath();
     }
@@ -761,12 +850,12 @@ function createUploadItem(file, uploadId) {
     return p.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
   })();
 
-  let finalTargetDir = baseFolder;
-  if (file.webkitRelativePath && file.webkitRelativePath.includes('/')) {
-    finalTargetDir = resolveDirectoryUploadTarget(baseFolder, file.webkitRelativePath);
-  } else if (file._explicitTargetDir !== undefined) {
-    finalTargetDir = file._explicitTargetDir;
-  }
+  let finalTargetDir = buildUploadTarget(baseFolder, file);
+
+  console.log("%c[UPLOAD PIPELINE TRACE] 📦 createUploadItem #%d | File: '%s' | TargetDir: '%s'",
+    "color:#3b82f6; font-weight:bold; font-size:11px;",
+    uploadId, file.name, finalTargetDir || "Home (Root)"
+  );
 
   return {
     id: uploadId,
@@ -784,6 +873,7 @@ function createUploadItem(file, uploadId) {
     error: null,
     targetDir: finalTargetDir,
     parent_path: finalTargetDir,
+    finalUploadPath: finalTargetDir,
     xhr: null
   };
 }
@@ -792,39 +882,11 @@ function addToUploadQueue(files) {
   const baseActiveFolder = (typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "")).replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
   console.log("%c[LANVAN UPLOAD] 📥 Queued %d file(s) | Active Folder: '%s'", "color:#8b5cf6; font-weight:bold; font-size:12px;", files.length, baseActiveFolder || "Home (Root)");
 
-  // Pre-create subfolder paths on server disk using Canonical Path Resolver
-  const createdFolderPaths = new Set();
-  for (let file of files) {
-    if (file && file.webkitRelativePath && file.webkitRelativePath.includes('/')) {
-      const fullTargetDir = resolveDirectoryUploadTarget(baseActiveFolder, file.webkitRelativePath);
-      if (fullTargetDir) {
-        const parts = fullTargetDir.split('/');
-        let currAccum = "";
-        for (let i = 0; i < parts.length; i++) {
-          const folderName = parts[i];
-          const parentPath = currAccum;
-          currAccum = currAccum ? `${currAccum}/${folderName}` : folderName;
-          const fullFolderKey = currAccum;
-
-          if (!createdFolderPaths.has(fullFolderKey)) {
-            createdFolderPaths.add(fullFolderKey);
-            const formData = new FormData();
-            formData.append("folder_name", folderName);
-            if (parentPath) {
-              formData.append("parent_path", parentPath);
-            }
-            fetch("/api/files/mkdir", { method: "POST", body: formData }).catch(() => { });
-          }
-        }
-      }
-    }
-  }
-
   for (let file of files) {
     if (!file || typeof file !== 'object' || typeof file.name !== 'string') continue;
     const uploadId = ++uploadIdCounter;
-    const uploadItem = createUploadItem(file, uploadId);
-    console.log("%c[LANVAN UPLOAD] 📄 '%s' (%s MB) -> targetDir: '%s'", "color:#ec4899; font-weight:500; font-size:11px;", uploadItem.fileName, ((uploadItem.fileSize || 0) / (1024 * 1024)).toFixed(1), uploadItem.targetDir || "Home (Root)");
+    const uploadItem = createUploadItem(file, uploadId, baseActiveFolder);
+    console.log("%c[LANVAN UPLOAD] 📄 '%s' (%s MB) -> finalUploadPath: '%s'", "color:#ec4899; font-weight:500; font-size:11px;", uploadItem.fileName, ((uploadItem.fileSize || 0) / (1024 * 1024)).toFixed(1), uploadItem.finalUploadPath || "Home (Root)");
     uploadQueue.push(uploadItem);
     renderUploadItem(uploadItem);
   }
@@ -2070,13 +2132,13 @@ function uploadSingleFileWithProgress(uploadItem) {
   const formData = new FormData();
   formData.append('files', uploadItem.file);
 
-  let parentPath = typeof window.getItemFolder === "function" ? window.getItemFolder(uploadItem) : (uploadItem.targetDir || "");
+  let parentPath = uploadItem.finalUploadPath || uploadItem.targetDir || uploadItem.parent_path || "";
   if (parentPath.startsWith("Home/")) parentPath = parentPath.substring(5);
   else if (parentPath === "Home") parentPath = "";
   if (parentPath) {
     formData.append('parent_path', parentPath);
   }
-  console.log("%c[LANVAN XHR] 🚀 Starting HTTP Upload: '%s' -> Destination: '%s'", "color:#06b6d4; font-weight:bold; font-size:12px;", uploadItem.fileName, parentPath || "Home (Root)");
+  console.log("%c[UPLOAD PIPELINE TRACE] 🚀 XHR Dispatch | File: '%s' | FinalDestination: '%s'", "color:#06b6d4; font-weight:bold; font-size:12px;", uploadItem.fileName, parentPath || "Home (Root)");
 
   const isAESEnabled = isEncryptionEnabled && document.getElementById('enableEncryption').checked;
   formData.append('encrypt', isAESEnabled.toString());
@@ -2792,6 +2854,7 @@ async function refreshFileList(reason = 'manual_or_api') {
 
     const files = data.files_data || data.files || [];
     console.log("[FLICKER-TRACE] refreshFileList #" + _genId + " for folder '" + targetFolder + "' | API returned " + files.length + " items");
+    console.log("[TRACE] refreshFileList API response for '" + targetFolder + "': " + JSON.stringify(files.map(function(f) { return (typeof f === 'string' ? f : f.name) + (f.isFolder ? '(dir)' : '(file)'); })));
 
     // Cache in Repository (single source of truth for disk state)
     if (window.FileRepository && typeof window.FileRepository.setFolderCache === 'function') {

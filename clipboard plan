@@ -1,0 +1,101 @@
+# WebSocket Architecture Analysis & Proposed UI Events WebSocket Plan
+
+## Current WebSocket Channels Analysis
+
+| Channel Name | Backend Endpoint | Connection Manager | UI Responsibility |
+|---|---|---|---|
+| **Clipboard WS** | `/ws/clipboard` | `ClipboardConnectionManager` | Dedicated strictly to **text/clipboard history sync** across devices (`refreshClipboardHistory()`). Does **NOT** touch file list UI. |
+| **File Events WS** | `/ws/file_events` | `FileEventsConnectionManager` | Dedicated to **real-time file system mutations** (`mkdir`, `rename`, `delete`, `upload`). Triggers `refreshFileList('ws_file_change')`. |
+| **Upload Status WS** | `/ws/upload-status` | `UploadStatusManager` | Dedicated to **live file transfer progress tracking** (bytes, speed, percentage). |
+
+### Finding
+The Clipboard WebSocket (`/ws/clipboard`) is **already cleanly isolated** and is **never used** to update file list UI elements.
+
+However, if you want a **new dedicated WebSocket channel specifically for custom UI operations** (e.g., system toasts, device presence, custom UI state sync, or layout updates without triggering file refreshes), we can introduce a new **`UI Events WebSocket`**.
+
+---
+
+## Proposed Plan: Dedicated UI Events WebSocket (`/ws/ui-events`)
+
+### 1. Backend: Create `app/ws_manager/ui_events.py`
+
+- Implement `UIEventsConnectionManager`:
+  - Memory-safe weakref client registry with automatic timeout cleanup.
+  - Endpoint `@router.websocket("/ws/ui-events")`.
+  - Broadcast method `broadcast_ui_event(event_type: str, payload: dict)`.
+- Register router in `app/main.py`.
+
+```python
+# app/ws_manager/ui_events.py
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from typing import Dict
+import weakref, json
+
+ui_events_router = APIRouter()
+
+class UIEventsConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, WebSocket] = {}
+
+    async def connect(self, websocket: WebSocket) -> str:
+        await websocket.accept()
+        conn_id = secrets.token_hex(8)
+        self.active_connections[conn_id] = websocket
+        return conn_id
+
+    async def broadcast_ui_event(self, event_type: str, data: dict):
+        payload = json.dumps({"type": event_type, "data": data})
+        for conn_id, ws in list(self.active_connections.items()):
+            try:
+                await ws.send_text(payload)
+            except Exception:
+                self.active_connections.pop(conn_id, None)
+
+ui_events_manager = UIEventsConnectionManager()
+
+@ui_events_router.websocket("/ws/ui-events")
+async def ui_events_endpoint(websocket: WebSocket):
+    await ui_events_manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+```
+
+---
+
+### 2. Frontend: Client Integration in `main-app.js`
+
+- Implement `initUIEventsWebSocket()` in `main-app.js`:
+  - Connects to `/ws/ui-events`.
+  - Listens for custom UI event types (`ui_toast`, `theme_change`, `active_user_sync`, etc.).
+  - Completely decoupled from `FileRepository` and `refreshFileList()`.
+
+```javascript
+let uiEventsWs = null;
+
+function initUIEventsWebSocket() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}/ws/ui-events`;
+  uiEventsWs = new WebSocket(wsUrl);
+
+  uiEventsWs.onmessage = function(event) {
+    try {
+      const payload = JSON.parse(event.data);
+      if (payload.type === 'ui_toast' && typeof window.showToast === 'function') {
+        window.showToast(payload.data.message);
+      }
+    } catch (e) {}
+  };
+}
+```
+
+---
+
+## Verification Plan
+
+### Automated Tests
+1. Verify `/ws/ui-events` WebSocket connection handshake via Playwright.
+2. Verify broadcasting custom UI events from backend reaches client without triggering unnecessary file list rerenders.
+3. Run full regression test suite: `python qt.py --fast`.

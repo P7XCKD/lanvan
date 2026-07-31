@@ -59,6 +59,21 @@ class UploadPathResolver:
             if filename_parts[:len(parent_parts)] == parent_parts:
                 filename_parts = filename_parts[len(parent_parts):]
 
+        # 5b. Recursive Upload Root Stripping
+        # When the frontend's recursive resolver has already renamed the root folder
+        # (e.g. "Folder" → "Folder (1)"), parent_parts contains the renamed root but
+        # filename_parts still carries the original root name from webkitRelativePath.
+        # Strip only the duplicated root component while preserving all nested subfolders.
+        # Condition: filename starts with the same first component as parent_parts,
+        # but the full prefix doesn't match (otherwise step 5 would have handled it),
+        # and filename has at least 2 components (root + something else).
+        if (parent_parts and len(filename_parts) >= 2
+            and filename_parts[0] == parent_parts[0]
+            and filename_parts[:len(parent_parts)] != parent_parts):
+            # The first component is the old root name that parent_parts already replaces.
+            # Strip it to avoid creating an extra nested folder.
+            filename_parts = filename_parts[1:]
+
         # 6. Single-Pass Component Sanitization
         safe_parent_parts = []
         for part in parent_parts:

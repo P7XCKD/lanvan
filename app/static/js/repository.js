@@ -54,8 +54,10 @@
         var target = cleanPath(folderPath);
         var oldFiles = this.cache[target] || [];
         var oldNames = oldFiles.map(function(f) { return typeof f === 'string' ? f : f.name; });
+        console.log("[TRACE STEP 5] Repository.setFolderCache BEFORE update | folder: '" + target + "' | old: " + JSON.stringify(oldNames));
         var tagged = tagFiles(files, target);
         var newNames = tagged.map(function(f) { return typeof f === 'string' ? f : f.name; });
+        console.log("[TRACE STEP 5] Repository.setFolderCache AFTER update | folder: '" + target + "' | new: " + JSON.stringify(newNames));
         
         this.cache[target] = tagged;
 

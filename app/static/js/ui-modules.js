@@ -1147,7 +1147,9 @@ function processSelectedFiles(files, type) {
       showToast(` Processing folder "${folderName}" with ${fileCount} files...`, 3000);
     }
 
-    uploadFolder(files);
+    if (typeof window.handleFiles === 'function') {
+      window.handleFiles(files);
+    }
   } else {
     if (typeof window.handleFiles === 'function') {
       window.handleFiles(files);
