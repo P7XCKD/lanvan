@@ -292,3 +292,22 @@ MANDATORY PRACTICES
 - Bug reports require scratch stress test scripts exploring all edge-case combinations.
 - Run python qt.py --fast (and full suite) to 100% pass rate before declaring completion.
 - Git commits: natural, human-readable, imperative mood.
+
+========================
+REPOSITORY / PROJECTION STABILITY RULES
+========================
+
+- Prefer MutationObserver over polling whenever possible when testing rendering stability.
+- Observe every DOM mutation instead of periodic snapshots.
+- Record every render frame that changes the file list.
+- Compare Repository, Projection, and DOM during every observation.
+- Never validate only final state when testing rendering stability.
+- Continuously observe intermediate render states.
+- Existing repository items must remain continuously visible throughout uploads unless intentionally removed.
+- Uploading new files may increase visible item count but must never temporarily remove unrelated existing items.
+- A list shrinking from 64 -> 63 -> 64 is a regression.
+- A list becoming empty is only one possible failure.
+- Prefer production-generated WebSocket events over manually invoking refresh helpers.
+- Tests should observe production behavior, not simulate internal architecture.
+- When validating rendering, compare Repository, Projection, and DOM together whenever possible.
+- Every render-stability regression test must produce detailed diagnostics showing mutation index, render timestamp, Repository items, Projection items, DOM items, and missing filenames.
