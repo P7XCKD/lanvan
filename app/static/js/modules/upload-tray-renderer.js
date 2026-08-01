@@ -230,13 +230,44 @@
         }
     }
 
+    function renderUploadTray() {
+        var container = document.getElementById("uploadToastContainer");
+        if (!container) return;
+        var queue = window.uploadQueue || [];
+
+        if (queue.length === 0) {
+            container.style.display = "none";
+            return;
+        }
+
+        container.style.display = "flex";
+        var itemsContainer = document.getElementById("uploadToastItems") || container;
+        var actionsContainer = document.getElementById("uploadToastActions") || container;
+
+        var html = "";
+        for (var i = 0; i < queue.length; i++) {
+            html += buildTrayItemHtml(queue[i]);
+        }
+        itemsContainer.innerHTML = html;
+
+        for (var j = 0; j < queue.length; j++) {
+            var itemEl = document.getElementById("toast-item-" + queue[j].id);
+            if (itemEl) {
+                wireTrayItemListeners(itemEl, queue[j]);
+            }
+        }
+        wireHeaderActions(actionsContainer);
+    }
+
     window.UploadTrayRenderer = {
+        render: renderUploadTray,
         buildTrayItemHtml: buildTrayItemHtml,
         buildHeaderActionsHtml: buildHeaderActionsHtml,
         wireHeaderActions: wireHeaderActions,
         wireTrayItemListeners: wireTrayItemListeners
     };
 
+    window.renderUploadTray = renderUploadTray;
     window.buildTrayItemHtml = buildTrayItemHtml;
     window.buildHeaderActionsHtml = buildHeaderActionsHtml;
     window.wireHeaderActions = wireHeaderActions;

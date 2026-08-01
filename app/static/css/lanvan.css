@@ -1120,24 +1120,31 @@ header.app-bar,
 .m3-list:not(.grid-mode) .m3-list-item > .row-progress-bar {
     grid-column: 1 / -1;
     grid-row: 1 / -1;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 100%;
+    transform-origin: left center;
+    pointer-events: none;
 }
 
-@media (min-width: 1025px) {
-    .m3-list:not(.grid-mode) .m3-list-item > .file-name-cell {
-        grid-column: 1;
-    }
+.m3-list:not(.grid-mode) .m3-list-item > .file-name-cell {
+    grid-column: 1;
+}
 
-    .m3-list:not(.grid-mode) .m3-list-item > .item-date {
-        grid-column: 2;
-    }
+.m3-list:not(.grid-mode) .m3-list-item > .item-date {
+    grid-column: 2;
+}
 
-    .m3-list:not(.grid-mode) .m3-list-item > .item-size {
-        grid-column: 3;
-    }
+.m3-list:not(.grid-mode) .m3-list-item > .item-size {
+    grid-column: 3;
+}
 
-    .m3-list:not(.grid-mode) .m3-list-item > .row-actions {
-        grid-column: 4;
-    }
+.m3-list:not(.grid-mode) .m3-list-item > .row-actions {
+    grid-column: 4;
 }
 
 .m3-list-item {

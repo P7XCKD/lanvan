@@ -23,7 +23,7 @@
         }
 
         var dateText = dateStr || "--";
-        var subtitleText = isFolder ? "Folder" : (subtitle || "File");
+        var subtitleText = subtitle ? subtitle : (isFolder ? "Folder" : "File");
         if (!isFolder && isUploading && (!subtitle || subtitle === "File" || subtitle.indexOf("%") !== -1)) {
             var statusLabel = uploadStatus === 'PAUSED' ? 'Paused' : (uploadStatus === 'QUEUED' ? 'Queued' : 'Uploading');
             subtitleText = pct + "% • " + statusLabel;
@@ -53,7 +53,7 @@
 
         var displaySize = isFolder ? "-" : sizeStr;
         var progressBarHtml = isUploading
-            ? '<div class="row-progress-bar" style="position:absolute; top:0; bottom:0; left:0; background:rgba(59, 130, 246, 0.08); width:' + pct + '%; transition:width 0.25s ease-out; pointer-events:none; z-index:1;"></div>'
+            ? '<div class="row-progress-bar" style="position:absolute; top:0; bottom:0; left:0; width:100%; height:100%; background:rgba(59, 130, 246, 0.08); transform:scaleX(' + (pct / 100) + '); transform-origin:left center; transition:transform 0.25s ease-out, width 0.25s ease-out; pointer-events:none; z-index:1;"></div>'
             : '';
 
         var actionsHtml = '';

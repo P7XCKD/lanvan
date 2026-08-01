@@ -254,6 +254,11 @@
         </div>
     </div>
 
+    <script src="{{ request.url_for('static', path='js/modules/utils.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/modules/quick-access.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/modules/connect-panel.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/modules/context-menu.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/modules/preview-modal.js') }}?v={{ cache_version }}"></script>
     <script src="{{ request.url_for('static', path='js/upload-helpers.js') }}?v={{ cache_version }}"></script>
     <script src="{{ request.url_for('static', path='js/state-store.js') }}?v={{ cache_version }}"></script>
     <script src="{{ request.url_for('static', path='js/repository.js') }}?v={{ cache_version }}"></script>
@@ -262,11 +267,6 @@
     <script src="{{ request.url_for('static', path='js/modules/upload-engine.js') }}?v={{ cache_version }}"></script>
     <script src="{{ request.url_for('static', path='js/modules/file-list-view.js') }}?v={{ cache_version }}"></script>
     <script src="{{ request.url_for('static', path='js/modules/m3-file-renderer.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/upload-eta.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/breadcrumb-nav.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/upload-tray-renderer.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/dialog-manager.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/selection-manager.js') }}?v={{ cache_version }}"></script>
     <script src="{{ request.url_for('static', path='js/modules/upload-eta.js') }}?v={{ cache_version }}"></script>
     <script src="{{ request.url_for('static', path='js/modules/breadcrumb-nav.js') }}?v={{ cache_version }}"></script>
     <script src="{{ request.url_for('static', path='js/modules/upload-tray-renderer.js') }}?v={{ cache_version }}"></script>

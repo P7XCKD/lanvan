@@ -3805,6 +3805,7 @@ function setupEventListeners() {
       if (typeof window.handleFiles === 'function') {
         window.handleFiles(files);
       }
+      DOM_CACHE.fileInput.value = '';
     }
   });
 

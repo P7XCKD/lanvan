@@ -153,6 +153,9 @@ function formatSpeed(bytesPerSecond) {
  * @returns {string} HTML-escaped text
  */
 function escapeHtml(text) {
+  if (typeof window !== 'undefined' && window.Utils && typeof window.Utils.escapeHtml === 'function') {
+    return window.Utils.escapeHtml(text);
+  }
   if (text == null) return "";
   const str = String(text);
   const map = {

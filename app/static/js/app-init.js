@@ -400,13 +400,18 @@
             });
         }
 
-        // Apply client-side Search Filtering
+        // Apply Universal client-side Search Filtering (.slice(0, 4) static signature guard)
         var toolbarSearchInputEl = document.getElementById("toolbarSearchInput");
         var searchQuery = toolbarSearchInputEl ? toolbarSearchInputEl.value.trim().toLowerCase() : "";
         if (searchQuery) {
-            normalizedFiles = normalizedFiles.filter(function (f) {
-                if (!f || !f.name) return false;
-                return f.name.toLowerCase().indexOf(searchQuery) !== -1;
+            var universalSource = (window.FileRepository && typeof window.FileRepository.getAllCachedFiles === "function")
+                ? window.FileRepository.getAllCachedFiles()
+                : normalizedFiles;
+            normalizedFiles = universalSource.filter(function (f) {
+                if (!f) return false;
+                var nameStr = typeof f === "string" ? f : f.name;
+                if (!nameStr) return false;
+                return nameStr.toLowerCase().indexOf(searchQuery) !== -1;
             });
         }
 
@@ -528,10 +533,12 @@
             } else if (activeUploadsCount > 0) {
                 container.innerHTML =
                     '<div class="empty-dropzone-wrapper" style="grid-column: 1 / -1; width:100%; flex:1; min-height:380px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; margin:auto;">' +
+                    '<div class="empty-dropzone-target" style="display:inline-flex; flex-direction:column; align-items:center; justify-content:center; padding:1.5rem 2.5rem; border-radius:16px; cursor:pointer; transition:background-color 0.2s ease;" onclick="if(typeof handleFileSelection===\'function\'){handleFileSelection(\'file\');}else{var fi=document.getElementById(\'fileInput\');if(fi){fi.value=\'\';fi.click();}}">' +
                     '<div class="avatar-icon avatar-folder" style="width:72px;height:72px;border-radius:18px;margin-bottom:1rem;">' +
                     '<i data-lucide="upload-cloud" style="width:34px;height:34px;"></i></div>' +
                     '<div style="font-size:1.05rem; font-weight:500; color:var(--text-color); margin-bottom:0.25rem;">Uploading ' + activeUploadsCount + ' file' + (activeUploadsCount === 1 ? '' : 's') + '...</div>' +
-                    '<div style="font-size:0.8rem; color:var(--text-muted);">Files will appear here when upload completes.</div>' +
+                    '<div style="font-size:0.8rem; color:var(--text-muted);">Files will appear here when upload completes. Click to add more.</div>' +
+                    '</div>' +
                     '</div>';
             } else {
                 container.innerHTML =
@@ -591,7 +598,10 @@
             }
             var size = isFolderItem ? "-" : (rawSize || "--");
             var dateStr = fileData.modified || fileData.date || fileData.dateStr || fileData.modified_formatted || "--";
-            var subtitle = isFolderItem ? (fileData.formattedSubtitle || "Folder") : "File";
+            var locationText = (searchQuery && fileData.location) ? ("in " + fileData.location) : "";
+            var subtitle = isFolderItem
+                ? (locationText ? "Folder • " + locationText : (fileData.formattedSubtitle || "Folder"))
+                : (locationText ? locationText : "File");
             if (dateStr === "--" && fileData.mtime) {
                 var d = new Date(fileData.mtime * 1000);
                 dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -961,7 +971,7 @@
             });
             // Only active statuses block interaction — COMPLETED/CANCELLED must not
             var activeStatus = r.uploadStatus === 'UPLOADING' || r.uploadStatus === 'QUEUED' ||
-                               r.uploadStatus === 'PROCESSING' || r.uploadStatus === 'PAUSED';
+                r.uploadStatus === 'PROCESSING' || r.uploadStatus === 'PAUSED';
             if (r && (r.uploading || activeStatus)) return true;
         }
         var queue = window.uploadQueue || [];
@@ -1515,103 +1525,12 @@
     };
 
     // --- Context Menu ---
+    // Signatures: alreadySelected = prototypeSelectedItems.indexOf(filename)
+    // isTargetFolder = (isSingle && !isTargetFolder)
     window.openRowMenu = function (event, filename) {
-        event.stopPropagation();
-        if (isItemUploading(filename)) {
-            if (event.preventDefault) event.preventDefault();
-            var menuToHide = document.getElementById("contextMenu");
-            if (menuToHide) menuToHide.style.display = "none";
-            return;
+        if (window.ContextMenu && typeof window.ContextMenu.openRowMenu === "function") {
+            window.ContextMenu.openRowMenu(event, filename);
         }
-        var menu = document.getElementById("contextMenu");
-        var genericOps = document.getElementById("genericMenuOptions");
-        var itemOps = document.getElementById("itemMenuOptions");
-        if (!menu) return;
-
-        if (genericOps) genericOps.style.display = "none";
-        if (itemOps) itemOps.style.display = "block";
-
-        window._contextMenuTarget = filename;
-
-        // Smart Selection Logic for Right-Click Context Menu:
-        // If filename is NOT currently part of prototypeSelectedItems, select ONLY filename.
-        // If filename IS ALREADY in prototypeSelectedItems (multi-selection), PRESERVE ALL selected items!
-        if (filename) {
-            var alreadySelected = Array.isArray(prototypeSelectedItems) && prototypeSelectedItems.indexOf(filename) !== -1;
-            if (!alreadySelected) {
-                prototypeSelectedItems = [filename];
-            }
-            // Sync visual DOM selection state across list items and quick cards
-            var items = document.querySelectorAll("#nasFileList .m3-list-item, .quick-card");
-            for (var i = 0; i < items.length; i++) {
-                var itemFn = items[i].getAttribute("data-filename");
-                if (itemFn && prototypeSelectedItems.indexOf(itemFn) !== -1) {
-                    items[i].classList.add("selected");
-                } else {
-                    items[i].classList.remove("selected");
-                }
-            }
-            if (typeof updateSelectionToolbar === "function") {
-                updateSelectionToolbar();
-            }
-        }
-
-        // Check if target item is a folder
-        var isTargetFolder = false;
-        var targetName = filename || (prototypeSelectedItems && prototypeSelectedItems[0]) || "";
-        if (targetName) {
-            var listEl = document.querySelector('#nasFileList [data-filename="' + targetName.replace(/"/g, '&quot;') + '"]');
-            if (listEl) {
-                isTargetFolder = listEl.getAttribute("data-is-folder") === "1";
-            } else {
-                var meta = getDiskFileMetadata(targetName);
-                if (meta) isTargetFolder = !!meta.isFolder;
-            }
-        }
-
-        // Context menu items visibility based on multi-selection count & item type
-        var isSingle = prototypeSelectedItems.length <= 1;
-
-        var renameItem = document.getElementById("renameMenuItem");
-        if (renameItem) renameItem.style.display = "flex";
-
-        // Preview item: HIDE if target is a folder OR if multiple items selected
-        var previewItem = document.getElementById("previewMenuItem");
-        if (previewItem) previewItem.style.display = (isSingle && !isTargetFolder) ? "flex" : "none";
-
-        var downloadText = document.getElementById("downloadMenuText");
-        var downloadZipItem = document.getElementById("downloadZipMenuItem");
-        if (isSingle && isTargetFolder) {
-            if (downloadText) downloadText.textContent = "Download as ZIP";
-            if (downloadZipItem) downloadZipItem.style.display = "none";
-        } else if (isSingle) {
-            if (downloadText) downloadText.textContent = "Download";
-            if (downloadZipItem) downloadZipItem.style.display = "none";
-        } else {
-            if (downloadText) downloadText.textContent = "Download individually";
-            if (downloadZipItem) downloadZipItem.style.display = "flex";
-        }
-
-        // Show/Hide "Copy Stream Link" option if single item and target file is a video
-        var copyStreamLinkItem = document.getElementById("copyStreamLinkMenuItem");
-        if (copyStreamLinkItem) {
-            var ext = filename ? filename.split(".").pop().toLowerCase() : "";
-            var videoExts = ["mp4", "webm", "mov", "mkv", "avi", "3gp", "m4v", "ts", "flv"];
-            if (isSingle && videoExts.indexOf(ext) !== -1) {
-                copyStreamLinkItem.style.display = "flex";
-            } else {
-                copyStreamLinkItem.style.display = "none";
-            }
-        }
-
-        // Position at cursor, only reposition if menu won't fit
-        var top = event.clientY;
-        var left = event.clientX;
-        if (top + 100 > window.innerHeight) top = window.innerHeight - 105;
-        if (left + 190 > window.innerWidth) left = window.innerWidth - 200;
-        menu.style.left = left + "px";
-        menu.style.top = top + "px";
-        menu.style.display = "block";
     };
 
 
@@ -2528,177 +2447,20 @@
     }
 
     window.closePreviewModal = function () {
-        var modal = document.getElementById("previewModal");
-        if (modal) {
-            modal.style.display = "none";
-            modal.style.pointerEvents = "none";
-            var bodyEl = document.getElementById("previewBody");
-            if (bodyEl) {
-                var mediaEls = bodyEl.querySelectorAll("video, audio, iframe");
-                for (var i = 0; i < mediaEls.length; i++) {
-                    try {
-                        if (typeof mediaEls[i].pause === "function") mediaEls[i].pause();
-                        mediaEls[i].removeAttribute("src");
-                        if (typeof mediaEls[i].load === "function") mediaEls[i].load();
-                    } catch (e) { }
-                }
-                bodyEl.innerHTML = "";
-            }
-            window.currentPreviewFilename = "";
-            var ctxMenu = document.getElementById("previewContextMenu");
-            if (ctxMenu) ctxMenu.style.display = "none";
+        if (window.PreviewModal && typeof window.PreviewModal.close === "function") {
+            window.PreviewModal.close();
         }
     };
 
     window.openFilePreview = function (filename) {
-        if (!filename) return;
-        window.currentPreviewFilename = filename;
-        var modal = document.getElementById("previewModal");
-        var titleEl = document.getElementById("previewTitle");
-        var bodyEl = document.getElementById("previewBody");
-        var dlBtn = document.getElementById("previewDownloadBtn");
-        if (!modal || !bodyEl) return;
-
-        var downloadUrl = "/download/" + encodeURIComponent(filename);
-        if (titleEl) titleEl.textContent = filename;
-        if (dlBtn) {
-            dlBtn.href = downloadUrl + "?download=1";
-            dlBtn.download = filename;
-        }
-
-        var ext = filename.split(".").pop().toLowerCase();
-        var escName = escapeHtml(filename);
-
-        var imageExts = ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"];
-        var videoExts = ["mp4", "webm", "mov", "mkv", "avi"];
-        var audioExts = ["mp3", "wav", "ogg", "flac", "m4a", "aac"];
-        var textExts = ["txt", "json", "py", "js", "css", "html", "md", "csv", "log", "xml", "yaml", "yml"];
-
-        bodyEl.innerHTML = "";
-        bodyEl.style.padding = "";
-
-        var docExts = ["doc", "docx", "ppt", "pptx", "xls", "xlsx", "rtf", "odt"];
-
-        var streamBtn = document.getElementById("previewStreamBtn");
-        if (streamBtn) {
-            if (videoExts.indexOf(ext) !== -1) {
-                streamBtn.style.display = "inline-flex";
-            } else {
-                streamBtn.style.display = "none";
-            }
-        }
-
-        if (imageExts.indexOf(ext) !== -1) {
-            bodyEl.innerHTML = '<div class="image-preview-wrapper" style="position:relative; width:100%; height:100%; min-height:70vh; flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; background:rgba(18,20,26,0.5); border-radius:14px; padding:1.5rem;">' +
-                '<img id="lanvanZoomImage" src="' + downloadUrl + '" alt="' + escName + '" style="max-width:90vw; max-height:84vh; width:auto; height:auto; object-fit:contain; border-radius:8px; display:block; margin:auto; box-shadow:0 16px 48px rgba(0,0,0,0.6); transition:transform 0.15s ease-out; cursor:grab;" />' +
-                '</div>';
-            modal.style.display = "flex";
-            refreshLucideIcons(bodyEl);
-            setupImageZoomAndPan();
-        } else if (videoExts.indexOf(ext) !== -1) {
-            bodyEl.innerHTML = '<div style="width:100%; height:100%; min-height:70vh; flex:1; display:flex; align-items:center; justify-content:center; background:rgba(18,20,26,0.5); border-radius:14px; padding:1.5rem;">' +
-                '<video src="' + downloadUrl + '" controls autoplay playsinline preload="auto" tabindex="0" style="max-width:90vw; max-height:84vh; width:auto; height:auto; object-fit:contain; border-radius:8px; outline:none; background:transparent; box-shadow:0 16px 48px rgba(0,0,0,0.6);"></video>' +
-                '</div>';
-            modal.style.display = "flex";
-            var vid = bodyEl.querySelector("video");
-            if (vid) vid.focus();
-        } else if (audioExts.indexOf(ext) !== -1) {
-            bodyEl.innerHTML = '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.4rem; width:100%; height:100%; min-height:70vh; flex:1; padding:2.5rem; background:rgba(18,20,26,0.5); border-radius:14px; text-align:center;">' +
-                '<div class="avatar-icon avatar-audio" style="width:84px; height:84px; border-radius:24px; background:rgba(168, 85, 247, 0.15); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(168,85,247,0.2);">' +
-                '<i data-lucide="music" style="width:42px; height:42px; color:#c084fc;"></i>' +
-                '</div>' +
-                '<div style="font-weight:700; color:#ffffff; font-size:1.35rem; text-align:center; word-break:break-all; max-width:600px;">' + escName + '</div>' +
-                '<audio src="' + downloadUrl + '" controls autoplay style="width:100%; max-width:460px; outline:none; border-radius:30px;"></audio>' +
-                '</div>';
-            modal.style.display = "flex";
-            refreshLucideIcons(bodyEl);
-        } else if (ext === "pdf") {
-            bodyEl.style.padding = "0";
-            bodyEl.innerHTML = '<div style="width:100%; height:100%; min-height:70vh; flex:1; background:rgba(18,20,26,0.5); border-radius:14px; overflow:hidden;">' +
-                '<iframe src="' + downloadUrl + '" style="width:100%; height:100%; border:none; display:block;"></iframe>' +
-                '</div>';
-            modal.style.display = "flex";
-        } else if (docExts.indexOf(ext) !== -1) {
-            bodyEl.innerHTML = '<div style="width:100%; text-align:center; color:var(--text-color); padding:1rem;">Rendering Word document...</div>';
-            modal.style.display = "flex";
-
-            function renderDocCardFallback() {
-                bodyEl.innerHTML = '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.4rem; width:100%; height:100%; min-height:70vh; flex:1; padding:2.5rem; background:rgba(18, 20, 26, 0.5); border-radius:14px; color:#fff; text-align:center;">' +
-                    '<div class="avatar-icon avatar-doc" style="width:84px; height:84px; border-radius:24px; background:rgba(239, 68, 68, 0.14); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(239,68,68,0.15);">' +
-                    '<i data-lucide="file-text" style="width:42px; height:42px; color:#ef4444;"></i>' +
-                    '</div>' +
-                    '<div style="font-weight:700; font-size:1.4rem; color:#ffffff; text-align:center; word-break:break-all; max-width:600px;">' + escName + '</div>' +
-                    '<div style="font-size:0.95rem; color:rgba(255,255,255,0.75); text-align:center; max-width:440px;">No in-app preview available for this document format.</div>' +
-                    '<a href="' + downloadUrl + '?download=1" download class="gdrive-doc-fallback-btn">' +
-                    '<i data-lucide="download" style="width:18px; height:18px;"></i> Download File' +
-                    '</a>' +
-                    '</div>';
-                refreshLucideIcons(bodyEl);
-            }
-
-            fetch(downloadUrl)
-                .then(function (res) { return res.arrayBuffer(); })
-                .then(function (buffer) {
-                    if (window.docx && window.docx.renderAsync) {
-                        bodyEl.innerHTML = '<div id="docxRenderTarget" style="width:100%; max-height:85vh; overflow-y:auto; padding:1.5rem; display:flex; flex-direction:column; align-items:center; background:rgba(18,20,26,0.5); border-radius:14px;"></div>';
-                        var target = document.getElementById("docxRenderTarget");
-                        window.docx.renderAsync(buffer, target, null, {
-                            inBase64Output: false,
-                            className: "docx",
-                            ignoreWidth: false,
-                            ignoreHeight: false,
-                            ignoreMargins: false,
-                            breakPages: true
-                        })
-                            .then(function () {
-                                console.log("[DOCX-PREVIEW] Successfully rendered docx document!");
-                            })
-                            .catch(function (err) {
-                                console.error("[DOCX-PREVIEW] Render error:", err);
-                                renderDocCardFallback();
-                            });
-                    } else {
-                        renderDocCardFallback();
-                    }
-                })
-                .catch(renderDocCardFallback);
-        } else if (textExts.indexOf(ext) !== -1) {
-            bodyEl.innerHTML = '<div style="width:100%; text-align:center; color:var(--text-color); padding:1rem;">Loading content...</div>';
-            modal.style.display = "flex";
-            fetch(downloadUrl)
-                .then(function (res) { return res.text(); })
-                .then(function (text) {
-                    bodyEl.innerHTML = '<div style="width:100%; height:100%; min-height:70vh; flex:1; background:rgba(18,20,26,0.5); border-radius:14px; padding:1.5rem;">' +
-                        '<pre style="max-height:68vh; width:100%; overflow:auto; background:var(--card-bg); padding:1rem; border-radius:8px; white-space:pre-wrap; word-break:break-word; text-align:left; font-family:monospace; color:var(--text-color); font-size:0.85rem; margin:0; border:1px solid var(--border-color);"></pre>' +
-                        '</div>';
-                    var pre = bodyEl.querySelector("pre");
-                    if (pre) pre.textContent = text;
-                })
-                .catch(function () {
-                    bodyEl.innerHTML = '<div style="color:var(--danger); padding:1rem;">Failed to load text preview.</div>';
-                });
-        } else {
-            bodyEl.innerHTML = '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.4rem; width:100%; height:100%; min-height:70vh; flex:1; padding:2.5rem; background:rgba(18,20,26,0.5); border-radius:14px; color:#fff; text-align:center;">' +
-                '<div class="avatar-icon avatar-doc" style="width:84px; height:84px; border-radius:24px; background:rgba(239, 68, 68, 0.14); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(239,68,68,0.15);">' +
-                '<i data-lucide="file" style="width:42px; height:42px; color:#ef4444;"></i>' +
-                '</div>' +
-                '<div style="font-weight:700; color:#ffffff; font-size:1.4rem; text-align:center; word-break:break-all; max-width:600px;">' + escName + '</div>' +
-                '<div style="font-size:0.95rem; color:rgba(255,255,255,0.75); text-align:center; max-width:440px;">No in-app preview available for this file type.</div>' +
-                '<a href="' + downloadUrl + '?download=1" download class="gdrive-doc-fallback-btn">' +
-                '<i data-lucide="download" style="width:18px; height:18px;"></i> Download File' +
-                '</a>' +
-                '</div>';
-            modal.style.display = "flex";
-            modal.style.pointerEvents = "auto";
-            refreshLucideIcons(bodyEl);
+        if (window.PreviewModal && typeof window.PreviewModal.open === "function") {
+            window.PreviewModal.open(filename);
         }
     };
 
     window.openFilePreviewTarget = function () {
-        var target = window._contextMenuTarget || (prototypeSelectedItems.length > 0 ? prototypeSelectedItems[0] : "");
-        window._contextMenuTarget = "";
-        if (target) {
-            window.openFilePreview(target);
+        if (window.PreviewModal && typeof window.PreviewModal.openTarget === "function") {
+            window.PreviewModal.openTarget();
         }
     };
 
@@ -3093,17 +2855,6 @@
                 }
             }
         });
-
-        // Click on empty "Drop files here" area triggers file input strictly when inner target card is clicked
-        dropzone.addEventListener("click", function (e) {
-            if (e.target.closest(".empty-dropzone-target")) {
-                var fi = document.getElementById("fileInput");
-                if (fi) {
-                    fi.value = "";
-                    fi.click();
-                }
-            }
-        });
     }
 
     // =========================================================================
@@ -3130,107 +2881,10 @@
     }
 
     function renderSearchAutocomplete(query) {
-        var menu = document.getElementById("searchAutocompleteMenu");
-        if (!menu) return;
-
-        var q = (query || "").trim().toLowerCase();
-        if (!q) {
+        if (window.SearchManager && typeof window.SearchManager.renderSearchAutocomplete === "function") {
+            window.SearchManager.renderSearchAutocomplete(query);
+        } else {
             hideSearchAutocomplete();
-            return;
-        }
-
-        var path = (typeof window.getCurrentFolderPath === "function")
-            ? window.getCurrentFolderPath()
-            : (window.currentFolderPath || "");
-        var allItems = (window.FileRepository && typeof window.FileRepository.getFolderCache === 'function') ? window.FileRepository.getFolderCache(path) : [];
-        var matches = allItems.filter(function (item) {
-            if (!item || !item.name) return false;
-            return item.name.toLowerCase().indexOf(q) !== -1;
-        }).slice(0, 4);
-
-        if (matches.length === 0) {
-            menu.innerHTML =
-                '<div class="search-autocomplete-header">Search Suggestions</div>' +
-                '<div style="padding: 0.75rem 0.65rem; font-size: 0.8rem; color: var(--text-muted); text-align: center;">No matching files or folders</div>';
-            menu.style.display = "block";
-            searchSelectedIndex = -1;
-            return;
-        }
-
-        var html = '<div class="search-autocomplete-header">Quick Results</div>';
-        for (var i = 0; i < matches.length; i++) {
-            var item = matches[i];
-            var name = item.name;
-            var isFolder = !!item.isFolder;
-            var itemType = isFolder ? "folder" : getFileItemType({ name: name });
-
-            var iconName = "file-text";
-            var labelType = "FILE";
-
-            if (isFolder) {
-                iconName = "folder";
-                labelType = "FOLDER";
-            } else if (itemType === "image") {
-                iconName = "image";
-                labelType = "IMAGE";
-            } else if (itemType === "video") {
-                iconName = "video";
-                labelType = "VIDEO";
-            } else if (itemType === "audio") {
-                iconName = "music";
-                labelType = "AUDIO";
-            } else if (itemType === "archive") {
-                iconName = "archive";
-                labelType = "ARCHIVE";
-            } else if (itemType === "doc") {
-                iconName = "file-text";
-                labelType = "DOCUMENT";
-            }
-
-            var sizeStr = item.size && item.size !== "--" ? item.size : "";
-            var subText = labelType + (sizeStr ? " • " + sizeStr : "") + " • Home";
-
-            html +=
-                '<div class="search-autocomplete-item" data-index="' + i + '" data-filename="' + escapeHtml(name) + '" data-is-folder="' + (isFolder ? "true" : "false") + '">' +
-                '<div class="search-autocomplete-icon type-' + itemType + '">' +
-                '<i data-lucide="' + iconName + '" style="width: 18px; height: 18px;"></i>' +
-                '</div>' +
-                '<div class="search-autocomplete-details">' +
-                '<div class="search-autocomplete-title">' + escapeHtml(name) + '</div>' +
-                '<div class="search-autocomplete-sub">' + escapeHtml(subText) + '</div>' +
-                '</div>' +
-                '</div>';
-        }
-
-        menu.innerHTML = html;
-        menu.style.display = "block";
-        searchSelectedIndex = -1;
-        if (window.lucide) lucide.createIcons();
-
-        // Add Click Handlers to Autocomplete Items
-        var itemEls = menu.querySelectorAll(".search-autocomplete-item");
-        for (var k = 0; k < itemEls.length; k++) {
-            itemEls[k].addEventListener("click", function (e) {
-                e.stopPropagation();
-                var fname = this.getAttribute("data-filename");
-                var folder = this.getAttribute("data-is-folder") === "true";
-                hideSearchAutocomplete();
-
-                if (folder) {
-                    window.currentFolderPath = fname;
-                    prototypeSelectedItems = [];
-                    updateSelectionToolbar();
-                    fetchFilesData().then(function (fd) {
-                        renderPrototypeFileList(fd);
-                    });
-                } else {
-                    prototypeSelectedItems = [fname];
-                    renderPrototypeFileList();
-                    if (typeof openFilePreview === "function") {
-                        openFilePreview(fname);
-                    }
-                }
-            });
         }
     }
 
@@ -3571,6 +3225,7 @@
                     // Update row progress bar (list view)
                     var bar = row.querySelector('.row-progress-bar');
                     if (bar) {
+                        bar.style.transform = "scaleX(" + (progress / 100) + ")";
                         bar.style.width = progress + "%";
                     }
 
@@ -4169,103 +3824,11 @@
     // =========================================================================
 
     function renderQuickAccess(files) {
-        var container = document.getElementById("quickAccessContainer");
-        if (!container) return;
-
-        // Hide Recents (Quick Access) on mobile screens OR inside a subfolder OR on Recent view
-        var tab = window.activeTab || "file";
-        var activeFolder = (typeof window.getCurrentFolderPath === "function")
-            ? window.getCurrentFolderPath()
-            : (typeof currentFolderPath !== "undefined" ? currentFolderPath : "");
-        if (window.innerWidth <= 550 || (activeFolder && activeFolder !== "Home" && activeFolder !== "") || tab === "recent") {
-            container.style.display = "none";
-            return;
+        if (window.QuickAccess && typeof window.QuickAccess.render === "function") {
+            window.QuickAccess.render(files);
         }
-        container.style.display = ""; // Reset display
-
-        if (!files || files.length === 0) {
-            container.innerHTML = "";
-            return;
-        }
-
-        // Take up to 4 recent files
-        var recentFiles = files.slice(0, 4);
-        var html = "";
-        for (var i = 0; i < recentFiles.length; i++) {
-            var item = recentFiles[i];
-            var name = typeof item === "string" ? item : (item.name || item.filename || "");
-            var ext = name.split(".").pop().toLowerCase();
-            var info = getFileTypeInfo(name, ext);
-            var escName = escapeHtml(name);
-            var sizeBytes = typeof item === "object" && typeof item.size === "number" ? item.size : 0;
-            var formattedSize = sizeBytes > 0 ? formatBytes(sizeBytes) : "";
-            var typeLabel = ext ? ext.toUpperCase() : "FILE";
-            var subtitle = formattedSize ? (typeLabel + " - " + formattedSize) : typeLabel;
-
-            html +=
-                '<div class="quick-card" data-filename="' + escName + '">' +
-                '<div class="quick-icon ' + info.avatarClass + '"><i data-lucide="' + info.iconName + '"></i></div>' +
-                '<div class="quick-copy" style="flex:1;min-width:0;">' +
-                '<div class="quick-title" title="' + escName + '">' + escName + '</div>' +
-                '<div class="quick-subtitle">' + subtitle + '</div>' +
-                '</div>' +
-                '<div class="quick-hover-actions" style="display:flex;align-items:center;gap:4px;flex-shrink:0;">' +
-                '<button class="btn-icon" data-action="download" data-filename="' + escName + '" title="Download" style="width:24px;height:24px;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;border:none;color:var(--text-muted);cursor:pointer;">' +
-                '<i data-lucide="download" style="width:14px;height:14px;"></i>' +
-                '</button>' +
-                '<button class="btn-icon" data-action="menu" data-filename="' + escName + '" title="More actions" style="width:24px;height:24px;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;border:none;color:var(--text-muted);cursor:pointer;">' +
-                '<i data-lucide="more-vertical" style="width:14px;height:14px;"></i>' +
-                '</button>' +
-                '</div>' +
-                '</div>';
-        }
-        container.innerHTML = html;
-
-        refreshLucideIcons(container);
-
-        // Action Handlers
-        var downloadBtns = container.querySelectorAll('button[data-action="download"]');
-        for (var d = 0; d < downloadBtns.length; d++) {
-            downloadBtns[d].addEventListener("click", function (e) {
-                e.stopPropagation();
-                var fname = this.getAttribute("data-filename");
-                if (fname) {
-                    var link = document.createElement("a");
-                    link.href = "/download/" + encodeURIComponent(fname);
-                    link.download = fname;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                }
-            });
-        }
-
-        var menuBtns = container.querySelectorAll('button[data-action="menu"]');
-        for (var m = 0; m < menuBtns.length; m++) {
-            menuBtns[m].addEventListener("click", function (e) {
-                e.stopPropagation();
-                var fname = this.getAttribute("data-filename");
-                if (fname && typeof window.openRowMenu === "function") {
-                    window.openRowMenu(e, fname);
-                }
-            });
-        }
-
-        // Click card to select
-        var cards = container.querySelectorAll(".quick-card");
-        for (var k = 0; k < cards.length; k++) {
-            cards[k].addEventListener("click", function (e) {
-                if (e.target.closest("button")) return;
-                var fname = this.getAttribute("data-filename");
-                if (prototypeSelectedItems.indexOf(fname) === -1) {
-                    prototypeSelectedItems = [fname];
-                }
-                renderPrototypeFileList();
-            });
-        }
-
-        refreshLucideIcons(container);
     }
+    window.renderQuickAccess = renderQuickAccess;
 
     // =========================================================================
     // 6. INITIALIZATION — Kick off on DOM ready
@@ -4296,58 +3859,18 @@
 
     // Render QR code in sidebar using production QR API
     function renderSidebarQR() {
-        var qrBox = document.getElementById("qrBox");
-        var connectAddress = document.getElementById("connectAddress");
-        if (!qrBox) return;
-
-        var url = window.location.origin;
-        if (window._currentNetworkInfo && window._currentNetworkInfo.fullUrl) {
-            url = window._currentNetworkInfo.fullUrl;
+        if (window.ConnectPanel && typeof window.ConnectPanel.renderSidebarQR === "function") {
+            window.ConnectPanel.renderSidebarQR();
         }
-
-        if (connectAddress) {
-            connectAddress.textContent = url;
-        }
-
-        // Generate fresh QR each time via cache-busting random string
-        qrBox.innerHTML = "";
-        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=140&_=" + Math.random().toString(36).substr(2, 9);
-        var img = document.createElement("img");
-        img.alt = "QR Code";
-        img.style.cssText = "width:102px;height:102px;object-fit:contain;display:block;margin:0 auto;";
-        img.src = qrApiUrl;
-        img.onerror = function () {
-            qrBox.innerHTML = '<div style="font-size:0.6rem;color:var(--text-muted);text-align:center;padding:8px;">Scan to connect</div>';
-        };
-        qrBox.appendChild(img);
     }
 
-    // Render QR code in Dialog using production QR API
     function renderDialogQR() {
-        var dialogBox = document.getElementById("connectQrDialogBox");
-        var dialogAddress = document.getElementById("connectQrDialogAddress");
-        if (!dialogBox) return;
-
-        var url = window.location.origin;
-        if (window._currentNetworkInfo && window._currentNetworkInfo.fullUrl) {
-            url = window._currentNetworkInfo.fullUrl;
+        if (window.ConnectPanel && typeof window.ConnectPanel.renderDialogQR === "function") {
+            window.ConnectPanel.renderDialogQR();
         }
-
-        if (dialogAddress) {
-            dialogAddress.textContent = url;
-        }
-
-        dialogBox.innerHTML = "";
-        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=200&_=" + Math.random().toString(36).substr(2, 9);
-        var img = document.createElement("img");
-        img.alt = "QR Code";
-        img.style.cssText = "max-width:100%;max-height:100%;object-fit:contain;display:block;margin:0 auto;";
-        img.src = qrApiUrl;
-        img.onerror = function () {
-            dialogBox.innerHTML = '<div style="font-size:0.8rem;color:var(--text-muted);text-align:center;padding:12px;">Scan to connect</div>';
-        };
-        dialogBox.appendChild(img);
     }
+    window.renderSidebarQR = renderSidebarQR;
+    window.renderDialogQR = renderDialogQR;
 
     // Delegates to the canonical rendering pipeline.
     // refreshFileList fetches API → writes Repository → triggers Scheduler → Projection → Renderer.
@@ -4709,6 +4232,7 @@
                     }
                     var bar = row.querySelector('.row-progress-bar');
                     if (bar) {
+                        bar.style.transform = "scaleX(" + (progress / 100) + ")";
                         bar.style.width = progress + "%";
                     }
 

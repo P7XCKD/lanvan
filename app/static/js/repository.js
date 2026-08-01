@@ -50,6 +50,33 @@
         return Array.isArray(cached) ? cached.slice() : [];
     };
 
+    FileRepository.prototype.getAllCachedFiles = function () {
+        var all = [];
+        var keys = Object.keys(this.cache);
+        var seenMap = {};
+        for (var i = 0; i < keys.length; i++) {
+            var folderKey = keys[i];
+            var folderFiles = this.cache[folderKey];
+            if (Array.isArray(folderFiles)) {
+                for (var j = 0; j < folderFiles.length; j++) {
+                    var item = folderFiles[j];
+                    if (!item) continue;
+                    var itemObj = (typeof item === 'string') ? { name: item } : Object.assign({}, item);
+                    var nameStr = itemObj.name;
+                    if (!nameStr) continue;
+                    itemObj.location = folderKey ? folderKey : "Home";
+                    var fullPath = itemObj.path ? itemObj.path : (folderKey ? folderKey + "/" + nameStr : nameStr);
+                    var key = fullPath + "::" + (itemObj.isFolder ? "folder" : "file");
+                    if (!seenMap[key]) {
+                        seenMap[key] = true;
+                        all.push(itemObj);
+                    }
+                }
+            }
+        }
+        return all;
+    };
+
     FileRepository.prototype.setFolderCache = function (folderPath, files) {
         var target = cleanPath(folderPath);
         var oldFiles = this.cache[target] || [];
