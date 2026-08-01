@@ -704,7 +704,22 @@
         }
 
         refreshLucideIcons(container);
+        syncFileTableHeadWidth();
     }
+
+    function syncFileTableHeadWidth() {
+        var head = document.getElementById("fileTableHead");
+        var list = document.getElementById("nasFileList");
+        if (!head || !list) return;
+
+        var mode = document.documentElement.getAttribute("data-view-mode") || (list.classList.contains("grid-mode") ? "grid" : "list");
+        if (mode === "grid") return;
+
+        var scrollbarWidth = list.offsetWidth - list.clientWidth;
+        head.style.paddingRight = (12 + Math.max(0, scrollbarWidth)) + "px";
+    }
+    window.syncFileTableHeadWidth = syncFileTableHeadWidth;
+    window.addEventListener("resize", syncFileTableHeadWidth);
 
     /**
      * Determine file type icon and avatar class.
@@ -2096,6 +2111,7 @@
         } else if (typeof triggerInstantUIUpdate === "function") {
             triggerInstantUIUpdate();
         }
+        syncFileTableHeadWidth();
     };
 
     // --- Clipboard Prototype Handlers ---

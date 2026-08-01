@@ -1085,6 +1085,7 @@ header.app-bar,
     color: var(--text-muted);
     font-size: 0.72rem;
     font-weight: 750;
+    scrollbar-gutter: stable;
 }
 
 .m3-list {
@@ -1096,7 +1097,7 @@ header.app-bar,
     max-height: none;
     overflow-y: auto !important;
     width: 100%;
-    padding-right: 4px;
+    scrollbar-gutter: stable;
     scrollbar-width: auto;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
@@ -1114,6 +1115,29 @@ header.app-bar,
     gap: 0.75rem;
     padding: 0.55rem 0.75rem;
     align-items: center;
+}
+
+.m3-list:not(.grid-mode) .m3-list-item > .row-progress-bar {
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+}
+
+@media (min-width: 1025px) {
+    .m3-list:not(.grid-mode) .m3-list-item > .file-name-cell {
+        grid-column: 1;
+    }
+
+    .m3-list:not(.grid-mode) .m3-list-item > .item-date {
+        grid-column: 2;
+    }
+
+    .m3-list:not(.grid-mode) .m3-list-item > .item-size {
+        grid-column: 3;
+    }
+
+    .m3-list:not(.grid-mode) .m3-list-item > .row-actions {
+        grid-column: 4;
+    }
 }
 
 .m3-list-item {
@@ -2506,45 +2530,61 @@ html[data-view-mode="list"] #gridViewBtn {
 
     body .bottom-nav,
     .m3-fab {
-        display: none !important;
+        display: none;
     }
 }
-
-/* 700px-1024px: Hide date column, keep size column */
-@media (max-width: 1024px) and (min-width: 700px) {
+/* 750px - 1024px: Hide date column, show Name + Size + Actions */
+@media (max-width: 1024px) and (min-width: 750px) {
 
     body .file-table-head,
     .m3-list:not(.grid-mode) .m3-list-item {
-        grid-template-columns: minmax(0, 1fr) 110px 40px !important;
+        grid-template-columns: minmax(0, 1fr) 110px 40px;
     }
 
     body .file-table-head>span:nth-child(2),
     body .item-date {
-        display: none !important;
+        display: none;
     }
 
     body .file-table-head>span:nth-child(3),
     body .item-size {
-        display: inline-block !important;
+        display: block;
+    }
+
+    .m3-list:not(.grid-mode) .m3-list-item > .file-name-cell {
+        grid-column: 1;
+    }
+
+    .m3-list:not(.grid-mode) .m3-list-item > .item-size {
+        grid-column: 2;
+    }
+
+    .m3-list:not(.grid-mode) .m3-list-item > .row-actions {
+        grid-column: 3;
     }
 }
 
-/* 550px-699px: Hide date column, keep name + size + actions */
-@media (max-width: 699px) and (min-width: 550px) {
+/* < 750px: Hide date and size columns, show Name + Actions only */
+@media (max-width: 749px) {
 
     body .file-table-head,
     .m3-list:not(.grid-mode) .m3-list-item {
-        grid-template-columns: minmax(0, 1fr) 110px 40px !important;
+        grid-template-columns: minmax(0, 1fr) 40px;
     }
 
     body .file-table-head>span:nth-child(2),
-    body .item-date {
-        display: none !important;
+    body .file-table-head>span:nth-child(3),
+    body .item-date,
+    body .item-size {
+        display: none;
     }
 
-    body .file-table-head>span:nth-child(3),
-    body .item-size {
-        display: inline-block !important;
+    .m3-list:not(.grid-mode) .m3-list-item > .file-name-cell {
+        grid-column: 1;
+    }
+
+    .m3-list:not(.grid-mode) .m3-list-item > .row-actions {
+        grid-column: 2;
     }
 }
 
@@ -2552,11 +2592,6 @@ html[data-view-mode="list"] #gridViewBtn {
 @media (max-width: 1150px) {
     .row-actions .hover-btn {
         display: none !important;
-    }
-
-    body .file-table-head,
-    .m3-list:not(.grid-mode) .m3-list-item {
-        grid-template-columns: minmax(0, 1fr) 140px 110px 40px;
     }
 }
 

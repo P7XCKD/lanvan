@@ -241,8 +241,7 @@
             // Add unified summary if helpers are available
             if (folderSummary && formattedFolder) {
                 baseOverlay.uploadSummary = folderSummary;
-                var folderSub = folderProgress + "% • " + (sFolder.hasUploading ? 'Uploading' : (folderProgress >= 100 ? 'Completed' : 'Queued'));
-                baseOverlay.formattedSubtitle = folderSub;
+                baseOverlay.formattedSubtitle = "Folder";
                 baseOverlay.formattedStatus = formattedFolder.status;
             }
 

@@ -23,8 +23,8 @@
         }
 
         var dateText = dateStr || "--";
-        var subtitleText = subtitle || (isFolder ? "Folder" : "File");
-        if (isUploading && (!subtitle || subtitle === "Folder" || subtitle === "File" || subtitle.indexOf("%") !== -1)) {
+        var subtitleText = isFolder ? "Folder" : (subtitle || "File");
+        if (!isFolder && isUploading && (!subtitle || subtitle === "File" || subtitle.indexOf("%") !== -1)) {
             var statusLabel = uploadStatus === 'PAUSED' ? 'Paused' : (uploadStatus === 'QUEUED' ? 'Queued' : 'Uploading');
             subtitleText = pct + "% • " + statusLabel;
 
