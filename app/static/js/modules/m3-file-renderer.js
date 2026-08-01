@@ -121,18 +121,34 @@
         if (isFolder) {
             previewHtml = '';
         } else if (itemInfo.avatarClass === 'avatar-image') {
-            var downloadUrl = "/download/" + encodeURIComponent(name);
-            previewHtml = '<div class="grid-card-preview" style="padding:0;margin:0;background:var(--card-bg);width:100%;height:100%;">' +
-                '<img src="' + downloadUrl + '" alt="' + escName + '" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;" onerror="this.style.display=\'none\';" />' +
-                '</div>';
+            if (isUploading) {
+                previewHtml = '<div class="grid-card-preview" style="background:var(--card-bg);">' +
+                    '<div class="doc-preview-sheet" style="display:flex;align-items:center;justify-content:center;">' +
+                    '<i data-lucide="image" style="width:36px;height:36px;color:var(--primary,#3b82f6);opacity:0.4;"></i>' +
+                    '</div>' +
+                    '</div>';
+            } else {
+                var downloadUrl = "/download/" + encodeURIComponent(name);
+                previewHtml = '<div class="grid-card-preview" style="padding:0;margin:0;background:var(--card-bg);width:100%;height:100%;">' +
+                    '<img src="' + downloadUrl + '" alt="' + escName + '" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;" onerror="this.style.display=\'none\';" />' +
+                    '</div>';
+            }
         } else if (itemInfo.avatarClass === 'avatar-video') {
-            var downloadUrl = "/download/" + encodeURIComponent(name);
-            previewHtml = '<div class="grid-card-preview video-preview-box" style="padding:0;margin:0;background:#0f172a;width:100%;height:100%;">' +
-                '<video src="' + downloadUrl + '#t=0.5" preload="metadata" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;" muted></video>' +
-                '<div class="video-play-badge" style="position:absolute;z-index:3;">' +
-                '<i data-lucide="play" style="width:20px;height:20px;fill:currentColor;"></i>' +
-                '</div>' +
-                '</div>';
+            if (isUploading) {
+                previewHtml = '<div class="grid-card-preview" style="background:var(--card-bg);">' +
+                    '<div class="doc-preview-sheet" style="display:flex;align-items:center;justify-content:center;">' +
+                    '<i data-lucide="video" style="width:36px;height:36px;color:var(--primary,#3b82f6);opacity:0.4;"></i>' +
+                    '</div>' +
+                    '</div>';
+            } else {
+                var downloadUrl = "/download/" + encodeURIComponent(name);
+                previewHtml = '<div class="grid-card-preview video-preview-box" style="padding:0;margin:0;background:#0f172a;width:100%;height:100%;">' +
+                    '<video src="' + downloadUrl + '#t=0.5" preload="metadata" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;" muted></video>' +
+                    '<div class="video-play-badge" style="position:absolute;z-index:3;">' +
+                    '<i data-lucide="play" style="width:20px;height:20px;fill:currentColor;"></i>' +
+                    '</div>' +
+                    '</div>';
+            }
         } else {
             previewHtml = '<div class="grid-card-preview" style="background:var(--card-bg);">' +
                 '<div class="doc-preview-sheet">' +

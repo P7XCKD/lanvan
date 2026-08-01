@@ -648,19 +648,19 @@
         var stackTrace = (new Error()).stack || "";
         var callerLine = stackTrace.split("\n")[2] || "";
         console.log("[DOM-WRITE-TRACE] 💥 DOM WRITE TO #" + (container.id || "nasFileList") + "\n" +
-                    "   Timestamp: " + performance.now().toFixed(1) + "ms\n" +
-                    "   File: app-init.js:645\n" +
-                    "   Function: renderPrototypeFileList\n" +
-                    "   Caller: " + callerLine.trim() + "\n" +
-                    "   Target Element: #" + (container.id || "nasFileList") + "\n" +
-                    "   Previous Child Count: " + prevChildCount + "\n" +
-                    "   HTML Length: " + html.length + "\n" +
-                    "   Reason: " + (renderReason || "prototype_render") + "\n" +
-                    "   Call Stack:\n" + stackTrace);
+            "   Timestamp: " + performance.now().toFixed(1) + "ms\n" +
+            "   File: app-init.js:645\n" +
+            "   Function: renderPrototypeFileList\n" +
+            "   Caller: " + callerLine.trim() + "\n" +
+            "   Target Element: #" + (container.id || "nasFileList") + "\n" +
+            "   Previous Child Count: " + prevChildCount + "\n" +
+            "   HTML Length: " + html.length + "\n" +
+            "   Reason: " + (renderReason || "prototype_render") + "\n" +
+            "   Call Stack:\n" + stackTrace);
 
-        var oldDomItems = Array.prototype.slice.call(container.querySelectorAll(".m3-list-item")).map(function(el) { return el.getAttribute("data-filename") || el.textContent.trim(); });
+        var oldDomItems = Array.prototype.slice.call(container.querySelectorAll(".m3-list-item")).map(function (el) { return el.getAttribute("data-filename") || el.textContent.trim(); });
         container.innerHTML = html;
-        var newDomItems = Array.prototype.slice.call(container.querySelectorAll(".m3-list-item")).map(function(el) { return el.getAttribute("data-filename") || el.textContent.trim(); });
+        var newDomItems = Array.prototype.slice.call(container.querySelectorAll(".m3-list-item")).map(function (el) { return el.getAttribute("data-filename") || el.textContent.trim(); });
 
         console.log("[DOM-WRITE-TRACE] ✅ New Child Count: " + container.children.length + " | Visible List Items: [" + newDomItems.join(", ") + "]");
 
@@ -759,6 +759,12 @@
 
                     // If a FILE is uploading and NOT selected, prevent selecting it
                     if ((itemData.uploading || isItemUploading(name)) && !isSelected) {
+                        return;
+                    }
+
+                    // In grid mode: clicking the preview thumbnail opens the file preview directly
+                    if (item.closest(".grid-mode") && e.target.closest(".grid-card-preview")) {
+                        if (typeof window.openFilePreview === "function") window.openFilePreview(name);
                         return;
                     }
 
@@ -939,7 +945,10 @@
             var r = lastRenderedFiles.find(function (f) {
                 return f && (f.name === filename || (typeof f === 'string' && f === filename));
             });
-            if (r && (r.uploading || r.uploadStatus)) return true;
+            // Only active statuses block interaction — COMPLETED/CANCELLED must not
+            var activeStatus = r.uploadStatus === 'UPLOADING' || r.uploadStatus === 'QUEUED' ||
+                               r.uploadStatus === 'PROCESSING' || r.uploadStatus === 'PAUSED';
+            if (r && (r.uploading || activeStatus)) return true;
         }
         var queue = window.uploadQueue || [];
         var targetBase = filename.split("/").pop().split("\\").pop();
@@ -2076,7 +2085,13 @@
         if (listBtn) listBtn.classList.toggle("active", mode === "list");
         if (gridBtn) gridBtn.classList.toggle("active", mode === "grid");
 
-        if (typeof lastRenderedFiles !== "undefined") {
+        // Force immediate synchronous re-render so the DOM template matches the new
+        // grid/list CSS layout without waiting for the scheduler's next debounce tick.
+        // Clearing the signature ensures the render guard does not skip this render.
+        window._lastPrototypeRenderSignature = null;
+        if (typeof lastRenderedFiles !== "undefined" && lastRenderedFiles && typeof renderPrototypeFileList === "function") {
+            renderPrototypeFileList(lastRenderedFiles, "view_mode_switch");
+        } else if (typeof triggerInstantUIUpdate === "function") {
             triggerInstantUIUpdate();
         }
     };
@@ -3394,7 +3409,7 @@
         if (_instantUIUpdateScheduled) return;
         _instantUIUpdateScheduled = true;
         var repoCount = 0;
-        try { repoCount = (window.FileRepository && window.FileRepository.getFolderCache) ? window.FileRepository.getFolderCache(window.LanvanStore ? window.LanvanStore.state.currentFolder : "").length : -1; } catch(e) {}
+        try { repoCount = (window.FileRepository && window.FileRepository.getFolderCache) ? window.FileRepository.getFolderCache(window.LanvanStore ? window.LanvanStore.state.currentFolder : "").length : -1; } catch (e) { }
         console.log("[FLICKER-TRACE] ⚡ triggerInstantUIUpdate | Repo cache: " + repoCount + " items | UploadQueue: " + (Array.isArray(window.uploadQueue) ? window.uploadQueue.length : 0) + " items | Scheduler available: " + !!(window.RenderScheduler && typeof window.RenderScheduler.requestRender === 'function'));
         // Reset debounce on next frame — RenderScheduler has its own coalescing
         requestAnimationFrame(function () { _instantUIUpdateScheduled = false; });
@@ -4513,12 +4528,12 @@
         } catch (e) { }
 
         // F5 Trace Instrumentation Helper
-        window.__logF5Trace = function(checkpointName) {
+        window.__logF5Trace = function (checkpointName) {
             try {
                 var folder = typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "");
-                var repoCount = (window.FileRepository && typeof window.FileRepository.getFolderCache === "function") 
+                var repoCount = (window.FileRepository && typeof window.FileRepository.getFolderCache === "function")
                     ? (window.FileRepository.getFolderCache(folder) || []).length : 0;
-                
+
                 var projCount = 0;
                 if (window.ProjectionLayer) {
                     var storeState = window.LanvanStore ? Object.assign({}, window.LanvanStore.state) : { currentFolder: folder, uploadQueue: [] };
@@ -4667,7 +4682,7 @@
                             var remBytes = item.fileSize - item.bytesUploaded;
                             if (remBytes > 0) {
                                 var etaSec = remBytes / item.speed;
-                                var formattedEta = window.formatUploadBatchStatus ? (Math.round(etaSec) < 60 ? Math.round(etaSec) + 's' : Math.floor(Math.round(etaSec)/60) + 'm ' + (Math.round(etaSec)%60) + 's') : '';
+                                var formattedEta = window.formatUploadBatchStatus ? (Math.round(etaSec) < 60 ? Math.round(etaSec) + 's' : Math.floor(Math.round(etaSec) / 60) + 'm ' + (Math.round(etaSec) % 60) + 's') : '';
                                 if (formattedEta) rowSub += " • ETA " + formattedEta;
                             }
                         }
@@ -4742,7 +4757,7 @@
                     var targetFolder = state.currentFolder || "";
                     currentFolderPath = targetFolder;
                     console.log("🛠️ [TRACE @ app-init.js:4580] Store Subscription Triggered Navigation -> '" + (targetFolder || "Home") + "'");
-                    
+
                     // fetchFolderContents writes to Repository; Navigation Controller requests render upon promise resolution
                     if (window.FileRepository && typeof window.FileRepository.fetchFolderContents === 'function') {
                         window.FileRepository.fetchFolderContents(targetFolder)
@@ -4771,7 +4786,7 @@
         // Wire the RenderScheduler to the prototype renderer so the
         // unidirectional Store→Projection→Renderer pipeline is complete.
         if (window.RenderScheduler && typeof window.RenderScheduler.setRenderer === 'function') {
-            window.RenderScheduler.setRenderer(function(viewModel) {
+            window.RenderScheduler.setRenderer(function (viewModel) {
                 renderPrototypeFileList(viewModel, 'scheduler');
             });
         }
