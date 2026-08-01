@@ -782,43 +782,89 @@
                 var itemData = (filesData || [])[index] || {};
                 var folderFlag = item.getAttribute("data-is-folder") === "1" || !!itemData.isFolder;
 
-                // Click / Tap handler (Single click selects item or enters folder)
+                // Touch / Pointer long-press selection handler for mobile devices
+                var touchStartPos = null;
+                var isLongPress = false;
+                var longPressTimer = null;
+
+                item.addEventListener("touchstart", function (e) {
+                    if (e.touches.length > 1) return;
+                    touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    isLongPress = false;
+
+                    var currentSelection = window.selectedItems || [];
+                    if (currentSelection.length === 0) {
+                        longPressTimer = setTimeout(function () {
+                            isLongPress = true;
+                            handleListItemClick(item, index, files);
+                            if (window.navigator && window.navigator.vibrate) {
+                                try { window.navigator.vibrate(40); } catch (err) { }
+                            }
+                        }, 500);
+                    }
+                }, { passive: true });
+
+                item.addEventListener("touchmove", function (e) {
+                    if (touchStartPos && e.touches.length === 1) {
+                        var dx = Math.abs(e.touches[0].clientX - touchStartPos.x);
+                        var dy = Math.abs(e.touches[0].clientY - touchStartPos.y);
+                        if (dx > 10 || dy > 10) {
+                            if (longPressTimer) clearTimeout(longPressTimer);
+                        }
+                    }
+                }, { passive: true });
+
+                item.addEventListener("touchend", function (e) {
+                    if (longPressTimer) clearTimeout(longPressTimer);
+                    if (isLongPress) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window._justHandledTouchSelection = true;
+                        setTimeout(function () { window._justHandledTouchSelection = false; }, 350);
+                    }
+                });
+
+                // Primary Click / Tap Handler (Exclusive Selection Mode Priority)
                 item.addEventListener("click", function (e) {
-                    if (window._justFinishedMarqueeDrag) {
+                    if (window._justFinishedMarqueeDrag || window._justHandledTouchSelection) {
                         e.stopPropagation();
                         e.preventDefault();
                         return;
                     }
                     if (e.target.closest("button")) return;
 
-                    var isSelected = selectedItems.indexOf(name) !== -1 || item.classList.contains("selected");
+                    var currentSelection = window.selectedItems || [];
 
-                    // Folder navigation logic: always allow entering folders even if uploads are active inside
-                    if (folderFlag) {
-                        if (selectedItems.length > 0) {
-                            handleListItemClick(item, index, files);
-                        } else {
-                            navigateIntoFolder(name);
-                        }
-                        return;
-                    }
-
-                    // If a FILE is uploading and NOT selected, prevent selecting it
-                    if ((itemData.uploading || isItemUploading(name)) && !isSelected) {
-                        return;
-                    }
-
-                    // Single click / tap handling for FILE items:
-                    // If multi-selection is active, clicking toggles selection state
-                    if (selectedItems.length > 0) {
+                    // =========================================================
+                    // 1. EXCLUSIVE SELECTION MODE PRIORITY
+                    // =========================================================
+                    if (currentSelection.length > 0) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // While Selection Mode is active: ONLY toggle selection.
+                        // Never preview, never navigate, never open folders/files.
                         handleListItemClick(item, index, files);
-                    } else {
-                        // When no selection is active, single click/tap opens the file preview directly
-                        if (typeof window.openFilePreview === "function") {
-                            window.openFilePreview(name);
-                        } else if (typeof window.openPreviewModal === "function") {
-                            window.openPreviewModal(name);
-                        }
+                        return;
+                    }
+
+                    // =========================================================
+                    // 2. NORMAL PIPELINE (NO SELECTION ACTIVE)
+                    // =========================================================
+                    if (folderFlag) {
+                        navigateIntoFolder(name);
+                        return;
+                    }
+
+                    // If a FILE is uploading and NOT selected, prevent opening it
+                    if ((itemData.uploading || isItemUploading(name))) {
+                        return;
+                    }
+
+                    // Single click / tap opens file preview modal
+                    if (typeof window.openFilePreview === "function") {
+                        window.openFilePreview(name);
+                    } else if (typeof window.openPreviewModal === "function") {
+                        window.openPreviewModal(name);
                     }
                 });
 
@@ -837,12 +883,18 @@
                 // Double-click handler for desktop mouse
                 item.addEventListener("dblclick", function (e) {
                     if (e.target.closest("button")) return;
+                    var currentSelection = window.selectedItems || [];
+                    if (currentSelection.length > 0) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                    }
                     if (folderFlag) {
                         navigateIntoFolder(name);
                         return;
                     }
                     if (itemData.uploading || isItemUploading(name)) return;
-                    window.openFilePreview(name);
+                    if (typeof window.openFilePreview === "function") window.openFilePreview(name);
                 });
 
                 // Cancel upload button
@@ -979,8 +1031,8 @@
         console.log("%c[LANVAN UI] 👆 Item clicked: '%s'", "color:#10b981; font-weight:bold;", name);
         var current = Array.isArray(window.selectedItems) ? window.selectedItems.slice() : [];
         var pos = current.indexOf(name);
-        if (pos > -1 || (item && item.classList.contains("selected"))) {
-            if (pos > -1) current.splice(pos, 1);
+        if (pos > -1) {
+            current.splice(pos, 1);
         } else {
             if (!isItemUploading(name)) {
                 current.push(name);

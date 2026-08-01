@@ -3756,9 +3756,91 @@ html[data-view-mode="list"] #clipboardHistory {
 }
 
 [data-theme="light"] .lv-preview-overlay {
-    background: rgba(18, 20, 26, 0.82) !important;
+    background: rgba(18, 20, 26, 0.95) !important;
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
+}
+
+@media (max-width: 768px) {
+    .lv-preview-overlay {
+        background: #0a0c10 !important;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .lv-preview-container {
+        width: 100vw;
+        height: 100vh;
+    }
+    .lv-preview-header {
+        height: 54px;
+        padding: 0 0.5rem;
+        gap: 0.5rem;
+        background: rgba(10, 12, 16, 0.9);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .lv-action-btn span {
+        display: none;
+    }
+    .lv-action-btn,
+    .header-close-btn {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+    }
+    .lv-action-btn {
+        background: rgba(255, 255, 255, 0.15);
+        color: #ffffff;
+    }
+    .lv-header-right {
+        gap: 0.35rem;
+    }
+    .lv-header-left {
+        gap: 0.5rem;
+        min-width: 0;
+        flex: 1;
+    }
+    .lv-preview-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #ffffff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .lv-preview-body {
+        padding: 0;
+        flex: 1;
+        height: calc(100vh - 54px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .media-preview-container {
+        padding: 0;
+        background: transparent;
+        border-radius: 0;
+        width: 100%;
+        height: 100%;
+    }
+    .media-preview-element,
+    .image-preview-wrapper img,
+    .video-preview-wrapper video {
+        max-width: 100vw;
+        max-height: calc(100vh - 60px);
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+        border-radius: 0;
+        box-shadow: none;
+    }
 }
 
 .lv-preview-container {

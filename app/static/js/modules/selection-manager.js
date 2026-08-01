@@ -212,6 +212,47 @@
         });
     }
 
+    function selectAll() {
+        var items = document.querySelectorAll("#nasFileList .m3-list-item");
+        var allSelected = [];
+        for (var i = 0; i < items.length; i++) {
+            var fn = items[i].getAttribute("data-filename");
+            if (fn) {
+                allSelected.push(fn);
+            }
+        }
+        window.selectedItems = allSelected;
+        updateSelectionToolbar();
+    }
+
+    document.addEventListener("keydown", function (e) {
+        if (document.activeElement && (
+            document.activeElement.tagName === "INPUT" ||
+            document.activeElement.tagName === "TEXTAREA" ||
+            document.activeElement.isContentEditable
+        )) {
+            return;
+        }
+
+        var modal = document.getElementById("lanvanPreviewModal");
+        if (modal && modal.style.display !== "none" && modal.style.display !== "") {
+            return;
+        }
+
+        if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A" || e.keyCode === 65)) {
+            var fileList = document.getElementById("nasFileList");
+            if (!fileList) return;
+            e.preventDefault();
+            e.stopPropagation();
+            selectAll();
+        } else if (e.key === "Escape" || e.keyCode === 27) {
+            if (window.selectedItems && window.selectedItems.length > 0) {
+                e.preventDefault();
+                clearSelection();
+            }
+        }
+    });
+
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", initMarqueeSelection);
     } else {
@@ -221,10 +262,12 @@
     window.SelectionManager = {
         updateSelectionToolbar: updateSelectionToolbar,
         clearSelection: clearSelection,
+        selectAll: selectAll,
         initMarqueeSelection: initMarqueeSelection
     };
 
     window.updateSelectionToolbar = updateSelectionToolbar;
     window.clearSelection = clearSelection;
+    window.selectAll = selectAll;
 
 })(window);

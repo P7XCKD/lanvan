@@ -53,6 +53,42 @@
                 img.style.cursor = scale > 1 ? "grab" : "default";
             }
         });
+
+        // Touch double-tap zoom on mobile
+        var lastTapTime = 0;
+        img.addEventListener("touchend", function (e) {
+            var currentTime = new Date().getTime();
+            var tapLength = currentTime - lastTapTime;
+            if (tapLength < 300 && tapLength > 0) {
+                e.preventDefault();
+                if (scale > 1) {
+                    scale = 1;
+                    translateX = 0;
+                    translateY = 0;
+                } else {
+                    scale = 2.2;
+                }
+                img.style.transform = "translate(" + translateX + "px, " + translateY + "px) scale(" + scale + ")";
+            }
+            lastTapTime = currentTime;
+        });
+
+        img.addEventListener("touchstart", function (e) {
+            if (e.touches.length === 1 && scale > 1) {
+                isPanning = true;
+                startX = e.touches[0].clientX - translateX;
+                startY = e.touches[0].clientY - translateY;
+            }
+        });
+
+        img.addEventListener("touchmove", function (e) {
+            if (isPanning && e.touches.length === 1 && scale > 1) {
+                e.preventDefault();
+                translateX = e.touches[0].clientX - startX;
+                translateY = e.touches[0].clientY - startY;
+                img.style.transform = "translate(" + translateX + "px, " + translateY + "px) scale(" + scale + ")";
+            }
+        }, { passive: false });
     }
 
     function closePreviewModal() {
@@ -80,6 +116,7 @@
 
     function openFilePreview(filename) {
         if (!filename) return;
+        if (window.selectedItems && window.selectedItems.length > 0) return;
         window.currentPreviewFilename = filename;
         var modal = document.getElementById("previewModal");
         var titleEl = document.getElementById("previewTitle");
@@ -116,15 +153,15 @@
         }
 
         if (imageExts.indexOf(ext) !== -1) {
-            bodyEl.innerHTML = '<div class="image-preview-wrapper" style="position:relative; width:100%; height:100%; min-height:70vh; flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; background:rgba(18,20,26,0.5); border-radius:14px; padding:1.5rem;">' +
-                '<img id="lanvanZoomImage" src="' + downloadUrl + '" alt="' + escName + '" style="max-width:90vw; max-height:84vh; width:auto; height:auto; object-fit:contain; border-radius:8px; display:block; margin:auto; box-shadow:0 16px 48px rgba(0,0,0,0.6); transition:transform 0.15s ease-out; cursor:grab;" />' +
+            bodyEl.innerHTML = '<div class="media-preview-container image-preview-wrapper" style="position:relative; width:100%; height:100%; min-height:70vh; flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden;">' +
+                '<img id="lanvanZoomImage" class="media-preview-element" src="' + downloadUrl + '" alt="' + escName + '" style="max-width:90vw; max-height:84vh; width:auto; height:auto; object-fit:contain; border-radius:8px; display:block; margin:auto; box-shadow:0 16px 48px rgba(0,0,0,0.6); transition:transform 0.15s ease-out; cursor:grab;" />' +
                 '</div>';
             modal.style.display = "flex";
             if (typeof window.refreshLucideIcons === 'function') window.refreshLucideIcons(bodyEl);
             setupImageZoomAndPan();
         } else if (videoExts.indexOf(ext) !== -1) {
-            bodyEl.innerHTML = '<div style="width:100%; height:100%; min-height:70vh; flex:1; display:flex; align-items:center; justify-content:center; background:rgba(18,20,26,0.5); border-radius:14px; padding:1.5rem;">' +
-                '<video src="' + downloadUrl + '" controls autoplay playsinline preload="auto" tabindex="0" style="max-width:90vw; max-height:84vh; width:auto; height:auto; object-fit:contain; border-radius:8px; outline:none; background:transparent; box-shadow:0 16px 48px rgba(0,0,0,0.6);"></video>' +
+            bodyEl.innerHTML = '<div class="media-preview-container video-preview-wrapper" style="width:100%; height:100%; min-height:70vh; flex:1; display:flex; align-items:center; justify-content:center;">' +
+                '<video class="media-preview-element" src="' + downloadUrl + '" controls autoplay playsinline preload="auto" tabindex="0" style="max-width:90vw; max-height:84vh; width:auto; height:auto; object-fit:contain; border-radius:8px; outline:none; background:transparent; box-shadow:0 16px 48px rgba(0,0,0,0.6);"></video>' +
                 '</div>';
             modal.style.display = "flex";
             var vid = bodyEl.querySelector("video");
