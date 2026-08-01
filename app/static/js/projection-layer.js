@@ -242,9 +242,6 @@
             if (folderSummary && formattedFolder) {
                 baseOverlay.uploadSummary = folderSummary;
                 var folderSub = folderProgress + "% • " + (sFolder.hasUploading ? 'Uploading' : (folderProgress >= 100 ? 'Completed' : 'Queued'));
-                if (folderSummary.eta && sFolder.hasUploading) {
-                    folderSub += " • ETA " + folderSummary.eta;
-                }
                 baseOverlay.formattedSubtitle = folderSub;
                 baseOverlay.formattedStatus = formattedFolder.status;
             }

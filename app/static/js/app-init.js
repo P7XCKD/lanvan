@@ -450,7 +450,6 @@
                     f.name || "",
                     f.isFolder ? 1 : 0,
                     f.uploading ? 1 : 0,
-                    Math.round((f.uploadProgress || 0) * 10) / 10,
                     f.uploadStatus || "",
                     f.size || "",
                     f.mtime || 0
@@ -2087,8 +2086,11 @@
 
         // Force immediate synchronous re-render so the DOM template matches the new
         // grid/list CSS layout without waiting for the scheduler's next debounce tick.
-        // Clearing the signature ensures the render guard does not skip this render.
+        // Clearing the signature and hash ensures the render guard does not skip this render.
         window._lastPrototypeRenderSignature = null;
+        if (window.RenderScheduler) {
+            window.RenderScheduler._lastViewModelHash = '';
+        }
         if (typeof lastRenderedFiles !== "undefined" && lastRenderedFiles && typeof renderPrototypeFileList === "function") {
             renderPrototypeFileList(lastRenderedFiles, "view_mode_switch");
         } else if (typeof triggerInstantUIUpdate === "function") {
@@ -4678,13 +4680,10 @@
                     if (subtitleCell) {
                         var statusTxt = item.status === 'PAUSED' ? 'Paused' : (item.status === 'PROCESSING' ? 'Processing' : 'Uploading');
                         var rowSub = progress + "% • " + statusTxt;
-                        if (item.status === 'UPLOADING' && item.speed > 0 && item.fileSize && item.bytesUploaded) {
-                            var remBytes = item.fileSize - item.bytesUploaded;
-                            if (remBytes > 0) {
-                                var etaSec = remBytes / item.speed;
-                                var formattedEta = window.formatUploadBatchStatus ? (Math.round(etaSec) < 60 ? Math.round(etaSec) + 's' : Math.floor(Math.round(etaSec) / 60) + 'm ' + (Math.round(etaSec) % 60) + 's') : '';
-                                if (formattedEta) rowSub += " • ETA " + formattedEta;
-                            }
+                        // ETA is shown only for actively uploading files, calculated by upload-eta.js
+                        if (item.status === 'UPLOADING' && window.UploadETA) {
+                            var etaStr = window.UploadETA.format(item);
+                            if (etaStr) rowSub += " • ETA " + etaStr;
                         }
                         subtitleCell.textContent = rowSub;
                     }

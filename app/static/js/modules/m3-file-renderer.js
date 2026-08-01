@@ -24,9 +24,28 @@
 
         var dateText = dateStr || "--";
         var subtitleText = subtitle || (isFolder ? "Folder" : "File");
-        if (isUploading && (!subtitle || subtitle === "Folder" || subtitle === "File")) {
+        if (isUploading && (!subtitle || subtitle === "Folder" || subtitle === "File" || subtitle.indexOf("%") !== -1)) {
             var statusLabel = uploadStatus === 'PAUSED' ? 'Paused' : (uploadStatus === 'QUEUED' ? 'Queued' : 'Uploading');
             subtitleText = pct + "% • " + statusLabel;
+            if (uploadStatus === 'UPLOADING' && window.UploadETA) {
+                var queue = window.uploadQueue || [];
+                var qItem = null;
+                if (uploadId) {
+                    qItem = queue.find(function (q) { return q && (q.id == uploadId || q.uploadId == uploadId); });
+                }
+                if (!qItem && name) {
+                    var targetBase = name.split("/").pop().split("\\").pop();
+                    qItem = queue.find(function (q) {
+                        if (!q) return false;
+                        var qName = q.fileName || q.name || (q.file ? q.file.name : "");
+                        return qName === name || (qName && qName.split("/").pop().split("\\").pop() === targetBase);
+                    });
+                }
+                if (qItem) {
+                    var etaStr = window.UploadETA.format(qItem);
+                    if (etaStr) subtitleText += " • ETA " + etaStr;
+                }
+            }
         }
 
         var displaySize = isFolder ? "-" : sizeStr;

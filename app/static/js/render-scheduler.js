@@ -21,8 +21,7 @@
                 f.name || '',
                 f.isFolder ? 'd' : 'f',
                 f.uploading ? 'u' : '-',
-                f.uploadStatus || '',
-                Math.round((f.uploadProgress || 0) * 10) / 10
+                f.uploadStatus || ''
             );
         }
         return parts.join('|');

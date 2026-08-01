@@ -322,7 +322,6 @@
 
         var parts = [];
         if (summary.speed) parts.push(summary.speed);
-        if (summary.eta) parts.push("ETA " + summary.eta);
         line2 = parts.join(" • ");
         break;
 
