@@ -617,15 +617,12 @@
                 rawSize = formatSize(fileData.fileSize);
             }
             var size = isFolderItem ? "-" : (rawSize || "--");
-            var dateStr = fileData.modified || fileData.date || fileData.dateStr || fileData.modified_formatted || "--";
+            var rawDate = fileData.modified || fileData.date || fileData.dateStr || fileData.modified_formatted || fileData.mtime || "--";
+            var dateStr = typeof formatLastModified === 'function' ? formatLastModified(rawDate) : rawDate;
             var locationText = (searchQuery && fileData.location) ? ("in " + fileData.location) : "";
             var subtitle = isFolderItem
                 ? (locationText ? "Folder • " + locationText : (fileData.formattedSubtitle || "Folder"))
                 : (locationText ? locationText : "File");
-            if (dateStr === "--" && fileData.mtime) {
-                var d = new Date(fileData.mtime * 1000);
-                dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-            }
             if (isGrid) {
                 html += buildGridItem(
                     name,
@@ -811,14 +808,18 @@
                         return;
                     }
 
-                    // In grid mode: clicking the preview thumbnail opens the file preview directly
-                    if (item.closest(".grid-mode") && e.target.closest(".grid-card-preview")) {
-                        if (typeof window.openFilePreview === "function") window.openFilePreview(name);
-                        return;
+                    // Single click / tap handling for FILE items:
+                    // If multi-selection is active, clicking toggles selection state
+                    if (selectedItems.length > 0) {
+                        handleListItemClick(item, index, files);
+                    } else {
+                        // When no selection is active, single click/tap opens the file preview directly
+                        if (typeof window.openFilePreview === "function") {
+                            window.openFilePreview(name);
+                        } else if (typeof window.openPreviewModal === "function") {
+                            window.openPreviewModal(name);
+                        }
                     }
-
-                    // Single click selects or unselects file item
-                    handleListItemClick(item, index, files);
                 });
 
                 // Context menu listener on item row

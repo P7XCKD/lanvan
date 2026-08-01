@@ -91,7 +91,9 @@
                 '</button>';
         }
 
-        var displayDate = isUploading ? (uploadStatus === 'PAUSED' ? 'Paused' : (uploadStatus === 'QUEUED' ? 'Queued' : 'Uploading')) : dateText;
+        var formattedDate = (typeof formatLastModified === 'function' && !isUploading && dateText && dateText !== '--') ? formatLastModified(dateText) : { display: dateText || "--", tooltip: dateText || "" };
+        var displayDate = isUploading ? (uploadStatus === 'PAUSED' ? 'Paused' : (uploadStatus === 'QUEUED' ? 'Queued' : 'Uploading')) : formattedDate.display;
+        var dateTooltip = isUploading ? "" : (formattedDate.tooltip || formattedDate.display);
 
         return (
             '<div class="m3-list-item' + (isUploading ? ' uploading' : '') + '" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '" style="' + (isUploading ? 'position:relative; overflow:hidden;' : '') + '">' +
@@ -103,7 +105,7 @@
             '<div class="item-subtitle">' + subtitleText + '</div>' +
             '</div>' +
             '</div>' +
-            '<div class="item-date" style="position:relative; z-index:2;">' + displayDate + '</div>' +
+            '<div class="item-date" style="position:relative; z-index:2;" title="' + (typeof escapeHtml === 'function' ? escapeHtml(dateTooltip) : dateTooltip) + '">' + (typeof escapeHtml === 'function' ? escapeHtml(displayDate) : displayDate) + '</div>' +
             '<div class="item-size" style="position:relative; z-index:2;">' + displaySize + '</div>' +
             '<div class="row-actions" style="position:relative; z-index:2;">' +
             actionsHtml +
