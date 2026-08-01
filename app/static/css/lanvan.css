@@ -1189,7 +1189,7 @@ html[data-view-mode="list"] #fileTableHead {
     display: grid !important;
 }
 
-html[data-view-mode="grid"] .m3-list {
+html[data-view-mode="grid"] #nasFileList {
     display: grid !important;
     grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)) !important;
     grid-auto-rows: 200px !important;
@@ -1198,7 +1198,7 @@ html[data-view-mode="grid"] .m3-list {
     padding: 0.5rem 0.25rem !important;
 }
 
-html[data-view-mode="list"] .m3-list {
+html[data-view-mode="list"] #nasFileList {
     display: flex !important;
     flex-direction: column !important;
     gap: 0 !important;
@@ -2240,11 +2240,29 @@ html[data-view-mode="list"] #gridViewBtn {
     transform: translateX(20px);
 }
 
+#clipboardHistory,
+#clipboardHistory.grid-mode,
+html[data-view-mode="grid"] #clipboardHistory,
+html[data-view-mode="list"] #clipboardHistory {
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: none;
+    gap: 0.5rem;
+}
+
 #clipboardHistory .m3-list-item {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    grid-template-columns: none !important;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    grid-template-columns: none;
+    height: auto;
+    min-height: 52px;
+    width: 100%;
+    background: var(--input-bg, rgba(255,255,255,0.05));
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
 }
 
 /* ==========================================================================
@@ -2813,9 +2831,9 @@ html[data-view-mode="list"] #gridViewBtn {
         padding-bottom: 1rem !important;
     }
 
-    html[data-view-mode="grid"] .m3-list,
-    body .m3-list.grid-mode,
-    .m3-list.grid-mode {
+    html[data-view-mode="grid"] #nasFileList,
+    body #nasFileList.grid-mode,
+    #nasFileList.grid-mode {
         display: grid !important;
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         grid-auto-rows: minmax(160px, auto) !important;

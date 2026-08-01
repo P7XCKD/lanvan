@@ -210,6 +210,29 @@ For detailed architecture descriptions, refer to the documentation in each folde
 
 ---
 
+## 🐞 Debugging & Client Logging
+
+Lanvan runs in **silent production mode** by default, suppressing verbose client-side console logs while preserving warnings, errors, network failures, and browser exceptions.
+
+If you need to enable full client-side debug logging at any time:
+
+### Live Toggle via Browser Console (No Reload Required)
+
+Open the browser Developer Console (`F12` or `Ctrl+Shift+I` / `Cmd+Option+I`) and run:
+
+```javascript
+enableDebug();
+```
+* **Instant:** Debug logs start printing immediately in the console.
+* **Persistent:** Saves `localStorage.debug = "true"`, so debug mode stays active across reloads and tab navigation.
+
+To return to silent production mode:
+```javascript
+disableDebug();
+```
+
+---
+
 ## Troubleshooting
 
 | Problem | Fix |
