@@ -37,11 +37,10 @@
     }
 
     function cleanFolderPath(path) {
-        if (!path || path === '/' || path === 'Home' || path === 'Home/') {
-            return '';
-        }
-        var cleaned = String(path).replace(/^\/+|\/+$/g, '');
-        return cleaned;
+        if (!path) return "";
+        var cleaned = String(path).replace(/\\/g, "/").replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
+        cleaned = cleaned.replace(/^\/+|\/+$/g, "");
+        return (cleaned === "Home (Root)" || cleaned === "Home" || cleaned === "Home/") ? "" : cleaned;
     }
 
     function formatSpeed(bytesPerSecond) {

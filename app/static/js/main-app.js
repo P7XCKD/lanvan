@@ -1225,8 +1225,8 @@ function renderSingleUpload(log, isEven) {
       <div style="background: ${isEven ? 'var(--section-bg)' : 'var(--input-bg)'}; padding: 1rem; margin-bottom: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
           <div style="font-weight: bold; color: var(--text-color) !important; flex: 1;">
-            ${log.filename || 'Unknown File'}
-            <span style="font-size: 0.8rem; color: var(--text-color) !important; opacity: 0.7; margin-left: 0.5rem;">.${log.fileExtension || 'unknown'}</span>
+            ${typeof escapeHtml === 'function' ? escapeHtml(log.filename || 'Unknown File') : (log.filename || 'Unknown File')}
+            <span style="font-size: 0.8rem; color: var(--text-color) !important; opacity: 0.7; margin-left: 0.5rem;">.${typeof escapeHtml === 'function' ? escapeHtml(log.fileExtension || 'unknown') : (log.fileExtension || 'unknown')}</span>
           </div>
           <div style="color: var(--text-color) !important; opacity: 0.7; font-size: 0.85rem;">${log.timestamp || 'Unknown Date'}</div>
         </div>

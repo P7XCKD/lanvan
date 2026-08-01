@@ -116,10 +116,12 @@
         });
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', scheduleSnapshots);
-    } else {
-        scheduleSnapshots();
+    if (window.DEBUG_MODE) {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', scheduleSnapshots);
+        } else {
+            scheduleSnapshots();
+        }
     }
 
     // 1. Upload State Machine Transitions
