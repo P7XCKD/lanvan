@@ -592,7 +592,7 @@
             }
             var size = isFolderItem ? "-" : (rawSize || "--");
             var dateStr = fileData.modified || fileData.date || fileData.dateStr || fileData.modified_formatted || "--";
-            var subtitle = isFolderItem ? "Folder" : "File";
+            var subtitle = isFolderItem ? (fileData.formattedSubtitle || "Folder") : "File";
             if (dateStr === "--" && fileData.mtime) {
                 var d = new Date(fileData.mtime * 1000);
                 dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -3851,55 +3851,17 @@
             stack.classList.remove("empty-state");
         }
 
-        // Calculate byte-weighted total progress across all items in queue batch
-        var allQueueItems = window.uploadQueue || [];
-        var totalBytesAll = 0;
-        var uploadedBytesAll = 0;
+        // Calculate summary using centralized pure helpers (single source of truth)
+        var batchSummary = window.buildUploadBatchSummary
+            ? window.buildUploadBatchSummary(window.uploadQueue || [])
+            : { totalFiles: totalCount, isComplete: isAllCompleted, percent: 0, totalSpeed: 0, status: 'IDLE' };
+        var formatted = window.formatUploadBatchStatus
+            ? window.formatUploadBatchStatus(batchSummary)
+            : { title: "Uploading...", subtitle: "", percent: 0, speedStr: "", status: "UPLOADING" };
 
-        allQueueItems.forEach(function (item) {
-            if (!item || item.status === 'DELETED' || item.status === 'CANCELLED') return;
-            var sz = item.fileSize || (item.file && item.file.size) || 0;
-            totalBytesAll += sz;
-            if (item.status === 'COMPLETED') {
-                uploadedBytesAll += sz;
-            } else {
-                var bytesDone = item.bytesUploaded || 0;
-                if (!bytesDone && item.progress && sz) {
-                    bytesDone = (sz * item.progress) / 100;
-                }
-                uploadedBytesAll += Math.min(sz, bytesDone);
-            }
-        });
-
-        var calcPct = totalBytesAll > 0 ? Math.min(100, Math.round((uploadedBytesAll / totalBytesAll) * 100)) : (isAllCompleted ? 100 : 0);
-
-        // Monotonic Progress Guard: Ensure progress percentage ONLY moves forward during an active upload batch
-        if (isAllCompleted) {
-            window._maxUploadTrayProgress = 100;
-        } else if (activePendingCount > 0) {
-            window._maxUploadTrayProgress = Math.max(window._maxUploadTrayProgress || 0, calcPct);
-        } else if (pausedCount === 0 && activePendingCount === 0 && totalCount === 0) {
-            window._maxUploadTrayProgress = 0;
-        }
-
-        var avgPct = isAllCompleted ? 100 : Math.min(100, Math.max(window._maxUploadTrayProgress || 0, calcPct));
-        var totalSpeedBytes = activeUploads.reduce(function (sum, item) { return sum + (item.speed || 0); }, 0);
-        var totalSpeedMB = (totalSpeedBytes / (1024 * 1024)).toFixed(1) + " MB/s";
-
-        // Calculate summary header title
-        var headerTitle = "";
-        var currentActiveIndex = Math.min(totalCount, completedOrDeletedCount + (activePendingCount > 0 ? 1 : 0));
-        if (totalCount === 0) {
-            headerTitle = "No pending uploads";
-        } else if (isAllCompleted) {
-            headerTitle = "Uploads completed (" + totalCount + ")";
-        } else if (pausedCount > 0 && activePendingCount === 0) {
-            headerTitle = "Uploads paused (" + pausedCount + " of " + totalCount + ")";
-        } else if (totalCount > 1) {
-            headerTitle = "Uploading " + currentActiveIndex + " of " + totalCount + " files (" + avgPct + "%) • " + totalSpeedMB;
-        } else {
-            headerTitle = "Uploading 1 file • " + totalSpeedMB;
-        }
+        var avgPct = formatted.percent;
+        var headerTitle = formatted.line1;
+        var headerSubtitle = formatted.line2 || "";
 
         var headerTitleEl = stack.querySelector(".upload-toast-header-title");
         var headerProgressBar = stack.querySelector(".header-progress-bar");
@@ -3919,7 +3881,12 @@
             var widgetHtml =
                 '<div class="upload-toast-header" style="position: relative; overflow: hidden;">' +
                 '<div class="header-progress-bar" style="position: absolute; top:0; left:0; bottom:0; background: rgba(59, 130, 246, 0.08); z-index: 1; transition: width 0.2s ease-out; width: ' + avgPct + '%;"></div>' +
-                '<span class="upload-toast-header-title" style="position: relative; z-index: 2;">' + headerTitle + '</span>' +
+                '<div style="position: relative; z-index: 2; display: flex; flex-direction: column; min-width: 0; flex: 1;">' +
+                '<span class="upload-toast-header-title">' + headerTitle + '</span>' +
+                '<div class="upload-toast-header-subtitle" style="font-size:0.72rem;color:var(--text-muted);opacity:0.85;white-space:nowrap;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;' + (headerSubtitle ? '' : 'display:none;') + '">' +
+                '<span class="tray-speed-text">' + (formatted.speed || headerSubtitle) + '</span>' +
+                '</div>' +
+                '</div>' +
                 '<div class="upload-toast-header-actions" style="position: relative; z-index: 2; display: flex; align-items: center;">' +
                 headerActionsHtml +
                 '</div>' +
@@ -3976,11 +3943,34 @@
             }
         }
 
-        // In-place updates:
-        // 1. Header Title & Progress Fill
-        if (headerTitleEl) headerTitleEl.textContent = headerTitle;
-        if (headerProgressBar) {
-            headerProgressBar.style.width = avgPct + "%";
+        // In-place updates via cached DOM references:
+        if (!stack._trayDOMCache) {
+            stack._trayDOMCache = {
+                title: stack.querySelector(".upload-toast-header-title"),
+                subtitle: stack.querySelector(".upload-toast-header-subtitle"),
+                speedEl: stack.querySelector(".tray-speed-text"),
+                progressBar: stack.querySelector(".header-progress-bar")
+            };
+        }
+        var trayDOM = stack._trayDOMCache;
+
+        if (trayDOM.title && trayDOM.title.textContent !== headerTitle) {
+            trayDOM.title.textContent = headerTitle;
+        }
+        if (trayDOM.subtitle) {
+            if (headerSubtitle) {
+                if (trayDOM.subtitle.style.display !== "") trayDOM.subtitle.style.display = "";
+                var speedTxt = formatted.speed || headerSubtitle;
+                if (trayDOM.speedEl && trayDOM.speedEl.textContent !== speedTxt) trayDOM.speedEl.textContent = speedTxt;
+            } else {
+                if (trayDOM.subtitle.style.display !== "none") trayDOM.subtitle.style.display = "none";
+            }
+        }
+        if (trayDOM.progressBar) {
+            var newWidth = avgPct + "%";
+            if (trayDOM.progressBar.style.width !== newWidth) {
+                trayDOM.progressBar.style.width = newWidth;
+            }
         }
 
         // 2. Header Actions Toggle Swap — ONLY update if HTML content actually changed (prevents button flickering)
@@ -4671,7 +4661,17 @@
                 if (row) {
                     var subtitleCell = row.querySelector('.item-subtitle');
                     if (subtitleCell) {
-                        subtitleCell.textContent = progress + "% • " + (item.status === 'PAUSED' ? 'Paused' : (item.status === 'PROCESSING' ? 'Processing' : 'Uploading'));
+                        var statusTxt = item.status === 'PAUSED' ? 'Paused' : (item.status === 'PROCESSING' ? 'Processing' : 'Uploading');
+                        var rowSub = progress + "% • " + statusTxt;
+                        if (item.status === 'UPLOADING' && item.speed > 0 && item.fileSize && item.bytesUploaded) {
+                            var remBytes = item.fileSize - item.bytesUploaded;
+                            if (remBytes > 0) {
+                                var etaSec = remBytes / item.speed;
+                                var formattedEta = window.formatUploadBatchStatus ? (Math.round(etaSec) < 60 ? Math.round(etaSec) + 's' : Math.floor(Math.round(etaSec)/60) + 'm ' + (Math.round(etaSec)%60) + 's') : '';
+                                if (formattedEta) rowSub += " • ETA " + formattedEta;
+                            }
+                        }
+                        subtitleCell.textContent = rowSub;
                     }
                     var dateCell = row.querySelector('.item-date');
                     if (dateCell) {

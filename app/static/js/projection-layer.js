@@ -221,24 +221,47 @@
                 }
             }
 
-            var folderProgress = sFolder.totalBytes > 0 ? Math.round((sFolder.uploadedBytes / sFolder.totalBytes) * 100) : 0;
+            var folderSummary = window.buildUploadBatchSummary
+                ? window.buildUploadBatchSummary(sFolder.items)
+                : null;
+            var formattedFolder = window.formatUploadBatchStatus && folderSummary
+                ? window.formatUploadBatchStatus(folderSummary)
+                : null;
+
+            var folderProgress = (folderSummary && typeof folderSummary.percent === 'number') 
+                ? folderSummary.percent 
+                : (sFolder.totalBytes > 0 ? Math.floor((sFolder.uploadedBytes / sFolder.totalBytes) * 100) : 0);
+
+            // Keep legacy fields for backward compatibility with renderer fallbacks
+            var baseOverlay = {
+                uploading: sFolder.hasUploading,
+                uploadProgress: folderProgress,
+                uploadStatus: sFolder.hasUploading ? 'UPLOADING' : (folderProgress >= 100 ? 'COMPLETED' : 'QUEUED')
+            };
+            // Add unified summary if helpers are available
+            if (folderSummary && formattedFolder) {
+                baseOverlay.uploadSummary = folderSummary;
+                var folderSub = folderProgress + "% • " + (sFolder.hasUploading ? 'Uploading' : (folderProgress >= 100 ? 'Completed' : 'Queued'));
+                if (folderSummary.eta && sFolder.hasUploading) {
+                    folderSub += " • ETA " + folderSummary.eta;
+                }
+                baseOverlay.formattedSubtitle = folderSub;
+                baseOverlay.formattedStatus = formattedFolder.status;
+            }
+
             if (existingIdx >= 0) {
-                var fClone = Object.assign({}, normalizedDiskFiles[existingIdx]);
-                fClone.uploading = sFolder.hasUploading;
-                fClone.uploadProgress = folderProgress;
-                fClone.uploadStatus = sFolder.hasUploading ? 'UPLOADING' : (folderProgress >= 100 ? 'COMPLETED' : 'QUEUED');
+                var fClone = Object.assign({}, normalizedDiskFiles[existingIdx], baseOverlay);
                 normalizedDiskFiles[existingIdx] = fClone;
             } else {
-                normalizedDiskFiles.push({
+                var newFolder = {
                     name: subFolderName,
                     identity: currentFolder + '/' + subFolderName,
                     size: formatSize(sFolder.totalBytes),
-                    mtime: null, // Unknown mtime — deterministic sentinel
-                    isFolder: true,
-                    uploading: sFolder.hasUploading,
-                    uploadProgress: folderProgress,
-                    uploadStatus: sFolder.hasUploading ? 'UPLOADING' : (folderProgress >= 100 ? 'COMPLETED' : 'QUEUED')
-                });
+                    mtime: null,
+                    isFolder: true
+                };
+                Object.assign(newFolder, baseOverlay);
+                normalizedDiskFiles.push(newFolder);
             }
         });
 

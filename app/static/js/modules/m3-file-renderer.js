@@ -24,7 +24,7 @@
 
         var dateText = dateStr || "--";
         var subtitleText = subtitle || (isFolder ? "Folder" : "File");
-        if (isUploading) {
+        if (isUploading && (!subtitle || subtitle === "Folder" || subtitle === "File")) {
             var statusLabel = uploadStatus === 'PAUSED' ? 'Paused' : (uploadStatus === 'QUEUED' ? 'Queued' : 'Uploading');
             subtitleText = pct + "% • " + statusLabel;
         }
@@ -104,20 +104,23 @@
         var progressBarHtml = '';
         if (hasActiveUpload) {
             var displayPct = Math.round(pct);
-            var statusText = 'Uploading';
+            var statusText = uploadStatus === 'PAUSED' ? 'Paused' : (uploadStatus === 'QUEUED' ? 'Queued' : 'Uploading');
             progressBarHtml =
-                '<div class="glass-b4-body" style="position: absolute; bottom: 0; left: 0; right: 0; padding: 8px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); z-index: 10;">' +
-                '<div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">' +
-                '<span>' + statusText + '</span><span>' + displayPct + '%</span>' +
+                '<div class="glass-b4-body" style="position: absolute; top: 39px; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.22); backdrop-filter: blur(4px); z-index: 10;">' +
+                '<div class="b4-badge" style="background: rgba(255, 255, 255, 0.95); border-radius: 12px; padding: 12px 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 100px;">' +
+                '<div class="b4-num" style="font-size: 1.35rem; font-weight: 800; color: var(--primary, #2563eb); line-height: 1.1;">' + displayPct + '%</div>' +
+                '<div class="b4-sub" style="font-size: 0.68rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">' + statusText + '</div>' +
                 '</div>' +
-                '<div style="height: 3px; background: rgba(0,0,0,0.1); border-radius: 2px; overflow: hidden;">' +
-                '<div style="width: ' + displayPct + '%; height: 100%; background: var(--primary, #3b82f6);"></div>' +
+                '<div class="b4-bottom-strip" style="position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: rgba(0,0,0,0.08); overflow: hidden;">' +
+                '<div style="width: ' + displayPct + '%; height: 100%; background: var(--primary, #3b82f6); transition: width 0.2s ease-out;"></div>' +
                 '</div>' +
                 '</div>';
         }
 
         var previewHtml = '';
-        if (itemInfo.avatarClass === 'avatar-image') {
+        if (isFolder) {
+            previewHtml = '';
+        } else if (itemInfo.avatarClass === 'avatar-image') {
             var downloadUrl = "/download/" + encodeURIComponent(name);
             previewHtml = '<div class="grid-card-preview" style="padding:0;margin:0;background:var(--card-bg);width:100%;height:100%;">' +
                 '<img src="' + downloadUrl + '" alt="' + escName + '" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;" onerror="this.style.display=\'none\';" />' +
@@ -142,11 +145,18 @@
                 '</div>';
         }
 
+        var subtitleHtml = (isFolder && subtitle && subtitle !== "Folder")
+            ? '<div class="item-subtitle" style="font-size:0.7rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + subtitle + '</div>'
+            : '';
+
         return (
             '<div class="m3-list-item' + (isUploading ? ' uploading' : '') + '" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '" style="position:relative; overflow:hidden;">' +
             '<div class="grid-card-head" style="position:relative; z-index:20; background:var(--card-bg, #ffffff);">' +
             '<div class="avatar-icon ' + itemInfo.avatarClass + '"><i data-lucide="' + itemInfo.iconName + '"></i></div>' +
+            '<div style="display:flex; flex-direction:column; min-width:0; flex:1;">' +
             '<div class="item-title" title="' + escName + '">' + escName + '</div>' +
+            subtitleHtml +
+            '</div>' +
             '<button class="btn-icon" title="More actions" data-action="menu" data-filename="' + escName + '" style="width:24px;height:24px;padding:0;flex-shrink:0;">' +
             '<i data-lucide="more-vertical" style="width:14px;height:14px;"></i>' +
             '</button>' +

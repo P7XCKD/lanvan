@@ -1219,6 +1219,11 @@ html[data-view-mode="list"] #gridViewBtn {
     transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
+.m3-list.grid-mode .m3-list-item[data-is-folder="1"] {
+    height: auto;
+    min-height: 52px;
+}
+
 .m3-list.grid-mode .m3-list-item {
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, background-color 0.2s ease;
 }

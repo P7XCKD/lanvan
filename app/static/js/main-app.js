@@ -1812,6 +1812,13 @@ function cancelUpload(uploadId) {
   const hasActiveUploads = currentStateQueue.some(function (item) {
     return item && isActiveStatus(item.status);
   });
+  if (typeof window.scheduleUploadTrayRender === "function") {
+    window.scheduleUploadTrayRender();
+  }
+  updateUploadManager();
+  if (typeof window.triggerInstantUIUpdate === "function") {
+    window.triggerInstantUIUpdate();
+  }
   if (!hasActiveUploads) {
     showClearCompletedButton();
     updateUploadManager();
