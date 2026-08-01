@@ -43,18 +43,18 @@
         window._contextMenuTarget = filename;
 
         // Smart Selection Logic for Right-Click Context Menu:
-        // If filename is NOT currently part of prototypeSelectedItems, select ONLY filename.
-        // If filename IS ALREADY in prototypeSelectedItems (multi-selection), PRESERVE ALL selected items!
-        if (filename && typeof window.prototypeSelectedItems !== 'undefined') {
-            var alreadySelected = Array.isArray(window.prototypeSelectedItems) && window.prototypeSelectedItems.indexOf(filename) !== -1;
+        // If filename is NOT currently part of selectedItems, select ONLY filename.
+        // If filename IS ALREADY in selectedItems (multi-selection), PRESERVE ALL selected items!
+        if (filename && typeof window.selectedItems !== 'undefined') {
+            var alreadySelected = Array.isArray(window.selectedItems) && window.selectedItems.indexOf(filename) !== -1;
             if (!alreadySelected) {
-                window.prototypeSelectedItems = [filename];
+                window.selectedItems = [filename];
             }
             // Sync visual DOM selection state across list items and quick cards
             var items = document.querySelectorAll("#nasFileList .m3-list-item, .quick-card");
             for (var i = 0; i < items.length; i++) {
                 var itemFn = items[i].getAttribute("data-filename");
-                if (itemFn && window.prototypeSelectedItems.indexOf(itemFn) !== -1) {
+                if (itemFn && window.selectedItems.indexOf(itemFn) !== -1) {
                     items[i].classList.add("selected");
                 } else {
                     items[i].classList.remove("selected");
@@ -67,7 +67,7 @@
 
         // Check if target item is a folder
         var isTargetFolder = false;
-        var targetName = filename || (window.prototypeSelectedItems && window.prototypeSelectedItems[0]) || "";
+        var targetName = filename || (window.selectedItems && window.selectedItems[0]) || "";
         if (targetName) {
             var listEl = document.querySelector('#nasFileList [data-filename="' + targetName.replace(/"/g, '&quot;') + '"]');
             if (listEl) {
@@ -78,7 +78,7 @@
             }
         }
 
-        var selectedCount = (window.prototypeSelectedItems && window.prototypeSelectedItems.length) || 1;
+        var selectedCount = (window.selectedItems && window.selectedItems.length) || 1;
         var isSingle = selectedCount <= 1;
 
         var renameItem = document.getElementById("renameMenuItem");

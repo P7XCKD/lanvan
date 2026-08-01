@@ -155,7 +155,7 @@
                     '</div>';
             } else {
                 var downloadUrl = "/download/" + encodeURIComponent(name);
-                previewHtml = '<div class="grid-card-preview" style="padding:0;margin:0;background:var(--card-bg);width:100%;height:100%;">' +
+                previewHtml = '<div class="grid-card-preview" style="padding:0;margin:0;background:var(--card-bg);">' +
                     '<img src="' + downloadUrl + '" alt="' + escName + '" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;" onerror="this.style.display=\'none\';" />' +
                     '</div>';
             }
@@ -168,10 +168,10 @@
                     '</div>';
             } else {
                 var downloadUrl = "/download/" + encodeURIComponent(name);
-                previewHtml = '<div class="grid-card-preview video-preview-box" style="padding:0;margin:0;background:#0f172a;width:100%;height:100%;">' +
-                    '<video src="' + downloadUrl + '#t=0.5" preload="metadata" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;" muted></video>' +
-                    '<div class="video-play-badge" style="position:absolute;z-index:3;">' +
-                    '<i data-lucide="play" style="width:20px;height:20px;fill:currentColor;"></i>' +
+                previewHtml = '<div class="grid-card-preview video-preview-box" style="position:absolute;top:39px;left:0;right:0;bottom:0;width:100%;height:calc(100% - 39px);padding:0;margin:0;background:#0f172a;overflow:hidden;">' +
+                    '<video src="' + downloadUrl + '#t=0.5" preload="metadata" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;pointer-events:none;" muted controlsList="nodownload no-fullscreen noremoteplayback" disablePictureInPicture></video>' +
+                    '<div class="video-play-badge" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;margin:0;">' +
+                    '<i data-lucide="play" style="width:20px;height:20px;fill:currentColor;margin:0;"></i>' +
                     '</div>' +
                     '</div>';
             }

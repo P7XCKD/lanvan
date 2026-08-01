@@ -73,7 +73,7 @@ async def run_suite(base_url="http://127.0.0.1", headed=False, slow_mo=0):
 
         # 10.4 Invariant 4: Renderer Write-Only Enforcement
         inv4_result = await page.evaluate("""() => {
-            if (typeof window.renderPrototypeFileList !== 'function') return { isWriteOnly: false };
+            if (typeof window.renderFileList !== 'function') return { isWriteOnly: false };
 
             function getBusinessState(queue) {
                 return (queue || []).map(item => ({
@@ -96,7 +96,7 @@ async def run_suite(base_url="http://127.0.0.1", headed=False, slow_mo=0):
             }
 
             try {
-                window.renderPrototypeFileList(testVm);
+                window.renderFileList(testVm);
             } catch (e) {}
 
             const qA = getBusinessState(window.uploadQueue);

@@ -1,9 +1,9 @@
 /**
- * app-init.js — Prototype UI to Production Logic Adapter
+ * app-init.js — Lanvan UI Integration & Rendering Layer
  *
  * This is a THIN TRANSLATION LAYER. It does not implement business logic,
  * networking, encryption, upload management, or clipboard sync.
- * It wraps production rendering functions and connects prototype UI events
+ * It wraps production rendering functions and connects Lanvan UI events
  * to existing production functions.
  *
  * Rules:
@@ -23,12 +23,12 @@
     window.__appInitLoaded = true;
 
     // =========================================================================
-    // 1. RENDERING WRAPPERS — Sync prototype containers with production data
+    // 1. RENDERING WRAPPERS — Synchronize active UI containers with application state
     // =========================================================================
 
     // Wrap updateFileDisplay() — called by production refreshFileList() and auto-refresh
     // Guard: only wrap if not already wrapped by a previous partial load
-    if (typeof updateFileDisplay === "function" && !updateFileDisplay.__prototypeWrapped) {
+    if (typeof updateFileDisplay === "function" && !updateFileDisplay.__renderWrapped) {
         const _originalUpdateFileDisplay = updateFileDisplay;
         updateFileDisplay = function (files) {
             var normCurrentDir = cleanFolderPath(currentFolderPath);
@@ -38,33 +38,33 @@
                     console.warn("[UPDATE FILE DISPLAY] Ignoring stale payload for folder '" + taggedFolder + "' while active view is '" + normCurrentDir + "'.");
                     return;
                 }
-                renderPrototypeFileList(tagFilesWithFolder(files, normCurrentDir));
+                renderFileList(tagFilesWithFolder(files, normCurrentDir));
             } else {
                 fetchFilesData().then(function (fd) {
-                    renderPrototypeFileList(fd);
+                    renderFileList(fd);
                 }).catch(function (err) {
                     console.error("fetchFilesData error:", err);
                 });
             }
         };
-        updateFileDisplay.__prototypeWrapped = true;
+        updateFileDisplay.__renderWrapped = true;
         window.updateFileDisplay = updateFileDisplay;
     }
 
     // Wrap refreshClipboardHistory() — called by production WebSocket and manual refresh
-    if (typeof refreshClipboardHistory === "function" && !refreshClipboardHistory.__prototypeWrapped) {
+    if (typeof refreshClipboardHistory === "function" && !refreshClipboardHistory.__renderWrapped) {
         const _originalRefreshClipboardHistory = refreshClipboardHistory;
         refreshClipboardHistory = async function () {
             await _originalRefreshClipboardHistory();
-            // After production refreshes, also render prototype clipboard
+            // After production refreshes, also render clipboard view
             // Production stores data in #clipboardHistoryContent DOM
-            setTimeout(() => syncPrototypeClipboard(), 100);
+            setTimeout(() => syncClipboardView(), 100);
         };
-        refreshClipboardHistory.__prototypeWrapped = true;
+        refreshClipboardHistory.__renderWrapped = true;
     }
 
     // =========================================================================
-    // 2. PROTOTYPE RENDERERS — Consume production data, output prototype DOM
+    // 2. FILE RENDERERS — Consume production data, output Lanvan DOM
     // =========================================================================
 
     // currentFolderPath is owned exclusively by state-store.js via its Object.defineProperty setter.
@@ -152,7 +152,7 @@
     // renderBreadcrumbs is provided by breadcrumb-nav.js module
 
     /**
-     * Render files in prototype #nasFileList from the same data production uses.
+     * Render files in production #nasFileList from the same data production uses.
      * @param {string[]} files - Array of filenames from production API
      */
     function getDiskFileMetadata(filename, folderPath) {
@@ -240,19 +240,23 @@
 
     var folderFilesCache = {}; // Folder-scoped disk file cache keyed by cleanFolderPath
 
-    function renderPrototypeFileList(files, renderReason) {
+    function renderFileList(files, renderReason) {
         if (window.__lanvanTimelineTracker) {
             var fCount = Array.isArray(files) ? files.length : (files ? 1 : 0);
-            window.__lanvanTimelineTracker.recordEvent("renderPrototype", "reason: " + renderReason + ", filesArg: " + fCount);
+            window.__lanvanTimelineTracker.recordEvent("renderView", "reason: " + renderReason + ", filesArg: " + fCount);
         }
         if (typeof window.__logF5Trace === "function") {
-            window.__logF5Trace("5. After renderPrototypeFileList() entry");
+            window.__logF5Trace("5. After renderFileList() entry");
         }
-        if (typeof window !== "undefined") window.renderPrototypeFileList = renderPrototypeFileList;
+        if (typeof window !== "undefined") {
+            window.renderFileList = renderFileList;
+            // Backward-compat alias — external callers using the old name continue to work
+            window.renderPrototypeFileList = window.renderFileList;
+        }
         var normCurrentDir = cleanFolderPath((typeof window.getCurrentFolderPath === "function")
             ? window.getCurrentFolderPath()
             : currentFolderPath);
-        var reason = renderReason || "render_prototype";
+        var reason = renderReason || "render_view";
         var container = document.getElementById("nasFileList");
         var filePanelMeta = document.getElementById("filePanelMeta");
         if (!container) return;
@@ -328,7 +332,7 @@
                 // ASSERTION: Fallback cache check
                 if (fileSource.startsWith("fallback_")) {
                     console.error("  [ASSERTION FAILED] Fallback cache used during subfolder view! File: '" + fn + "' | Source: " + fileSource + " | CurrentFolder: '" + normCurrentDir + "'");
-                    console.error("   WHO: renderPrototypeFileList | FROM: " + fileSource + " | WHY: files parameter was undefined/null during render!");
+                    console.error("   WHO: renderFileList | FROM: " + fileSource + " | WHY: files parameter was undefined/null during render!");
                 }
 
                 var isFolderFlag = false;
@@ -369,7 +373,7 @@
             viewModel = projectionEngine ? projectionEngine.buildCurrentFolderViewModel(storeState, files) : normalizedFiles;
 
             var traceId = Math.random().toString(36).substring(2, 7);
-            console.log("🛠️ [TRACE @" + traceId + " @ app-init.js:348] renderPrototypeFileList triggered | Reason: " + reason + " | Folder: '" + (normCurrentDir || "Home") + "'");
+            console.log("🛠️ [TRACE @" + traceId + " @ app-init.js:348] renderFileList triggered | Reason: " + reason + " | Folder: '" + (normCurrentDir || "Home") + "'");
             console.log("   ↳ Disk Payload: " + (files ? files.length : 0) + " items | Active Queue: " + liveUploadQueue.length + " items");
             console.log("✨ [TRACE @" + traceId + " @ app-init.js:364] View Model Ready | Visible Count: " + (Array.isArray(viewModel) ? viewModel.length : 0) + " | Files: [" + (Array.isArray(viewModel) ? viewModel.map(function (f) { return f.name + (f.isFolder ? '(dir)' : '(file)'); }).join(", ") : "?") + "]");
         }
@@ -388,7 +392,7 @@
                 var itemDir = cleanFolderPath(window.getItemFolder(qi));
                 if (itemDir !== normCurrentDir) {
                     console.error("  [ASSERTION FAILED] Queue item from wrong folder rendered! File: '" + item.name + "' | Item targetDir: '" + itemDir + "' | currentFolder: '" + normCurrentDir + "'");
-                    console.error("   WHO: renderPrototypeFileList | FROM: uploadQueue merge | WHY: targetDir mismatch! ('" + itemDir + "' !== '" + normCurrentDir + "')");
+                    console.error("   WHO: renderFileList | FROM: uploadQueue merge | WHY: targetDir mismatch! ('" + itemDir + "' !== '" + normCurrentDir + "')");
                 }
             }
         });
@@ -468,16 +472,16 @@
                 /Loading files\.\.\./i.test(container.textContent || "");
         } catch (e) { }
 
-        if (window._prototypeRenderHasPainted && window._lastPrototypeRenderSignature === renderSignature && !isStillShowingLoadingShell) {
+        if (window._renderHasPainted && window._lastRenderSignature === renderSignature && !isStillShowingLoadingShell) {
             return;
         }
-        window._lastPrototypeRenderSignature = renderSignature;
+        window._lastRenderSignature = renderSignature;
 
         // Sync dropdown checkmarks and header arrows
         updateSortCheckmarks();
         updateSortHeaderArrows();
 
-        // Update file count in prototype panel meta
+        // Update file count in file panel meta
         if (filePanelMeta) {
             filePanelMeta.textContent = normalizedFiles.length
                 ? normalizedFiles.length + " file" + (normalizedFiles.length === 1 ? "" : "s")
@@ -501,7 +505,15 @@
         }
 
         if (!normalizedFiles || normalizedFiles.length === 0) {
-            prototypeSelectedItems = [];
+            container.classList.add("empty-state");
+            container.style.display = "flex";
+            container.style.flexDirection = "column";
+            container.style.alignItems = "center";
+            container.style.justifyContent = "center";
+            container.style.flex = "1";
+            container.style.minHeight = "420px";
+            container.style.height = "100%";
+            window.selectedItems = [];
             window._contextMenuTarget = "";
 
             // Hide file table header when list is empty to prevent DOM overlap
@@ -551,7 +563,7 @@
                     '</div>' +
                     '</div>';
             }
-            window._prototypeRenderHasPainted = true;
+            window._renderHasPainted = true;
             refreshLucideIcons(container);
             updateSelectionToolbar();
             try {
@@ -563,6 +575,14 @@
             return;
         }
 
+        container.classList.remove("empty-state");
+        container.style.display = "";
+        container.style.flexDirection = "";
+        container.style.alignItems = "";
+        container.style.justifyContent = "";
+        container.style.flex = "";
+        container.style.minHeight = "";
+        container.style.height = "";
         var isGrid = container.classList.contains("grid-mode");
         var html = "";
         for (var i = 0; i < normalizedFiles.length; i++) {
@@ -634,7 +654,7 @@
                 );
             }
         }
-        window._prototypeRenderHasPainted = true;
+        window._renderHasPainted = true;
         // Preserve existing ALREADY-LOADED video and image previews to eliminate blank flickers
         var existingPreviews = {};
         var existingItems = container.querySelectorAll(".m3-list-item");
@@ -659,12 +679,12 @@
         console.log("[DOM-WRITE-TRACE] 💥 DOM WRITE TO #" + (container.id || "nasFileList") + "\n" +
             "   Timestamp: " + performance.now().toFixed(1) + "ms\n" +
             "   File: app-init.js:645\n" +
-            "   Function: renderPrototypeFileList\n" +
+            "   Function: renderFileList\n" +
             "   Caller: " + callerLine.trim() + "\n" +
             "   Target Element: #" + (container.id || "nasFileList") + "\n" +
             "   Previous Child Count: " + prevChildCount + "\n" +
             "   HTML Length: " + html.length + "\n" +
-            "   Reason: " + (renderReason || "prototype_render") + "\n" +
+            "   Reason: " + (renderReason || "file_render") + "\n" +
             "   Call Stack:\n" + stackTrace);
 
         var oldDomItems = Array.prototype.slice.call(container.querySelectorAll(".m3-list-item")).map(function (el) { return el.getAttribute("data-filename") || el.textContent.trim(); });
@@ -687,16 +707,16 @@
         // Attach click handlers — pass full normalized data for folder detection
         attachListItemHandlers(container, normalizedFiles.map(function (f) { return f.name; }), normalizedFiles);
 
-        // Sync selection state: purge any deleted or uploading items from prototypeSelectedItems
+        // Sync selection state: purge any deleted or uploading items from selectedItems
         var validNames = normalizedFiles.map(function (f) { return f.name; });
-        if (Array.isArray(prototypeSelectedItems)) {
-            prototypeSelectedItems = prototypeSelectedItems.filter(function (name) {
+        if (Array.isArray(selectedItems)) {
+            selectedItems = selectedItems.filter(function (name) {
                 return validNames.indexOf(name) !== -1 && !isItemUploading(name);
             });
             var renderedItems = container.querySelectorAll(".m3-list-item");
             for (var s = 0; s < renderedItems.length; s++) {
                 var itemFn = renderedItems[s].getAttribute("data-filename");
-                if (itemFn && prototypeSelectedItems.indexOf(itemFn) !== -1) {
+                if (itemFn && selectedItems.indexOf(itemFn) !== -1) {
                     renderedItems[s].classList.add("selected");
                 } else {
                     renderedItems[s].classList.remove("selected");
@@ -752,7 +772,7 @@
     // buildListItem and buildGridItem are provided by m3-file-renderer.js module
 
     /**
-     * Attach click handlers to prototype list items after render.
+     * Attach click handlers to file list items after render.
      * @param {Element} container - The list container
      * @param {string[]} files - Array of file/folder names
      * @param {object[]} filesData - Array of file metadata objects
@@ -767,13 +787,18 @@
 
                 // Click / Tap handler (Single click selects item or enters folder)
                 item.addEventListener("click", function (e) {
+                    if (window._justFinishedMarqueeDrag) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        return;
+                    }
                     if (e.target.closest("button")) return;
 
-                    var isSelected = prototypeSelectedItems.indexOf(name) !== -1 || item.classList.contains("selected");
+                    var isSelected = selectedItems.indexOf(name) !== -1 || item.classList.contains("selected");
 
                     // Folder navigation logic: always allow entering folders even if uploads are active inside
                     if (folderFlag) {
-                        if (prototypeSelectedItems.length > 0) {
+                        if (selectedItems.length > 0) {
                             handleListItemClick(item, index, files);
                         } else {
                             navigateIntoFolder(name);
@@ -870,7 +895,7 @@
                     renameBtn.addEventListener("click", function (e) {
                         e.stopPropagation();
                         var fname = renameBtn.getAttribute("data-filename");
-                        prototypeSelectedItems = [fname];
+                        selectedItems = [fname];
                         window._contextMenuTarget = fname;
                         window.openRenameModal();
                     });
@@ -916,7 +941,7 @@
         }
 
         console.log("%c[LANVAN UI] 📂 Navigating into folder: '%s'", "color:#3b82f6; font-weight:bold;", newPath);
-        prototypeSelectedItems = [];
+        selectedItems = [];
         updateSelectionToolbar();
 
         window.currentFolderPath = newPath;
@@ -930,18 +955,18 @@
     /**
      * Handle item click — toggle selection.
      */
-    var prototypeSelectedItems = [];
-    Object.defineProperty(window, 'prototypeSelectedItems', {
+    var selectedItems = [];
+    Object.defineProperty(window, 'selectedItems', {
         get: function () {
             if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.getState) {
-                return window.LanvanStore.getState().selection || prototypeSelectedItems;
+                return window.LanvanStore.getState().selection || selectedItems;
             }
-            return prototypeSelectedItems;
+            return selectedItems;
         },
         set: function (val) {
-            prototypeSelectedItems = Array.isArray(val) ? val : [];
-            if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.dispatch) {
-                window.LanvanStore.dispatch("SET_SELECTION", { files: prototypeSelectedItems }, "NORMAL");
+            selectedItems = Array.isArray(val) ? val : [];
+            if (window.LanvanStore && typeof window.LanvanStore.dispatch === "function") {
+                window.LanvanStore.dispatch("SET_SELECTION", { selection: selectedItems, files: selectedItems }, "NORMAL");
             }
         },
         configurable: true
@@ -949,17 +974,18 @@
 
     function handleListItemClick(item, index, files) {
         var name = files[index];
+        if (!name) return;
         console.log("%c[LANVAN UI] 👆 Item clicked: '%s'", "color:#10b981; font-weight:bold;", name);
-        var pos = prototypeSelectedItems.indexOf(name);
-        if (pos > -1 || item.classList.contains("selected")) {
-            if (pos > -1) prototypeSelectedItems.splice(pos, 1);
-            item.classList.remove("selected");
+        var current = Array.isArray(window.selectedItems) ? window.selectedItems.slice() : [];
+        var pos = current.indexOf(name);
+        if (pos > -1 || (item && item.classList.contains("selected"))) {
+            if (pos > -1) current.splice(pos, 1);
         } else {
             if (!isItemUploading(name)) {
-                prototypeSelectedItems.push(name);
-                item.classList.add("selected");
+                current.push(name);
             }
         }
+        window.selectedItems = current;
         updateSelectionToolbar();
     }
 
@@ -999,17 +1025,17 @@
     }
 
     /**
-     * Update selection toolbar based on prototypeSelectedItems.
+     * Update selection toolbar based on selectedItems.
      */
     // updateSelectionToolbar and clearSelection are provided by selection-manager.js module
 
     /**
-     * Sync prototype clipboard from production #clipboardHistoryContent DOM.
+     * Sync clipboard history view from production #clipboardHistoryContent DOM.
      */
-    function syncPrototypeClipboard() {
-        var protoContainer = document.getElementById("clipboardHistory");
+    function syncClipboardView() {
+        var clipboardContainer = document.getElementById("clipboardHistory");
         var prodContainer = document.getElementById("clipboardHistoryContent");
-        if (!protoContainer || !prodContainer) return;
+        if (!clipboardContainer || !prodContainer) return;
 
         // Production stores clipboard items as child elements
         var items = prodContainer.querySelectorAll("div[style]");
@@ -1017,7 +1043,7 @@
             // Try reading innerText as fallback
             var text = prodContainer.innerText.trim();
             if (!text || text.indexOf("No clipboard items") !== -1) {
-                protoContainer.innerHTML =
+                clipboardContainer.innerHTML =
                     '<div style="text-align:center; padding:2rem; color:var(--text-muted); font-size:0.85rem;">No items in clipboard history yet.</div>';
                 return;
             }
@@ -1047,12 +1073,12 @@
                 "</div>" +
                 "</div>";
         }
-        protoContainer.innerHTML = html || '<div style="text-align:center; padding:2rem; color:var(--text-muted); font-size:0.85rem;">No items in clipboard history yet.</div>';
+        clipboardContainer.innerHTML = html || '<div style="text-align:center; padding:2rem; color:var(--text-muted); font-size:0.85rem;">No items in clipboard history yet.</div>';
         if (window.lucide) lucide.createIcons();
     }
 
     // =========================================================================
-    // 3. PROTOTYPE UI HANDLERS — Stubs wired to production
+    // 3. APPLICATION UI HANDLERS — Stubs wired to production
     // =========================================================================
 
     // --- View Switching ---
@@ -1099,7 +1125,7 @@
             if (navFile) navFile.classList.add("active");
 
             if (typeof lastRenderedFiles !== "undefined") {
-                renderPrototypeFileList(lastRenderedFiles);
+                renderFileList(lastRenderedFiles);
             }
         }
     };
@@ -1196,7 +1222,7 @@
 
     // --- File Operations ---
     window.downloadSelected = function () {
-        var items = prototypeSelectedItems.slice();
+        var items = selectedItems.slice();
         var target = window._contextMenuTarget || "";
 
         if (items.length === 0 && target) {
@@ -1244,7 +1270,7 @@
         var menu = document.getElementById("contextMenu");
         if (menu) menu.style.display = "none";
 
-        var items = prototypeSelectedItems.slice();
+        var items = selectedItems.slice();
         var target = window._contextMenuTarget || "";
 
         if (items.length === 0 && target) {
@@ -1341,12 +1367,12 @@
         var itemsToDelete = [];
         var target = window._contextMenuTarget || "";
 
-        if (prototypeSelectedItems.length > 0) {
+        if (selectedItems.length > 0) {
             // If targeted item is in the selected list or target was not explicitly set for another item, delete all selected items
-            if (target && prototypeSelectedItems.indexOf(target) !== -1) {
-                itemsToDelete = prototypeSelectedItems.slice();
+            if (target && selectedItems.indexOf(target) !== -1) {
+                itemsToDelete = selectedItems.slice();
             } else if (!target) {
-                itemsToDelete = prototypeSelectedItems.slice();
+                itemsToDelete = selectedItems.slice();
             } else {
                 // Targeted single item outside active multi-selection
                 itemsToDelete = [target];
@@ -1376,7 +1402,7 @@
                 if (typeof window.requestSafeVisibleFilesRefresh === "function") {
                     window.requestSafeVisibleFilesRefresh(120);
                 } else if (typeof fetchFilesData === "function") {
-                    fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+                    fetchFilesData().then(function (fd) { renderFileList(fd); });
                 }
                 return;
             }
@@ -1500,7 +1526,7 @@
     // --- Item Selection Helper ---
     window.setSelectedItem = function (filename) {
         if (!filename || isItemUploading(filename)) return;
-        prototypeSelectedItems = [filename];
+        selectedItems = [filename];
         var items = document.querySelectorAll("#nasFileList .m3-list-item");
         for (var i = 0; i < items.length; i++) {
             var itemFn = items[i].getAttribute("data-filename");
@@ -1518,14 +1544,14 @@
     window.handleCopyStreamLinkFromMenu = function () {
         var menu = document.getElementById("contextMenu");
         if (menu) menu.style.display = "none";
-        var fname = window._contextMenuTarget || (prototypeSelectedItems && prototypeSelectedItems[0]) || "";
+        var fname = window._contextMenuTarget || (selectedItems && selectedItems[0]) || "";
         if (fname && typeof copyVideoStreamUrl === "function") {
             copyVideoStreamUrl(fname);
         }
     };
 
     // --- Context Menu ---
-    // Signatures: alreadySelected = prototypeSelectedItems.indexOf(filename)
+    // Signatures: alreadySelected = selectedItems.indexOf(filename) || selectedItems.indexOf(filename)
     // isTargetFolder = (isSingle && !isTargetFolder)
     window.openRowMenu = function (event, filename) {
         if (window.ContextMenu && typeof window.ContextMenu.openRowMenu === "function") {
@@ -1568,7 +1594,7 @@
         if (typeof window.closePreviewModal === "function") {
             window.closePreviewModal();
         }
-        var targets = prototypeSelectedItems.slice();
+        var targets = selectedItems.slice();
         if (targets.length === 0 && window._contextMenuTarget) {
             targets = [window._contextMenuTarget];
         }
@@ -1632,7 +1658,7 @@
         if (typeof window.closePreviewModal === "function") {
             window.closePreviewModal();
         }
-        var targets = prototypeSelectedItems.slice();
+        var targets = selectedItems.slice();
         if (targets.length === 0 && window._contextMenuTarget) {
             targets = [window._contextMenuTarget];
         }
@@ -2021,19 +2047,19 @@
         // Force immediate synchronous re-render so the DOM template matches the new
         // grid/list CSS layout without waiting for the scheduler's next debounce tick.
         // Clearing the signature and hash ensures the render guard does not skip this render.
-        window._lastPrototypeRenderSignature = null;
+        window._lastRenderSignature = null;
         if (window.RenderScheduler) {
             window.RenderScheduler._lastViewModelHash = '';
         }
-        if (typeof lastRenderedFiles !== "undefined" && lastRenderedFiles && typeof renderPrototypeFileList === "function") {
-            renderPrototypeFileList(lastRenderedFiles, "view_mode_switch");
+        if (typeof lastRenderedFiles !== "undefined" && lastRenderedFiles && typeof renderFileList === "function") {
+            renderFileList(lastRenderedFiles, "view_mode_switch");
         } else if (typeof triggerInstantUIUpdate === "function") {
             triggerInstantUIUpdate();
         }
         syncFileTableHeadWidth();
     };
 
-    // --- Clipboard Prototype Handlers ---
+    // --- Clipboard History Handlers ---
     window.addClipboardItem = function () {
         var protoInput = document.getElementById("clipboardInput");
         var prodInput = document.getElementById("clipboardTextInput");
@@ -2118,7 +2144,7 @@
                         if (typeof window.requestSafeVisibleFilesRefresh === "function") {
                             window.requestSafeVisibleFilesRefresh(120);
                         } else if (typeof fetchFilesData === "function") {
-                            fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+                            fetchFilesData().then(function (fd) { renderFileList(fd); });
                         }
                     }
                 } else {
@@ -2136,7 +2162,7 @@
         if (typeof window.closePreviewModal === "function") {
             window.closePreviewModal();
         }
-        var itemsToRename = prototypeSelectedItems.slice();
+        var itemsToRename = selectedItems.slice();
         if (itemsToRename.length === 0 && window._contextMenuTarget) {
             itemsToRename = [window._contextMenuTarget];
         }
@@ -2166,7 +2192,7 @@
                 if (typeof window.requestSafeVisibleFilesRefresh === "function") {
                     window.requestSafeVisibleFilesRefresh(120);
                 } else if (typeof fetchFilesData === "function") {
-                    fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+                    fetchFilesData().then(function (fd) { renderFileList(fd); });
                 }
                 return;
             }
@@ -2231,7 +2257,11 @@
 
             var formData = new FormData();
             formData.append("filename", oldName);
+            formData.append("new_name", nameToUse);
             var parentPath = cleanFolderPath(currentFolderPath);
+            if (parentPath && parentPath !== "Home") {
+                formData.append("parent_path", parentPath);
+            }
             var repoPromise = (window.FileRepository && typeof window.FileRepository.renameItem === 'function')
                 ? window.FileRepository.renameItem(oldName, nameToUse, isFolder, parentPath)
                 : fetch("/api/files/rename", { method: "POST", body: formData }).then(function (r) { return r.json(); });
@@ -2271,8 +2301,8 @@
     };
 
     window.submitMove = function () {
-        // Use itemsToMove if populated by openMoveModal, else fall back to prototypeSelectedItems
-        var filesToMove = (itemsToMove.length > 0 ? itemsToMove : prototypeSelectedItems).slice();
+        // Use itemsToMove if populated by openMoveModal, else fall back to selectedItems
+        var filesToMove = (itemsToMove.length > 0 ? itemsToMove : selectedItems).slice();
         if (filesToMove.length === 0) {
             window.closeMoveDialog();
             return;
@@ -2324,7 +2354,7 @@
                 if (typeof window.requestSafeVisibleFilesRefresh === "function") {
                     window.requestSafeVisibleFilesRefresh(120);
                 } else if (typeof fetchFilesData === "function") {
-                    fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+                    fetchFilesData().then(function (fd) { renderFileList(fd); });
                 }
                 window.closeMoveDialog();
             })
@@ -2374,7 +2404,7 @@
         renderDialogQR();
         // Load QR from production
         if (typeof showConnectionInfo === "function") {
-            // Populate address in prototype QR dialog
+            // Populate address in connect QR dialog
             var protoAddr = document.getElementById("connectQrDialogAddress");
             if (protoAddr && window._currentNetworkInfo) {
                 protoAddr.textContent = window._currentNetworkInfo.fullUrl || "";
@@ -2560,7 +2590,7 @@
     };
 
     window.copyVideoStreamUrl = function (filename) {
-        var fn = filename || window.currentPreviewFilename || (window._contextMenuTarget || (prototypeSelectedItems && prototypeSelectedItems[0]));
+        var fn = filename || window.currentPreviewFilename || (window._contextMenuTarget || (selectedItems && selectedItems[0]));
         if (!fn) return;
         var fullUrl = window.location.origin + "/download/" + encodeURIComponent(fn);
 
@@ -2763,11 +2793,11 @@
     };
 
     // =========================================================================
-    // 4. DROPZONE INTEGRATION — Wire prototype dropzone to production handlers
+    // 4. DROPZONE INTEGRATION — Wire dropzone integration to production handlers
     // =========================================================================
 
     function setupDropzone() {
-        // Match prototype: context menu on the entire app container (.android-app)
+        // match reference build: context menu on the entire app container (.android-app)
         var appContainer = document.querySelector(".android-app");
         if (appContainer) {
             appContainer.addEventListener("contextmenu", function (e) {
@@ -2896,7 +2926,7 @@
             toolbarInput.addEventListener("input", function () {
                 var q = this.value.trim();
                 if (toolbarClearBtn) toolbarClearBtn.style.display = q ? "inline-flex" : "none";
-                renderPrototypeFileList();
+                renderFileList();
                 renderSearchAutocomplete(q);
             });
 
@@ -2931,7 +2961,7 @@
                     if (toolbarClearBtn) toolbarClearBtn.style.display = "none";
                     hideSearchAutocomplete();
                     fetchFilesData().then(function (fd) {
-                        renderPrototypeFileList(fd);
+                        renderFileList(fd);
                     });
                     toolbarInput.focus();
                 }
@@ -2972,7 +3002,7 @@
 
             if (!query) {
                 // Re-render full list
-                renderPrototypeFileList(lastFiles);
+                renderFileList(lastFiles);
                 document.getElementById("searchResultsPanel").classList.remove("active");
                 return;
             }
@@ -2988,15 +3018,15 @@
             clearBtn.addEventListener("click", function () {
                 searchInput.value = "";
                 searchInput.focus();
-                renderPrototypeFileList(lastFiles);
+                renderFileList(lastFiles);
                 document.getElementById("searchResultsPanel").classList.remove("active");
                 clearBtn.classList.remove("visible");
             });
         }
 
-        // Update lastFiles whenever prototype list renders
-        var _origRender = renderPrototypeFileList;
-        renderPrototypeFileList = function (files, renderReason) {
+        // Update lastFiles whenever production list renders
+        var _origRender = renderFileList;
+        renderFileList = function (files, renderReason) {
             if (files) {
                 lastFiles = files.slice();
                 var taggedFolderPath = getTaggedFolderPath(files);
@@ -3066,7 +3096,7 @@
     }
 
     // =========================================================================
-    // 4.5 UPLOAD TOAST TRAY — Mirror production uploadQueue to prototype tray
+    // 4.5 UPLOAD TOAST TRAY — Mirror production uploadQueue to upload toast tray
     // =========================================================================
 
     if (typeof window.uploadManagerExpanded === "undefined") {
@@ -3142,7 +3172,7 @@
 
             if (missingRow && typeof lastRenderedFiles !== "undefined" && !window._instantRenderInProgress) {
                 window._instantRenderInProgress = true;
-                renderPrototypeFileList(lastRenderedFiles);
+                renderFileList(lastRenderedFiles);
                 setTimeout(function () { window._instantRenderInProgress = false; }, 200);
             } else {
                 // Pass 1: Aggregate items into per-row progress data
@@ -3311,11 +3341,11 @@
 
     window.navigateToPathAndSelect = function (targetPath, filename) {
         window.currentFolderPath = targetPath || "";
-        prototypeSelectedItems = [];
+        selectedItems = [];
         updateSelectionToolbar();
         renderBreadcrumbs();
         fetchFilesData().then(function (fd) {
-            renderPrototypeFileList(fd);
+            renderFileList(fd);
             setTimeout(function () {
                 var allItems = document.querySelectorAll("#nasFileList .m3-list-item");
                 var matchedEl = null;
@@ -3354,7 +3384,7 @@
                 }
 
                 if (matchedEl && matchedName) {
-                    prototypeSelectedItems = [matchedName];
+                    selectedItems = [matchedName];
                     matchedEl.classList.add("selected");
                     updateSelectionToolbar();
                     matchedEl.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -3986,12 +4016,12 @@
                 var items = document.querySelectorAll("#nasFileList .m3-list-item");
                 if (items.length === 0) return;
 
-                prototypeSelectedItems = [];
+                selectedItems = [];
                 for (var i = 0; i < items.length; i++) {
                     var item = items[i];
                     var name = item.getAttribute("data-filename");
                     if (name) {
-                        prototypeSelectedItems.push(name);
+                        selectedItems.push(name);
                         item.classList.add("selected");
                     }
                 }
@@ -4011,7 +4041,7 @@
             if (e.key === "F2") {
                 if (isInputActive) return;
                 e.preventDefault();
-                if (prototypeSelectedItems.length > 0 && typeof openRenameModal === "function") {
+                if (selectedItems.length > 0 && typeof openRenameModal === "function") {
                     openRenameModal();
                 }
             }
@@ -4030,7 +4060,7 @@
         // Global document click listener for outside selection clearing and uploader tray collapse
         document.addEventListener("click", function (e) {
             // 1. Unselect items when clicking outside list items, cards, or control elements
-            if (typeof prototypeSelectedItems !== "undefined" && prototypeSelectedItems.length > 0) {
+            if (typeof selectedItems !== "undefined" && selectedItems.length > 0) {
                 var isListItem = e.target.closest(".m3-list-item");
                 var isQuickCard = e.target.closest(".quick-card");
                 var isSelectionToolbar = e.target.closest("#selectionContent");
@@ -4119,7 +4149,7 @@
         // Fetch full file data with metadata from API
         fetchFilesData().then(function (filesData) {
             window.__logF5Trace("2. After fetchFilesData()");
-            renderPrototypeFileList(filesData);
+            renderFileList(filesData);
         });
 
         // Also try reading from production #fileGrid (server-rendered files)
@@ -4131,7 +4161,7 @@
                 for (var i = 0; i < cards.length; i++) {
                     initialFiles.push(cards[i].textContent.trim());
                 }
-                renderPrototypeFileList(initialFiles);
+                renderFileList(initialFiles);
             }
         }
 
@@ -4183,7 +4213,7 @@
         }
 
         // Clean event-driven DOM progress updater (no setInterval polling)
-        window.updatePrototypeRowProgress = function (item) {
+        window.updateRowProgress = function (item) {
             if (!item || !item.fileName) return;
 
             if (item.status === 'COMPLETED') {
@@ -4267,7 +4297,7 @@
                     if (typeof window.triggerInstantUIUpdate === 'function') {
                         window.triggerInstantUIUpdate();
                     } else if (typeof lastRenderedFiles !== 'undefined') {
-                        renderPrototypeFileList(lastRenderedFiles);
+                        renderFileList(lastRenderedFiles);
                     }
                 }
             }
@@ -4279,8 +4309,8 @@
             if (typeof renderUploadTray === "function") {
                 renderUploadTray();
             }
-            if (typeof lastRenderedFiles !== "undefined" && typeof renderPrototypeFileList === "function") {
-                renderPrototypeFileList(lastRenderedFiles);
+            if (typeof lastRenderedFiles !== "undefined" && typeof renderFileList === "function") {
+                renderFileList(lastRenderedFiles);
             }
             startUploadTrayPolling();
         };
@@ -4336,11 +4366,11 @@
         // Render empty manager on load so it is visible by default
         renderUploadTray();
 
-        // Wire the RenderScheduler to the prototype renderer so the
+        // Wire the RenderScheduler to the file list renderer so the
         // unidirectional Store→Projection→Renderer pipeline is complete.
         if (window.RenderScheduler && typeof window.RenderScheduler.setRenderer === 'function') {
             window.RenderScheduler.setRenderer(function (viewModel) {
-                renderPrototypeFileList(viewModel, 'scheduler');
+                renderFileList(viewModel, 'scheduler');
             });
         }
 
@@ -4348,7 +4378,7 @@
             window.refreshFileList('bootstrap');
         }
 
-        console.log("[app-init] Prototype UI adapter initialized. " +
+        console.log("[app-init] Lanvan UI adapter initialized. " +
             "Wrapped updateFileDisplay=" + (typeof updateFileDisplay === "function") +
             ", refreshClipboardHistory=" + (typeof refreshClipboardHistory === "function"));
     }

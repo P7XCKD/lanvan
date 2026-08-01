@@ -1618,9 +1618,9 @@ function performUIUpdate(uploadItem, forceUpdate = false) {
   // on every chunk (that causes flicker). updateUploadManager handles tray refresh.
   window.uploadQueue = uploadQueue;
 
-  // Event-driven DOM update for prototype list row on upload progress
-  if (typeof window.updatePrototypeRowProgress === 'function') {
-    window.updatePrototypeRowProgress(uploadItem);
+  // Event-driven DOM update for file list row on upload progress
+  if (typeof window.updateRowProgress === 'function') {
+    window.updateRowProgress(uploadItem);
   }
 
   // Individual file completion is handled by the XHR load handler (main-app.js:2203)

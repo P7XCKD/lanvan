@@ -44,7 +44,8 @@
                         if (typeof window.clearSelection === "function") {
                             window.clearSelection();
                         } else {
-                            window.prototypeSelectedItems = [];
+                            window.selectedItems = [];
+                            window.prototypeSelectedItems = window.selectedItems;
                         }
                         if (typeof updateSelectionToolbar === "function") updateSelectionToolbar();
                     };

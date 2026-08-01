@@ -70,7 +70,7 @@ with sync_playwright() as p:
         page.wait_for_timeout(3000)
         print("   File uploaded")
     else:
-        print("   [!] #fileInput not found, trying prototype input")
+        print("   [!] #fileInput not found, trying fallback input")
         proto_input = page.locator("#hiddenFileInput")
         if proto_input.count() > 0:
             proto_input.set_input_files(test_file_path)

@@ -60,8 +60,8 @@ try:
             page.wait_for_timeout(1000)
             print("   Uploaded test file")
         else:
-            print("   [!] File input not found, checking for prototype dropzone...")
-            # Try prototype hidden file input
+            print("   [!] File input not found, checking for dropzone integration...")
+            # Try fallback file input
             proto_input = page.locator("#hiddenFileInput")
             if proto_input.count() > 0:
                 proto_input.set_input_files(test_file_path)

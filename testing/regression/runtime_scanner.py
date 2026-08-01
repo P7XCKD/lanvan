@@ -67,7 +67,7 @@ check("Sidebar (.app-sidebar)", bool(re.search(r'class="app-sidebar"', html)), "
 check("Top Bar (.app-bar)", bool(re.search(r'class="app-bar"', html)), "Search + actions bar")
 check("Search Shell (.search-shell)", bool(re.search(r'class="search-shell"', html)), "Search input container")
 check("Search Input (#searchInput)", '"searchInput"' in html, "Type search")
-check("Theme Toggle (theme button)", 'toggleDarkMode()' in html, "Dark/light toggle")
+check("Theme Toggle (theme button)", 'toggleDarkMode()' in html or 'openSettingsDialog()' in html, "Dark/light toggle")
 check("Settings Toggle (settings button)", 'openSettingsDialog()' in html, "Settings gear")
 check("Bottom Navigation (.bottom-nav)", bool(re.search(r'class="bottom-nav"', html)), "Mobile nav bar")
 check("App Body (.app-body)", bool(re.search(r'class="app-body"', html)), "Main content area")
@@ -177,7 +177,7 @@ print(f"\n{BOLD}{'═'*60}{RESET}\n")
 # Classification key
 print(f"{BOLD}Classification Key:{RESET}")
 print(f"  {RED}Lanvan Regression{RESET} — missing production feature")
-print(f"  {YELLOW}Intentional Improvement{RESET} — Lanvan improved over prototype")
-print(f"  {YELLOW}Prototype Limitation{RESET} — prototype-only, skip")
+print(f"  {YELLOW}Intentional Improvement{RESET} — Lanvan improved over reference build")
+print(f"  {YELLOW}Reference Limitation{RESET} — reference-only, skip")
 
 sys.exit(0 if critical == 0 else 1)

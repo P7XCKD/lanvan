@@ -24,7 +24,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
 {% block content %}
 
 <!-- ==========================================================================
-     PROTOTYPE APPLICATION SHELL
+     LANVAN APPLICATION SHELL
      Wraps around all production content.
      ========================================================================== -->
 <div class="android-app">
@@ -656,22 +656,22 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
   </div>
 </div>
 
-<!-- Google Drive Style Sleek Media Preview Modal -->
-<div id="previewModal" class="gdrive-preview-overlay" style="display: none; pointer-events: none !important;">
-  <div class="gdrive-preview-container">
-    <div class="gdrive-preview-header">
-      <div class="gdrive-header-left">
+<!-- Lanvan Media Preview Lightbox -->
+<div id="previewModal" class="lv-preview-overlay" style="display: none; pointer-events: none !important;">
+  <div class="lv-preview-container">
+    <div class="lv-preview-header">
+      <div class="lv-header-left">
         <button class="btn-icon header-close-btn" onclick="closePreviewModal()" title="Close preview">
           <i data-lucide="arrow-left" style="width:20px;height:20px;"></i>
         </button>
-        <span id="previewTitle" class="gdrive-preview-title">File Preview</span>
+        <span id="previewTitle" class="lv-preview-title">File Preview</span>
       </div>
-      <div class="gdrive-header-right">
-        <button id="previewStreamBtn" class="gdrive-action-btn" onclick="copyVideoStreamUrl(window.currentPreviewFilename)" title="Copy stream link" style="display:none; background:rgba(59,130,246,0.15); color:#60a5fa; border:1px solid rgba(59,130,246,0.3); margin-right:4px;">
+      <div class="lv-header-right">
+        <button id="previewStreamBtn" class="lv-action-btn" onclick="copyVideoStreamUrl(window.currentPreviewFilename)" title="Copy stream link" style="display:none; background:rgba(59,130,246,0.15); color:#60a5fa; border:1px solid rgba(59,130,246,0.3); margin-right:4px;">
           <i data-lucide="tv" style="width:16px;height:16px;color:#60a5fa;"></i>
           <span>Copy Stream Link</span>
         </button>
-        <a id="previewDownloadBtn" href="#" download class="gdrive-action-btn" title="Download file">
+        <a id="previewDownloadBtn" href="#" download class="lv-action-btn" title="Download file">
           <i data-lucide="download" style="width:16px;height:16px;"></i>
           <span>Download</span>
         </a>
@@ -680,7 +680,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         </button>
       </div>
     </div>
-    <div id="previewBody" class="gdrive-preview-body">
+    <div id="previewBody" class="lv-preview-body">
     </div>
   </div>
 </div>
@@ -810,6 +810,6 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
     </div>
   </section>
 
-</div><!-- /production-legacy -->
+</div>
 
 {% endblock %}

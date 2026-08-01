@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright
 GREEN = "\033[92m"; RED = "\033[91m"; YELLOW = "\033[93m"; BOLD = "\033[1m"; RESET = "\033[0m"
 BASE = Path(__file__).parent.parent.parent
 LANVAN_URL = "http://localhost"
-PROTO_URL = f"file:///{BASE}/prototype/prototype.html"
+PROTO_URL = f"file:///{BASE}/production/production.html"
 
 CRITICAL_ELEMENTS = [
     ("body", "body"),
@@ -157,9 +157,9 @@ def inspect_page(page, url, label):
 
 
 def diff_reports(proto_report, lanvan_report):
-    """Compare prototype vs Lanvan computed styles."""
+    """Compare reference vs Lanvan computed styles."""
     print(f"\n{BOLD}{'═'*60}{RESET}")
-    print(f"{BOLD}  DIFF: Prototype vs Lanvan{RESET}")
+    print(f"{BOLD}  DIFF: Reference vs Lanvan{RESET}")
     print(f"{BOLD}{'═'*60}")
 
     diffs = []
@@ -173,13 +173,13 @@ def diff_reports(proto_report, lanvan_report):
             pv = proto_styles.get(prop, "")
             lv = lanvan_styles.get(prop, "")
             if pv and lv and pv != lv:
-                diffs.append({"element": name, "property": prop, "prototype": pv, "lanvan": lv})
+                diffs.append({"element": name, "property": prop, "Reference": pv, "lanvan": lv})
 
     if diffs:
         print(f"\n  {RED}{len(diffs)} visual differences found:{RESET}")
         for d in diffs[:20]:
             print(f"  {d['element']}: {d['property']}")
-            print(f"    {GREEN}Prototype:{RESET} {d['prototype']}")
+            print(f"    {GREEN}production:{RESET} {d['production']}")
             print(f"    {RED}Lanvan:{RESET}    {d['lanvan']}")
         if len(diffs) > 20:
             print(f"  ... and {len(diffs)-20} more")
@@ -207,9 +207,9 @@ with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     context = browser.new_context(viewport={"width": 1440, "height": 900})
 
-    # Inspect Prototype
+    # Inspect Reference Build
     proto_page = context.new_page()
-    proto_report = inspect_page(proto_page, PROTO_URL, "PROTOTYPE")
+    proto_report = inspect_page(proto_page, PROTO_URL, "Reference")
     
     # Inspect Lanvan
     lanvan_page = context.new_page()
@@ -222,7 +222,7 @@ with sync_playwright() as p:
     report_path = BASE / "testing" / "regression" / "runtime_css_report.json"
     with open(report_path, "w") as f:
         json.dump({
-            "prototype": proto_report,
+            "Reference": proto_report,
             "lanvan": lanvan_report,
             "diff_count": len(diffs),
             "diffs": diffs

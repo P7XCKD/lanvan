@@ -20,7 +20,7 @@
             repoSetCache: null,
             repoGetCache: null,
             projectionBuild: null,
-            renderPrototype: null,
+            renderView: null,
             domUpdate: null,
             wsEvent: null,
             navEvent: null
@@ -96,7 +96,7 @@
                 console.log("Last Repository.setFolderCache(): " + (this.lastEvents.repoSetCache || "None"));
                 console.log("Last Repository.getFolderCache(): " + (this.lastEvents.repoGetCache || "None"));
                 console.log("Last Projection.buildCurrentFolderViewModel(): " + (this.lastEvents.projectionBuild || "None"));
-                console.log("Last renderPrototypeFileList(): " + (this.lastEvents.renderPrototype || "None"));
+                console.log("Last renderFileList(): " + (this.lastEvents.renderView || "None"));
                 console.log("Last DOM update: " + (this.lastEvents.domUpdate || "None"));
                 console.log("Last WebSocket Event: " + (this.lastEvents.wsEvent || "None"));
                 console.log("Last Navigation Event: " + (this.lastEvents.navEvent || "None"));
@@ -311,7 +311,8 @@
                 break;
 
             case 'SET_SELECTION':
-                nextState.selection = Array.isArray(payload.selection) ? payload.selection.slice() : [];
+                var selectionList = Array.isArray(payload.selection) ? payload.selection : (Array.isArray(payload.files) ? payload.files : []);
+                nextState.selection = selectionList.slice();
                 break;
 
             case 'CLEAR_SELECTION':

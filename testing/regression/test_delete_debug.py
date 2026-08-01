@@ -32,7 +32,7 @@ with sync_playwright() as p:
     js_state = page.evaluate("""() => {
         return {
             deleteSelected: typeof window.deleteSelected,
-            prototypeSelectedItems: window.prototypeSelectedItems || 'N/A',
+            selectedItems: window.selectedItems || 'N/A',
             appInitLoaded: window.__appInitLoaded,
             updateFileDisplay: typeof window.updateFileDisplay,
         };
@@ -83,8 +83,8 @@ with sync_playwright() as p:
         # Check selection state
         selected = page.evaluate("""() => {
             const items = document.querySelectorAll('#nasFileList .m3-list-item.selected');
-            const sel = window.prototypeSelectedItems || [];
-            return {selectedElements: items.length, prototypeSelectedItems: sel};
+            const sel = window.selectedItems || [];
+            return {selectedElements: items.length, selectedItems: sel};
         }""")
         print(f"   Selection state: {selected}")
 

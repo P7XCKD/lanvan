@@ -27,11 +27,20 @@ print(f"{BOLD}  Module 4: JS Audit — Behavior & Handler Verification{RESET}")
 print(f"{BOLD}{'='*60}")
 
 handlers = re.findall(r'on(?:click|change|input|paste)="(\w+)', index)
-handler_funcs = set(handlers) - {"", "event"}
+handler_funcs = set(handlers) - {"", "event", "if", "window"}
 
-defined = set(re.findall(r'function\s+(\w+)\s*\(', app_js))
-defined |= set(re.findall(r'window\.(\w+)\s*=\s*function', app_js))
-defined |= set(re.findall(r'window\.(\w+)\s*=\s*async\s+function', app_js))
+all_js = app_js
+js_dir = BASE / "app" / "static" / "js"
+if js_dir.exists():
+    for jsf in js_dir.rglob("*.js"):
+        try:
+            all_js += "\n" + jsf.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            pass
+
+defined = set(re.findall(r'function\s+(\w+)\s*\(', all_js))
+defined |= set(re.findall(r'window\.(\w+)\s*=\s*function', all_js))
+defined |= set(re.findall(r'window\.(\w+)\s*=\s*async\s+function', all_js))
 
 production = {"toggleDeviceLogs","closeDeviceLogsModal","toggleSettingsMenu",
     "showAccessControlSettings","showConnectionInfo","addTextToClipboard",
@@ -54,14 +63,14 @@ for h in sorted(broken):
 print(f"\n{BOLD}Adapter Guards{RESET}")
 print(f"{'─'*50}")
 check("Self-guard (__appInitLoaded)", "__appInitLoaded" in app_js, "prevents double-init")
-check("Wrapper guard (__prototypeWrapped)", "__prototypeWrapped" in app_js, "prevents double-wrap")
-check("Rendering wrapper", "updateFileDisplay" in app_js and "renderPrototypeFileList" in app_js)
-check("Clipboard wrapper", "refreshClipboardHistory" in app_js and "syncPrototypeClipboard" in app_js)
+check("Wrapper guard (__renderWrapped)", "__renderWrapped" in app_js, "prevents double-wrap")
+check("Rendering wrapper", "updateFileDisplay" in app_js and "renderFileList" in app_js)
+check("Clipboard wrapper", "refreshClipboardHistory" in app_js and "syncClipboardView" in app_js)
 
 print(f"\n{BOLD}Critical Functions{RESET}")
 print(f"{'─'*50}")
-critical_funcs = ["renderPrototypeFileList","buildListItem","attachListItemHandlers",
-    "syncPrototypeClipboard","renderUploadTray","startUploadTrayPolling",
+critical_funcs = ["renderFileList","buildListItem","attachListItemHandlers",
+    "syncClipboardView","renderUploadTray","startUploadTrayPolling",
     "renderQuickAccess","renderSidebarQR","fetchFilesData","triggerInstantRefresh",
     "setupDropzone","setupSearch","renderSearchResults"]
 for fn in critical_funcs:

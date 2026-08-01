@@ -1,18 +1,32 @@
 /**
  * @file selection-manager.js
- * @description Store-backed selection state manager & toolbar renderer.
+ * @description Lanvan Selection State Manager & toolbar renderer.
  * @module SelectionManager
  */
 
 (function (window) {
     'use strict';
 
+    function syncSelectionDOM() {
+        var selected = window.selectedItems || [];
+        var items = document.querySelectorAll("#nasFileList .m3-list-item, .quick-card");
+        for (var i = 0; i < items.length; i++) {
+            var fn = items[i].getAttribute("data-filename");
+            if (fn && selected.indexOf(fn) !== -1) {
+                items[i].classList.add("selected");
+            } else {
+                items[i].classList.remove("selected");
+            }
+        }
+    }
+
     function updateSelectionToolbar() {
+        syncSelectionDOM();
         var defaultContent = document.getElementById("toolbarDefaultContent");
         var selectionContent = document.getElementById("toolbarSelectionContent");
         if (!defaultContent || !selectionContent) return;
 
-        var selected = window.prototypeSelectedItems || [];
+        var selected = window.selectedItems || [];
 
         if (selected.length > 0) {
             defaultContent.style.display = "none";
@@ -47,17 +61,167 @@
     }
 
     function clearSelection() {
-        window.prototypeSelectedItems = [];
-        var items = document.querySelectorAll("#nasFileList .m3-list-item.selected");
-        for (var i = 0; i < items.length; i++) {
-            items[i].classList.remove("selected");
-        }
+        window.selectedItems = [];
+        // Keep backward-compat alias so older callers using window.prototypeSelectedItems still work
+        window.prototypeSelectedItems = window.selectedItems;
+        syncSelectionDOM();
         updateSelectionToolbar();
+    }
+
+    // --- Production-Grade Marquee Selection System ---
+    function initMarqueeSelection() {
+        var fileList = document.getElementById("nasFileList");
+        var container = document.getElementById("fileView") || fileList;
+        if (!container) return;
+
+        var DRAG_THRESHOLD = 5;
+        var startX = 0;
+        var startY = 0;
+        var currentX = 0;
+        var currentY = 0;
+        var isMarqueeActive = false;
+        var rafPending = false;
+        var cachedItems = [];
+        var marqueeBox = null;
+
+        function getMarqueeElement() {
+            if (!marqueeBox) {
+                marqueeBox = document.createElement("div");
+                marqueeBox.className = "drag-selection-marquee";
+                marqueeBox.style.cssText = "position:fixed; border:1px solid #3b82f6; background:rgba(59, 130, 246, 0.18); border-radius:4px; z-index:9999; pointer-events:none; display:none;";
+                document.body.appendChild(marqueeBox);
+            }
+            return marqueeBox;
+        }
+
+        function cacheItemRectangles() {
+            var elements = document.querySelectorAll("#nasFileList .m3-list-item");
+            cachedItems = [];
+            for (var i = 0; i < elements.length; i++) {
+                var fn = elements[i].getAttribute("data-filename");
+                if (fn) {
+                    cachedItems.push({
+                        name: fn,
+                        rect: elements[i].getBoundingClientRect()
+                    });
+                }
+            }
+        }
+
+        function updateMarqueeFrame() {
+            rafPending = false;
+            if (!isMarqueeActive) return;
+
+            var box = getMarqueeElement();
+            box.style.display = "block";
+
+            var rectLeft = Math.min(startX, currentX);
+            var rectTop = Math.min(startY, currentY);
+            var rectWidth = Math.abs(currentX - startX);
+            var rectHeight = Math.abs(currentY - startY);
+
+            box.style.left = rectLeft + "px";
+            box.style.top = rectTop + "px";
+            box.style.width = rectWidth + "px";
+            box.style.height = rectHeight + "px";
+
+            // Fast 60 FPS hit test against cached item rects
+            var nextSelection = [];
+            for (var i = 0; i < cachedItems.length; i++) {
+                var item = cachedItems[i];
+                var r = item.rect;
+                var overlaps = !(rectLeft > r.right ||
+                    rectLeft + rectWidth < r.left ||
+                    rectTop > r.bottom ||
+                    rectTop + rectHeight < r.top);
+                if (overlaps) {
+                    nextSelection.push(item.name);
+                }
+            }
+
+            // Atomic store update: replace selection array directly to trigger window setter
+            window.selectedItems = nextSelection;
+            updateSelectionToolbar();
+        }
+
+        function suppressNextClick(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            window.removeEventListener("click", suppressNextClick, true);
+        }
+
+        container.addEventListener("pointerdown", function (e) {
+            // Only primary pointer (left click / touch)
+            if (e.button !== 0 && e.pointerType === "mouse") return;
+            // Ignore click on interactive buttons, inputs, links, or context menus
+            if (e.target.closest("button, a, input, select, textarea, .custom-context-menu, [data-action]")) return;
+
+            startX = e.clientX;
+            startY = e.clientY;
+            currentX = e.clientX;
+            currentY = e.clientY;
+            isMarqueeActive = false;
+
+            function onPointerMove(ev) {
+                currentX = ev.clientX;
+                currentY = ev.clientY;
+                var dx = currentX - startX;
+                var dy = currentY - startY;
+
+                if (!isMarqueeActive && Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD) {
+                    isMarqueeActive = true;
+                    if (window.getSelection) window.getSelection().removeAllRanges();
+                    cacheItemRectangles();
+                }
+
+                if (isMarqueeActive) {
+                    ev.preventDefault();
+                    if (window.getSelection) window.getSelection().removeAllRanges();
+
+                    if (!rafPending) {
+                        rafPending = true;
+                        requestAnimationFrame(updateMarqueeFrame);
+                    }
+                }
+            }
+
+            function onPointerUp(ev) {
+                window.removeEventListener("pointermove", onPointerMove, true);
+                window.removeEventListener("pointerup", onPointerUp, true);
+                window.removeEventListener("pointercancel", onPointerUp, true);
+
+                if (window.getSelection) window.getSelection().removeAllRanges();
+                if (marqueeBox) {
+                    marqueeBox.style.display = "none";
+                }
+
+                if (isMarqueeActive) {
+                    // Instantly register capture-phase click suppressor to consume the upcoming click
+                    window.addEventListener("click", suppressNextClick, true);
+                    // Fallback cleanup of suppressor after 200ms if no click fires
+                    setTimeout(function () {
+                        window.removeEventListener("click", suppressNextClick, true);
+                    }, 200);
+                    isMarqueeActive = false;
+                }
+            }
+
+            window.addEventListener("pointermove", onPointerMove, true);
+            window.addEventListener("pointerup", onPointerUp, true);
+            window.addEventListener("pointercancel", onPointerUp, true);
+        });
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initMarqueeSelection);
+    } else {
+        initMarqueeSelection();
     }
 
     window.SelectionManager = {
         updateSelectionToolbar: updateSelectionToolbar,
-        clearSelection: clearSelection
+        clearSelection: clearSelection,
+        initMarqueeSelection: initMarqueeSelection
     };
 
     window.updateSelectionToolbar = updateSelectionToolbar;

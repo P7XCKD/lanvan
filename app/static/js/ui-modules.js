@@ -1198,8 +1198,8 @@ async function uploadFolder(files) {
       }
       if (typeof window.requestSafeVisibleFilesRefresh === 'function') {
         window.requestSafeVisibleFilesRefresh(120);
-      } else if (typeof fetchFilesData === 'function' && typeof renderPrototypeFileList === 'function') {
-        fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+      } else if (typeof fetchFilesData === 'function' && typeof renderFileList === 'function') {
+        fetchFilesData().then(function (fd) { renderFileList(fd); });
       }
     } catch (error) {
       console.error('Multiple folder upload error:', error);
@@ -1246,8 +1246,8 @@ async function uploadSingleFolder(folderName, files) {
       }
       if (typeof window.requestSafeVisibleFilesRefresh === 'function') {
         window.requestSafeVisibleFilesRefresh(120);
-      } else if (typeof fetchFilesData === 'function' && typeof renderPrototypeFileList === 'function') {
-        fetchFilesData().then(function (fd) { renderPrototypeFileList(fd); });
+      } else if (typeof fetchFilesData === 'function' && typeof renderFileList === 'function') {
+        fetchFilesData().then(function (fd) { renderFileList(fd); });
       }
       if (typeof loadFolders === 'function') loadFolders();
       return { success: true, folderName, fileCount: result.files_uploaded.length };

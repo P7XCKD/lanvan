@@ -156,7 +156,7 @@
                     '</div>' +
                     '<div style="font-weight:700; font-size:1.4rem; color:#ffffff; text-align:center; word-break:break-all; max-width:600px;">' + escName + '</div>' +
                     '<div style="font-size:0.95rem; color:rgba(255,255,255,0.75); text-align:center; max-width:440px;">No in-app preview available for this document format.</div>' +
-                    '<a href="' + downloadUrl + '?download=1" download class="gdrive-doc-fallback-btn">' +
+                    '<a href="' + downloadUrl + '?download=1" download class="lv-doc-fallback-btn">' +
                     '<i data-lucide="download" style="width:18px; height:18px;"></i> Download File' +
                     '</a>' +
                     '</div>';
@@ -211,7 +211,7 @@
                 '</div>' +
                 '<div style="font-weight:700; color:#ffffff; font-size:1.4rem; text-align:center; word-break:break-all; max-width:600px;">' + escName + '</div>' +
                 '<div style="font-size:0.95rem; color:rgba(255,255,255,0.75); text-align:center; max-width:440px;">No in-app preview available for this file type.</div>' +
-                '<a href="' + downloadUrl + '?download=1" download class="gdrive-doc-fallback-btn">' +
+                '<a href="' + downloadUrl + '?download=1" download class="lv-doc-fallback-btn">' +
                 '<i data-lucide="download" style="width:18px; height:18px;"></i> Download File' +
                 '</a>' +
                 '</div>';
@@ -222,7 +222,7 @@
     }
 
     function openFilePreviewTarget() {
-        var selected = window.prototypeSelectedItems || [];
+        var selected = window.selectedItems || [];
         var target = window._contextMenuTarget || (selected.length > 0 ? selected[0] : "");
         window._contextMenuTarget = "";
         if (target) {

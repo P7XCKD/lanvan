@@ -6,7 +6,7 @@ from collections import defaultdict
 
 GREEN = "\033[92m"; RED = "\033[91m"; YELLOW = "\033[93m"; BOLD = "\033[1m"; RESET = "\033[0m"
 BASE = Path(__file__).parent.parent.parent
-PROTO_CSS = BASE / "prototype" / "prototype.css"
+PROTO_CSS = BASE / "Reference" / "production.css"
 LANVAN_CSS = BASE / "app" / "static" / "css" / "lanvan.css"
 passed = 0; failed = 0; critical = 0
 
@@ -48,7 +48,7 @@ print(f"{BOLD}{'='*60}")
 proto_rules = parse_rules(Path(PROTO_CSS).read_text(encoding="utf-8")) if PROTO_CSS.exists() else {}
 lanvan_rules = parse_rules(Path(LANVAN_CSS).read_text(encoding="utf-8")) if LANVAN_CSS.exists() else {}
 
-# Critical selectors that must match prototype
+# Critical selectors that must match reference build
 critical_selectors = [
     ".app-sidebar", ".app-bar", ".search-shell", ".search-shell input",
     ".m3-card", ".m3-list-item", ".m3-list-item:hover", ".m3-list-item.selected",
@@ -61,7 +61,7 @@ critical_selectors = [
     ".sidebar-item", ".sidebar-item.active"
 ]
 
-print(f"\n{BOLD}Critical CSS Selectors (must match prototype){RESET}")
+print(f"\n{BOLD}Critical CSS Selectors (must match reference build){RESET}")
 print(f"{'─'*50}")
 
 for sel in critical_selectors:
@@ -69,7 +69,7 @@ for sel in critical_selectors:
     lanvan_props = lanvan_rules.get(sel, {})
     
     if not proto_props:
-        check(f"  {sel}", True, "prototype-only, skip")
+        check(f"  {sel}", True, "reference-only, skip")
         continue
     
     if not lanvan_props:
@@ -88,7 +88,7 @@ for sel in critical_selectors:
             mismatches.append(f"{kp}: {pv} → {lv}")
     
     if not mismatches:
-        check(f"  {sel}", True, "matches prototype")
+        check(f"  {sel}", True, "matches reference build")
     else:
         check(f"  {sel}", False, f"MISMATCHES: {', '.join(mismatches[:3])}")
 

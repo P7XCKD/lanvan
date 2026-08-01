@@ -1,4 +1,4 @@
-/* Lanvan Design System — Adapted from prototype for production */
+/* Lanvan Design System — Adapted for production */
 /* Phase 1: Design tokens + component styles. Coexists with existing CSS. */
 
 /* ==========================================================================
@@ -1102,9 +1102,32 @@ header.app-bar,
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
+#nasFileList,
+.m3-list-item,
+.quick-card,
+.file-table-head,
+.desktop-panel-header {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
 .m3-list:has(.empty-dropzone-wrapper),
 .m3-list:has(#emptyDropzoneWrapper),
-.m3-list.empty-state {
+.m3-list.empty-state,
+.m3-list.grid-mode.empty-state,
+.m3-list.grid-mode:has(.empty-dropzone-wrapper),
+.m3-list.grid-mode:has(#emptyDropzoneWrapper) {
+    display: flex !important;
+    grid-template-columns: none !important;
+    grid-auto-rows: auto !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 420px !important;
+    height: 100% !important;
+    flex: 1 !important;
     overflow: hidden !important;
     overflow-y: hidden !important;
 }
@@ -1371,6 +1394,10 @@ html[data-view-mode="list"] #gridViewBtn {
     object-fit: cover;
     object-position: center;
     display: block;
+}
+
+.grid-card-preview video {
+    pointer-events: none !important;
 }
 
 [data-theme="dark"] .grid-card-preview {
@@ -2914,7 +2941,7 @@ html[data-view-mode="list"] #clipboardHistory {
 }
 
 /* ==========================================================================
-   MISSING PROTOTYPE CLASSES — Added by scanner
+   LANVAN COMPATIBILITY STYLES — Added by scanner
    ========================================================================== */
 
 /* AES card (sidebar utility) */
@@ -3475,7 +3502,7 @@ html[data-view-mode="list"] #clipboardHistory {
     font-style: italic;
 }
 
-/* Added missing prototype selector */
+/* Added missing selector */
 .aes-card,
 .connection-card {
     border: 1px solid var(--border-color);
@@ -3485,7 +3512,7 @@ html[data-view-mode="list"] #clipboardHistory {
     color: var(--text-color);
 }
 
-/* Merge remaining prototype classes */
+/* Merge remaining classes */
 .m3-fab {
     display: none !important;
 }
@@ -3497,6 +3524,10 @@ html[data-view-mode="list"] #clipboardHistory {
 }
 
 .video-play-badge {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     width: 42px;
     height: 42px;
     border-radius: 50%;
@@ -3507,16 +3538,22 @@ html[data-view-mode="list"] #clipboardHistory {
     justify-content: center;
     border: 2px solid rgba(255, 255, 255, 0.9);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+}
+
+.video-play-badge i,
+.video-play-badge svg {
+    margin: 0;
 }
 
 .video-preview-box {
     position: absolute;
-    top: 0;
+    top: 39px;
     left: 0;
     right: 0;
     bottom: 0;
     width: 100%;
-    height: 100%;
+    height: calc(100% - 39px);
     z-index: 1;
     background: linear-gradient(135deg, #111827, #1f2937);
     display: flex;
@@ -3670,14 +3707,14 @@ html[data-view-mode="list"] #clipboardHistory {
 }
 
 /* ==========================================================================
-   GOOGLE DRIVE STYLE FULL-SCREEN DARK PREVIEW LIGHTBOX
+   LANVAN MEDIA PREVIEW LIGHTBOX
    ========================================================================== */
-.gdrive-preview-overlay,
-.gdrive-preview-overlay * {
+.lv-preview-overlay,
+.lv-preview-overlay * {
     pointer-events: none !important;
 }
 
-.gdrive-preview-overlay {
+.lv-preview-overlay {
     position: fixed !important;
     top: 0 !important;
     left: 0 !important;
@@ -3699,32 +3736,32 @@ html[data-view-mode="list"] #clipboardHistory {
     -ms-user-select: none !important;
 }
 
-.gdrive-preview-overlay.active,
-.gdrive-preview-overlay[style*="display: flex"]:not([style*="display: none"]),
-.gdrive-preview-overlay[style*="display: block"]:not([style*="display: none"]) {
+.lv-preview-overlay.active,
+.lv-preview-overlay[style*="display: flex"]:not([style*="display: none"]),
+.lv-preview-overlay[style*="display: block"]:not([style*="display: none"]) {
     display: flex !important;
     pointer-events: auto !important;
 }
 
-.gdrive-preview-overlay.active *,
-.gdrive-preview-overlay[style*="display: flex"]:not([style*="display: none"]) *,
-.gdrive-preview-overlay[style*="display: block"]:not([style*="display: none"]) * {
+.lv-preview-overlay.active *,
+.lv-preview-overlay[style*="display: flex"]:not([style*="display: none"]) *,
+.lv-preview-overlay[style*="display: block"]:not([style*="display: none"]) * {
     pointer-events: auto !important;
 }
 
-.gdrive-preview-overlay[style*="display: none"],
-.gdrive-preview-overlay[style*="display: none"] * {
+.lv-preview-overlay[style*="display: none"],
+.lv-preview-overlay[style*="display: none"] * {
     display: none !important;
     pointer-events: none !important;
 }
 
-[data-theme="light"] .gdrive-preview-overlay {
+[data-theme="light"] .lv-preview-overlay {
     background: rgba(18, 20, 26, 0.82) !important;
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
 }
 
-.gdrive-preview-container {
+.lv-preview-container {
     width: 100%;
     height: 100%;
     display: flex;
@@ -3732,7 +3769,7 @@ html[data-view-mode="list"] #clipboardHistory {
     background: transparent;
 }
 
-.gdrive-preview-header {
+.lv-preview-header {
     height: 60px;
     padding: 0 1.25rem;
     display: flex;
@@ -3745,13 +3782,13 @@ html[data-view-mode="list"] #clipboardHistory {
     gap: 1rem;
 }
 
-[data-theme="light"] .gdrive-preview-header {
+[data-theme="light"] .lv-preview-header {
     background: transparent;
     border-bottom: none;
     color: #ffffff;
 }
 
-.gdrive-header-left {
+.lv-header-left {
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -3759,7 +3796,7 @@ html[data-view-mode="list"] #clipboardHistory {
     flex: 1;
 }
 
-.gdrive-preview-title {
+.lv-preview-title {
     font-size: 1.05rem;
     font-weight: 600;
     color: #ffffff;
@@ -3768,18 +3805,18 @@ html[data-view-mode="list"] #clipboardHistory {
     text-overflow: ellipsis;
 }
 
-[data-theme="light"] .gdrive-preview-title {
+[data-theme="light"] .lv-preview-title {
     color: #ffffff;
 }
 
-.gdrive-header-right {
+.lv-header-right {
     display: flex;
     align-items: center;
     gap: 0.75rem;
     flex-shrink: 0;
 }
 
-.gdrive-action-btn {
+.lv-action-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
@@ -3793,18 +3830,18 @@ html[data-view-mode="list"] #clipboardHistory {
     transition: background 0.15s ease, color 0.15s ease;
 }
 
-.gdrive-action-btn:hover,
-[data-theme="light"] .gdrive-action-btn:hover {
+.lv-action-btn:hover,
+[data-theme="light"] .lv-action-btn:hover {
     background: rgba(255, 255, 255, 0.28);
     color: #ffffff;
 }
 
-[data-theme="light"] .gdrive-action-btn {
+[data-theme="light"] .lv-action-btn {
     background: rgba(255, 255, 255, 0.15);
     color: #ffffff;
 }
 
-.gdrive-doc-fallback-btn {
+.lv-doc-fallback-btn {
     padding: 0.75rem 1.8rem;
     font-size: 0.95rem;
     font-weight: 600;
@@ -3819,14 +3856,14 @@ html[data-view-mode="list"] #clipboardHistory {
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.gdrive-doc-fallback-btn:hover {
+.lv-doc-fallback-btn:hover {
     background: #2563eb;
     transform: translateY(-2px) scale(1.03);
     box-shadow: 0 12px 30px rgba(59, 130, 246, 0.55);
     color: #ffffff !important;
 }
 
-.gdrive-doc-fallback-btn:active {
+.lv-doc-fallback-btn:active {
     transform: translateY(0) scale(0.98);
     box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
 }
@@ -3861,7 +3898,7 @@ html[data-view-mode="list"] #clipboardHistory {
     background: #e5e7eb !important;
 }
 
-.gdrive-preview-body {
+.lv-preview-body {
     flex: 1;
     display: flex;
     align-items: center;
@@ -3873,19 +3910,19 @@ html[data-view-mode="list"] #clipboardHistory {
     height: 100%;
 }
 
-.gdrive-preview-body>div {
+.lv-preview-body>div {
     background: transparent;
     color: #ffffff;
 }
 
-[data-theme="light"] .gdrive-preview-body>div {
+[data-theme="light"] .lv-preview-body>div {
     background: transparent;
     color: #ffffff;
 }
 
 /* Dark Mode ONLY: Frosted light-grey glass surface for inner preview cards */
-[data-theme="dark"] .gdrive-preview-body>div,
-html:not([data-theme="light"]) .gdrive-preview-body>div {
+[data-theme="dark"] .lv-preview-body>div,
+html:not([data-theme="light"]) .lv-preview-body>div {
     background: rgba(255, 255, 255, 0.08) !important;
     border: 1px solid rgba(255, 255, 255, 0.14) !important;
     border-radius: 16px;
@@ -3894,7 +3931,7 @@ html:not([data-theme="light"]) .gdrive-preview-body>div {
     -webkit-backdrop-filter: blur(16px);
 }
 
-.gdrive-preview-body img {
+.lv-preview-body img {
     max-width: 90vw !important;
     max-height: 84vh !important;
     width: auto;
@@ -3904,7 +3941,7 @@ html:not([data-theme="light"]) .gdrive-preview-body>div {
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
 }
 
-.gdrive-preview-body video {
+.lv-preview-body video {
     max-width: 90vw !important;
     max-height: 84vh !important;
     width: auto;
@@ -3923,7 +3960,7 @@ video::-webkit-media-controls-cast-button {
     display: none !important;
 }
 
-.gdrive-preview-body audio {
+.lv-preview-body audio {
     width: 100%;
     max-width: 460px;
     outline: none;
@@ -3932,12 +3969,12 @@ video::-webkit-media-controls-cast-button {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
-[data-theme="light"] .gdrive-preview-body audio {
+[data-theme="light"] .lv-preview-body audio {
     filter: none !important;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 
-.gdrive-preview-body iframe {
+.lv-preview-body iframe {
     width: 100%;
     height: 100%;
     border: none;
@@ -3946,7 +3983,7 @@ video::-webkit-media-controls-cast-button {
     background: #ffffff;
 }
 
-.gdrive-preview-body pre {
+.lv-preview-body pre {
     width: 85vw;
     max-height: 82vh;
     overflow: auto;

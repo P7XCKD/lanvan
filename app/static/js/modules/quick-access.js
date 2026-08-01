@@ -104,13 +104,17 @@
             cards[k].addEventListener("click", function (e) {
                 if (e.target.closest("button")) return;
                 var fname = this.getAttribute("data-filename");
-                if (typeof window.prototypeSelectedItems !== 'undefined') {
-                    if (window.prototypeSelectedItems.indexOf(fname) === -1) {
-                        window.prototypeSelectedItems = [fname];
-                    }
+                if (!fname) return;
+                var current = Array.isArray(window.selectedItems) ? window.selectedItems.slice() : [];
+                var idx = current.indexOf(fname);
+                if (idx > -1) {
+                    current.splice(idx, 1);
+                } else {
+                    current = [fname];
                 }
-                if (typeof window.renderPrototypeFileList === 'function') {
-                    window.renderPrototypeFileList();
+                window.selectedItems = current;
+                if (typeof window.updateSelectionToolbar === "function") {
+                    window.updateSelectionToolbar();
                 }
             });
         }

@@ -160,14 +160,14 @@ class Suite:
         proj_js = (JS_DIR / "projection-layer.js").read_text(encoding="utf-8", errors="ignore")
         main_app = (JS_DIR / "main-app.js").read_text(encoding="utf-8", errors="ignore")
 
-        self._ck("activeFolderMap" in app_init or "activeFolderMap" in proj_js or "activeFolderMap" in main_app, "activeFolderMap root subfolder aggregation in renderPrototypeFileList", "subfolder-synthesis")
+        self._ck("activeFolderMap" in app_init or "activeFolderMap" in proj_js or "activeFolderMap" in main_app, "activeFolderMap root subfolder aggregation in renderFileList", "subfolder-synthesis")
         self._ck("rowDataMap" in app_init or "rowDataMap" in main_app, "rowDataMap two-pass aggregation in _doInstantUIUpdate (prevents progress bar bouncing)", "subfolder-synthesis")
         
         # Verify two-pass DOM update pattern exists (Pass 1 aggregation + Pass 2 single DOM write)
         self._ck("// Pass 1: Aggregate items into per-row progress data" in app_init or "// Pass 1: Aggregate items into per-row progress data" in main_app, "Pass 1 item aggregation logic present", "subfolder-synthesis")
         self._ck("// Pass 2: Update DOM rows with aggregated progress" in app_init or "// Pass 2: Update DOM rows with aggregated progress" in main_app, "Pass 2 single-pass DOM row rendering present", "subfolder-synthesis")
         self._ck("function getRelativeItemDir" in app_init or "getRelativeItemDir" in proj_js or "getRelativeItemDir" in main_app, "getRelativeItemDir helper function present (prevents cross-folder upload item leakage)", "subfolder-synthesis")
-        self._ck("rowDataMap" in app_init or "deduplicatedFiles" in proj_js or "activeFolderMap" in proj_js, "activeNameMap deduplication present in renderPrototypeFileList (prevents duplicate row flickering)", "subfolder-synthesis")
+        self._ck("rowDataMap" in app_init or "deduplicatedFiles" in proj_js or "activeFolderMap" in proj_js, "activeNameMap deduplication present in renderFileList (prevents duplicate row flickering)", "subfolder-synthesis")
         
         files_py = (ROUTER_DIR / "files.py").read_text(encoding="utf-8", errors="ignore")
         self._ck("requestFileListRefresh" in main_app, "requestFileListRefresh single-flight debouncer present in main-app.js", "subfolder-synthesis")
@@ -207,7 +207,7 @@ class Suite:
         self._ck("initFileEventsWebSocket" in main_app and "/ws/file_events" in main_app, "Real-time cross-device file events WebSocket listener present", "declarative-ui")
         self._ck("isItemUploading" in app_init, "Uploading files selection guard present in app-init.js", "declarative-ui")
         self._ck("copyVideoStreamUrl" in app_init and "lanvanGlobalToast" in app_init, "Copy stream link handler with global toast notification present in app-init.js", "declarative-ui")
-        self._ck("alreadySelected" in app_init and "prototypeSelectedItems.indexOf(filename)" in app_init, "Multi-selection context menu right-click preservation present in app-init.js", "declarative-ui")
+        self._ck("alreadySelected" in app_init and "selectedItems.indexOf(filename)" in app_init, "Multi-selection context menu right-click preservation present in app-init.js", "declarative-ui")
         self._ck("SINGLE FILE / FOLDER RENAME" in app_init and "MULTI-ITEM BATCH RENAME" in app_init, "Single file extension modification & multi-item extension preservation handlers present in app-init.js", "declarative-ui")
         self._ck("downloadSelectedAsZip" in app_init and "downloadZipMenuItem" in (TEMPLATE_DIR / "index.html").read_text(encoding="utf-8", errors="ignore"), "Multi-selection Download individually and Download as ZIP options present in app-init.js & index.html", "declarative-ui")
         self._ck("isTargetFolder" in app_init and "(isSingle && !isTargetFolder)" in app_init, "Folder preview option suppression & Download as ZIP menu handler present in app-init.js", "declarative-ui")

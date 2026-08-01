@@ -164,6 +164,25 @@
             });
     };
 
+    FileRepository.prototype.renameItem = function (oldName, newName, isFolder, parentPath) {
+        var formData = new FormData();
+        formData.append("filename", oldName);
+        formData.append("new_name", newName);
+        var targetPath = cleanPath(parentPath);
+        if (targetPath) {
+            formData.append("parent_path", targetPath);
+        }
+        var self = this;
+        return fetch("/api/files/rename", { method: "POST", body: formData })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data && data.status === "success") {
+                    self.invalidateCache(targetPath);
+                }
+                return data;
+            });
+    };
+
     var repoInstance = new FileRepository();
     window.FileRepository = repoInstance;
 

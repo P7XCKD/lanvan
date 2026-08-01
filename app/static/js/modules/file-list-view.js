@@ -1,6 +1,6 @@
 /**
  * Lanvan File List View Module (file-list-view.js)
- * Manages prototype file list rendering (#nasFileList), subfolder synthesis, and row progress updates.
+ * Manages file list rendering (#nasFileList), subfolder synthesis, and row progress updates.
  */
 
 (function (window) {
