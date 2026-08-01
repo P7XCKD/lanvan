@@ -321,7 +321,23 @@
         line1 = "Uploading " + visibleProcessedFiles + " of " + summary.effectiveTotalFiles + " files";
 
         var parts = [];
-        if (summary.speed) parts.push(summary.speed);
+        if (summary.speed) {
+          parts.push(summary.speed);
+        } else {
+          var queue = (typeof window !== 'undefined' && window.uploadQueue) ? window.uploadQueue : [];
+          var activeItem = null;
+          for (var qIdx = 0; qIdx < queue.length; qIdx++) {
+            if (queue[qIdx] && queue[qIdx].status === 'UPLOADING' && queue[qIdx].speed > 0) {
+              activeItem = queue[qIdx];
+              break;
+            }
+          }
+          if (activeItem && typeof formatSpeed === 'function') {
+            parts.push(formatSpeed(activeItem.speed));
+          } else {
+            parts.push("Calculating...");
+          }
+        }
         line2 = parts.join(" • ");
         break;
 

@@ -3916,8 +3916,8 @@
                 '<div class="header-progress-bar" style="position: absolute; top:0; left:0; bottom:0; background: rgba(59, 130, 246, 0.08); z-index: 1; transition: width 0.2s ease-out; width: ' + avgPct + '%;"></div>' +
                 '<div style="position: relative; z-index: 2; display: flex; flex-direction: column; min-width: 0; flex: 1;">' +
                 '<span class="upload-toast-header-title">' + headerTitle + '</span>' +
-                '<div class="upload-toast-header-subtitle" style="font-size:0.72rem;color:var(--text-muted);opacity:0.85;white-space:nowrap;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;' + (headerSubtitle ? '' : 'display:none;') + '">' +
-                '<span class="tray-speed-text">' + (formatted.speed || headerSubtitle) + '</span>' +
+                '<div class="upload-toast-header-subtitle" style="font-size:0.72rem;color:var(--text-muted);opacity:0.85;white-space:nowrap;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:16px;">' +
+                '<span class="tray-speed-text">' + (formatted.speed || headerSubtitle || "Calculating...") + '</span>' +
                 '</div>' +
                 '</div>' +
                 '<div class="upload-toast-header-actions" style="position: relative; z-index: 2; display: flex; align-items: center;">' +
@@ -3991,12 +3991,11 @@
             trayDOM.title.textContent = headerTitle;
         }
         if (trayDOM.subtitle) {
-            if (headerSubtitle) {
-                if (trayDOM.subtitle.style.display !== "") trayDOM.subtitle.style.display = "";
-                var speedTxt = formatted.speed || headerSubtitle;
-                if (trayDOM.speedEl && trayDOM.speedEl.textContent !== speedTxt) trayDOM.speedEl.textContent = speedTxt;
-            } else {
-                if (trayDOM.subtitle.style.display !== "none") trayDOM.subtitle.style.display = "none";
+            var speedTxt = formatted.speed || headerSubtitle || ((batchSummary.state === 'UPLOADING' || batchSummary.state === 'PROCESSING') ? "Calculating..." : "");
+            if (speedTxt) {
+                if (trayDOM.speedEl && trayDOM.speedEl.textContent !== speedTxt) {
+                    trayDOM.speedEl.textContent = speedTxt;
+                }
             }
         }
         if (trayDOM.progressBar) {
