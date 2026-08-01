@@ -4676,6 +4676,7 @@
                 var escName = escapeHtml(item.fileName);
                 var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
                 if (row) {
+                    // List view updates
                     var subtitleCell = row.querySelector('.item-subtitle');
                     if (subtitleCell) {
                         var statusTxt = item.status === 'PAUSED' ? 'Paused' : (item.status === 'PROCESSING' ? 'Processing' : 'Uploading');
@@ -4694,6 +4695,20 @@
                     var bar = row.querySelector('.row-progress-bar');
                     if (bar) {
                         bar.style.width = progress + "%";
+                    }
+
+                    // Grid view updates
+                    var b4Num = row.querySelector('.b4-num');
+                    if (b4Num) {
+                        b4Num.textContent = progress + "%";
+                    }
+                    var b4Sub = row.querySelector('.b4-sub');
+                    if (b4Sub) {
+                        b4Sub.textContent = item.status === 'PAUSED' ? 'PAUSED' : (item.status === 'QUEUED' ? 'QUEUED' : 'UPLOADING');
+                    }
+                    var b4Strip = row.querySelector('.b4-bottom-strip > div');
+                    if (b4Strip) {
+                        b4Strip.style.width = progress + "%";
                     }
 
                     var playPauseBtn = row.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
