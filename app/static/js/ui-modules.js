@@ -602,11 +602,6 @@ function switchToPage(page) {
     return;
   }
 
-  // Get all tick indicators (removed for cleaner UI)
-  // const clipboardTickMain = document.getElementById('clipboardTickMain');
-  // const fileTickClipboard = document.getElementById('fileTickClipboard');
-  // const clipboardTickClipboard = document.getElementById('clipboardTickClipboard');
-
   // Add smooth transition effect with opacity
   const sections = [fileTransferSection, fileListSection, clipboardSection];
   sections.forEach(section => {
@@ -633,11 +628,6 @@ function switchToPage(page) {
         clipboardSection.style.opacity = '1';
       }
 
-      // Update tick indicators - removed for cleaner UI
-      // if (fileTickClipboard) fileTickClipboard.style.display = 'none';
-      // if (clipboardTickMain) clipboardTickMain.style.display = 'inline';
-      // if (clipboardTickClipboard) clipboardTickClipboard.style.display = 'inline';
-
       // Update page title/URL without navigation (preserves uploads)
       history.pushState({ page: 'clipboard' }, 'Lanvan - Clipboard', '/clipboard');
       document.title = 'Lanvan - Clipboard';
@@ -659,11 +649,6 @@ function switchToPage(page) {
         clipboardSection.style.display = 'none';
         clipboardSection.style.opacity = '1';
       }
-
-      // Update tick indicators - removed for cleaner UI
-      // if (fileTickClipboard) fileTickClipboard.style.display = 'inline';
-      // if (clipboardTickMain) clipboardTickMain.style.display = 'none';
-      // if (clipboardTickClipboard) clipboardTickClipboard.style.display = 'none';
 
       // Update page title/URL without navigation (preserves uploads)
       history.pushState({ page: 'file' }, 'Lanvan - File Transfer', '/');
@@ -709,31 +694,16 @@ if (!window.__popstateWired) {
     const fileListSection = document.getElementById('fileListSection');
     const clipboardSection = document.getElementById('clipboardSection');
 
-    // Get all tick indicators (removed for cleaner UI)
-    // const clipboardTickMain = document.getElementById('clipboardTickMain');
-    // const fileTickClipboard = document.getElementById('fileTickClipboard');
-    // const clipboardTickClipboard = document.getElementById('clipboardTickClipboard');
-
     if (targetPage === 'clipboard') {
       if (fileTransferSection) fileTransferSection.style.display = 'none';
       if (fileListSection) fileListSection.style.display = 'none';
       if (clipboardSection) clipboardSection.style.display = 'block';
-
-      // Update tick indicators for clipboard (removed for cleaner UI)
-      // if (fileTickClipboard) fileTickClipboard.style.display = 'none';
-      // if (clipboardTickMain) clipboardTickMain.style.display = 'inline';
-      // if (clipboardTickClipboard) clipboardTickClipboard.style.display = 'inline';
 
       document.title = 'Lanvan - Clipboard';
     } else {
       if (fileTransferSection) fileTransferSection.style.display = 'block';
       if (fileListSection) fileListSection.style.display = 'block';
       if (clipboardSection) clipboardSection.style.display = 'none';
-
-      // Update tick indicators for file transfer (removed for cleaner UI)
-      // if (fileTickClipboard) fileTickClipboard.style.display = 'inline';
-      // if (clipboardTickMain) clipboardTickMain.style.display = 'none';
-      // if (clipboardTickClipboard) clipboardTickClipboard.style.display = 'none';
 
       document.title = 'Lanvan - File Transfer';
 
