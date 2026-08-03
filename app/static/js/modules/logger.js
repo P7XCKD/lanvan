@@ -126,7 +126,22 @@
     window.enableDebug = enableDebugMode;
     window.disableDebug = disableDebugMode;
 
-    // 4. Install Compatibility Layer if DEBUG_MODE is false
+    // 4. Global Error Handlers: Ensure Uncaught ReferenceErrors & Rejections are ALWAYS printed to console
+    window.addEventListener('error', function (event) {
+        if (event && event.error) {
+            OriginalConsole.error('[UNCAUGHT ERROR]', event.error);
+        } else if (event && event.message) {
+            OriginalConsole.error('[UNCAUGHT ERROR]', event.message);
+        }
+    });
+
+    window.addEventListener('unhandledrejection', function (event) {
+        if (event && event.reason) {
+            OriginalConsole.error('[UNHANDLED REJECTION]', event.reason);
+        }
+    });
+
+    // 5. Install Compatibility Layer if DEBUG_MODE is false
     if (!window.DEBUG_MODE) {
         suppressConsole();
     }

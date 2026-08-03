@@ -171,8 +171,13 @@ if (typeof show_clipboard_only !== 'undefined' && show_clipboard_only) {
       }
     };
     clipboardWS.onmessage = (event) => {
-      if (event.data === 'refresh') {
-        window.log.debug('Clipboard update received via WebSocket');
+      try {
+        const raw = typeof event.data === 'string' ? event.data : '';
+        if (raw === 'refresh' || raw.includes('refresh') || raw.includes('clear') || raw.includes('delete')) {
+          window.log.debug('Clipboard update received via WebSocket:', raw);
+          if (typeof refreshClipboardHistory === 'function') refreshClipboardHistory();
+        }
+      } catch (err) {
         if (typeof refreshClipboardHistory === 'function') refreshClipboardHistory();
       }
     };
@@ -2877,7 +2882,7 @@ async function refreshFileList(reason = 'manual_or_api') {
 
     const files = data.files_data || data.files || [];
     console.log("[FLICKER-TRACE] refreshFileList #" + _genId + " for folder '" + targetFolder + "' | API returned " + files.length + " items");
-    console.log("[TRACE] refreshFileList API response for '" + targetFolder + "': " + JSON.stringify(files.map(function(f) { return (typeof f === 'string' ? f : f.name) + (f.isFolder ? '(dir)' : '(file)'); })));
+    console.log("[TRACE] refreshFileList API response for '" + targetFolder + "': " + JSON.stringify(files.map(function (f) { return (typeof f === 'string' ? f : f.name) + (f.isFolder ? '(dir)' : '(file)'); })));
 
     // Cache in Repository (single source of truth for disk state)
     if (window.FileRepository && typeof window.FileRepository.setFolderCache === 'function') {
@@ -5783,6 +5788,57 @@ function handleClipboardPaste(event) {
   console.log(' Text paste detected - will be added when you click "Add Text"');
 }
 
+// Global document paste listener for Clipboard view (Industry Standard Event Propagation Marking)
+document.addEventListener('paste', function (event) {
+  if (event.defaultPrevented || event._handled) {
+    return;
+  }
+
+  const activeEl = document.activeElement;
+  const isClipInput = activeEl && (activeEl.id === 'clipboardInput' || activeEl.id === 'clipboardTextInput');
+  const isClipView = window.activeTab === 'clipboard' || (document.getElementById('clipboardView') && document.getElementById('clipboardView').style.display !== 'none');
+
+  if (isClipInput || isClipView) {
+    const clipboardData = event.clipboardData || window.clipboardData;
+    if (!clipboardData) return;
+
+    let targetImage = null;
+
+    // 1. Check files array
+    if (clipboardData.files && clipboardData.files.length > 0) {
+      for (let i = 0; i < clipboardData.files.length; i++) {
+        if (clipboardData.files[i].type && clipboardData.files[i].type.startsWith('image/')) {
+          targetImage = clipboardData.files[i];
+          break;
+        }
+      }
+    }
+
+    // 2. Check items array if no file found yet
+    if (!targetImage && clipboardData.items) {
+      for (let i = 0; i < clipboardData.items.length; i++) {
+        const item = clipboardData.items[i];
+        if (item.type && item.type.startsWith('image/')) {
+          const blob = item.getAsFile();
+          if (blob) {
+            targetImage = blob;
+            break;
+          }
+        }
+      }
+    }
+
+    if (targetImage) {
+      event._handled = true;
+      event.preventDefault();
+      if (typeof event.stopImmediatePropagation === 'function') {
+        event.stopImmediatePropagation();
+      }
+      handleImagePaste(targetImage);
+    }
+  }
+}, true);
+
 // Handle image paste from clipboard
 function handleImagePaste(blob) {
   console.log(' Image pasted from clipboard, size:', blob.size);
@@ -5854,21 +5910,20 @@ function getClipboardImageCount() {
 
 // Add text content to clipboard with instant responsiveness
 async function addTextToClipboard() {
-  const textInput = document.getElementById('clipboardTextInput');
-  const addButton = document.getElementById('addTextToClipboardBtn'); // Updated selector
-  const text = textInput.value; // Preserve original formatting - no trim()
+  const textInput = document.getElementById('clipboardInput') || document.getElementById('clipboardTextInput');
+  const addButton = document.querySelector('.clipboard-action-bar .m3-primary-btn') || document.getElementById('addTextToClipboardBtn');
+  const text = textInput ? textInput.value : '';
 
   // Immediate validation with instant feedback
   if (!text || !text.trim()) { // Only check if completely empty
     showToast(' Please enter some text to add to clipboard', 3000);
-    textInput.focus(); // Immediate focus feedback
+    if (textInput) textInput.focus(); // Immediate focus feedback
     return;
   }
 
   // Immediate visual feedback - disable button temporarily
   if (addButton) {
     addButton.disabled = true;
-    addButton.textContent = '⏳ Adding...';
     addButton.style.opacity = '0.7';
   }
 
@@ -5876,44 +5931,30 @@ async function addTextToClipboard() {
   formData.append('data', text);
 
   try {
-    // Use setTimeout(0) to ensure this runs completely independently of any upload processing
-    setTimeout(async () => {
-      try {
-        const response = await fetch('/api/clipboard/add', {
-          method: 'POST',
-          body: formData
-        });
-        const data = await response.json();
+    const response = await fetch('/api/clipboard/add', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await response.json();
 
-        if (data.status === 'success') {
-          showToast(` Text added to clipboard (${data.item.size} bytes)`, 3000);
-          textInput.value = ''; // Clear input immediately
+    if (data.status === 'success') {
+      showToast(` Text added to clipboard (${data.item.size} bytes)`, 3000);
+      if (textInput) textInput.value = ''; // Clear input immediately
+      const prodInput = document.getElementById('clipboardTextInput');
+      if (prodInput) prodInput.value = '';
 
-          // Refresh clipboard in next animation frame - completely independent of uploads
-          requestAnimationFrame(() => refreshClipboardHistory());
-        } else {
-          showToast(` Failed to add text: ${data.msg}`, 4000);
-        }
-      } catch (error) {
-        console.error('Error adding text to clipboard:', error);
-        showToast(' Failed to add text to clipboard', 4000);
-      } finally {
-        // Restore button state
-        if (addButton) {
-          addButton.disabled = false;
-          addButton.textContent = ' Add Text';
-          addButton.style.opacity = '1';
-        }
-      }
-    }, 0); // Run in next event loop cycle
-
+      // Refresh clipboard in next animation frame
+      requestAnimationFrame(() => refreshClipboardHistory());
+    } else {
+      showToast(` Failed to add text: ${data.msg || data.message}`, 4000);
+    }
   } catch (error) {
     console.error('Error adding text to clipboard:', error);
     showToast(' Failed to add text to clipboard', 4000);
-    // Restore button state on immediate error
+  } finally {
+    // Restore button state
     if (addButton) {
       addButton.disabled = false;
-      addButton.textContent = ' Add Text';
       addButton.style.opacity = '1';
     }
   }
@@ -5921,9 +5962,10 @@ async function addTextToClipboard() {
 
 // Clear clipboard input fields
 function clearClipboardInput() {
-  const textInput = document.getElementById('clipboardTextInput');
-
-  textInput.value = '';
+  const textInput = document.getElementById('clipboardInput') || document.getElementById('clipboardTextInput');
+  if (textInput) textInput.value = '';
+  const prodInput = document.getElementById('clipboardTextInput');
+  if (prodInput) prodInput.value = '';
 
   showToast(' Clipboard input cleared', 2000);
 }
@@ -5931,14 +5973,13 @@ function clearClipboardInput() {
 // Refresh clipboard history
 async function refreshClipboardHistory() {
   try {
-    // Use requestIdleCallback if available to avoid blocking upload progress
     const performRefresh = async () => {
       const response = await fetch('/api/clipboard/list');
       const data = await response.json();
 
       if (data.status === 'success') {
+        window.clipboardHistoryData = data.items;
         clipboardHistoryData = data.items;
-        // Use requestAnimationFrame for smooth UI updates
         requestAnimationFrame(() => renderClipboardHistory(data.items));
       } else {
         console.error('Failed to load clipboard history:', data.msg);
@@ -5959,12 +6000,21 @@ async function refreshClipboardHistory() {
 
 // Render clipboard history with image previews
 function renderClipboardHistory(items) {
-  const container = document.getElementById('clipboardHistoryContent');
+  window.clipboardHistoryData = items;
+  clipboardHistoryData = items;
 
-  if (!items.length) {
-    container.innerHTML = `
+  // Render modern M3 Clipboard view directly
+  if (typeof syncClipboardView === 'function') {
+    syncClipboardView();
+  }
+
+  // Only render legacy HTML into secondary container if present
+  const legacyContainer = document.getElementById('clipboardHistoryContent');
+  if (!legacyContainer) return;
+
+  if (!items || !items.length) {
+    legacyContainer.innerHTML = `
       <div style="text-align: center; color: var(--text-color); padding: 2rem;">
-        <div style="font-size: 3rem; margin-bottom: 1rem;"></div>
         <div>No clipboard items yet</div>
         <div style="font-size: 0.9rem; margin-top: 0.5rem;">Add content above to get started</div>
       </div>
@@ -5972,7 +6022,7 @@ function renderClipboardHistory(items) {
     return;
   }
 
-  container.innerHTML = items.map(item => {
+  legacyContainer.innerHTML = items.map(item => {
     const typeIcon = getClipboardItemIcon(item);
     const sizeText = formatClipboardSize(item.size);
     const isImage = item.type === 'file' && item.content_type === 'image';
@@ -6070,377 +6120,40 @@ function renderClipboardHistory(items) {
   }
 }
 
-// Show full size image preview
+// Show full size image preview using official system preview modal
 function showImagePreview(imageSrc, filename) {
-  const modal = document.createElement('div');
-  modal.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.9);
-    z-index: 10002;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-    box-sizing: border-box;
-    user-select: none;
-  `;
+  const modal = document.getElementById('previewModal');
+  const titleEl = document.getElementById('previewTitle');
+  const bodyEl = document.getElementById('previewBody');
+  const dlBtn = document.getElementById('previewDownloadBtn');
+  const streamBtn = document.getElementById('previewStreamBtn');
 
-  let scale = 1;
-  let translateX = 0;
-  let translateY = 0;
-  let isDragging = false;
-  let hasDragged = false; // Track if user actually dragged
-  let startX = 0;
-  let startY = 0;
-  let startTranslateX = 0;
-  let startTranslateY = 0;
+  if (modal && bodyEl) {
+    const displayTitle = filename || 'Pasted Image';
+    if (titleEl) titleEl.textContent = displayTitle;
+    if (dlBtn) {
+      dlBtn.href = imageSrc;
+      dlBtn.download = displayTitle;
+    }
+    if (streamBtn) streamBtn.style.display = 'none';
 
-  modal.innerHTML = `
-    <div style="
-      position: relative;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      max-width: 95%;
-      max-height: 95%;
-    ">
-      <!-- Header -->
-      <div style="
-        padding: 1rem;
-        background: rgba(255,255,255,0.95);
-        border-radius: 8px 8px 0 0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        backdrop-filter: blur(10px);
-        flex-shrink: 0;
-      ">
-        <div style="display: flex; align-items: center; gap: 1rem;">
-          <h4 style="margin: 0; color: #333; font-size: 1.1rem;">${filename}</h4>
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <button class="zoom-btn" onclick="event.stopPropagation(); zoomImage(0.8)" style="
-              background: var(--settings-bg);
-              color: white;
-              border: none;
-              padding: 0.4rem 0.8rem;
-              border-radius: 4px;
-              cursor: pointer;
-              font-size: 0.9rem;
-            " title="Zoom Out">−</button>
-            <span id="zoomLevel" style="color: #666; font-size: 0.9rem; min-width: 50px; text-align: center;">100%</span>
-            <button class="zoom-btn" onclick="event.stopPropagation(); zoomImage(1.25)" style="
-              background: var(--settings-bg);
-              color: white;
-              border: none;
-              padding: 0.4rem 0.8rem;
-              border-radius: 4px;
-              cursor: pointer;
-              font-size: 0.9rem;
-            " title="Zoom In">+</button>
-            <button onclick="event.stopPropagation(); resetZoom()" style="
-              background: #17a2b8;
-              color: white;
-              border: none;
-              padding: 0.4rem 0.8rem;
-              border-radius: 4px;
-              cursor: pointer;
-              font-size: 0.9rem;
-            " title="Reset Zoom">Reset</button>
-          </div>
-        </div>
-        <button onclick="event.stopPropagation(); this.closest('.image-modal').remove()" style="
-          background: #dc3545;
-          color: white;
-          border: none;
-          padding: 0.5rem 1rem;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 0.9rem;
-        "> Close</button>
+    const safeTitle = typeof window.escapeHtml === 'function' ? window.escapeHtml(displayTitle) : displayTitle;
+    bodyEl.innerHTML = `
+      <div class="media-preview-container image-preview-wrapper" style="position:relative; width:100%; height:100%; min-height:70vh; flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+        <img id="lanvanZoomImage" class="media-preview-element" src="${imageSrc}" alt="${safeTitle}" style="max-width:90vw; max-height:84vh; width:auto; height:auto; object-fit:contain; border-radius:8px; display:block; margin:auto; box-shadow:0 16px 48px rgba(0,0,0,0.6); transition:transform 0.15s ease-out; cursor:grab;" />
       </div>
-      
-      <!-- Image Container -->
-      <div class="image-container" style="
-        flex: 1;
-        background: #000;
-        border-radius: 0 0 8px 8px;
-        overflow: hidden;
-        position: relative;
-        cursor: grab;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      ">
-        <img id="zoomableImage" src="${imageSrc}" alt="${filename}" style="
-          max-width: 100%;
-          max-height: 100%;
-          object-fit: contain;
-          transition: transform 0.2s ease-out;
-          transform: scale(1) translate(0px, 0px);
-          pointer-events: none;
-        " />
-        <div class="zoom-instructions" style="
-          position: absolute;
-          bottom: 10px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: rgba(0,0,0,0.7);
-          color: white;
-          padding: 0.5rem 1rem;
-          border-radius: 20px;
-          font-size: 0.8rem;
-          opacity: 0.8;
-        ">
-           Double-click to zoom • Drag to pan • Scroll to zoom
-        </div>
-      </div>
-    </div>
-  `;
+    `;
 
-  modal.className = 'image-modal';
-  document.body.appendChild(modal);
+    modal.style.display = 'flex';
+    modal.style.pointerEvents = 'auto';
 
-  const imageContainer = modal.querySelector('.image-container');
-  const image = modal.querySelector('#zoomableImage');
-  const zoomLevelDisplay = modal.querySelector('#zoomLevel');
-  const instructions = modal.querySelector('.zoom-instructions');
-
-  // Hide instructions after 3 seconds
-  setTimeout(() => {
-    if (instructions) instructions.style.opacity = '0';
-  }, 3000);
-
-  function updateImageTransform() {
-    image.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
-    zoomLevelDisplay.textContent = Math.round(scale * 100) + '%';
-
-    // Update cursor based on zoom level
-    if (scale > 1) {
-      imageContainer.style.cursor = isDragging ? 'grabbing' : 'grab';
-    } else {
-      imageContainer.style.cursor = 'grab';
+    if (typeof window.setupImageZoomAndPan === 'function') {
+      window.setupImageZoomAndPan();
+    }
+    if (typeof window.refreshLucideIcons === 'function') {
+      window.refreshLucideIcons(bodyEl);
     }
   }
-
-  // Zoom function
-  window.zoomImage = function (factor) {
-    const newScale = Math.min(Math.max(scale * factor, 0.1), 5); // Min 10%, Max 500%
-
-    if (newScale !== scale) {
-      scale = newScale;
-
-      // Reset pan if zooming out to fit
-      if (scale <= 1) {
-        translateX = 0;
-        translateY = 0;
-      }
-
-      updateImageTransform();
-    }
-  };
-
-  // Reset zoom function
-  window.resetZoom = function () {
-    scale = 1;
-    translateX = 0;
-    translateY = 0;
-    updateImageTransform();
-  };
-
-  // Double-click to zoom (only if not dragging)
-  imageContainer.addEventListener('dblclick', (e) => {
-    e.preventDefault();
-    e.stopPropagation(); // Prevent any parent handlers
-
-    // Only zoom if user wasn't dragging
-    if (!hasDragged) {
-      if (scale === 1) {
-        zoomImage(2); // Zoom to 200%
-      } else {
-        window.resetZoom();
-      }
-    }
-    hasDragged = false; // Reset for next interaction
-  });
-
-  // Mouse wheel zoom
-  imageContainer.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const factor = e.deltaY > 0 ? 0.9 : 1.1;
-    zoomImage(factor);
-  });
-
-  // Touch gestures for mobile
-  let initialDistance = 0;
-  let lastScale = 1;
-
-  imageContainer.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) {
-      // Pinch zoom start
-      initialDistance = Math.hypot(
-        e.touches[0].pageX - e.touches[1].pageX,
-        e.touches[0].pageY - e.touches[1].pageY
-      );
-      lastScale = scale;
-      e.preventDefault();
-      e.stopPropagation(); // Prevent modal close
-    } else if (e.touches.length === 1 && scale > 1) {
-      // Single touch pan start
-      isDragging = true;
-      hasDragged = false; // Reset drag flag
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      startTranslateX = translateX;
-      startTranslateY = translateY;
-      imageContainer.style.cursor = 'grabbing';
-      e.stopPropagation(); // Prevent modal close
-    }
-  });
-
-  imageContainer.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2) {
-      // Pinch zoom
-      e.preventDefault();
-      e.stopPropagation(); // Prevent modal close
-      const currentDistance = Math.hypot(
-        e.touches[0].pageX - e.touches[1].pageX,
-        e.touches[0].pageY - e.touches[1].pageY
-      );
-
-      if (initialDistance > 0) {
-        const newScale = Math.min(Math.max(lastScale * (currentDistance / initialDistance), 0.1), 5);
-        scale = newScale;
-        updateImageTransform();
-      }
-    } else if (e.touches.length === 1 && isDragging && scale > 1) {
-      // Single touch pan
-      e.preventDefault();
-      e.stopPropagation(); // Prevent modal close
-      const deltaX = e.touches[0].clientX - startX;
-      const deltaY = e.touches[0].clientY - startY;
-
-      // Check if drag has moved enough to be considered a drag
-      if (!hasDragged && (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)) {
-        hasDragged = true;
-      }
-
-      translateX = startTranslateX + deltaX / scale;
-      translateY = startTranslateY + deltaY / scale;
-      updateImageTransform();
-    }
-  });
-
-  imageContainer.addEventListener('touchend', (e) => {
-    if (e.touches.length === 0) {
-      isDragging = false;
-      initialDistance = 0;
-      updateImageTransform();
-    }
-  });
-
-  // Mouse drag for desktop
-  imageContainer.addEventListener('mousedown', (e) => {
-    if (scale > 1) {
-      isDragging = true;
-      hasDragged = false; // Reset drag flag
-      startX = e.clientX;
-      startY = e.clientY;
-      startTranslateX = translateX;
-      startTranslateY = translateY;
-      imageContainer.style.cursor = 'grabbing';
-      e.preventDefault();
-      e.stopPropagation(); // Prevent modal close
-    }
-  });
-
-  document.addEventListener('mousemove', (e) => {
-    if (isDragging && scale > 1) {
-      const deltaX = e.clientX - startX;
-      const deltaY = e.clientY - startY;
-
-      // If moved more than 5 pixels, consider it a drag
-      if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
-        hasDragged = true;
-      }
-
-      translateX = startTranslateX + deltaX / scale;
-      translateY = startTranslateY + deltaY / scale;
-      updateImageTransform();
-    }
-  });
-
-  document.addEventListener('mouseup', () => {
-    if (isDragging) {
-      isDragging = false;
-      updateImageTransform();
-    }
-  });
-
-  // Keyboard shortcuts
-  const keyHandler = (e) => {
-    if (e.key === 'Escape') {
-      modal.remove();
-      document.removeEventListener('keydown', keyHandler);
-    } else if (e.key === '+' || e.key === '=') {
-      e.preventDefault();
-      zoomImage(1.25);
-    } else if (e.key === '-') {
-      e.preventDefault();
-      zoomImage(0.8);
-    } else if (e.key === '0') {
-      e.preventDefault();
-      window.resetZoom();
-    }
-  };
-
-  document.addEventListener('keydown', keyHandler);
-
-  // Prevent clicks on header and image container from closing modal
-  const headerElement = modal.querySelector('div[style*="backdrop-filter"]');
-  const imageContainerElement = modal.querySelector('.image-container');
-
-  if (headerElement) {
-    headerElement.addEventListener('click', (e) => {
-      e.stopPropagation();
-    });
-  }
-
-  if (imageContainerElement) {
-    imageContainerElement.addEventListener('click', (e) => {
-      e.stopPropagation();
-    });
-  }
-
-  // Close on background click (but not when interacting with image)
-  modal.addEventListener('click', (e) => {
-    // Only close if clicking on the modal background, not on image container or image itself
-    if (e.target === modal) {
-      modal.remove();
-      document.removeEventListener('keydown', keyHandler);
-    }
-  });
-
-  // Clean up when modal is removed
-  const observer = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      mutation.removedNodes.forEach((node) => {
-        if (node === modal) {
-          document.removeEventListener('keydown', keyHandler);
-          // Clean up global functions
-          delete window.zoomImage;
-          delete window.resetZoom;
-          observer.disconnect();
-        }
-      });
-    });
-  });
-
-  observer.observe(document.body, { childList: true });
 }
 
 // Upload clipboard item to main file storage
@@ -6463,9 +6176,42 @@ function uploadClipboardItem(itemId) {
     });
 }
 
-// Download clipboard item
-function downloadClipboardItem(itemId) {
-  window.open(`/api/clipboard/get/${itemId}`, '_blank');
+// Download clipboard item directly without opening a new tab using Blob URL
+async function downloadClipboardItem(itemId) {
+  try {
+    const downloadUrl = `/api/clipboard/get/${itemId}?download=1`;
+    const res = await fetch(downloadUrl);
+    
+    if (!res.ok) {
+      showToast(' Failed to download clipboard item', 3000);
+      return;
+    }
+
+    let filename = `pasted-text-${itemId}.txt`;
+    const disposition = res.headers.get('Content-Disposition');
+    if (disposition && disposition.indexOf('filename=') !== -1) {
+      const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+      if (matches != null && matches[1]) {
+        filename = matches[1].replace(/['"]/g, '');
+      }
+    }
+
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => {
+      try { URL.revokeObjectURL(blobUrl); } catch (e) {}
+    }, 1000);
+    showToast(` Downloaded ${filename}`, 2000);
+  } catch (err) {
+    console.error('Download error:', err);
+    showToast(' Failed to download clipboard item', 3000);
+  }
 }
 
 // Copy clipboard text item to system clipboard

@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lanvan Clipboard — Grid 2 Design Variations</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --border-color: #e2e8f0;
+      --text-color: #0f172a;
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-container: #eff6ff;
+      --surface-variant: #f1f5f9;
+      --danger: #ef4444;
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text-color);
+      padding: 2.5rem 2rem;
+      line-height: 1.5;
+    }
+
+    .header-area { margin-bottom: 2rem; }
+    h1 { font-size: 1.65rem; font-weight: 800; color: #0f172a; letter-spacing: -0.02em; }
+    p.subtitle { color: var(--text-muted); font-size: 0.92rem; margin-top: 0.25rem; }
+
+    .demo-nav {
+      display: flex;
+      gap: 0.65rem;
+      margin-bottom: 2rem;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 1rem;
+      overflow-x: auto;
+    }
+
+    .nav-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      padding: 0.65rem 1.25rem;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .nav-btn:hover { background: #f1f5f9; color: var(--text-color); }
+    .nav-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+    }
+
+    .section-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .section-desc {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+    }
+
+    .option-view { display: none; }
+    .option-view.active { display: block; }
+
+    .grid-layout {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    .btn-icon {
+      background: transparent;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-icon:hover { background: var(--surface-variant); color: var(--text-color); }
+
+    .avatar-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .avatar-document { background: #eff6ff; color: #2563eb; }
+    .avatar-code { background: #f0fdf4; color: #16a34a; }
+
+    .size-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      background: var(--surface-variant);
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+    }
+
+    /* ==========================================================================
+       VARIATION 2A: Minimalist Avatar Header + White Canvas Body
+       ========================================================================== */
+    .var2a-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      height: 165px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: all 0.2s ease;
+    }
+    .var2a-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+    }
+    .var2a-head {
+      padding: 0.6rem 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+      background: #fafafa;
+    }
+    .var2a-body {
+      padding: 0.85rem;
+      flex: 1;
+      font-size: 0.9rem;
+      color: var(--text-color);
+      line-height: 1.5;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-weight: 500;
+    }
+
+    /* ==========================================================================
+       VARIATION 2B: Tinted Soft-Grey Card Body (Light Contrast Sheet)
+       ========================================================================== */
+    .var2b-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      height: 165px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: all 0.2s ease;
+    }
+    .var2b-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+    }
+    .var2b-head {
+      padding: 0.6rem 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+      background: #ffffff;
+    }
+    .var2b-body {
+      padding: 0.85rem;
+      flex: 1;
+      background: #f8fafc;
+      font-size: 0.88rem;
+      color: var(--text-color);
+      line-height: 1.5;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* ==========================================================================
+       VARIATION 2C: Monospace Code Editor Card (Fira Code Font)
+       ========================================================================== */
+    .var2c-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      height: 165px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: all 0.2s ease;
+    }
+    .var2c-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+    }
+    .var2c-head {
+      padding: 0.6rem 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+      background: #f1f5f9;
+    }
+    .var2c-body {
+      padding: 0.85rem;
+      flex: 1;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.82rem;
+      color: #1e293b;
+      line-height: 1.5;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* ==========================================================================
+       VARIATION 2D: M3 Pill Header + Pure Canvas Body
+       ========================================================================== */
+    .var2d-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      height: 165px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: all 0.2s ease;
+    }
+    .var2d-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+    }
+    .var2d-head {
+      padding: 0.65rem 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+      background: #ffffff;
+    }
+    .var2d-pill {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--primary);
+      background: var(--primary-container);
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+    }
+    .var2d-body {
+      padding: 0.85rem;
+      flex: 1;
+      font-size: 0.9rem;
+      color: var(--text-color);
+      line-height: 1.5;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="header-area">
+    <h1>Grid Option 2 — Design Variations</h1>
+    <p class="subtitle">Exploring 4 sub-styles based on Grid 2 (Soft Sheet Card with Top Header).</p>
+  </div>
+
+  <div class="demo-nav">
+    <button class="nav-btn active" onclick="switchTab('var2a')">2A: Avatar Icon Header + White Body</button>
+    <button class="nav-btn" onclick="switchTab('var2b')">2B: Tinted Soft-Grey Body</button>
+    <button class="nav-btn" onclick="switchTab('var2c')">2C: Monospace Code Editor Card</button>
+    <button class="nav-btn" onclick="switchTab('var2d')">2D: M3 Pill Badge Header</button>
+  </div>
+
+  <!-- VARIATION 2A -->
+  <div id="var2a" class="option-view active">
+    <div class="section-title"><i data-lucide="sparkles" style="color:var(--primary);"></i> Variation 2A: Avatar Icon Header + White Body</div>
+    <div class="section-desc">Lanvan pastel avatar icon in header + crisp white text canvas.</div>
+
+    <div class="grid-layout">
+      <!-- Small text -->
+      <div class="var2a-card">
+        <div class="var2a-head">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div class="avatar-icon avatar-document"><i data-lucide="file-text" style="width:16px;height:16px;"></i></div>
+            <div>
+              <div style="font-weight:700;font-size:0.85rem;">Text</div>
+              <div style="font-size:0.7rem;color:var(--text-muted);">3 B</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.15rem;">
+            <button class="btn-icon" title="Copy"><i data-lucide="copy" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon" title="Download"><i data-lucide="download" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon" title="Delete" style="color:var(--danger);"><i data-lucide="trash-2" style="width:15px;height:15px;"></i></button>
+          </div>
+        </div>
+        <div class="var2a-body">eee</div>
+      </div>
+
+      <!-- Medium text -->
+      <div class="var2a-card">
+        <div class="var2a-head">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div class="avatar-icon avatar-document"><i data-lucide="file-text" style="width:16px;height:16px;"></i></div>
+            <div>
+              <div style="font-weight:700;font-size:0.85rem;">Text</div>
+              <div style="font-size:0.7rem;color:var(--text-muted);">168 B</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.15rem;">
+            <button class="btn-icon" title="Copy"><i data-lucide="copy" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon" title="Download"><i data-lucide="download" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon" title="Delete" style="color:var(--danger);"><i data-lucide="trash-2" style="width:15px;height:15px;"></i></button>
+          </div>
+        </div>
+        <div class="var2a-body">Lanvan is a real-time cross-device file & clipboard sharing platform built with high performance and zero setup requirements.</div>
+      </div>
+
+      <!-- Large text -->
+      <div class="var2a-card">
+        <div class="var2a-head">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div class="avatar-icon avatar-code"><i data-lucide="code" style="width:16px;height:16px;"></i></div>
+            <div>
+              <div style="font-weight:700;font-size:0.85rem;">Text</div>
+              <div style="font-size:0.7rem;color:var(--text-muted);">109.1 KB</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:0.15rem;">
+            <button class="btn-icon" title="Copy"><i data-lucide="copy" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon" title="Download"><i data-lucide="download" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon" title="Delete" style="color:var(--danger);"><i data-lucide="trash-2" style="width:15px;height:15px;"></i></button>
+          </div>
+        </div>
+        <div class="var2a-body" style="font-family:'Fira Code',monospace;font-size:0.82rem;">/* Lanvan Design System Architecture */
+const repository = new Repository();
+const store = new StateStore();
+const projection = new ProjectionLayer(store);
+const renderer = new ViewRenderer(projection);</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VARIATION 2B -->
+  <div id="var2b" class="option-view">
+    <div class="section-title"><i data-lucide="layout" style="color:var(--primary);"></i> Variation 2B: Tinted Soft-Grey Body</div>
+    <div class="section-desc">White top header + soft slate-grey (#f8fafc) card body background.</div>
+
+    <div class="grid-layout">
+      <!-- Small text -->
+      <div class="var2b-card">
+        <div class="var2b-head">
+          <div style="display:flex;align-items:center;gap:0.4rem;">
+            <span style="font-weight:700;font-size:0.85rem;">Text</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);">• 3 B</span>
+          </div>
+          <div style="display:flex;gap:0.15rem;">
+            <button class="btn-icon"><i data-lucide="copy" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon"><i data-lucide="download" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon" style="color:var(--danger);"><i data-lucide="trash-2" style="width:15px;height:15px;"></i></button>
+          </div>
+        </div>
+        <div class="var2b-body">eee</div>
+      </div>
+
+      <!-- Medium text -->
+      <div class="var2b-card">
+        <div class="var2b-head">
+          <div style="display:flex;align-items:center;gap:0.4rem;">
+            <span style="font-weight:700;font-size:0.85rem;">Text</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);">• 168 B</span>
+          </div>
+          <div style="display:flex;gap:0.15rem;">
+            <button class="btn-icon"><i data-lucide="copy" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon"><i data-lucide="download" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon" style="color:var(--danger);"><i data-lucide="trash-2" style="width:15px;height:15px;"></i></button>
+          </div>
+        </div>
+        <div class="var2b-body">Lanvan is a real-time cross-device file & clipboard sharing platform built with high performance.</div>
+      </div>
+
+      <!-- Large text -->
+      <div class="var2b-card">
+        <div class="var2b-head">
+          <div style="display:flex;align-items:center;gap:0.4rem;">
+            <span style="font-weight:700;font-size:0.85rem;">Text</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);">• 109.1 KB</span>
+          </div>
+          <div style="display:flex;gap:0.15rem;">
+            <button class="btn-icon"><i data-lucide="copy" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon"><i data-lucide="download" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon" style="color:var(--danger);"><i data-lucide="trash-2" style="width:15px;height:15px;"></i></button>
+          </div>
+        </div>
+        <div class="var2b-body" style="font-family:'Fira Code',monospace;font-size:0.82rem;">/* Lanvan Design System Architecture */
+const repository = new Repository();</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VARIATION 2C -->
+  <div id="var2c" class="option-view">
+    <div class="section-title"><i data-lucide="code" style="color:var(--primary);"></i> Variation 2C: Monospace Code Editor Card</div>
+    <div class="section-desc">IDE/Code editor vibe with grey header band and Fira Code font in card body.</div>
+
+    <div class="grid-layout">
+      <div class="var2c-card">
+        <div class="var2c-head">
+          <div style="display:flex;align-items:center;gap:0.4rem;">
+            <i data-lucide="file-text" style="width:15px;height:15px;color:var(--text-muted);"></i>
+            <span style="font-weight:700;font-size:0.82rem;color:var(--text-muted);">Text • 3 B</span>
+          </div>
+          <div style="display:flex;gap:0.15rem;">
+            <button class="btn-icon"><i data-lucide="copy" style="width:14px;height:14px;"></i></button>
+            <button class="btn-icon"><i data-lucide="download" style="width:14px;height:14px;"></i></button>
+            <button class="btn-icon" style="color:var(--danger);"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+          </div>
+        </div>
+        <div class="var2c-body">eee</div>
+      </div>
+
+      <div class="var2c-card">
+        <div class="var2c-head">
+          <div style="display:flex;align-items:center;gap:0.4rem;">
+            <i data-lucide="code" style="width:15px;height:15px;color:var(--primary);"></i>
+            <span style="font-weight:700;font-size:0.82rem;color:var(--text-muted);">Text • 109.1 KB</span>
+          </div>
+          <div style="display:flex;gap:0.15rem;">
+            <button class="btn-icon"><i data-lucide="copy" style="width:14px;height:14px;"></i></button>
+            <button class="btn-icon"><i data-lucide="download" style="width:14px;height:14px;"></i></button>
+            <button class="btn-icon" style="color:var(--danger);"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+          </div>
+        </div>
+        <div class="var2c-body">/* Lanvan Design System Architecture */
+const repository = new Repository();</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VARIATION 2D -->
+  <div id="var2d" class="option-view">
+    <div class="section-title"><i data-lucide="tag" style="color:var(--primary);"></i> Variation 2D: M3 Pill Badge Header</div>
+    <div class="section-desc">Features rounded primary pill badge for Title & Size in top header.</div>
+
+    <div class="grid-layout">
+      <div class="var2d-card">
+        <div class="var2d-head">
+          <div style="display:flex;align-items:center;gap:0.4rem;">
+            <span class="var2d-pill">Text</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);">3 B</span>
+          </div>
+          <div style="display:flex;gap:0.15rem;">
+            <button class="btn-icon"><i data-lucide="copy" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon"><i data-lucide="download" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon" style="color:var(--danger);"><i data-lucide="trash-2" style="width:15px;height:15px;"></i></button>
+          </div>
+        </div>
+        <div class="var2d-body">eee</div>
+      </div>
+
+      <div class="var2d-card">
+        <div class="var2d-head">
+          <div style="display:flex;align-items:center;gap:0.4rem;">
+            <span class="var2d-pill">Text</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);">109.1 KB</span>
+          </div>
+          <div style="display:flex;gap:0.15rem;">
+            <button class="btn-icon"><i data-lucide="copy" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon"><i data-lucide="download" style="width:15px;height:15px;"></i></button>
+            <button class="btn-icon" style="color:var(--danger);"><i data-lucide="trash-2" style="width:15px;height:15px;"></i></button>
+          </div>
+        </div>
+        <div class="var2d-body">Lanvan is a real-time cross-device file & clipboard sharing platform built with high performance.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.option-view').forEach(view => view.classList.remove('active'));
+
+      event.target.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+  </script>
+</body>
+</html>

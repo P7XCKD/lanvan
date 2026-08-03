@@ -327,24 +327,20 @@ async def get_clipboard_history():
 
 
 @router.get("/api/clipboard/get/{item_id}", name="clipboard_get")
-async def get_clipboard_item(item_id: int):
-    """Get specific clipboard item by ID"""
+async def get_clipboard_item(item_id: int, request: Request, download: Optional[str] = None):
+    """Retrieve a single clipboard item by ID, or download as file/attachment."""
     try:
-        # Find item by ID
-        item = None
-        for clipboard_item in clipboard_history:
-            if clipboard_item["id"] == item_id:
-                item = clipboard_item
-                break
-
+        item = next((i for i in clipboard_history if i["id"] == item_id), None)
         if not item:
             return JSONResponse(
                 status_code=404,
                 content={"status": "error", "msg": "Clipboard item not found"}
             )
 
+        is_download = download is not None and str(download).lower() in ("1", "true", "yes")
+
         if item["type"] == "file":
-            # Return file as download
+            # Return file as download or inline preview
             file_data = item["data"]
             filename = item["filename"]
             
@@ -359,16 +355,33 @@ async def get_clipboard_item(item_id: int):
             if not mime_type:
                 mime_type = "application/octet-stream"
 
+            disposition = "attachment" if (is_download or not mime_type.startswith("image/")) else "inline"
+
             return StreamingResponse(
                 io.BytesIO(file_data),
                 media_type=mime_type,
                 headers={
-                    "Content-Disposition": f'attachment; filename="{safe_name}"; filename*=UTF-8\'\'{encoded_filename}',
+                    "Content-Disposition": f'{disposition}; filename="{safe_name}"; filename*=UTF-8\'\'{encoded_filename}',
                     "Content-Length": str(len(file_data))
                 }
             )
         else:
-            # Return text content
+            if is_download:
+                raw_text = item.get("data") or ""
+                text_bytes = raw_text.encode("utf-8")
+                filename = f"pasted-text-{item_id}.txt"
+                from urllib.parse import quote
+                encoded_filename = quote(filename)
+                return StreamingResponse(
+                    io.BytesIO(text_bytes),
+                    media_type="text/plain; charset=utf-8",
+                    headers={
+                        "Content-Disposition": f'attachment; filename="{filename}"; filename*=UTF-8\'\'{encoded_filename}',
+                        "Content-Length": str(len(text_bytes))
+                    }
+                )
+
+            # Return text content JSON for non-download API callers
             return JSONResponse(content={
                 "status": "success",
                 "item": {
@@ -396,8 +409,11 @@ async def clear_clipboard():
     save_clipboard_history()
     
     # Broadcast clear action to active WebSocket listeners
-    await clipboard_ws_manager.broadcast(json.dumps({"type": "clear"}))
-    return {"status": "success", "message": "Clipboard cleared"}
+    try:
+        await clipboard_ws_manager.broadcast("refresh")
+    except Exception:
+        pass
+    return {"status": "success", "msg": "Clipboard cleared", "message": "Clipboard cleared"}
 
 
 @router.delete("/api/clipboard/remove/{item_id}", name="clipboard_remove")
@@ -410,15 +426,15 @@ async def remove_clipboard_item(item_id: int):
             save_clipboard_history()
             
             # Broadcast delete action to active WebSocket listeners
-            await clipboard_ws_manager.broadcast(json.dumps({
-                "type": "delete",
-                "id": item_id
-            }))
-            return {"status": "success", "message": f"Item {item_id} deleted"}
+            try:
+                await clipboard_ws_manager.broadcast("refresh")
+            except Exception:
+                pass
+            return {"status": "success", "msg": f"Item {item_id} deleted", "message": f"Item {item_id} deleted"}
             
     return JSONResponse(
         status_code=404,
-        content={"status": "error", "message": "Item not found"}
+        content={"status": "error", "msg": "Item not found", "message": "Item not found"}
     )
 
 

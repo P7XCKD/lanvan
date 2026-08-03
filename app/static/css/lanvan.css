@@ -2436,29 +2436,108 @@ html[data-view-mode="list"] #gridViewBtn {
     transform: translateX(20px);
 }
 
-#clipboardHistory,
-#clipboardHistory.grid-mode,
-html[data-view-mode="grid"] #clipboardHistory,
-html[data-view-mode="list"] #clipboardHistory {
-    display: flex;
-    flex-direction: column;
-    grid-template-columns: none;
-    gap: 0.5rem;
+#clipboardHistory {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+    align-content: start;
+    padding-bottom: 1rem;
 }
 
-#clipboardHistory .m3-list-item {
+@media (max-width: 640px) {
+    #clipboardHistory {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.65rem;
+    }
+}
+
+.clipboard-grid-card {
+    position: relative;
+    height: 210px;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+    overflow: hidden;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.clipboard-grid-card:hover {
+    border-color: var(--primary, #3b82f6);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+@media (max-width: 640px) {
+    .clipboard-grid-card {
+        height: 185px;
+        border-radius: 12px;
+    }
+}
+
+.clipboard-card-head {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 52px;
+    z-index: 10;
     display: flex;
-    flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    grid-template-columns: none;
-    height: auto;
-    min-height: 52px;
+    padding: 0.6rem 0.85rem;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+}
+
+@media (max-width: 640px) {
+    .clipboard-card-head {
+        height: 46px;
+        padding: 0.45rem 0.65rem;
+    }
+}
+
+.clipboard-card-body {
+    position: absolute;
+    top: 52px;
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: 100%;
-    background: var(--input-bg, rgba(255, 255, 255, 0.05));
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 0.75rem 1rem;
+    height: calc(100% - 52px);
+    z-index: 1;
+    overflow: hidden;
+    background: var(--surface-variant, rgba(0, 0, 0, 0.03));
+}
+
+@media (max-width: 640px) {
+    .clipboard-card-body {
+        top: 46px;
+        height: calc(100% - 46px);
+    }
+}
+
+.clipboard-card-body.text-card-body {
+    background: var(--card-bg, #ffffff);
+}
+
+.clipboard-text-body {
+    padding: 0.85rem;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: var(--text-color);
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    user-select: text;
+    font-family: inherit;
+    font-weight: 500;
+    height: 100%;
+}
+
+@media (max-width: 640px) {
+    .clipboard-text-body {
+        padding: 0.65rem 0.75rem;
+        font-size: 0.82rem;
+    }
 }
 
 /* ==========================================================================

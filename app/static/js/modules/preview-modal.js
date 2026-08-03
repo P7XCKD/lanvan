@@ -307,5 +307,6 @@
     window.openFilePreview = openFilePreview;
     window.closePreviewModal = closePreviewModal;
     window.openFilePreviewTarget = openFilePreviewTarget;
+    window.setupImageZoomAndPan = setupImageZoomAndPan;
 
 })(window);
