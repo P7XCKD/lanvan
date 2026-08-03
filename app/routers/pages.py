@@ -101,18 +101,7 @@ async def home(request: Request):
     return safe_template_response(templates, request, "index.html", template_context)
 
 
-@router.get("/ios-help", response_class=HTMLResponse)
-async def ios_help_page(request: Request):
-    """iOS Safari troubleshooting and help page."""
-    return safe_template_response(templates, request, "ios-help.html", {})
 
-
-@router.get("/loading", response_class=HTMLResponse, name="loading")
-async def loading_page(request: Request, redirect: str = "/"):
-    """Loading page shown while resources are being prepared."""
-    return safe_template_response(templates, request, "loading.html", {
-        "redirect_url": redirect
-    })
 
 
 @router.get("/favicon.ico", name="favicon")

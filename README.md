@@ -69,10 +69,31 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**5. Run the server**
+## Running the Server
+
+### Launcher Modes & Command-Line Flags
+
+Lanvan features an intelligent launcher system (`run.py`) supporting development and production modes with order-independent flags:
 
 ```bash
+# Development Mode (HTTP, unminified source assets from app/static)
 python run.py
+
+# Development Mode with HTTPS / SSL
+python run.py https
+
+# Production Mode (HTTP, optimized minified assets from dist/static)
+python run.py prod
+
+# Production Mode with HTTPS / SSL (flags can be in any order)
+python run.py prod https
+python run.py https prod
+
+# Force Rebuild Production Assets
+python run.py prod force
+
+# Clean Production Build Output
+python run.py clean
 ```
 
 > On Windows you can also use `py run.py` — the launcher will auto-activate the venv if it exists.
@@ -91,28 +112,36 @@ Open the LAN address in any browser on the same network to start transferring fi
 
 ---
 
-### Android (Termux)
+## Production Build Pipeline
 
-**1. Install Termux** from [F-Droid](https://f-droid.org/packages/com.termux/) (recommended) or Google Play.
-
-**2. Open Termux and run the setup script**
+Lanvan includes a zero-dependency production build pipeline (`build.py`) that minifies frontend assets while leaving the development source tree (`app/`) 100% untouched as the single source of truth.
 
 ```bash
-pkg update -y && pkg install -y git python
-git clone https://github.com/P7XCKD/lanvan.git ~/lanvan
-cd ~/lanvan/docs/termux && bash setup-android.sh
+# Generate production bundle manually in dist/
+python build.py
 ```
 
-**3. Start the server**
+- **Isolated Output**: Generated assets reside strictly inside `dist/`.
+- **Automatic Build Detection**: `python run.py prod` automatically checks SHA-256 asset hashes and rebuilds `dist/` only when source files change.
+- **Zero Internet / Offline Native**: 100% self-contained local dependencies with strict Content Security Policy.
+- **No Source Maps**: Production mode generates zero `.map` files for maximum performance.
+
+---
+
+## Automated Testing & Quality Audit
+
+Lanvan maintains a 100% automated test pass rate for reliability and architecture.
 
 ```bash
-cd ~/lanvan
-python run.py
+# Run fast regression test suite (162 tests)
+python qt.py --fast
+
+# Run full test suite
+python qt.py
+
+# Run architectural defect scanner
+python arch_scan.py
 ```
-
-> Tip: Run `termux-wake-lock` before starting to prevent Android from killing the server.
-
-On Android, use the direct IP address (`http://192.168.x.x`) — mDNS `.local` domains usually do not work on Android.
 
 ---
 
@@ -131,7 +160,7 @@ On Android, use the direct IP address (`http://192.168.x.x`) — mDNS `.local` d
 2. Open a browser on the other device and go to:
    - `http://Lanvan.local` (Windows/macOS/iOS — via mDNS)
    - `http://192.168.x.x` (direct IP, works everywhere)
-   - Scan the **QR code** shown in the terminal
+   - Scan the **QR code** shown in the terminal or browser modal
 3. Start uploading or downloading files.
 
 **If other devices cannot connect (Windows host)**
@@ -149,14 +178,9 @@ fix_guest_connectivity.bat
 ```bash
 # Start with HTTPS
 python run.py https
-
-# iOS compatibility mode (HTTP, optimised for Safari)
-python run.py ios
 ```
 
 Certificates are auto-generated on first HTTPS run and stored in `certs/`.
-
-> iOS Safari requires either HTTP mode or a trusted certificate. Use `python run.py ios` for the best iOS experience.
 
 ---
 
@@ -179,19 +203,22 @@ To achieve the absolute maximum file transfer rates over your local network:
 
 ```
 lanvan/
-  ├── app/                  # Main FastAPI Application Core
+  ├── app/                  # Main FastAPI Application Core (Development Source of Truth)
   │   ├── core/             # Cryptography, validation, streaming merge, and atomic locks
   │   ├── routers/          # API route controllers (files, pages, clipboard, etc.)
   │   ├── ws_manager/       # WebSocket states for real-time clipboard & updates
   │   ├── utils/            # Platform checks, memory limits, and Zeroconf mDNS
-  │   ├── static/           # CSS styles, images, and client JS modules
+  │   ├── static/           # Unminified CSS styles, images, and JS modules
   │   └── templates/        # Jinja2 layout components (base.html, index.html)
   ├── certs/                # SSL certificate config and generation scripts
   ├── data/                 # Operational user files & db stores (uploads, clipboards)
+  ├── dist/                 # Generated production output (minified JS/CSS, isolated)
   ├── docs/                 # Platform setups and requirements manifests
   │   └── termux/           # Automated setup assets for Android Termux
   ├── testing/              # Test workspace and unit diagnostic suites
-  ├── run.py                # Platform-aware server launcher entry point
+  ├── arch_scan.py          # Automated architectural defect scanner
+  ├── build.py             # Industry-standard production build system
+  ├── run.py                # Platform-aware server launcher entry point (dev & prod)
   └── qt.py                 # Core component reliability test runner
 ```
 

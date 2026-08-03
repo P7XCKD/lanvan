@@ -32,9 +32,4 @@ Extends `base.html` to supply the main **Upload Files & Manager** panel along wi
 ### 3. `clipboard.html`
 Extends `base.html` to supply the **Unified Clipboard System** including text inputs, pasted image preview targets, and historical text/logs downloaders.
 
----
 
-## Standalone Templates
-
-* **`loading.html`**: A lightweight standalone splash screen containing progressive loaders shown to users while initial server resources and connection states are prepared.
-* **`ios-help.html`**: A standalone help guide outlining browser setting adjustments required to bypass local network protocol limits on iOS Safari.
