@@ -22,9 +22,39 @@
     }
     window.__appInitLoaded = true;
 
-    // =========================================================================
-    // 1. RENDERING WRAPPERS — Synchronize active UI containers with application state
-    // =========================================================================
+    // Disable browser native spellcheck, autocomplete, and writing assist overlays globally
+    function disableBrowserAssist(el) {
+        if (!el || !el.setAttribute) return;
+        el.setAttribute('autocomplete', 'off');
+        el.setAttribute('autocorrect', 'off');
+        el.setAttribute('autocapitalize', 'off');
+        el.setAttribute('spellcheck', 'false');
+        el.setAttribute('data-gramm', 'false');
+        el.setAttribute('data-enable-grammarly', 'false');
+    }
+
+    function initBrowserAssist() {
+        document.querySelectorAll('input, textarea').forEach(disableBrowserAssist);
+        const observer = new MutationObserver(function (mutations) {
+            mutations.forEach(function (mutation) {
+                mutation.addedNodes.forEach(function (node) {
+                    if (node.nodeType === 1) {
+                        if (node.matches && node.matches('input, textarea')) disableBrowserAssist(node);
+                        if (node.querySelectorAll) node.querySelectorAll('input, textarea').forEach(disableBrowserAssist);
+                    }
+                });
+            });
+        });
+        if (document.body) {
+            observer.observe(document.body, { childList: true, subtree: true });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initBrowserAssist);
+    } else {
+        initBrowserAssist();
+    }
 
     // Wrap updateFileDisplay() — called by production refreshFileList() and auto-refresh
     // Guard: only wrap if not already wrapped by a previous partial load

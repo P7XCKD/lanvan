@@ -61,6 +61,8 @@ defaultView: "clipboard"
           Text/Content:</label>
         <!-- Text Area Input: Listens to Ctrl+V pastes via handleClipboardPaste() in main-app.js -->
         <textarea id="clipboardTextInput" placeholder="Type or paste text content here..."
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          data-gramm="false" data-enable-grammarly="false"
           style="width: 100%; height: 100px; padding: 0.5rem; border: 2px dashed var(--border-color); background: var(--input-bg); color: var(--text-color); border-radius: 6px; resize: vertical; font-family: monospace; font-size: 0.9rem; white-space: pre-wrap; word-wrap: break-word;"
           onpaste="handleClipboardPaste(event)"></textarea>
         <small style="color: var(--text-color); font-size: 0.8rem;"><i data-lucide="lightbulb"

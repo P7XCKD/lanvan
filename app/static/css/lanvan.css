@@ -97,12 +97,56 @@ select {
 }
 
 /* ==========================================================================
-   ACCESSIBILITY & KEYBOARD FOCUS (:focus-visible)
+   GLOBAL FOCUS SYSTEM UNIFICATION (Search Gold Standard)
    ========================================================================== */
+
+/* 1. Reset inner inputs & textareas inside focus wrappers (no double outline) */
+.search-pill-wrapper input,
+.search-shell input,
+.clipboard-input-wrapper textarea,
+.clipboard-input-wrapper input,
+.clipboard-input,
+#clipboardInput {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* 2. Wrapper-Owned Focus Architecture (Matches Search Pill Gold Standard) */
+.search-pill-wrapper:focus-within,
+.search-shell:focus-within,
+.clipboard-input-wrapper:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.18);
+}
+
+[data-theme="dark"] .search-pill-wrapper:focus-within,
+[data-theme="dark"] .search-shell:focus-within,
+[data-theme="dark"] .clipboard-input-wrapper:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.22);
+}
+
+/* 3. Standalone Inputs & Dialog Controls Focus Architecture */
+.dialog-input:focus,
+.dialog-input:focus-within,
+.clipboard-textarea:focus,
+.clipboard-textarea:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.18);
+    outline: none;
+}
+
+[data-theme="dark"] .dialog-input:focus,
+[data-theme="dark"] .dialog-input:focus-within,
+[data-theme="dark"] .clipboard-textarea:focus,
+[data-theme="dark"] .clipboard-textarea:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.22);
+    outline: none;
+}
+
+/* 4. Non-Input Interactive Controls Accessibility Focus Ring (:focus-visible) */
 button:focus-visible,
-input:not(.search-pill-wrapper input):not(.search-shell input):focus-visible,
-textarea:focus-visible,
-select:focus-visible,
 a:focus-visible,
 .filter-chip:focus-visible,
 .view-switcher-btn:focus-visible,
@@ -112,25 +156,6 @@ a:focus-visible,
 .connect-tab:focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
-}
-
-/* Material 3 Wrapper-Owned Focus Styling (:focus-within) */
-.search-pill-wrapper input,
-.search-shell input {
-    outline: none;
-    box-shadow: none;
-}
-
-.search-pill-wrapper:focus-within,
-.search-shell:focus-within {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.18);
-}
-
-[data-theme="dark"] .search-pill-wrapper:focus-within,
-[data-theme="dark"] .search-shell:focus-within {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.22);
 }
 
 /* ==========================================================================
@@ -201,14 +226,25 @@ body {
 .sidebar-brand {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
-    padding: 0 0.65rem;
-    height: 44px;
+    gap: 9px;
+    padding: 0 0.5rem;
+    height: 40px;
+    margin-bottom: 0.2rem;
+}
+
+.brand-logo-container {
+    position: relative;
+    width: 46px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(-1.5px);
 }
 
 .brand-logo {
-    width: 52px;
-    height: 34px;
+    width: 46px;
+    height: 30px;
     object-fit: contain;
     transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -236,13 +272,15 @@ body {
 }
 
 .brand-title {
-    font-size: 1.35rem;
-    font-weight: 600;
-    color: #3c4043;
+    font-size: 1.32rem;
+    line-height: 30px;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    color: var(--text-color);
 }
 
-[data-theme="dark"] .brand-title {
-    color: var(--text-color);
+[data-theme="light"] .brand-title {
+    color: #202124;
 }
 
 .sidebar-menu {
@@ -1200,7 +1238,7 @@ header.app-bar,
     align-items: center;
 }
 
-.m3-list:not(.grid-mode) .m3-list-item > .row-progress-bar {
+.m3-list:not(.grid-mode) .m3-list-item>.row-progress-bar {
     grid-column: 1 / -1;
     grid-row: 1 / -1;
     position: absolute;
@@ -1214,19 +1252,19 @@ header.app-bar,
     pointer-events: none;
 }
 
-.m3-list:not(.grid-mode) .m3-list-item > .file-name-cell {
+.m3-list:not(.grid-mode) .m3-list-item>.file-name-cell {
     grid-column: 1;
 }
 
-.m3-list:not(.grid-mode) .m3-list-item > .item-date {
+.m3-list:not(.grid-mode) .m3-list-item>.item-date {
     grid-column: 2;
 }
 
-.m3-list:not(.grid-mode) .m3-list-item > .item-size {
+.m3-list:not(.grid-mode) .m3-list-item>.item-size {
     grid-column: 3;
 }
 
-.m3-list:not(.grid-mode) .m3-list-item > .row-actions {
+.m3-list:not(.grid-mode) .m3-list-item>.row-actions {
     grid-column: 4;
 }
 
@@ -2417,7 +2455,7 @@ html[data-view-mode="list"] #clipboardHistory {
     height: auto;
     min-height: 52px;
     width: 100%;
-    background: var(--input-bg, rgba(255,255,255,0.05));
+    background: var(--input-bg, rgba(255, 255, 255, 0.05));
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 0.75rem 1rem;
@@ -2732,6 +2770,7 @@ html[data-view-mode="list"] #clipboardHistory {
         display: none;
     }
 }
+
 /* 750px - 1024px: Hide date column, show Name + Size + Actions */
 @media (max-width: 1024px) and (min-width: 750px) {
 
@@ -2750,15 +2789,15 @@ html[data-view-mode="list"] #clipboardHistory {
         display: block;
     }
 
-    .m3-list:not(.grid-mode) .m3-list-item > .file-name-cell {
+    .m3-list:not(.grid-mode) .m3-list-item>.file-name-cell {
         grid-column: 1;
     }
 
-    .m3-list:not(.grid-mode) .m3-list-item > .item-size {
+    .m3-list:not(.grid-mode) .m3-list-item>.item-size {
         grid-column: 2;
     }
 
-    .m3-list:not(.grid-mode) .m3-list-item > .row-actions {
+    .m3-list:not(.grid-mode) .m3-list-item>.row-actions {
         grid-column: 3;
     }
 }
@@ -2778,11 +2817,11 @@ html[data-view-mode="list"] #clipboardHistory {
         display: none;
     }
 
-    .m3-list:not(.grid-mode) .m3-list-item > .file-name-cell {
+    .m3-list:not(.grid-mode) .m3-list-item>.file-name-cell {
         grid-column: 1;
     }
 
-    .m3-list:not(.grid-mode) .m3-list-item > .row-actions {
+    .m3-list:not(.grid-mode) .m3-list-item>.row-actions {
         grid-column: 2;
     }
 }
@@ -3916,10 +3955,12 @@ html[data-view-mode="list"] #clipboardHistory {
         padding-top: env(safe-area-inset-top, 0px);
         padding-bottom: env(safe-area-inset-bottom, 0px);
     }
+
     .lv-preview-container {
         width: 100vw;
         height: 100vh;
     }
+
     .lv-preview-header {
         height: 54px;
         padding: 0 0.5rem;
@@ -3927,9 +3968,11 @@ html[data-view-mode="list"] #clipboardHistory {
         background: rgba(10, 12, 16, 0.9);
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
+
     .lv-action-btn span {
         display: none;
     }
+
     .lv-action-btn,
     .header-close-btn {
         width: 44px;
@@ -3942,18 +3985,22 @@ html[data-view-mode="list"] #clipboardHistory {
         justify-content: center;
         border-radius: 50%;
     }
+
     .lv-action-btn {
         background: rgba(255, 255, 255, 0.15);
         color: #ffffff;
     }
+
     .lv-header-right {
         gap: 0.35rem;
     }
+
     .lv-header-left {
         gap: 0.5rem;
         min-width: 0;
         flex: 1;
     }
+
     .lv-preview-title {
         font-size: 0.95rem;
         font-weight: 600;
@@ -3962,6 +4009,7 @@ html[data-view-mode="list"] #clipboardHistory {
         overflow: hidden;
         text-overflow: ellipsis;
     }
+
     .lv-preview-body {
         padding: 0;
         flex: 1;
@@ -3970,6 +4018,7 @@ html[data-view-mode="list"] #clipboardHistory {
         align-items: center;
         justify-content: center;
     }
+
     .media-preview-container {
         padding: 0;
         background: transparent;
@@ -3977,6 +4026,7 @@ html[data-view-mode="list"] #clipboardHistory {
         width: 100%;
         height: 100%;
     }
+
     .media-preview-element,
     .image-preview-wrapper img,
     .video-preview-wrapper video {
@@ -4525,6 +4575,7 @@ video::-webkit-media-controls-cast-button {
     background: rgba(34, 197, 94, 0.15);
     color: #16a34a;
 }
+
 [data-theme="dark"] .search-autocomplete-icon.type-image {
     background: rgba(34, 197, 94, 0.22);
     color: #4ade80;
@@ -4534,6 +4585,7 @@ video::-webkit-media-controls-cast-button {
     background: rgba(168, 85, 247, 0.15);
     color: #9333ea;
 }
+
 [data-theme="dark"] .search-autocomplete-icon.type-audio {
     background: rgba(168, 85, 247, 0.22);
     color: #c084fc;
@@ -4543,6 +4595,7 @@ video::-webkit-media-controls-cast-button {
     background: rgba(245, 158, 11, 0.15);
     color: #d97706;
 }
+
 [data-theme="dark"] .search-autocomplete-icon.type-video {
     background: rgba(245, 158, 11, 0.22);
     color: #fbbf24;
@@ -4552,6 +4605,7 @@ video::-webkit-media-controls-cast-button {
     background: rgba(59, 130, 246, 0.15);
     color: #2563eb;
 }
+
 [data-theme="dark"] .search-autocomplete-icon.type-doc {
     background: rgba(59, 130, 246, 0.22);
     color: #60a5fa;
@@ -4561,6 +4615,7 @@ video::-webkit-media-controls-cast-button {
     background: rgba(14, 165, 233, 0.15);
     color: #0284c7;
 }
+
 [data-theme="dark"] .search-autocomplete-icon.type-folder {
     background: rgba(14, 165, 233, 0.22);
     color: #38bdf8;

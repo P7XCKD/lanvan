@@ -32,8 +32,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
   <!-- 1. Desktop Sidebar Navigation -->
   <aside class="app-sidebar">
     <div class="sidebar-brand">
-      <div
-        style="position: relative; width: 52px; height: 34px; display: inline-flex; align-items: center; justify-content: center;">
+      <div class="brand-logo-container">
         <img class="brand-logo dark-logo" src="{{ request.url_for('static', path='images/icon_dark_transparent.png') }}"
           alt="Lanvan Logo">
         <img class="brand-logo light-logo"
@@ -276,7 +275,9 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
           </div>
           <div class="clipboard-input-wrapper">
             <textarea id="clipboardInput" class="clipboard-input"
-              placeholder="Type or paste text, links, or Media here..."></textarea>
+              placeholder="Type or paste text, links, or Media here..."
+              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+              data-gramm="false" data-enable-grammarly="false"></textarea>
             <div class="clipboard-action-bar" style="justify-content: flex-start; gap: 0.5rem;">
               <button class="m3-primary-btn" onclick="addClipboardItem()">
                 <i data-lucide="plus" style="width:15px;height:15px;"></i>
