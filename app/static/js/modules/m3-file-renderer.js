@@ -130,10 +130,10 @@
             var displayPct = Math.round(pct);
             var statusText = uploadStatus === 'PAUSED' ? 'Paused' : (uploadStatus === 'QUEUED' ? 'Queued' : 'Uploading');
             progressBarHtml =
-                '<div class="glass-b4-body" style="position: absolute; top: 39px; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.22); backdrop-filter: blur(4px); z-index: 10;">' +
-                '<div class="b4-badge" style="background: rgba(255, 255, 255, 0.95); border-radius: 12px; padding: 12px 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 100px;">' +
-                '<div class="b4-num" style="font-size: 1.35rem; font-weight: 800; color: var(--primary, #2563eb); line-height: 1.1;">' + displayPct + '%</div>' +
-                '<div class="b4-sub" style="font-size: 0.68rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">' + statusText + '</div>' +
+                '<div class="glass-b4-body">' +
+                '<div class="b4-badge">' +
+                '<div class="b4-num">' + displayPct + '%</div>' +
+                '<div class="b4-sub">' + statusText + '</div>' +
                 '</div>' +
                 '<div class="b4-bottom-strip" style="position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: rgba(0,0,0,0.08); overflow: hidden;">' +
                 '<div style="width: ' + displayPct + '%; height: 100%; background: var(--primary, #3b82f6); transition: width 0.2s ease-out;"></div>' +

@@ -197,6 +197,16 @@ if (typeof show_clipboard_only !== 'undefined' && show_clipboard_only) {
   });
 }
 
+// WebSocket Exponential Backoff Strategy Helper
+let uploadWsBackoffDelay = 1000;
+let fileEventsWsBackoffDelay = 1000;
+
+function getNextWsBackoffDelay(currentDelay) {
+  const nextDelay = Math.min(currentDelay * 2, 10000);
+  const jitter = (Math.random() * 0.4 - 0.2) * nextDelay;
+  return Math.max(1000, Math.floor(nextDelay + jitter));
+}
+
 //  Upload Status WebSocket for low-latency real-time cross-device sync
 let uploadWs = null;
 let uploadWsReconnectTimer = null;
@@ -214,6 +224,7 @@ function initUploadWebSocket() {
 
     uploadWs.onopen = function () {
       console.log('[WS UPLOAD] 🟢 Connected to Upload Status WebSocket');
+      uploadWsBackoffDelay = 1000;
       if (uploadWsReconnectTimer) {
         clearTimeout(uploadWsReconnectTimer);
         uploadWsReconnectTimer = null;
@@ -240,7 +251,8 @@ function initUploadWebSocket() {
     uploadWs.onclose = function () {
       uploadWs = null;
       if (!uploadWsReconnectTimer) {
-        uploadWsReconnectTimer = setTimeout(initUploadWebSocket, 3000);
+        uploadWsBackoffDelay = getNextWsBackoffDelay(uploadWsBackoffDelay);
+        uploadWsReconnectTimer = setTimeout(initUploadWebSocket, uploadWsBackoffDelay);
       }
     };
 
@@ -251,7 +263,8 @@ function initUploadWebSocket() {
     };
   } catch (err) {
     if (!uploadWsReconnectTimer) {
-      uploadWsReconnectTimer = setTimeout(initUploadWebSocket, 5000);
+      uploadWsBackoffDelay = getNextWsBackoffDelay(uploadWsBackoffDelay);
+      uploadWsReconnectTimer = setTimeout(initUploadWebSocket, uploadWsBackoffDelay);
     }
   }
 }
@@ -273,6 +286,7 @@ function initFileEventsWebSocket() {
 
     fileEventsWs.onopen = function () {
       console.log('[WS FILE EVENTS] 🟢 Connected to Cross-Device Real-Time File Sync');
+      fileEventsWsBackoffDelay = 1000;
       if (fileEventsWsReconnectTimer) {
         clearTimeout(fileEventsWsReconnectTimer);
         fileEventsWsReconnectTimer = null;
@@ -303,7 +317,8 @@ function initFileEventsWebSocket() {
     fileEventsWs.onclose = function () {
       fileEventsWs = null;
       if (!fileEventsWsReconnectTimer) {
-        fileEventsWsReconnectTimer = setTimeout(initFileEventsWebSocket, 2500);
+        fileEventsWsBackoffDelay = getNextWsBackoffDelay(fileEventsWsBackoffDelay);
+        fileEventsWsReconnectTimer = setTimeout(initFileEventsWebSocket, fileEventsWsBackoffDelay);
       }
     };
 
@@ -314,7 +329,8 @@ function initFileEventsWebSocket() {
     };
   } catch (err) {
     if (!fileEventsWsReconnectTimer) {
-      fileEventsWsReconnectTimer = setTimeout(initFileEventsWebSocket, 4000);
+      fileEventsWsBackoffDelay = getNextWsBackoffDelay(fileEventsWsBackoffDelay);
+      fileEventsWsReconnectTimer = setTimeout(initFileEventsWebSocket, fileEventsWsBackoffDelay);
     }
   }
 }

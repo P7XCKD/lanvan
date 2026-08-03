@@ -42,10 +42,10 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
       <span class="brand-title">Lanvan</span>
     </div>
     <nav class="sidebar-menu">
-      <div class="sidebar-item active" id="sideItemFile" onclick="switchView('file')">
+      <div class="sidebar-item active" id="sideItemFile" role="button" tabindex="0" onclick="switchView('file')">
         <i data-lucide="folder"></i> Files
       </div>
-      <div class="sidebar-item" id="sideItemClipboard" onclick="switchView('clipboard')">
+      <div class="sidebar-item" id="sideItemClipboard" role="button" tabindex="0" onclick="switchView('clipboard')">
         <i data-lucide="clipboard"></i> Clipboard
       </div>
     </nav>
@@ -191,9 +191,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
                 style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.76rem; font-weight: 700; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-color); border-radius: 999px; padding: 0 0.75rem; height: 32px; box-sizing: border-box; transition: all 0.2s ease;">
                 <i data-lucide="search" style="width:13px;height:13px;color:var(--text-muted);flex-shrink:0;"></i>
                 <input id="toolbarSearchInput" type="text" placeholder="Search" autocomplete="off" spellcheck="false"
-                  style="border: none; background: transparent; outline: none; font-size: 0.76rem; font-weight: 600; color: var(--text-color); width: 80px; transition: width 0.2s ease;"
-                  onfocus="this.parentElement.style.borderColor='var(--primary)';"
-                  onblur="if(!this.value){this.parentElement.style.borderColor='var(--border-color)';}">
+                  style="border: none; background: transparent; outline: none; font-size: 0.76rem; font-weight: 600; color: var(--text-color); width: 80px; transition: width 0.2s ease;">
                 <button id="clearToolbarSearchBtn" type="button" onclick="clearToolbarSearch()" title="Clear search"
                   style="display: none; background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 0; align-items: center; justify-content: center;">
                   <i data-lucide="x" style="width: 13px; height: 13px;"></i>

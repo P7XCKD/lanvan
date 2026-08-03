@@ -97,6 +97,43 @@ select {
 }
 
 /* ==========================================================================
+   ACCESSIBILITY & KEYBOARD FOCUS (:focus-visible)
+   ========================================================================== */
+button:focus-visible,
+input:not(.search-pill-wrapper input):not(.search-shell input):focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+a:focus-visible,
+.filter-chip:focus-visible,
+.view-switcher-btn:focus-visible,
+.sidebar-item:focus-visible,
+.btn-icon:focus-visible,
+.context-item:focus-visible,
+.connect-tab:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* Material 3 Wrapper-Owned Focus Styling (:focus-within) */
+.search-pill-wrapper input,
+.search-shell input {
+    outline: none;
+    box-shadow: none;
+}
+
+.search-pill-wrapper:focus-within,
+.search-shell:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.18);
+}
+
+[data-theme="dark"] .search-pill-wrapper:focus-within,
+[data-theme="dark"] .search-shell:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.22);
+}
+
+/* ==========================================================================
    CUSTOM SCROLLBARS
    ========================================================================== */
 ::-webkit-scrollbar {
@@ -158,6 +195,7 @@ body {
     padding: 1.25rem 0.75rem;
     gap: 1rem;
     flex-shrink: 0;
+    border-right: 1px solid var(--border-color);
 }
 
 .sidebar-brand {
@@ -863,28 +901,36 @@ body {
     justify-content: space-between;
     min-height: 44px;
     gap: 1rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .desktop-panel-header {
+    border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 
 .panel-title {
     display: flex;
     align-items: center;
-    gap: 0.7rem;
+    gap: 0.65rem;
     min-width: 0;
-    font-size: 1.45rem;
-    font-weight: 650;
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
     color: var(--text-color);
 }
 
 .panel-title i {
     color: var(--primary);
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
 }
 
 .panel-meta {
     color: var(--text-muted);
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 600;
+    opacity: 0.85;
 }
 
 .qr-launch-btn {
@@ -898,10 +944,12 @@ body {
     background: var(--card-bg);
     color: var(--primary);
     flex-shrink: 0;
+    transition: all 0.2s ease;
 }
 
 .qr-launch-btn:hover {
     background: var(--hover-bg);
+    border-color: var(--primary);
 }
 
 .file-settings-btn {
@@ -1028,10 +1076,16 @@ header.app-bar,
     background: var(--card-bg);
     color: var(--text-color);
     border-radius: 999px;
-    padding: 0.45rem 0.8rem;
+    padding: 0.45rem 0.85rem;
     font-size: 0.76rem;
     font-weight: 700;
     cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.filter-chip:hover {
+    background: var(--hover-bg);
+    border-color: var(--primary);
 }
 
 .filter-chip.active {
@@ -1045,7 +1099,7 @@ header.app-bar,
    ========================================================================== */
 .view-switcher-pill {
     display: flex;
-    background: transparent;
+    background: var(--toggle-bg);
     border-radius: 999px;
     padding: 2px;
     border: 1px solid var(--border-color);
@@ -1055,8 +1109,8 @@ header.app-bar,
 .view-switcher-btn {
     background: transparent;
     border: none;
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -1066,10 +1120,15 @@ header.app-bar,
     transition: all 0.2s ease;
 }
 
+.view-switcher-btn:hover:not(.active) {
+    color: var(--text-color);
+}
+
 .view-switcher-btn.active {
-    background: var(--primary-container);
+    background: var(--card-bg);
     color: var(--primary);
-    box-shadow: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
 }
 
 /* ==========================================================================
@@ -1202,6 +1261,75 @@ header.app-bar,
     background-color: rgba(59, 130, 246, 0.12) !important;
     border: 2px solid var(--primary) !important;
     box-shadow: none !important;
+}
+
+/* ==========================================================================
+   MATERIAL 3 GRID UPLOAD OVERLAY — Production Dark Theme Refinement
+   ========================================================================== */
+.glass-b4-body {
+    position: absolute;
+    top: 39px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 10;
+}
+
+.b4-badge {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 10px 18px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 100px;
+    transition: all 0.2s ease;
+}
+
+.b4-num {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--primary);
+    line-height: 1.1;
+}
+
+.b4-sub {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-top: 3px;
+}
+
+/* Dark Theme Overlay Treatment */
+[data-theme="dark"] .glass-b4-body {
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+[data-theme="dark"] .b4-badge {
+    background: rgba(24, 25, 28, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .b4-num {
+    color: var(--primary);
+}
+
+[data-theme="dark"] .b4-sub {
+    color: var(--text-muted);
 }
 
 /* Industry-Standard Zero-Flicker View Mode Anti-FOUC Rules */
