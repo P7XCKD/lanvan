@@ -1172,8 +1172,11 @@
                     imgTitle = item.filename;
                 }
 
+                var isSelected = Array.isArray(window.selectedItems) && (window.selectedItems.indexOf(itemId) !== -1 || window.selectedItems.indexOf(String(itemId)) !== -1);
+                var selectedClass = isSelected ? " selected" : "";
+
                 html +=
-                    '<div class="clipboard-grid-card">' +
+                    '<div class="clipboard-grid-card' + selectedClass + '" data-clipboard-id="' + itemId + '" onclick="toggleClipboardSelection(event, ' + itemId + ')">' +
                     '<div class="clipboard-card-head">' +
                     '<div style="display:flex;align-items:center;gap:0.5rem;min-width:0;flex:1;">' +
                     '<div class="avatar-icon avatar-image" style="width:32px;height:32px;border-radius:8px;flex-shrink:0;"><i data-lucide="image" style="width:16px;height:16px;"></i></div>' +
@@ -1182,12 +1185,12 @@
                     '<span style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:text;">' + escapeHtml(subtitle) + '</span>' +
                     '</div>' +
                     '</div>' +
-                    '<div style="display:flex;align-items:center;gap:0.15rem;flex-shrink:0;">' +
+                    '<div style="display:flex;align-items:center;gap:0.15rem;flex-shrink:0;" onclick="event.stopPropagation()">' +
                     downloadAction +
                     removeAction +
                     '</div>' +
                     '</div>' +
-                    '<div class="clipboard-card-body" style="cursor:pointer;" onclick="showImagePreview(\'/api/clipboard/get/' + itemId + '\', \'' + escapeHtml(imgTitle) + '\')">' +
+                    '<div class="clipboard-card-body" style="cursor:pointer;" onclick="event.stopPropagation(); showImagePreview(\'/api/clipboard/get/' + itemId + '\', \'' + escapeHtml(imgTitle) + '\')">' +
                     '<img src="/api/clipboard/get/' + itemId + '" alt="' + escapeHtml(imgTitle) + '" style="width:100%;height:100%;object-fit:cover;display:block;" />' +
                     '</div>' +
                     '</div>';
@@ -1198,8 +1201,11 @@
                 var displayTitle = isFile ? (item.filename || "File") : (isUrl ? "URL" : "Text");
                 var fullText = item.data || item.preview || "";
 
+                var isSelected = Array.isArray(window.selectedItems) && (window.selectedItems.indexOf(itemId) !== -1 || window.selectedItems.indexOf(String(itemId)) !== -1);
+                var selectedClass = isSelected ? " selected" : "";
+
                 html +=
-                    '<div class="clipboard-grid-card">' +
+                    '<div class="clipboard-grid-card' + selectedClass + '" data-clipboard-id="' + itemId + '" onclick="toggleClipboardSelection(event, ' + itemId + ')">' +
                     '<div class="clipboard-card-head">' +
                     '<div style="display:flex;align-items:center;gap:0.5rem;min-width:0;flex:1;">' +
                     '<div class="avatar-icon ' + avatarClass + '"><i data-lucide="' + iconName + '"></i></div>' +
@@ -1208,7 +1214,7 @@
                     '<span style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:text;">' + escapeHtml(subtitle) + '</span>' +
                     '</div>' +
                     '</div>' +
-                    '<div style="display:flex;align-items:center;gap:0.15rem;flex-shrink:0;">' +
+                    '<div style="display:flex;align-items:center;gap:0.15rem;flex-shrink:0;" onclick="event.stopPropagation()">' +
                     copyAction +
                     downloadAction +
                     removeAction +
@@ -1224,6 +1230,102 @@
         if (window.lucide) lucide.createIcons();
     }
 
+    window.toggleClipboardSelection = function (event, itemId) {
+        if (event && event.target && (event.target.closest("button") || event.target.tagName === "BUTTON" || event.target.tagName === "A")) {
+            return;
+        }
+
+        var idStr = String(itemId);
+        if (!Array.isArray(window.selectedItems)) {
+            window.selectedItems = [];
+        }
+
+        var idx = window.selectedItems.indexOf(idStr);
+        if (idx === -1) {
+            idx = window.selectedItems.indexOf(itemId);
+        }
+
+        if (idx !== -1) {
+            window.selectedItems.splice(idx, 1);
+        } else {
+            window.selectedItems.push(idStr);
+        }
+
+        if (typeof syncSelectionDOM === "function") syncSelectionDOM();
+        if (typeof updateSelectionToolbar === "function") updateSelectionToolbar();
+    };
+
+    window.downloadSelectedClipboard = function () {
+        var selected = window.selectedItems || [];
+        if (selected.length === 0) return;
+
+        if (selected.length === 1) {
+            var singleId = selected[0];
+            window.open('/api/clipboard/get/' + singleId + '?download=1', '_blank');
+            if (typeof window.clearSelection === 'function') window.clearSelection();
+        } else {
+            fetch('/api/clipboard/download-zip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ item_ids: selected })
+            })
+            .then(function (res) {
+                if (!res.ok) throw new Error('ZIP download failed');
+                return res.blob();
+            })
+            .then(function (blob) {
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'clipboard_selection.zip';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                if (typeof window.clearSelection === 'function') window.clearSelection();
+                if (typeof showToast === 'function') showToast('Downloaded ' + selected.length + ' clipboard items as ZIP', 3000);
+            })
+            .catch(function (err) {
+                console.error('Clipboard ZIP error:', err);
+                if (typeof showToast === 'function') showToast('Error downloading ZIP archive', 4000);
+            });
+        }
+    };
+
+    window.handleClipboardMenuDownload = function () {
+        var menu = document.getElementById("contextMenu");
+        if (menu) menu.style.display = "none";
+
+        var selected = window.selectedItems || [];
+        var target = window._contextClipboardTarget;
+
+        if (selected.length > 0) {
+            window.downloadSelectedClipboard();
+        } else if (target) {
+            window.open('/api/clipboard/get/' + target + '?download=1', '_blank');
+        }
+    };
+
+    window.handleClipboardMenuDelete = function () {
+        var menu = document.getElementById("contextMenu");
+        if (menu) menu.style.display = "none";
+
+        var selected = window.selectedItems || [];
+        var target = window._contextClipboardTarget;
+
+        if (selected.length > 0) {
+            window.deleteSelected();
+        } else if (target) {
+            fetch('/api/clipboard/delete/' + target, { method: 'DELETE' })
+                .then(function (res) {
+                    if (res.ok) {
+                        if (typeof showToast === "function") showToast("Deleted 1 clipboard item.", 3000);
+                        if (typeof refreshClipboardHistory === "function") refreshClipboardHistory();
+                    }
+                });
+        }
+    };
+
     // =========================================================================
     // 3. APPLICATION UI HANDLERS — Stubs wired to production
     // =========================================================================
@@ -1232,6 +1334,8 @@
     window.switchView = function (tab) {
         if (!tab || tab === "recent") tab = "file";
         window.activeTab = tab;
+        document.documentElement.setAttribute('data-active-tab', tab);
+        try { localStorage.setItem("lanvan_active_tab", tab); } catch (e) {}
 
         var fileView = document.getElementById("fileView");
         var clipView = document.getElementById("clipboardView");
@@ -1247,30 +1351,28 @@
         // Clear selection when switching views
         window.clearSelection();
 
-        // Deactivate all sidebar items
-        var allSideItems = [sideFile, sideClip];
-        for (var i = 0; i < allSideItems.length; i++) {
-            if (allSideItems[i]) allSideItems[i].classList.remove("active");
+        // Update active classes and accessibility attributes
+        var isFile = (tab === "file");
+        if (sideFile) {
+            sideFile.classList.toggle("active", isFile);
+            sideFile.setAttribute("aria-current", isFile ? "page" : "false");
         }
-
-        // Deactivate all nav items
-        var allNavItems = [navFile, navClip];
-        for (var j = 0; j < allNavItems.length; j++) {
-            if (allNavItems[j]) allNavItems[j].classList.remove("active");
+        if (sideClip) {
+            sideClip.classList.toggle("active", !isFile);
+            sideClip.setAttribute("aria-current", !isFile ? "page" : "false");
+        }
+        if (navFile) {
+            navFile.classList.toggle("active", isFile);
+            navFile.setAttribute("aria-current", isFile ? "page" : "false");
+        }
+        if (navClip) {
+            navClip.classList.toggle("active", !isFile);
+            navClip.setAttribute("aria-current", !isFile ? "page" : "false");
         }
 
         if (tab === "clipboard") {
-            if (fileView) fileView.style.display = "none";
-            if (clipView) clipView.style.display = "flex";
-            if (sideClip) sideClip.classList.add("active");
-            if (navClip) navClip.classList.add("active");
             if (typeof refreshClipboardHistory === "function") refreshClipboardHistory();
         } else {
-            if (fileView) fileView.style.display = "flex";
-            if (clipView) clipView.style.display = "none";
-            if (sideFile) sideFile.classList.add("active");
-            if (navFile) navFile.classList.add("active");
-
             if (typeof lastRenderedFiles !== "undefined") {
                 renderFileList(lastRenderedFiles);
             }
@@ -1532,6 +1634,20 @@
         window._contextMenuTarget = "";
 
         if (itemsToDelete.length === 0) return;
+
+        var isClipboardDelete = window.activeTab === "clipboard" || (!isNaN(itemsToDelete[0]) && !isNaN(parseFloat(itemsToDelete[0])));
+        if (isClipboardDelete) {
+            var completedCb = 0;
+            Promise.all(itemsToDelete.map(function (cbId) {
+                return fetch('/api/clipboard/delete/' + cbId, { method: 'DELETE' })
+                    .then(function (res) { if (res.ok) completedCb++; });
+            })).then(function () {
+                if (typeof showToast === "function") showToast("Deleted " + completedCb + " clipboard item(s).", 3000);
+                if (typeof window.clearSelection === "function") window.clearSelection();
+                if (typeof refreshClipboardHistory === "function") refreshClipboardHistory();
+            });
+            return;
+        }
 
         var completed = 0;
         var failed = [];
@@ -3016,6 +3132,55 @@
         var appContainer = document.querySelector(".android-app");
         if (appContainer) {
             appContainer.addEventListener("contextmenu", function (e) {
+                var clipCard = e.target.closest(".clipboard-grid-card");
+                var isClipView = window.activeTab === "clipboard" || e.target.closest("#clipboardView") || e.target.closest("#clipboardHistory");
+
+                if (isClipView) {
+                    if (!clipCard) {
+                        // Right-clicking empty space in Clipboard — do nothing
+                        return;
+                    }
+                    e.preventDefault();
+
+                    var menu = document.getElementById("contextMenu");
+                    if (!menu) return;
+                    menu.style.display = "none";
+
+                    var genericOps = document.getElementById("genericMenuOptions");
+                    var itemOps = document.getElementById("itemMenuOptions");
+                    var clipboardOps = document.getElementById("clipboardMenuOptions");
+
+                    var itemId = clipCard.getAttribute("data-clipboard-id");
+                    window._contextClipboardTarget = itemId;
+
+                    if (!Array.isArray(window.selectedItems)) window.selectedItems = [];
+
+                    var idx = window.selectedItems.indexOf(itemId);
+                    if (idx === -1) idx = window.selectedItems.indexOf(String(itemId));
+                    if (idx === -1) idx = window.selectedItems.indexOf(Number(itemId));
+
+                    if (idx === -1) {
+                        window.selectedItems = [String(itemId)];
+                        if (typeof syncSelectionDOM === "function") syncSelectionDOM();
+                        if (typeof updateSelectionToolbar === "function") updateSelectionToolbar();
+                    }
+
+                    if (genericOps) genericOps.style.display = "none";
+                    if (itemOps) itemOps.style.display = "none";
+                    if (clipboardOps) clipboardOps.style.display = "block";
+
+                    var top = e.clientY;
+                    var left = e.clientX;
+                    if (top + 100 > window.innerHeight) top = window.innerHeight - 110;
+                    if (left + 180 > window.innerWidth) left = window.innerWidth - 190;
+
+                    menu.style.top = top + "px";
+                    menu.style.left = left + "px";
+                    menu.style.display = "block";
+                    if (window.lucide) lucide.createIcons();
+                    return;
+                }
+
                 e.preventDefault();
 
                 var menu = document.getElementById("contextMenu");
@@ -4592,6 +4757,13 @@
         if (typeof window.refreshFileList === 'function') {
             window.refreshFileList('bootstrap');
         }
+
+        var savedTab = "file";
+        try {
+            savedTab = localStorage.getItem("lanvan_active_tab") || "file";
+        } catch (e) {}
+
+        window.switchView(savedTab);
 
         console.log("[app-init] Lanvan UI adapter initialized. " +
             "Wrapped updateFileDisplay=" + (typeof updateFileDisplay === "function") +

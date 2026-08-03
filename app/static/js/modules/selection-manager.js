@@ -9,10 +9,10 @@
 
     function syncSelectionDOM() {
         var selected = window.selectedItems || [];
-        var items = document.querySelectorAll("#nasFileList .m3-list-item, .quick-card");
+        var items = document.querySelectorAll("#nasFileList .m3-list-item, .quick-card, #clipboardHistory .clipboard-grid-card");
         for (var i = 0; i < items.length; i++) {
-            var fn = items[i].getAttribute("data-filename");
-            if (fn && selected.indexOf(fn) !== -1) {
+            var key = items[i].getAttribute("data-filename") || items[i].getAttribute("data-clipboard-id");
+            if (key && (selected.indexOf(key) !== -1 || selected.indexOf(Number(key)) !== -1)) {
                 items[i].classList.add("selected");
             } else {
                 items[i].classList.remove("selected");
@@ -31,27 +31,43 @@
         if (selected.length > 0) {
             defaultContent.style.display = "none";
             selectionContent.style.display = "flex";
-            var isGrid = document.getElementById("nasFileList") && document.getElementById("nasFileList").classList.contains("grid-mode");
-            selectionContent.innerHTML =
-                '<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;font-weight:700;color:var(--primary);">' +
-                '<button class="btn-icon" onclick="clearSelection()" title="Clear selection" style="width:32px;height:32px;color:var(--primary);">' +
-                '<i data-lucide="x" style="width:18px;height:18px;"></i></button>' +
-                "<span>" +
-                selected.length +
-                " selected</span></div>" +
-                '<div style="display:flex;align-items:center;gap:0.35rem;">' +
-                '<button class="btn-icon" onclick="openRenameModal()" title="Rename" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="pencil" style="width:16px;height:16px;"></i></button>' +
-                '<button class="btn-icon" onclick="downloadSelected()" title="Download individually" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="download" style="width:16px;height:16px;"></i></button>' +
-                (selected.length > 1
-                    ? '<button class="btn-icon" onclick="downloadSelectedAsZip()" title="Download as ZIP" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="file-archive" style="width:16px;height:16px;"></i></button>'
-                    : "") +
-                '<button class="btn-icon" onclick="openMoveModal()" title="Move selected" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="folder-input" style="width:16px;height:16px;"></i></button>' +
-                '<button class="btn-icon" onclick="deleteSelected()" title="Delete selected" style="width:34px;height:34px;color:var(--danger);"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>' +
-                '<div class="view-switcher-pill" style="margin-left:0.5rem;">' +
-                '<button id="listViewBtn" class="view-switcher-btn' + (isGrid ? '' : ' active') + '" onclick="setViewMode(\'list\')" title="List View"><i data-lucide="menu" style="width:16px;height:16px;"></i></button>' +
-                '<button id="gridViewBtn" class="view-switcher-btn' + (isGrid ? ' active' : '') + '" onclick="setViewMode(\'grid\')" title="Grid View"><i data-lucide="layout-grid" style="width:16px;height:16px;"></i></button>' +
-                '</div>' +
-                "</div>";
+            var isClipboardMode = window.activeTab === "clipboard" || (!isNaN(selected[0]) && !isNaN(parseFloat(selected[0])));
+            
+            if (isClipboardMode) {
+                selectionContent.innerHTML =
+                    '<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;font-weight:700;color:var(--primary);">' +
+                    '<button class="btn-icon" onclick="clearSelection()" title="Clear selection" style="width:32px;height:32px;color:var(--primary);">' +
+                    '<i data-lucide="x" style="width:18px;height:18px;"></i></button>' +
+                    "<span>" +
+                    selected.length +
+                    " selected</span></div>" +
+                    '<div style="display:flex;align-items:center;gap:0.35rem;">' +
+                    '<button class="btn-icon" onclick="downloadSelectedClipboard()" title="' + (selected.length > 1 ? 'Download all as ZIP' : 'Download item') + '" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="download" style="width:16px;height:16px;"></i></button>' +
+                    '<button class="btn-icon" onclick="deleteSelected()" title="Delete selected" style="width:34px;height:34px;color:var(--danger);"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>' +
+                    "</div>";
+            } else {
+                var isGrid = document.getElementById("nasFileList") && document.getElementById("nasFileList").classList.contains("grid-mode");
+                selectionContent.innerHTML =
+                    '<div style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;font-weight:700;color:var(--primary);">' +
+                    '<button class="btn-icon" onclick="clearSelection()" title="Clear selection" style="width:32px;height:32px;color:var(--primary);">' +
+                    '<i data-lucide="x" style="width:18px;height:18px;"></i></button>' +
+                    "<span>" +
+                    selected.length +
+                    " selected</span></div>" +
+                    '<div style="display:flex;align-items:center;gap:0.35rem;">' +
+                    '<button class="btn-icon" onclick="openRenameModal()" title="Rename" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="pencil" style="width:16px;height:16px;"></i></button>' +
+                    '<button class="btn-icon" onclick="downloadSelected()" title="Download individually" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="download" style="width:16px;height:16px;"></i></button>' +
+                    (selected.length > 1
+                        ? '<button class="btn-icon" onclick="downloadSelectedAsZip()" title="Download as ZIP" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="file-archive" style="width:16px;height:16px;"></i></button>'
+                        : "") +
+                    '<button class="btn-icon" onclick="openMoveModal()" title="Move selected" style="width:34px;height:34px;color:var(--primary);"><i data-lucide="folder-input" style="width:16px;height:16px;"></i></button>' +
+                    '<button class="btn-icon" onclick="deleteSelected()" title="Delete selected" style="width:34px;height:34px;color:var(--danger);"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>' +
+                    '<div class="view-switcher-pill" style="margin-left:0.5rem;">' +
+                    '<button id="listViewBtn" class="view-switcher-btn' + (isGrid ? '' : ' active') + '" onclick="setViewMode(\'list\')" title="List View"><i data-lucide="menu" style="width:16px;height:16px;"></i></button>' +
+                    '<button id="gridViewBtn" class="view-switcher-btn' + (isGrid ? ' active' : '') + '" onclick="setViewMode(\'grid\')" title="Grid View"><i data-lucide="layout-grid" style="width:16px;height:16px;"></i></button>' +
+                    '</div>' +
+                    "</div>";
+            }
         } else {
             defaultContent.style.display = "flex";
             selectionContent.style.display = "none";
@@ -70,10 +86,6 @@
 
     // --- Production-Grade Marquee Selection System ---
     function initMarqueeSelection() {
-        var fileList = document.getElementById("nasFileList");
-        var container = document.getElementById("fileView") || fileList;
-        if (!container) return;
-
         var DRAG_THRESHOLD = 5;
         var startX = 0;
         var startY = 0;
@@ -95,13 +107,16 @@
         }
 
         function cacheItemRectangles() {
-            var elements = document.querySelectorAll("#nasFileList .m3-list-item");
+            var selector = (window.activeTab === "clipboard" || document.getElementById("clipboardSection")?.style.display !== "none")
+                ? "#clipboardHistory .clipboard-grid-card"
+                : "#nasFileList .m3-list-item, .quick-card";
+            var elements = document.querySelectorAll(selector);
             cachedItems = [];
             for (var i = 0; i < elements.length; i++) {
-                var fn = elements[i].getAttribute("data-filename");
-                if (fn) {
+                var key = elements[i].getAttribute("data-filename") || elements[i].getAttribute("data-clipboard-id");
+                if (key) {
                     cachedItems.push({
-                        name: fn,
+                        name: key,
                         rect: elements[i].getBoundingClientRect()
                     });
                 }
@@ -150,11 +165,13 @@
             window.removeEventListener("click", suppressNextClick, true);
         }
 
-        container.addEventListener("pointerdown", function (e) {
+        document.addEventListener("pointerdown", function (e) {
             // Only primary pointer (left click / touch)
             if (e.button !== 0 && e.pointerType === "mouse") return;
-            // Ignore click on interactive buttons, inputs, links, or context menus
-            if (e.target.closest("button, a, input, select, textarea, .custom-context-menu, [data-action]")) return;
+            // Ignore click on interactive buttons, inputs, links, context menus or sidebar
+            if (e.target.closest("button, a, input, select, textarea, .custom-context-menu, [data-action], .sidebar-item, .brand-logo")) return;
+            // Only activate if inside fileView, clipboardView, or clipboardHistory
+            if (!e.target.closest("#fileView") && !e.target.closest("#clipboardView") && !e.target.closest("#clipboardHistory") && !e.target.closest("#fileListSection")) return;
 
             startX = e.clientX;
             startY = e.clientY;
@@ -213,12 +230,16 @@
     }
 
     function selectAll() {
-        var items = document.querySelectorAll("#nasFileList .m3-list-item");
+        var isClipboardMode = window.activeTab === "clipboard" || (document.getElementById("clipboardSection") && document.getElementById("clipboardSection").style.display !== "none");
+        var selector = isClipboardMode
+            ? "#clipboardHistory .clipboard-grid-card"
+            : "#nasFileList .m3-list-item";
+        var items = document.querySelectorAll(selector);
         var allSelected = [];
         for (var i = 0; i < items.length; i++) {
-            var fn = items[i].getAttribute("data-filename");
-            if (fn) {
-                allSelected.push(fn);
+            var key = items[i].getAttribute("data-filename") || items[i].getAttribute("data-clipboard-id");
+            if (key) {
+                allSelected.push(key);
             }
         }
         window.selectedItems = allSelected;
@@ -240,8 +261,6 @@
         }
 
         if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A" || e.keyCode === 65)) {
-            var fileList = document.getElementById("nasFileList");
-            if (!fileList) return;
             e.preventDefault();
             e.stopPropagation();
             selectAll();

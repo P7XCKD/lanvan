@@ -41,7 +41,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
       <span class="brand-title">Lanvan</span>
     </div>
     <nav class="sidebar-menu">
-      <div class="sidebar-item active" id="sideItemFile" role="button" tabindex="0" onclick="switchView('file')">
+      <div class="sidebar-item" id="sideItemFile" role="button" tabindex="0" onclick="switchView('file')">
         <i data-lucide="folder"></i> Files
       </div>
       <div class="sidebar-item" id="sideItemClipboard" role="button" tabindex="0" onclick="switchView('clipboard')">
@@ -104,7 +104,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
 
       <!-- ======= FILE BROWSER VIEW ======= -->
       <div id="fileView" class="view-content"
-        style="display: flex; flex-direction: column; gap: 0.35rem; width:100%; flex: 1; min-height: 0; overflow: hidden;">
+        style="flex-direction: column; gap: 0.35rem; width:100%; flex: 1; min-height: 0; overflow: hidden;">
 
         <!-- Desktop Panel Header -->
         <div class="desktop-panel-header">
@@ -253,7 +253,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
 
       <!-- ======= CLIPBOARD VIEW ======= -->
       <div id="clipboardView" class="view-content"
-        style="display: none; flex-direction: column; gap: 0.75rem; width:100%; flex: 1; min-height: 0; overflow: hidden;">
+        style="flex-direction: column; gap: 0.75rem; width:100%; flex: 1; min-height: 0; overflow: hidden;">
         <div class="desktop-panel-header">
           <div class="panel-title">
             <span>Clipboard</span>
@@ -306,7 +306,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
 
     <!-- Bottom Navigation Bar (Mobile) -->
     <nav class="bottom-nav">
-      <div class="nav-item active" id="navItemFile" onclick="switchView('file')">
+      <div class="nav-item" id="navItemFile" onclick="switchView('file')">
         <div class="nav-item-icon-wrapper">
           <i data-lucide="folder" style="width:20px;height:20px;"></i>
         </div>
@@ -745,7 +745,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
   </div>
 
   <!-- Production File Transfer Section -->
-  <section id="fileTransferSection" class="upload-section file-upload-section" style="display: block;">
+  <section id="fileTransferSection" class="upload-section file-upload-section">
     <div id="switchDropdownMain"
       style="display:none; position:absolute; right:0; top:110%; background:var(--section-bg); border:1px solid var(--border-color); border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); min-width:150px; z-index:10001;">
     </div>
@@ -790,7 +790,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
   </section>
 
   <!-- Production File List Section -->
-  <section id="fileListSection" style="display: block;">
+  <section id="fileListSection">
     <span id="fileCount" class="file-count"
       style="color: var(--text-color); font-size: 0.9em; margin-left: 0.5rem;"></span>
     <div id="fileGrid" class="file-grid"></div>
@@ -801,7 +801,7 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
   </section>
 
   <!-- Production Clipboard Section (hidden fallback) -->
-  <section id="clipboardSection" style="display: none !important;">
+  <section id="clipboardSection">
     <textarea id="clipboardTextInput"
       style="width: 100%; height: 100px; padding: 0.5rem; border: 2px dashed var(--border-color); background: var(--input-bg); color: var(--text-color); border-radius: 6px; resize: vertical; font-family: monospace; font-size: 0.9rem;"></textarea>
     <button id="addTextToClipboardBtn" onclick="addTextToClipboard()" class="download-btn"

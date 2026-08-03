@@ -2466,6 +2466,75 @@ html[data-view-mode="list"] #gridViewBtn {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 }
 
+/* Zero-flicker active tab styling matching data-view-mode architecture */
+[data-active-tab="clipboard"] #fileView,
+[data-active-tab="clipboard"] #fileTransferSection,
+[data-active-tab="clipboard"] #fileListSection {
+    display: none;
+}
+[data-active-tab="clipboard"] #clipboardView,
+[data-active-tab="clipboard"] #clipboardSection {
+    display: flex;
+}
+[data-active-tab="file"] #fileView,
+[data-active-tab="file"] #fileTransferSection,
+[data-active-tab="file"] #fileListSection {
+    display: flex;
+}
+[data-active-tab="file"] #clipboardView,
+[data-active-tab="file"] #clipboardSection {
+    display: none;
+}
+
+/* Pre-paint Sidebar & Navigation Active Indicator Architecture */
+[data-active-tab="file"] #sideItemFile,
+[data-active-tab="clipboard"] #sideItemClipboard {
+    background-color: var(--primary-container);
+    color: var(--secondary-container-text);
+}
+
+[data-active-tab="file"] #navItemFile,
+[data-active-tab="clipboard"] #navItemClipboard {
+    color: var(--text-color);
+}
+
+[data-active-tab="file"] #navItemFile .nav-item-icon-wrapper,
+[data-active-tab="clipboard"] #navItemClipboard .nav-item-icon-wrapper {
+    background-color: var(--secondary-container);
+    color: var(--secondary-container-text);
+}
+
+.clipboard-grid-card.selected {
+    background-color: rgba(37, 99, 235, 0.1);
+    border: 2px solid var(--primary);
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.18);
+}
+
+.clipboard-grid-card.selected .clipboard-card-head {
+    background-color: #dbeafe;
+    border-bottom: 1px solid rgba(37, 99, 235, 0.3);
+}
+
+.clipboard-grid-card.selected .clipboard-card-head span,
+.clipboard-grid-card.selected .clipboard-card-head .btn-icon {
+    color: #1e40af;
+}
+
+[data-theme="dark"] .clipboard-grid-card.selected {
+    background-color: rgba(59, 130, 246, 0.12);
+    border: 2px solid var(--primary);
+}
+
+[data-theme="dark"] .clipboard-grid-card.selected .clipboard-card-head {
+    background-color: #1c2d4a;
+    border-bottom: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+[data-theme="dark"] .clipboard-grid-card.selected .clipboard-card-head span,
+[data-theme="dark"] .clipboard-grid-card.selected .clipboard-card-head .btn-icon {
+    color: #93c5fd;
+}
+
 @media (max-width: 640px) {
     .clipboard-grid-card {
         height: 185px;

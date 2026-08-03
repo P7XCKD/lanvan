@@ -401,6 +401,77 @@ async def get_clipboard_item(item_id: int, request: Request, download: Optional[
         )
 
 
+@router.post("/api/clipboard/download-zip", name="clipboard_download_zip")
+async def download_clipboard_zip(request: Request):
+    """Download multiple selected clipboard items packaged into a single ZIP archive."""
+    try:
+        data = await request.json()
+        raw_ids = data.get("item_ids", [])
+        if not raw_ids:
+            return JSONResponse(status_code=400, content={"status": "error", "msg": "No item_ids provided"})
+
+        valid_ids = set()
+        for val in raw_ids:
+            try:
+                valid_ids.add(int(val))
+            except (ValueError, TypeError):
+                pass
+
+        if not valid_ids:
+            return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid item_ids"})
+
+        target_items = [item for item in clipboard_history if item["id"] in valid_ids]
+        if not target_items:
+            return JSONResponse(status_code=404, content={"status": "error", "msg": "No matching clipboard items found"})
+
+        import zipfile
+        zip_buffer = io.BytesIO()
+        used_filenames = set()
+
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for item in target_items:
+                item_id = item["id"]
+                if item["type"] == "file":
+                    fname = item.get("filename") or f"file-{item_id}"
+                    file_data = item.get("data") or b""
+                else:
+                    text_str = item.get("data") or ""
+                    file_data = text_str.encode("utf-8")
+                    fname = f"clipboard-text-{item_id}.txt"
+
+                base_name = fname
+                counter = 1
+                while fname in used_filenames:
+                    name_part, ext_part = os.path.splitext(base_name)
+                    fname = f"{name_part}_{counter}{ext_part}"
+                    counter += 1
+                used_filenames.add(fname)
+
+                zf.writestr(fname, file_data)
+
+        zip_buffer.seek(0)
+        zip_bytes = zip_buffer.getvalue()
+
+        from urllib.parse import quote
+        filename = "clipboard_selection.zip"
+        encoded_filename = quote(filename)
+
+        return StreamingResponse(
+            io.BytesIO(zip_bytes),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"; filename*=UTF-8\'\'{encoded_filename}',
+                "Content-Length": str(len(zip_bytes))
+            }
+        )
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "msg": f"Failed to create ZIP archive: {str(e)}"}
+        )
+
+
 @router.delete("/api/clipboard/clear", name="clipboard_clear")
 async def clear_clipboard():
     """Clear all clipboard items from history and persistent storage."""

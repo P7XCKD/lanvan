@@ -44,9 +44,12 @@
                 document.documentElement.setAttribute('data-theme', 'light');
             }
 
-            // Zero-flicker view mode initialization before first paint
+            // Zero-flicker view mode & active tab initialization before first paint
             var viewModePref = localStorage.getItem('lanvan_view_mode') || 'grid';
             document.documentElement.setAttribute('data-view-mode', viewModePref);
+
+            var activeTabPref = localStorage.getItem('lanvan_active_tab') || 'file';
+            document.documentElement.setAttribute('data-active-tab', activeTabPref);
         })();
     </script>
     <!-- Legacy CSS (preserved for rollback â€” inactive) -->

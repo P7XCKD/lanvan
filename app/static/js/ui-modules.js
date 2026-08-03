@@ -610,23 +610,14 @@ function switchToPage(page) {
 
   // Use setTimeout to allow smooth transition
   setTimeout(() => {
+    document.documentElement.setAttribute('data-active-tab', page);
     if (page === 'clipboard') {
       // Update current active section tracker
       currentActiveSection = 'clipboard';
 
-      // Show clipboard section, hide file sections
-      if (fileTransferSection) {
-        fileTransferSection.style.display = 'none';
-        fileTransferSection.style.opacity = '1';
-      }
-      if (fileListSection) {
-        fileListSection.style.display = 'none';
-        fileListSection.style.opacity = '1';
-      }
-      if (clipboardSection) {
-        clipboardSection.style.display = 'block';
-        clipboardSection.style.opacity = '1';
-      }
+      if (fileTransferSection) fileTransferSection.style.opacity = '1';
+      if (fileListSection) fileListSection.style.opacity = '1';
+      if (clipboardSection) clipboardSection.style.opacity = '1';
 
       // Update page title/URL without navigation (preserves uploads)
       history.pushState({ page: 'clipboard' }, 'Lanvan - Clipboard', '/clipboard');
@@ -636,19 +627,9 @@ function switchToPage(page) {
       // Update current active section tracker
       currentActiveSection = 'file';
 
-      // Show file sections, hide clipboard section
-      if (fileTransferSection) {
-        fileTransferSection.style.display = 'block';
-        fileTransferSection.style.opacity = '1';
-      }
-      if (fileListSection) {
-        fileListSection.style.display = 'block';
-        fileListSection.style.opacity = '1';
-      }
-      if (clipboardSection) {
-        clipboardSection.style.display = 'none';
-        clipboardSection.style.opacity = '1';
-      }
+      if (fileTransferSection) fileTransferSection.style.opacity = '1';
+      if (fileListSection) fileListSection.style.opacity = '1';
+      if (clipboardSection) clipboardSection.style.opacity = '1';
 
       // Update page title/URL without navigation (preserves uploads)
       history.pushState({ page: 'file' }, 'Lanvan - File Transfer', '/');
