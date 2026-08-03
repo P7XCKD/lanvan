@@ -270,6 +270,9 @@ function getClipboardItemIcon(item) {
     }
   }
 }
+if (typeof window !== 'undefined') {
+  window.getClipboardItemIcon = getClipboardItemIcon;
+}
 
 /**
  * Get control buttons HTML for upload item

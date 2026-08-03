@@ -7,6 +7,17 @@
 (function (window) {
     'use strict';
 
+    function isClipboardTabActive() {
+        var attr = document.documentElement.getAttribute("data-active-tab");
+        if (attr) return attr === "clipboard";
+        if (window.activeTab) return window.activeTab === "clipboard";
+        var clipView = document.getElementById("clipboardView");
+        if (clipView) {
+            return window.getComputedStyle(clipView).display !== "none";
+        }
+        return false;
+    }
+
     function syncSelectionDOM() {
         var selected = window.selectedItems || [];
         var items = document.querySelectorAll("#nasFileList .m3-list-item, .quick-card, #clipboardHistory .clipboard-grid-card");
@@ -31,7 +42,7 @@
         if (selected.length > 0) {
             defaultContent.style.display = "none";
             selectionContent.style.display = "flex";
-            var isClipboardMode = window.activeTab === "clipboard" || (!isNaN(selected[0]) && !isNaN(parseFloat(selected[0])));
+            var isClipboardMode = isClipboardTabActive() || (!isNaN(selected[0]) && !isNaN(parseFloat(selected[0])));
             
             if (isClipboardMode) {
                 selectionContent.innerHTML =
@@ -107,7 +118,7 @@
         }
 
         function cacheItemRectangles() {
-            var selector = (window.activeTab === "clipboard" || document.getElementById("clipboardSection")?.style.display !== "none")
+            var selector = isClipboardTabActive()
                 ? "#clipboardHistory .clipboard-grid-card"
                 : "#nasFileList .m3-list-item, .quick-card";
             var elements = document.querySelectorAll(selector);
@@ -230,7 +241,7 @@
     }
 
     function selectAll() {
-        var isClipboardMode = window.activeTab === "clipboard" || (document.getElementById("clipboardSection") && document.getElementById("clipboardSection").style.display !== "none");
+        var isClipboardMode = isClipboardTabActive();
         var selector = isClipboardMode
             ? "#clipboardHistory .clipboard-grid-card"
             : "#nasFileList .m3-list-item";
@@ -240,9 +251,13 @@
             var key = items[i].getAttribute("data-filename") || items[i].getAttribute("data-clipboard-id");
             if (key) {
                 allSelected.push(key);
+                items[i].classList.add("selected");
             }
         }
         window.selectedItems = allSelected;
+        if (window.LanvanStore && typeof window.LanvanStore.dispatch === "function") {
+            window.LanvanStore.dispatch({ type: 'SET_SELECTION', payload: allSelected });
+        }
         updateSelectionToolbar();
     }
 
@@ -264,6 +279,20 @@
             e.preventDefault();
             e.stopPropagation();
             selectAll();
+        } else if (e.key === "Delete" || e.key === "Del") {
+            if (window.selectedItems && window.selectedItems.length > 0) {
+                e.preventDefault();
+                if (typeof window.deleteSelected === "function") {
+                    window.deleteSelected();
+                }
+            }
+        } else if (e.key === "F2") {
+            if (window.selectedItems && window.selectedItems.length > 0) {
+                e.preventDefault();
+                if (typeof window.openRenameModal === "function") {
+                    window.openRenameModal();
+                }
+            }
         } else if (e.key === "Escape" || e.keyCode === 27) {
             if (window.selectedItems && window.selectedItems.length > 0) {
                 e.preventDefault();

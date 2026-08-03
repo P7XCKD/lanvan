@@ -210,7 +210,7 @@
     }
 
     var lastRenderedFiles = [];
-    window.activeTab = "file";
+    window.activeTab = document.documentElement.dataset.activeTab || null;
 
     function tagFilesWithFolder(files, folderPath) {
         var list = Array.isArray(files) ? files : [];
@@ -290,6 +290,11 @@
         var container = document.getElementById("nasFileList");
         var filePanelMeta = document.getElementById("filePanelMeta");
         if (!container) return;
+        var activeTab = document.documentElement.dataset.activeTab || (window.activeTab || 'file');
+        if (activeTab !== 'file') {
+            if (files) lastRenderedFiles = files;
+            return;
+        }
 
         // Repository writes belong exclusively to refreshFileList() (main-app.js:2757)
         // and fetchFolderContents() (repository.js:89). The renderer must only read.
@@ -784,10 +789,13 @@
         if (!head || !list) return;
 
         var mode = document.documentElement.getAttribute("data-view-mode") || (list.classList.contains("grid-mode") ? "grid" : "list");
-        if (mode === "grid") return;
+        if (mode === "grid") {
+            head.style.removeProperty("padding-right");
+            return;
+        }
 
         var scrollbarWidth = list.offsetWidth - list.clientWidth;
-        head.style.paddingRight = (12 + Math.max(0, scrollbarWidth)) + "px";
+        head.style.setProperty("padding-right", (12 + Math.max(0, scrollbarWidth)) + "px", "important");
     }
     window.syncFileTableHeadWidth = syncFileTableHeadWidth;
     window.addEventListener("resize", syncFileTableHeadWidth);
@@ -879,36 +887,29 @@
 
                     var currentSelection = window.selectedItems || [];
 
-                    // =========================================================
                     // 1. CTRL / CMD / SHIFT CLICK OR EXCLUSIVE SELECTION MODE PRIORITY
-                    // =========================================================
                     if (e.ctrlKey || e.metaKey || e.shiftKey || currentSelection.length > 0) {
                         e.preventDefault();
                         e.stopPropagation();
-                        // Ctrl/Cmd/Shift click or active selection mode: toggle selection
-                        handleListItemClick(item, index, files);
+                        handleListItemClick(item, index, files, e);
                         return;
                     }
 
-                    // =========================================================
                     // 2. NORMAL PIPELINE (NO SELECTION ACTIVE)
-                    // =========================================================
                     if (folderFlag) {
                         navigateIntoFolder(name);
                         return;
                     }
 
-                    // If a FILE is uploading and NOT selected, prevent opening it
+                    // If a FILE is uploading and NOT selected, prevent selection
                     if ((itemData.uploading || isItemUploading(name))) {
                         return;
                     }
 
-                    // Single click / tap opens file preview modal
-                    if (typeof window.openFilePreview === "function") {
-                        window.openFilePreview(name);
-                    } else if (typeof window.openPreviewModal === "function") {
-                        window.openPreviewModal(name);
-                    }
+                    // Single click on file selects the item
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleListItemClick(item, index, files, e);
                 });
 
                 // Context menu listener on item row
@@ -1068,18 +1069,43 @@
         configurable: true
     });
 
-    function handleListItemClick(item, index, files) {
+    function handleListItemClick(item, index, files, e) {
         var name = files[index];
         if (!name) return;
         console.log("%c[LANVAN UI] 👆 Item clicked: '%s'", "color:#10b981; font-weight:bold;", name);
         var current = Array.isArray(window.selectedItems) ? window.selectedItems.slice() : [];
-        var pos = current.indexOf(name);
-        if (pos > -1) {
-            current.splice(pos, 1);
-        } else {
-            if (!isItemUploading(name)) {
-                current.push(name);
+        var isMulti = e && (e.ctrlKey || e.metaKey);
+        var isShift = e && e.shiftKey;
+
+        if (isShift && window._lastSelectedIndex !== undefined && window._lastSelectedIndex !== null) {
+            var start = Math.min(window._lastSelectedIndex, index);
+            var end = Math.max(window._lastSelectedIndex, index);
+            for (var k = start; k <= end; k++) {
+                var fName = files[k];
+                if (fName && current.indexOf(fName) === -1 && !isItemUploading(fName)) {
+                    current.push(fName);
+                }
             }
+        } else if (isMulti) {
+            var pos = current.indexOf(name);
+            if (pos > -1) {
+                current.splice(pos, 1);
+            } else {
+                if (!isItemUploading(name)) {
+                    current.push(name);
+                }
+            }
+            window._lastSelectedIndex = index;
+        } else {
+            var alreadyInSelection = current.indexOf(name) !== -1;
+            if (alreadyInSelection && current.length === 1) {
+                current = [];
+            } else {
+                if (!isItemUploading(name)) {
+                    current = [name];
+                }
+            }
+            window._lastSelectedIndex = index;
         }
         window.selectedItems = current;
         updateSelectionToolbar();
@@ -1371,10 +1397,20 @@
         }
 
         if (tab === "clipboard") {
-            if (typeof refreshClipboardHistory === "function") refreshClipboardHistory();
+            if (fileView) fileView.style.display = "none";
+            if (clipView) clipView.style.display = "flex";
+            if (!window._clipboardViewInitialized) {
+                window._clipboardViewInitialized = true;
+                if (typeof refreshClipboardHistory === "function") refreshClipboardHistory();
+            }
         } else {
-            if (typeof lastRenderedFiles !== "undefined") {
-                renderFileList(lastRenderedFiles);
+            if (fileView) fileView.style.display = "flex";
+            if (clipView) clipView.style.display = "none";
+            if (!window._fileViewInitialized) {
+                window._fileViewInitialized = true;
+                if (typeof window.refreshFileList === "function") window.refreshFileList("navigation");
+            } else if (typeof lastRenderedFiles !== "undefined" && lastRenderedFiles) {
+                renderFileList(lastRenderedFiles, "view_switch");
             }
         }
     };
@@ -2364,17 +2400,13 @@
 
         updateExplorerLayoutState({ viewMode: mode });
 
-        // Force immediate synchronous re-render so the DOM template matches the new
-        // grid/list CSS layout without waiting for the scheduler's next debounce tick.
-        // Clearing the signature and hash ensures the render guard does not skip this render.
-        window._lastRenderSignature = null;
-        if (window.RenderScheduler) {
-            window.RenderScheduler._lastViewModelHash = '';
-        }
-        if (typeof lastRenderedFiles !== "undefined" && lastRenderedFiles && typeof renderFileList === "function") {
+        // Only trigger re-render if startup initialization is complete AND meaningful files exist
+        if (window._initialized && Array.isArray(lastRenderedFiles) && lastRenderedFiles.length > 0 && typeof renderFileList === "function") {
+            window._lastRenderSignature = null;
+            if (window.RenderScheduler) {
+                window.RenderScheduler._lastViewModelHash = '';
+            }
             renderFileList(lastRenderedFiles, "view_mode_switch");
-        } else if (typeof triggerInstantUIUpdate === "function") {
-            triggerInstantUIUpdate();
         }
         syncFileTableHeadWidth();
     };
@@ -4390,29 +4422,24 @@
             }
 
             // Ctrl+A Select All Files/Folders
-            if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
+            if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A" || e.keyCode === 65)) {
                 if (isInputActive) return; // Let standard input selection work
                 e.preventDefault();
-                var items = document.querySelectorAll("#nasFileList .m3-list-item");
-                if (items.length === 0) return;
-
-                selectedItems = [];
-                for (var i = 0; i < items.length; i++) {
-                    var item = items[i];
-                    var name = item.getAttribute("data-filename");
-                    if (name) {
-                        selectedItems.push(name);
-                        item.classList.add("selected");
-                    }
+                e.stopPropagation();
+                if (typeof window.selectAll === "function") {
+                    window.selectAll();
+                } else if (typeof selectAll === "function") {
+                    selectAll();
                 }
-                updateSelectionToolbar();
             }
 
-            // Delete Key to Delete Selected Items
+            // Delete / Backspace Key to Delete Selected Items
             if (e.key === "Delete" || e.key === "Del") {
                 if (isInputActive) return;
                 e.preventDefault();
-                if (typeof deleteSelected === "function") {
+                if (typeof window.deleteSelected === "function") {
+                    window.deleteSelected();
+                } else if (typeof deleteSelected === "function") {
                     deleteSelected();
                 }
             }
@@ -4421,8 +4448,13 @@
             if (e.key === "F2") {
                 if (isInputActive) return;
                 e.preventDefault();
-                if (selectedItems.length > 0 && typeof openRenameModal === "function") {
-                    openRenameModal();
+                var curSelected = window.selectedItems || (typeof selectedItems !== "undefined" ? selectedItems : []);
+                if (curSelected.length > 0) {
+                    if (typeof window.openRenameModal === "function") {
+                        window.openRenameModal();
+                    } else if (typeof openRenameModal === "function") {
+                        openRenameModal();
+                    }
                 }
             }
         });
@@ -4469,13 +4501,7 @@
             }
         });
 
-        // Restore saved view mode preference immediately on page load
-        try {
-            var savedViewModeOnLoad = localStorage.getItem("lanvan_view_mode") || "grid";
-            if (typeof window.setViewMode === "function") {
-                window.setViewMode(savedViewModeOnLoad);
-            }
-        } catch (e) { }
+
 
         // F5 Trace Instrumentation Helper
         window.__logF5Trace = function (checkpointName) {
@@ -4754,29 +4780,66 @@
             });
         }
 
-        if (typeof window.refreshFileList === 'function') {
-            window.refreshFileList('bootstrap');
+        // Mark single-source startup completion
+        window._initialized = true;
+
+        // Restore view mode preference (state only, no rendering)
+        var savedViewModeOnLoad = "grid";
+        try { savedViewModeOnLoad = localStorage.getItem("lanvan_view_mode") || "grid"; } catch(e){}
+        document.documentElement.setAttribute("data-view-mode", savedViewModeOnLoad);
+        if (typeof updateExplorerLayoutState === "function") {
+            updateExplorerLayoutState({ viewMode: savedViewModeOnLoad });
         }
 
-        var savedTab = "file";
+        var savedTab = document.documentElement.dataset.activeTab || "file";
         try {
-            savedTab = localStorage.getItem("lanvan_active_tab") || "file";
+            savedTab = localStorage.getItem("lanvan_active_tab") || savedTab;
         } catch (e) {}
 
-        window.switchView(savedTab);
+        if (savedTab === "file") {
+            window._fileViewInitialized = true;
+            window.switchView(savedTab);
+            if (typeof window.refreshFileList === 'function') {
+                window.refreshFileList('bootstrap'); // Single-flight bootstrap
+            }
+        } else if (savedTab === "clipboard") {
+            window._clipboardViewInitialized = true;
+            window.switchView(savedTab);
+            if (typeof refreshClipboardHistory === 'function') {
+                refreshClipboardHistory();
+            }
+        }
 
         console.log("[app-init] Lanvan UI adapter initialized. " +
             "Wrapped updateFileDisplay=" + (typeof updateFileDisplay === "function") +
             ", refreshClipboardHistory=" + (typeof refreshClipboardHistory === "function"));
+
+        // Smooth reveal: allow browser viewport layout and safe-area insets to settle completely before fade out
+        setTimeout(function () {
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                    document.documentElement.classList.remove("booting");
+                    document.documentElement.classList.remove("startup");
+                    var shell = document.getElementById("startup-shell");
+                    if (shell) {
+                        shell.style.opacity = "0";
+                        setTimeout(function () {
+                            if (shell && shell.parentNode) {
+                                shell.parentNode.removeChild(shell);
+                            }
+                        }, 260);
+                    }
+                });
+            });
+        }, 180);
     }
 
     // Run after production JS has loaded (main-app.js and ui-modules.js are in base.html after this script)
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", function () {
-            // Small delay to ensure production scripts have run
-            setTimeout(init, 100);
+            init();
         });
     } else {
-        setTimeout(init, 100);
+        init();
     }
 })();

@@ -126,7 +126,9 @@
         if (window.__lanvanTimelineTracker) {
             window.__lanvanTimelineTracker.recordEvent("schedulerExecute", "isRendering: " + this.isRendering + ", hasRenderer: " + (!!this.rendererFn));
         }
-        if (this.isRendering || !this.rendererFn) return;
+        if (this.isRendering || !this.rendererFn || !window._initialized) return;
+        var activeTab = document.documentElement.dataset.activeTab || (window.activeTab || 'file');
+        if (activeTab !== 'file') return;
         this.isRendering = true;
 
         var viewModel = null;

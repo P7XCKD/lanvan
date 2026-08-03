@@ -131,7 +131,8 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         <div class="file-toolbar" id="fileToolbar">
           <div id="toolbarDefaultContent"
             style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-            <div class="toolbar-left-controls" style="display: flex; align-items: center; gap: 0.5rem; position: relative;">
+            <div class="toolbar-left-controls"
+              style="display: flex; align-items: center; gap: 0.5rem; position: relative;">
               <div class="dropdown" style="position: relative; display: inline-flex; align-items: center;">
                 <div id="typeBtnWrapper" style="display: inline-flex; align-items: center;">
                   <button class="filter-chip" id="typeDropdownBtn" onclick="toggleTypeDropdown(event)"
@@ -223,18 +224,15 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
             <span>Drop files to upload here</span>
           </div>
           <div class="file-table-head" id="fileTableHead">
-            <span onclick="handleHeaderSortClick('name')"
-              style="cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; user-select:none;">
+            <span onclick="handleHeaderSortClick('name')">
               <span>Name</span>
               <span id="sortArrow-name"></span>
             </span>
-            <span onclick="handleHeaderSortClick('date')"
-              style="cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; user-select:none;">
+            <span onclick="handleHeaderSortClick('date')">
               <span>Modified</span>
               <span id="sortArrow-date"></span>
             </span>
-            <span onclick="handleHeaderSortClick('size')"
-              style="cursor:pointer; display:inline-flex; align-items:center; gap:0.25rem; user-select:none;">
+            <span onclick="handleHeaderSortClick('size')">
               <span>Size</span>
               <span id="sortArrow-size"></span>
             </span>
@@ -275,9 +273,8 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
           </div>
           <div class="clipboard-input-wrapper">
             <textarea id="clipboardInput" class="clipboard-input"
-              placeholder="Type or paste text, links, or Media here..."
-              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-              data-gramm="false" data-enable-grammarly="false"
+              placeholder="Type or paste text, links, or Media here..." autocomplete="off" autocorrect="off"
+              autocapitalize="off" spellcheck="false" data-gramm="false" data-enable-grammarly="false"
               onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();addClipboardItem();}else if(event.key==='Escape'){event.preventDefault();clearClipboardInput();}"></textarea>
             <div class="clipboard-action-bar" style="justify-content: flex-start; gap: 0.5rem;">
               <button class="m3-primary-btn" onclick="addClipboardItem()">
@@ -389,7 +386,8 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         <span>Preview</span>
       </div>
     </div>
-    <div class="context-item" id="copyStreamLinkMenuItem" onclick="handleCopyStreamLinkFromMenu()" style="display:none;">
+    <div class="context-item" id="copyStreamLinkMenuItem" onclick="handleCopyStreamLinkFromMenu()"
+      style="display:none;">
       <div class="context-item-left">
         <i data-lucide="tv"></i>
         <span>Copy Stream Link</span>
@@ -563,7 +561,8 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
 </div>
 
 <!-- Settings Dialog -->
-<div id="settingsDialog" class="m3-dialog-overlay" style="z-index: 21000; display: none;" onclick="if(event.target === this) closeSettingsDialog();">
+<div id="settingsDialog" class="m3-dialog-overlay" style="z-index: 21000; display: none;"
+  onclick="if(event.target === this) closeSettingsDialog();">
   <div class="m3-dialog" style="max-width: 420px; width: 90%; padding: 1.5rem; border-radius: 20px;">
     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem;">
       <div
@@ -642,14 +641,17 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
       <button id="connectQrLanIpTab" class="connect-tab active" onclick="setConnectMode('ip')">LAN IP</button>
       <button id="connectQrMdnsTab" class="connect-tab" onclick="setConnectMode('mdns')">mDNS</button>
     </div>
-    <div class="qr-box connect-qr-box" id="connectQrDialogBox" aria-label="Connection QR preview" style="margin: 0.75rem auto;">
+    <div class="qr-box connect-qr-box" id="connectQrDialogBox" aria-label="Connection QR preview"
+      style="margin: 0.75rem auto;">
       <!-- Populated by production QR generation -->
     </div>
-    <div class="connect-value connect-qr-value" onclick="copyConnectAddress()" title="Click to copy" style="margin-bottom: 0.75rem;">
+    <div class="connect-value connect-qr-value" onclick="copyConnectAddress()" title="Click to copy"
+      style="margin-bottom: 0.75rem;">
       <span id="connectQrDialogAddress">...</span>
       <span class="connect-tooltip">Click to copy</span>
     </div>
-    <div class="connect-qr-subtitle" style="font-size:0.78rem; color:var(--text-muted); text-align:center; margin-bottom: 1rem;">
+    <div class="connect-qr-subtitle"
+      style="font-size:0.78rem; color:var(--text-muted); text-align:center; margin-bottom: 1rem;">
       Connect to Lanvan using the URL or QR code. Make sure you are on the same Wi-Fi or hotspot.
     </div>
     <div class="connect-qr-actions" style="display: flex; gap: 0.5rem; justify-content: flex-end; width: 100%;">
@@ -670,7 +672,9 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         <span id="previewTitle" class="lv-preview-title">File Preview</span>
       </div>
       <div class="lv-header-right">
-        <button id="previewStreamBtn" class="lv-action-btn" onclick="copyVideoStreamUrl(window.currentPreviewFilename)" title="Copy stream link" style="display:none; background:rgba(59,130,246,0.15); color:#60a5fa; border:1px solid rgba(59,130,246,0.3); margin-right:4px;">
+        <button id="previewStreamBtn" class="lv-action-btn" onclick="copyVideoStreamUrl(window.currentPreviewFilename)"
+          title="Copy stream link"
+          style="display:none; background:rgba(59,130,246,0.15); color:#60a5fa; border:1px solid rgba(59,130,246,0.3); margin-right:4px;">
           <i data-lucide="tv" style="width:16px;height:16px;color:#60a5fa;"></i>
           <span>Copy Stream Link</span>
         </button>

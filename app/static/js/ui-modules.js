@@ -281,7 +281,7 @@ async function downloadFileRegular(fileUrl, fileName, fileSizeMB, requestStartTi
       const reader = response.body.getReader();
       const chunks = [];
       let lastProgressUpdate = 0;
-      const PROGRESS_UPDATE_INTERVAL = 250; // Update every 250ms for ultra-smooth progress
+      const PROGRESS_UPDATE_INTERVAL = 250; // Update every 500ms for ultra-smooth progress
 
       while (true) {
         const { done, value } = await reader.read();
@@ -602,40 +602,27 @@ function switchToPage(page) {
     return;
   }
 
-  // Add smooth transition effect with opacity
-  const sections = [fileTransferSection, fileListSection, clipboardSection];
-  sections.forEach(section => {
-    if (section) section.style.opacity = '0.7';
-  });
+  // Update active tab state immediately (0ms delay)
+  document.documentElement.setAttribute('data-active-tab', page);
+  if (typeof window.switchView === 'function') {
+    window.switchView(page);
+  }
 
-  // Use setTimeout to allow smooth transition
-  setTimeout(() => {
-    document.documentElement.setAttribute('data-active-tab', page);
-    if (page === 'clipboard') {
-      // Update current active section tracker
-      currentActiveSection = 'clipboard';
-
-      if (fileTransferSection) fileTransferSection.style.opacity = '1';
-      if (fileListSection) fileListSection.style.opacity = '1';
-      if (clipboardSection) clipboardSection.style.opacity = '1';
-
-      // Update page title/URL without navigation (preserves uploads)
-      history.pushState({ page: 'clipboard' }, 'Lanvan - Clipboard', '/clipboard');
-      document.title = 'Lanvan - Clipboard';
-
-    } else if (page === 'file') {
-      // Update current active section tracker
-      currentActiveSection = 'file';
-
-      if (fileTransferSection) fileTransferSection.style.opacity = '1';
-      if (fileListSection) fileListSection.style.opacity = '1';
-      if (clipboardSection) clipboardSection.style.opacity = '1';
-
-      // Update page title/URL without navigation (preserves uploads)
-      history.pushState({ page: 'file' }, 'Lanvan - File Transfer', '/');
-      document.title = 'Lanvan - File Transfer';
-    }
-  }, 100); // Small delay for smooth transition
+  if (page === 'clipboard') {
+    currentActiveSection = 'clipboard';
+    if (fileTransferSection) fileTransferSection.style.opacity = '1';
+    if (fileListSection) fileListSection.style.opacity = '1';
+    if (clipboardSection) clipboardSection.style.opacity = '1';
+    history.pushState({ page: 'clipboard' }, 'Lanvan - Clipboard', '/clipboard');
+    document.title = 'Lanvan - Clipboard';
+  } else if (page === 'file') {
+    currentActiveSection = 'file';
+    if (fileTransferSection) fileTransferSection.style.opacity = '1';
+    if (fileListSection) fileListSection.style.opacity = '1';
+    if (clipboardSection) clipboardSection.style.opacity = '1';
+    history.pushState({ page: 'file' }, 'Lanvan - File Transfer', '/');
+    document.title = 'Lanvan - File Transfer';
+  }
 
   // Trigger any necessary updates for the visible section
   setTimeout(() => {
@@ -663,37 +650,30 @@ function switchToPage(page) {
 if (!window.__popstateWired) {
   window.__popstateWired = true;
   window.addEventListener('popstate', function (event) {
-  if (event.state && event.state.page) {
-    // Switch to the page without updating history (since we're handling popstate)
-    const targetPage = event.state.page;
+    if (event.state && event.state.page) {
+      // Switch to the page without updating history (since we're handling popstate)
+      const targetPage = event.state.page;
 
-    // Update current active section tracker
-    currentActiveSection = targetPage;
-    console.log(` Browser navigation - active section: ${currentActiveSection}`);
+      // Update current active section tracker
+      currentActiveSection = targetPage;
+      console.log(` Browser navigation - active section: ${currentActiveSection}`);
 
-    const fileTransferSection = document.getElementById('fileTransferSection');
-    const fileListSection = document.getElementById('fileListSection');
-    const clipboardSection = document.getElementById('clipboardSection');
+      const fileTransferSection = document.getElementById('fileTransferSection');
+      const fileListSection = document.getElementById('fileListSection');
+      const clipboardSection = document.getElementById('clipboardSection');
 
-    if (targetPage === 'clipboard') {
-      if (fileTransferSection) fileTransferSection.style.display = 'none';
-      if (fileListSection) fileListSection.style.display = 'none';
-      if (clipboardSection) clipboardSection.style.display = 'block';
+      if (targetPage === 'clipboard') {
+        document.title = 'Lanvan - Clipboard';
+      } else {
+        document.title = 'Lanvan - File Transfer';
+      }
 
-      document.title = 'Lanvan - Clipboard';
-    } else {
-      if (fileTransferSection) fileTransferSection.style.display = 'block';
-      if (fileListSection) fileListSection.style.display = 'block';
-      if (clipboardSection) clipboardSection.style.display = 'none';
-
-      document.title = 'Lanvan - File Transfer';
-
-      if (typeof refreshFileList === 'function') {
-        setTimeout(() => refreshFileList(), 100);
+      // Delegate all view switching to switchView (single source of truth)
+      if (typeof window.switchView === 'function') {
+        window.switchView(targetPage);
       }
     }
-  }
-});
+  });
 }
 
 //  Save toggle state when user changes it
@@ -943,7 +923,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-  //  HTTP-Safe mode is now automatic - no toggle management needed
+//  HTTP-Safe mode is now automatic - no toggle management needed
 
 
 

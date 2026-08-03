@@ -5,6 +5,9 @@
    DESIGN TOKENS
    ========================================================================== */
 :root {
+    --file-list-columns: minmax(0, 1fr) 140px 110px 140px;
+    --file-list-gap: 0.75rem;
+    --file-list-padding: 0.55rem 0.75rem;
     --bg-color: #f8fafd;
     --text-color: #1f1f1f;
     --text-muted: #5f6368;
@@ -299,7 +302,7 @@ body {
     cursor: pointer;
     font-weight: 650;
     font-size: 0.85rem;
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .sidebar-item:hover {
@@ -982,7 +985,7 @@ body {
     background: var(--card-bg);
     color: var(--primary);
     flex-shrink: 0;
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .qr-launch-btn:hover {
@@ -1118,7 +1121,7 @@ header.app-bar,
     font-size: 0.76rem;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .filter-chip:hover {
@@ -1155,7 +1158,7 @@ header.app-bar,
     justify-content: center;
     cursor: pointer;
     color: var(--text-muted);
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .view-switcher-btn:hover:not(.active) {
@@ -1167,23 +1170,45 @@ header.app-bar,
     color: var(--primary);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
-}
 
 /* ==========================================================================
    FILE TABLE HEAD + LIST ITEMS
    ========================================================================== */
 .file-table-head {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 140px 110px 140px;
+    grid-template-columns: var(--file-list-columns);
+    gap: var(--file-list-gap);
+    padding: var(--file-list-padding);
     align-items: center;
     min-height: 38px;
-    padding: 0.55rem 0.75rem;
-    gap: 0.75rem;
     border-bottom: 1px solid var(--border-color);
     color: var(--text-muted);
-    font-size: 0.72rem;
-    font-weight: 750;
+    font-size: 0.8rem;
+    font-weight: 600;
     scrollbar-gutter: stable;
+    overflow-y: hidden;
+    box-sizing: border-box;
+}
+
+.file-table-head > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: color 0.15s ease;
+}
+
+.file-table-head > span:last-child {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.file-table-head > span:hover {
+    color: var(--text-color);
 }
 
 .m3-list {
@@ -1232,10 +1257,11 @@ header.app-bar,
 
 .m3-list:not(.grid-mode) .m3-list-item {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 140px 110px 140px;
-    gap: 0.75rem;
-    padding: 0.55rem 0.75rem;
+    grid-template-columns: var(--file-list-columns);
+    gap: var(--file-list-gap);
+    padding: var(--file-list-padding);
     align-items: center;
+    box-sizing: border-box;
 }
 
 .m3-list:not(.grid-mode) .m3-list-item>.row-progress-bar {
@@ -1371,14 +1397,22 @@ header.app-bar,
 }
 
 /* Industry-Standard Zero-Flicker View Mode Anti-FOUC Rules */
-#nasDropzone.is-empty #fileTableHead,
 #nasDropzone.is-grid #fileTableHead,
 html[data-view-mode="grid"] #fileTableHead {
     display: none !important;
 }
 
-html[data-view-mode="list"] #nasDropzone:not(.is-empty) #fileTableHead {
-    display: grid !important;
+@media (min-width: 768px) {
+    html[data-view-mode="list"] #fileTableHead {
+        display: grid !important;
+        grid-template-columns: var(--file-list-columns) !important;
+        gap: var(--file-list-gap) !important;
+        padding-top: 0.55rem !important;
+        padding-bottom: 0.55rem !important;
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem;
+        overflow-y: hidden;
+    }
 }
 
 html[data-view-mode="grid"] #nasFileList:not(.empty-state) {
@@ -2467,22 +2501,20 @@ html[data-view-mode="list"] #gridViewBtn {
 }
 
 /* Zero-flicker active tab styling matching data-view-mode architecture */
-[data-active-tab="clipboard"] #fileView,
-[data-active-tab="clipboard"] #fileTransferSection,
-[data-active-tab="clipboard"] #fileListSection {
+/* Both views hidden by default; data-active-tab on <html> (set pre-paint in <head>) reveals the correct one */
+#fileView,
+#clipboardView {
     display: none;
 }
-[data-active-tab="clipboard"] #clipboardView,
-[data-active-tab="clipboard"] #clipboardSection {
+[data-active-tab="clipboard"] #clipboardView {
     display: flex;
 }
-[data-active-tab="file"] #fileView,
-[data-active-tab="file"] #fileTransferSection,
-[data-active-tab="file"] #fileListSection {
+[data-active-tab="file"] #fileView {
     display: flex;
 }
-[data-active-tab="file"] #clipboardView,
-[data-active-tab="file"] #clipboardSection {
+#fileTransferSection,
+#fileListSection,
+#clipboardSection {
     display: none;
 }
 
@@ -2919,12 +2951,13 @@ html[data-view-mode="list"] #gridViewBtn {
     }
 }
 
-/* 750px - 1024px: Hide date column, show Name + Size + Actions */
-@media (max-width: 1024px) and (min-width: 750px) {
+/* 768px - 1024px: Hide date column, show Name + Size + Actions */
+@media (max-width: 1024px) and (min-width: 768px) {
 
     body .file-table-head,
+    html[data-view-mode="list"] #fileTableHead,
     .m3-list:not(.grid-mode) .m3-list-item {
-        grid-template-columns: minmax(0, 1fr) 110px 40px;
+        grid-template-columns: minmax(0, 1fr) 110px 40px !important;
     }
 
     body .file-table-head>span:nth-child(2),
@@ -2934,28 +2967,33 @@ html[data-view-mode="list"] #gridViewBtn {
 
     body .file-table-head>span:nth-child(3),
     body .item-size {
-        display: block;
+        display: inline-flex;
     }
 
-    .m3-list:not(.grid-mode) .m3-list-item>.file-name-cell {
+    .m3-list:not(.grid-mode) .m3-list-item>.file-name-cell,
+    .file-table-head>span:nth-child(1) {
         grid-column: 1;
     }
 
-    .m3-list:not(.grid-mode) .m3-list-item>.item-size {
+    .m3-list:not(.grid-mode) .m3-list-item>.item-size,
+    .file-table-head>span:nth-child(3) {
         grid-column: 2;
     }
 
-    .m3-list:not(.grid-mode) .m3-list-item>.row-actions {
+    .m3-list:not(.grid-mode) .m3-list-item>.row-actions,
+    .file-table-head>span:nth-child(4) {
         grid-column: 3;
     }
 }
 
-/* < 750px: Hide date and size columns, show Name + Actions only */
-@media (max-width: 749px) {
+/* < 768px: Mobile view (Show Name + Sort header, hide date and size columns, 2-col grid) */
+@media (max-width: 767px) {
 
     body .file-table-head,
+    html[data-view-mode="list"] #fileTableHead,
     .m3-list:not(.grid-mode) .m3-list-item {
-        grid-template-columns: minmax(0, 1fr) 40px;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) 40px !important;
     }
 
     body .file-table-head>span:nth-child(2),
@@ -2965,12 +3003,16 @@ html[data-view-mode="list"] #gridViewBtn {
         display: none;
     }
 
-    .m3-list:not(.grid-mode) .m3-list-item>.file-name-cell {
+    .m3-list:not(.grid-mode) .m3-list-item>.file-name-cell,
+    .file-table-head>span:nth-child(1) {
         grid-column: 1;
     }
 
-    .m3-list:not(.grid-mode) .m3-list-item>.row-actions {
+    .m3-list:not(.grid-mode) .m3-list-item>.row-actions,
+    .file-table-head>span:nth-child(4) {
         grid-column: 2;
+        display: flex;
+        justify-content: flex-end;
     }
 }
 
@@ -2981,7 +3023,7 @@ html[data-view-mode="list"] #gridViewBtn {
     }
 }
 
-/* Max 767px: Compact breadcrumbs, 2-col quick access, hide table headers */
+/* Max 767px: Compact breadcrumbs, 2-col quick access */
 @media (max-width: 767px) {
     body .nas-breadcrumbs {
         gap: 0.35rem;
@@ -3009,7 +3051,6 @@ html[data-view-mode="list"] #gridViewBtn {
         justify-content: space-between;
     }
 
-    body .file-table-head,
     body .item-date,
     body .item-size {
         display: none !important;
@@ -3095,48 +3136,15 @@ html[data-view-mode="list"] #gridViewBtn {
         justify-content: space-between;
     }
 
-    body .file-table-head {
-        display: none !important;
-    }
-
-    .m3-list:not(.grid-mode) .m3-list-item {
-        display: flex;
-        justify-content: space-between;
-    }
-
     #quickAccessContainer,
     .quick-access {
         display: none !important;
-    }
-
-    body .item-date,
-    body .item-size {
-        display: none !important;
-    }
-
-    body #fileTableHead,
-    #fileTableHead {
-        display: grid !important;
-        grid-template-columns: minmax(0, 1fr) auto !important;
-        padding: 0.5rem 0.75rem !important;
-    }
-
-    body #fileTableHead>span:nth-child(2),
-    body #fileTableHead>span:nth-child(3),
-    #fileTableHead>span:nth-child(2),
-    #fileTableHead>span:nth-child(3) {
-        display: none !important;
-    }
-
-    body .m3-list:not(.grid-mode) .m3-list-item {
-        grid-template-columns: minmax(0, 1fr) auto !important;
     }
 
     html,
     body,
     .android-app,
     .app-body {
-        height: 100vh !important;
         height: 100dvh !important;
         overflow: hidden !important;
     }

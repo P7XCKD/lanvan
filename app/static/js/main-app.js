@@ -3419,13 +3419,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Check if we're on clipboard-only page
   const isClipboardOnly = typeof show_clipboard_only !== 'undefined' && show_clipboard_only;
 
-  // Initialize current active section based on default view or URL
-  const urlPath = window.location.pathname;
-  if (urlPath === '/clipboard' || (window.LanvanConfig && window.LanvanConfig.defaultView === 'clipboard')) {
-    currentActiveSection = 'clipboard';
-  } else {
-    currentActiveSection = 'file';
-  }
+  // Initialize current active section from authoritative pre-paint dataset / localStorage
+  const savedTab = document.documentElement.dataset.activeTab || localStorage.getItem('lanvan_active_tab') || (window.location.pathname === '/clipboard' ? 'clipboard' : 'file');
+  currentActiveSection = savedTab;
+  window.activeTab = savedTab;
   console.log(` Initial active section: ${currentActiveSection}`);
 
   Object.assign(DOM_CACHE, {
@@ -6023,7 +6020,7 @@ function renderClipboardHistory(items) {
   }
 
   legacyContainer.innerHTML = items.map(item => {
-    const typeIcon = getClipboardItemIcon(item);
+    const typeIcon = (typeof window.getClipboardItemIcon === 'function') ? window.getClipboardItemIcon(item) : (typeof getClipboardItemIcon === 'function' ? getClipboardItemIcon(item) : '');
     const sizeText = formatClipboardSize(item.size);
     const isImage = item.type === 'file' && item.content_type === 'image';
 
