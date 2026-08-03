@@ -31,8 +31,13 @@
             return;
         }
 
-        // Take up to 4 recent files
-        var recentFiles = files.slice(0, 4);
+        // Always sort recent files by mtime descending for Quick Access bar
+        var parseDate = window.parseDateToTimestamp || function (d) { return typeof d === 'number' ? d : 0; };
+        var recentFiles = files.slice().sort(function (a, b) {
+            var timeA = parseDate(typeof a === 'object' ? (a.mtime || a.date || a.modified) : 0);
+            var timeB = parseDate(typeof b === 'object' ? (b.mtime || b.date || b.modified) : 0);
+            return timeB - timeA;
+        }).slice(0, 4);
         var html = "";
         for (var i = 0; i < recentFiles.length; i++) {
             var item = recentFiles[i];

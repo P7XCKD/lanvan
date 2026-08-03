@@ -69,19 +69,27 @@
                 if (isPendingDelete) continue;
 
                 var isFolderVal = false;
-                if (typeof df === 'string') {
-                    // Use the diskFiles parameter itself for folder detection — already a Repository snapshot
-                    // No global window.FileRepository read needed
-                    isFolderVal = false;
-                } else {
+                var dfSize = '--';
+                var dfMtime = 0;
+
+                if (typeof df === 'object' && df !== null) {
                     isFolderVal = !!(df.isFolder || df.is_dir || df.is_folder);
+                    dfSize = df.size || df.fileSize || df.file_size || '--';
+                    dfMtime = df.mtime || df.date || df.modified || 0;
+                } else if (typeof df === 'string') {
+                    if (window._fileMetadataMap && window._fileMetadataMap[df]) {
+                        var cachedMeta = window._fileMetadataMap[df];
+                        dfSize = cachedMeta.size || '--';
+                        dfMtime = cachedMeta.mtime || 0;
+                        isFolderVal = !!cachedMeta.isFolder;
+                    }
                 }
 
                 normalizedDiskFiles.push({
                     name: fileName,
                     identity: (taggedPath || currentFolder) ? ((taggedPath || currentFolder) + '/' + fileName) : fileName,
-                    size: typeof df === 'string' ? '--' : (df.size || '--'),
-                    mtime: typeof df === 'string' ? 0 : (df.mtime || 0),
+                    size: dfSize,
+                    mtime: dfMtime,
                     isFolder: isFolderVal,
                     uploading: false,
                     uploadProgress: 100,
@@ -286,12 +294,40 @@
             }
         });
 
-        // 5. Sort: Folders first (by name), then files (by name)
+        // 5. Apply Pure Projection Sorting based on Store state / Global sort settings
+        var sortBy = (storeState && typeof storeState.sortBy === "string") ? storeState.sortBy : (window.sortBy || "name");
+        var sortDirection = (storeState && typeof storeState.sortDirection === "string") ? storeState.sortDirection : (window.sortDirection || "asc");
+        var sortFolders = (storeState && typeof storeState.sortFolders === "string") ? storeState.sortFolders : (window.sortFolders || "top");
+
+        var parseBytes = window.parseSizeToBytes || function (s, isF) { return isF ? -1 : 0; };
+        var parseDate = window.parseDateToTimestamp || function (d) { return 0; };
+
         deduplicatedFiles.sort(function (a, b) {
-            if (a.isFolder !== b.isFolder) {
-                return a.isFolder ? -1 : 1;
+            if (sortFolders === "top") {
+                if (a.isFolder && !b.isFolder) return -1;
+                if (!a.isFolder && b.isFolder) return 1;
             }
-            return String(a.name).localeCompare(String(b.name));
+
+            var comparison = 0;
+            if (sortBy === "name") {
+                var nameA = String(a.name || "").toLowerCase();
+                var nameB = String(b.name || "").toLowerCase();
+                comparison = nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+            } else if (sortBy === "date") {
+                var timeA = parseDate(a.mtime || a.date || a.modified || (a.uploading ? Date.now() / 1000 : 0));
+                var timeB = parseDate(b.mtime || b.date || b.modified || (b.uploading ? Date.now() / 1000 : 0));
+                comparison = timeA - timeB;
+            } else if (sortBy === "size") {
+                var bytesA = parseBytes(a.size || a.fileSize, a.isFolder);
+                var bytesB = parseBytes(b.size || b.fileSize, b.isFolder);
+                comparison = bytesA - bytesB;
+            } else {
+                var defaultNameA = String(a.name || "").toLowerCase();
+                var defaultNameB = String(b.name || "").toLowerCase();
+                comparison = defaultNameA.localeCompare(defaultNameB, undefined, { numeric: true, sensitivity: 'base' });
+            }
+
+            return sortDirection === "asc" ? comparison : -comparison;
         });
 
         // INVARIANT GUARD (DEBUG only): Verify ViewModel integrity.

@@ -2369,6 +2369,22 @@ html[data-view-mode="list"] #clipboardHistory {
     animation: modalPop 0.2s cubic-bezier(0.1, 0.9, 0.2, 1);
 }
 
+.connect-qr-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.connect-qr-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
 @keyframes modalPop {
     from {
         opacity: 0;
@@ -3763,7 +3779,7 @@ html[data-view-mode="list"] #clipboardHistory {
 
 @media (max-width: 768px) {
     .lv-preview-overlay {
-        background: #0a0c10 !important;
+        background: #0a0c10;
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
         padding-top: env(safe-area-inset-top, 0px);
@@ -4190,11 +4206,13 @@ video::-webkit-media-controls-cast-button {
     transition: all 0.2s ease !important;
 }
 
-.connect-value #connectAddress {
+.connect-value #connectAddress,
+.connect-value #connectQrDialogAddress {
     text-align: center !important;
     width: 100% !important;
     display: block !important;
     margin: 0 auto !important;
+    word-break: break-all !important;
 }
 
 .connect-value:hover {

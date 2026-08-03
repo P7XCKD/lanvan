@@ -366,6 +366,9 @@
             var liveUploadQueue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
             storeState.currentFolder = normCurrentDir;
             storeState.uploadQueue = liveUploadQueue;
+            storeState.sortBy = sortBy;
+            storeState.sortDirection = sortDirection;
+            storeState.sortFolders = sortFolders;
             if (!storeState.pendingOps) {
                 storeState.pendingOps = {};
             }
@@ -429,14 +432,18 @@
 
             var comparison = 0;
             if (sortBy === "name") {
-                comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+                var nameA = String(a.name || "").toLowerCase();
+                var nameB = String(b.name || "").toLowerCase();
+                comparison = nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
             } else if (sortBy === "date") {
-                var timeA = a.mtime || (a.uploading ? Date.now() / 1000 : 0);
-                var timeB = b.mtime || (b.uploading ? Date.now() / 1000 : 0);
+                var parseDate = window.parseDateToTimestamp || function(d) { return typeof d === 'number' ? d : 0; };
+                var timeA = parseDate(a.mtime || a.date || a.modified || (a.uploading ? Date.now() / 1000 : 0));
+                var timeB = parseDate(b.mtime || b.date || b.modified || (b.uploading ? Date.now() / 1000 : 0));
                 comparison = timeA - timeB;
             } else if (sortBy === "size") {
-                var bytesA = parseSizeToBytes(a.size, a.isFolder);
-                var bytesB = parseSizeToBytes(b.size, b.isFolder);
+                var parseBytes = window.parseSizeToBytes || function() { return 0; };
+                var bytesA = parseBytes(a.size || a.fileSize, a.isFolder);
+                var bytesB = parseBytes(b.size || b.fileSize, b.isFolder);
                 comparison = bytesA - bytesB;
             }
 
@@ -453,6 +460,9 @@
             savedViewModeForSignature,
             typeFilter,
             searchQuery,
+            sortBy,
+            sortDirection,
+            sortFolders,
             normalizedFiles.map(function (f) {
                 if (!f) return "";
                 return [
@@ -824,7 +834,7 @@
                     }
                 });
 
-                // Primary Click / Tap Handler (Exclusive Selection Mode Priority)
+                // Primary Click / Tap Handler (Exclusive Selection Mode Priority & Ctrl/Cmd Multi-Select)
                 item.addEventListener("click", function (e) {
                     if (window._justFinishedMarqueeDrag || window._justHandledTouchSelection) {
                         e.stopPropagation();
@@ -836,13 +846,12 @@
                     var currentSelection = window.selectedItems || [];
 
                     // =========================================================
-                    // 1. EXCLUSIVE SELECTION MODE PRIORITY
+                    // 1. CTRL / CMD / SHIFT CLICK OR EXCLUSIVE SELECTION MODE PRIORITY
                     // =========================================================
-                    if (currentSelection.length > 0) {
+                    if (e.ctrlKey || e.metaKey || e.shiftKey || currentSelection.length > 0) {
                         e.preventDefault();
                         e.stopPropagation();
-                        // While Selection Mode is active: ONLY toggle selection.
-                        // Never preview, never navigate, never open folders/files.
+                        // Ctrl/Cmd/Shift click or active selection mode: toggle selection
                         handleListItemClick(item, index, files);
                         return;
                     }
@@ -1924,14 +1933,21 @@
         var arrowDate = document.getElementById("sortArrow-date");
         var arrowSize = document.getElementById("sortArrow-size");
 
-        var iconMarkup = sortDirection === "asc"
-            ? '<i data-lucide="chevron-down" class="sort-header-icon" title="Ascending"></i>'
-            : '<i data-lucide="chevron-up" class="sort-header-icon" title="Descending"></i>';
+        function getArrowMarkup(col) {
+            if (sortBy === col) {
+                return sortDirection === "asc"
+                    ? '<i data-lucide="chevron-down" class="sort-header-icon active" title="Ascending" style="width:13px;height:13px;color:var(--primary);vertical-align:middle;margin-left:2px;"></i>'
+                    : '<i data-lucide="chevron-up" class="sort-header-icon active" title="Descending" style="width:13px;height:13px;color:var(--primary);vertical-align:middle;margin-left:2px;"></i>';
+            }
+            return '<i data-lucide="chevron-down" class="sort-header-icon inactive" title="Sort by ' + col + '" style="width:13px;height:13px;color:var(--text-muted);opacity:0.3;vertical-align:middle;margin-left:2px;"></i>';
+        }
 
-        if (arrowName) arrowName.innerHTML = sortBy === "name" ? iconMarkup : "";
-        if (arrowDate) arrowDate.innerHTML = sortBy === "date" ? iconMarkup : "";
-        if (arrowSize) arrowSize.innerHTML = sortBy === "size" ? iconMarkup : "";
-        if (window.lucide) lucide.createIcons();
+        if (arrowName) arrowName.innerHTML = getArrowMarkup("name");
+        if (arrowDate) arrowDate.innerHTML = getArrowMarkup("date");
+        if (arrowSize) arrowSize.innerHTML = getArrowMarkup("size");
+        if (window.lucide && typeof window.lucide.createIcons === "function") {
+            window.lucide.createIcons();
+        }
     }
 
     window.setSortOption = function (category, value) {
@@ -1939,9 +1955,20 @@
         else if (category === "direction") sortDirection = value;
         else if (category === "folders") sortFolders = value;
 
+        window.sortBy = sortBy;
+        window.sortDirection = sortDirection;
+        window.sortFolders = sortFolders;
+
+        if (window.LanvanStore && window.LanvanStore.state) {
+            window.LanvanStore.state.sortBy = sortBy;
+            window.LanvanStore.state.sortDirection = sortDirection;
+            window.LanvanStore.state.sortFolders = sortFolders;
+        }
+
         var el = document.getElementById("sortDropdownMenu");
         if (el) el.style.display = "none";
 
+        window._lastRenderSignature = null;
         updateSortCheckmarks();
         updateSortHeaderArrows();
 
@@ -2067,6 +2094,17 @@
             sortBy = column;
             sortDirection = "asc";
         }
+        window.sortBy = sortBy;
+        window.sortDirection = sortDirection;
+        window.sortFolders = sortFolders;
+
+        if (window.LanvanStore && window.LanvanStore.state) {
+            window.LanvanStore.state.sortBy = sortBy;
+            window.LanvanStore.state.sortDirection = sortDirection;
+            window.LanvanStore.state.sortFolders = sortFolders;
+        }
+
+        window._lastRenderSignature = null;
         updateSortHeaderArrows();
         updateSortCheckmarks();
         refreshFileList('header_sort_changed');
@@ -2471,10 +2509,15 @@
     };
 
     window.copyConnectAddress = function () {
-        var addr = document.getElementById("connectAddress") || document.getElementById("connectQrDialogAddress");
+        var dialog = document.getElementById("connectQrDialog");
+        var dialogActive = dialog && dialog.style.display !== "none";
+        var addr = dialogActive ? document.getElementById("connectQrDialogAddress") : document.getElementById("connectAddress");
+        if (!addr) {
+            addr = document.getElementById("connectAddress") || document.getElementById("connectQrDialogAddress");
+        }
         var textToCopy = addr ? addr.textContent.trim() : "";
         if (!textToCopy || textToCopy === "...") {
-            textToCopy = window.location.origin;
+            textToCopy = (window._currentNetworkInfo && window._currentNetworkInfo.fullUrl) ? window._currentNetworkInfo.fullUrl : window.location.origin;
         }
 
         if (textToCopy) {
@@ -2487,14 +2530,20 @@
             }
         }
 
-        var tooltip = document.querySelector(".connect-tooltip");
-        if (tooltip) {
-            tooltip.textContent = "Copied successfully!";
-            tooltip.classList.add("copied");
-            setTimeout(function () {
-                tooltip.textContent = "Click to copy";
-                tooltip.classList.remove("copied");
-            }, 1800);
+        var tooltips = document.querySelectorAll(".connect-tooltip");
+        for (var i = 0; i < tooltips.length; i++) {
+            tooltips[i].textContent = "Copied successfully!";
+            tooltips[i].classList.add("copied");
+        }
+        setTimeout(function () {
+            for (var j = 0; j < tooltips.length; j++) {
+                tooltips[j].textContent = "Click to copy";
+                tooltips[j].classList.remove("copied");
+            }
+        }, 1800);
+
+        if (typeof window.showToast === "function") {
+            window.showToast("Connection URL copied to clipboard", "success");
         }
     };
 

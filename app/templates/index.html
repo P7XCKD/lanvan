@@ -639,17 +639,21 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         <i data-lucide="x" style="width:16px;height:16px;"></i>
       </button>
     </div>
-    <div class="connect-qr-subtitle">Connect to Lanvan using the URL or QR code. Make sure you are on the same Wi-Fi or
-      hotspot.</div>
-    <div class="connect-tabs connect-qr-tabs">
+    <div class="connect-tabs connect-qr-tabs" style="margin-top: 0.5rem;">
       <button id="connectQrLanIpTab" class="connect-tab active" onclick="setConnectMode('ip')">LAN IP</button>
       <button id="connectQrMdnsTab" class="connect-tab" onclick="setConnectMode('mdns')">mDNS</button>
     </div>
-    <div class="qr-box connect-qr-box" id="connectQrDialogBox" aria-label="Connection QR preview">
+    <div class="qr-box connect-qr-box" id="connectQrDialogBox" aria-label="Connection QR preview" style="margin: 0.75rem auto;">
       <!-- Populated by production QR generation -->
     </div>
-    <div class="connect-qr-address" id="connectQrDialogAddress"></div>
-    <div class="connect-qr-actions">
+    <div class="connect-value connect-qr-value" onclick="copyConnectAddress()" title="Click to copy" style="margin-bottom: 0.75rem;">
+      <span id="connectQrDialogAddress">...</span>
+      <span class="connect-tooltip">Click to copy</span>
+    </div>
+    <div class="connect-qr-subtitle" style="font-size:0.78rem; color:var(--text-muted); text-align:center; margin-bottom: 1rem;">
+      Connect to Lanvan using the URL or QR code. Make sure you are on the same Wi-Fi or hotspot.
+    </div>
+    <div class="connect-qr-actions" style="display: flex; gap: 0.5rem; justify-content: flex-end; width: 100%;">
       <button class="dialog-btn" onclick="closeConnectQrDialog()" style="color:var(--text-muted);">Close</button>
       <button class="dialog-btn dialog-btn-primary" onclick="copyConnectAddress()">Copy address</button>
     </div>

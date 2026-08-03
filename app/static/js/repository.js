@@ -14,6 +14,10 @@
         return (cleaned === "Home (Root)" || cleaned === "Home" || cleaned === "Home/") ? "" : cleaned;
     }
 
+    if (!window._fileMetadataMap) {
+        window._fileMetadataMap = {};
+    }
+
     function tagFiles(files, folderPath) {
         var list = Array.isArray(files) ? files : [];
         var targetPath = cleanPath(folderPath);
@@ -21,6 +25,13 @@
             var item = list[i];
             if (item && typeof item === 'object') {
                 item.isFolder = !!(item.isFolder || item.is_dir || item.is_folder);
+                if (item.name) {
+                    window._fileMetadataMap[item.name] = {
+                        size: item.size || '--',
+                        mtime: item.mtime || 0,
+                        isFolder: item.isFolder
+                    };
+                }
             }
         }
         try {
