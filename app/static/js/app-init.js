@@ -491,11 +491,27 @@
         updateSortCheckmarks();
         updateSortHeaderArrows();
 
-        // Update file count in file panel meta
+        // Update file and folder count in file panel meta
         if (filePanelMeta) {
-            filePanelMeta.textContent = normalizedFiles.length
-                ? normalizedFiles.length + " file" + (normalizedFiles.length === 1 ? "" : "s")
-                : "";
+            var folderCount = 0;
+            var fileCount = 0;
+            if (Array.isArray(normalizedFiles)) {
+                for (var fIdx = 0; fIdx < normalizedFiles.length; fIdx++) {
+                    if (normalizedFiles[fIdx] && normalizedFiles[fIdx].isFolder) {
+                        folderCount++;
+                    } else {
+                        fileCount++;
+                    }
+                }
+            }
+            var parts = [];
+            if (fileCount > 0) {
+                parts.push(fileCount + " file" + (fileCount === 1 ? "" : "s"));
+            }
+            if (folderCount > 0) {
+                parts.push(folderCount + " folder" + (folderCount === 1 ? "" : "s"));
+            }
+            filePanelMeta.textContent = parts.length > 0 ? parts.join(", ") : "";
         }
 
         var fileTableHead = document.getElementById("fileTableHead");
