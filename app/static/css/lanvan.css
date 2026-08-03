@@ -984,13 +984,14 @@ header.app-bar,
 .empty-dropzone-wrapper {
     flex: 1;
     width: 100%;
-    min-height: 380px;
+    height: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
-    margin: auto;
+    padding: 0;
+    margin: 0;
 }
 
 [data-theme="dark"] .m3-card {
@@ -1123,14 +1124,14 @@ header.app-bar,
     grid-template-columns: none !important;
     grid-auto-rows: auto !important;
     flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
-    min-height: 420px !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
     height: 100% !important;
     flex: 1 !important;
     overflow: hidden !important;
     overflow-y: hidden !important;
 }
+
 
 .m3-list:not(.grid-mode) .m3-list-item {
     display: grid;
@@ -1204,15 +1205,17 @@ header.app-bar,
 }
 
 /* Industry-Standard Zero-Flicker View Mode Anti-FOUC Rules */
+#nasDropzone.is-empty #fileTableHead,
+#nasDropzone.is-grid #fileTableHead,
 html[data-view-mode="grid"] #fileTableHead {
     display: none !important;
 }
 
-html[data-view-mode="list"] #fileTableHead {
+html[data-view-mode="list"] #nasDropzone:not(.is-empty) #fileTableHead {
     display: grid !important;
 }
 
-html[data-view-mode="grid"] #nasFileList {
+html[data-view-mode="grid"] #nasFileList:not(.empty-state) {
     display: grid !important;
     grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)) !important;
     grid-auto-rows: 200px !important;
@@ -2874,9 +2877,9 @@ html[data-view-mode="list"] #clipboardHistory {
         padding-bottom: 1rem !important;
     }
 
-    html[data-view-mode="grid"] #nasFileList,
-    body #nasFileList.grid-mode,
-    #nasFileList.grid-mode {
+    html[data-view-mode="grid"] #nasFileList:not(.empty-state),
+    body #nasFileList.grid-mode:not(.empty-state),
+    #nasFileList.grid-mode:not(.empty-state) {
         display: grid !important;
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         grid-auto-rows: minmax(160px, auto) !important;

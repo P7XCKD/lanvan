@@ -305,13 +305,12 @@
         var filePanelMeta = document.getElementById("filePanelMeta");
         if (!container) return;
 
-        // Hide Recents (Quick Access) if inside a subfolder
         var quickContainer = document.getElementById("quickAccessContainer");
         if (quickContainer) {
-            if (normCurrentDir && normCurrentDir !== "") {
+            if ((normCurrentDir && normCurrentDir !== "") || !files || files.length === 0) {
                 quickContainer.style.display = "none";
             } else {
-                quickContainer.style.display = ""; // Reset
+                quickContainer.style.display = "";
             }
         }
 
@@ -518,32 +517,21 @@
         var listBtn = document.getElementById("listViewBtn");
         var gridBtn = document.getElementById("gridViewBtn");
 
-        if (savedViewModeForSignature === "grid") {
-            container.classList.add("grid-mode");
-            if (fileTableHead) fileTableHead.style.display = "none";
-            if (gridBtn) gridBtn.classList.add("active");
-            if (listBtn) listBtn.classList.remove("active");
-        } else {
-            container.classList.remove("grid-mode");
-            if (fileTableHead) fileTableHead.style.display = "";
-            if (listBtn) listBtn.classList.add("active");
-            if (gridBtn) gridBtn.classList.remove("active");
-        }
+        var hasFiles = normalizedFiles && normalizedFiles.length > 0;
+        updateExplorerLayoutState({
+            hasFiles: hasFiles,
+            viewMode: savedViewModeForSignature
+        });
 
-        if (!normalizedFiles || normalizedFiles.length === 0) {
-            container.classList.add("empty-state");
+        if (!hasFiles) {
             container.style.display = "flex";
             container.style.flexDirection = "column";
-            container.style.alignItems = "center";
-            container.style.justifyContent = "center";
+            container.style.alignItems = "stretch";
+            container.style.justifyContent = "stretch";
             container.style.flex = "1";
-            container.style.minHeight = "420px";
             container.style.height = "100%";
             window.selectedItems = [];
             window._contextMenuTarget = "";
-
-            // Hide file table header when list is empty to prevent DOM overlap
-            if (fileTableHead) fileTableHead.style.display = "none";
 
             var queue = window.uploadQueue || [];
             var activeUploadsCount = queue.filter(function (item) {
@@ -552,7 +540,7 @@
 
             if (searchQuery) {
                 container.innerHTML =
-                    '<div class="empty-dropzone-wrapper" style="grid-column: 1 / -1; width:100%; flex:1; min-height:300px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; margin:auto;">' +
+                    '<div class="empty-dropzone-wrapper" style="grid-column: 1 / -1; width:100%; height:100%; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0; margin:auto;">' +
                     '<div class="avatar-icon" style="width:64px;height:64px;border-radius:18px;margin-bottom:1rem;background:var(--toggle-bg);color:var(--text-muted);display:flex;align-items:center;justify-content:center;">' +
                     '<i data-lucide="search-x" style="width:32px;height:32px;"></i></div>' +
                     '<div style="font-size:1.05rem; font-weight:600; color:var(--text-color); margin-bottom:0.25rem;">No files matching "' + escapeHtml(searchQuery) + '"</div>' +
@@ -561,7 +549,7 @@
                     '</div>';
             } else if (typeFilter !== "all") {
                 container.innerHTML =
-                    '<div class="empty-dropzone-wrapper" style="grid-column: 1 / -1; width:100%; flex:1; min-height:300px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; margin:auto;">' +
+                    '<div class="empty-dropzone-wrapper" style="grid-column: 1 / -1; width:100%; height:100%; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0; margin:auto;">' +
                     '<div class="avatar-icon" style="width:64px;height:64px;border-radius:18px;margin-bottom:1rem;background:var(--toggle-bg);color:var(--text-muted);display:flex;align-items:center;justify-content:center;">' +
                     '<i data-lucide="file-x" style="width:32px;height:32px;"></i></div>' +
                     '<div style="font-size:1.05rem; font-weight:600; color:var(--text-color); margin-bottom:0.25rem;">No ' + escapeHtml(typeFilter) + ' files found</div>' +
@@ -570,7 +558,7 @@
                     '</div>';
             } else if (activeUploadsCount > 0) {
                 container.innerHTML =
-                    '<div class="empty-dropzone-wrapper" style="grid-column: 1 / -1; width:100%; flex:1; min-height:380px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; margin:auto;">' +
+                    '<div class="empty-dropzone-wrapper" style="grid-column: 1 / -1; width:100%; height:100%; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0; margin:auto;">' +
                     '<div class="empty-dropzone-target" style="display:inline-flex; flex-direction:column; align-items:center; justify-content:center; padding:1.5rem 2.5rem; border-radius:16px; cursor:pointer; transition:background-color 0.2s ease;" onclick="if(typeof handleFileSelection===\'function\'){handleFileSelection(\'file\');}else{var fi=document.getElementById(\'fileInput\');if(fi){fi.value=\'\';fi.click();}}">' +
                     '<div class="avatar-icon avatar-folder" style="width:72px;height:72px;border-radius:18px;margin-bottom:1rem;">' +
                     '<i data-lucide="upload-cloud" style="width:34px;height:34px;"></i></div>' +
@@ -580,7 +568,7 @@
                     '</div>';
             } else {
                 container.innerHTML =
-                    '<div class="empty-dropzone-wrapper" style="grid-column: 1 / -1; width:100%; flex:1; min-height:380px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; margin:auto;">' +
+                    '<div class="empty-dropzone-wrapper" style="grid-column: 1 / -1; width:100%; height:100%; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0; margin:auto;">' +
                     '<div class="empty-dropzone-target" style="display:inline-flex; flex-direction:column; align-items:center; justify-content:center; padding:1.5rem 2.5rem; border-radius:16px; cursor:pointer; transition:background-color 0.2s ease;" onclick="if(typeof handleFileSelection===\'function\'){handleFileSelection(\'file\');}else{var fi=document.getElementById(\'fileInput\');if(fi){fi.value=\'\';fi.click();}}">' +
                     '<div class="avatar-icon avatar-folder" style="width:72px;height:72px;border-radius:18px;margin-bottom:1rem;">' +
                     '<i data-lucide="folder-open" style="width:34px;height:34px;"></i></div>' +
@@ -2126,30 +2114,58 @@
         refreshFileList('header_sort_changed');
     };
 
-    // --- View Mode ---
-    window.setViewMode = function (mode) {
+    function updateExplorerLayoutState(options) {
+        var nasDropzone = document.getElementById("nasDropzone");
         var fileList = document.getElementById("nasFileList");
         var fileTableHead = document.getElementById("fileTableHead");
+        var quickContainer = document.getElementById("quickAccessContainer");
         var listBtn = document.getElementById("listViewBtn");
         var gridBtn = document.getElementById("gridViewBtn");
 
+        var viewMode = (options && options.viewMode) ||
+                       document.documentElement.getAttribute("data-view-mode") ||
+                       (fileList && fileList.classList.contains("grid-mode") ? "grid" : "list");
+
+        var hasFiles = options && typeof options.hasFiles === "boolean"
+            ? options.hasFiles
+            : (fileList ? !fileList.classList.contains("empty-state") : false);
+
+        var normCurrentDir = typeof currentFolderPath !== "undefined" ? currentFolderPath : "";
+        var isSubfolder = (normCurrentDir && normCurrentDir !== "" && normCurrentDir !== "Home");
+        var hasRecents = hasFiles && !isSubfolder;
+
+        if (nasDropzone) {
+            nasDropzone.classList.toggle("is-empty", !hasFiles);
+            nasDropzone.classList.toggle("is-grid", viewMode === "grid");
+            nasDropzone.classList.toggle("is-list", viewMode === "list");
+        }
+
+        if (fileList) {
+            fileList.classList.toggle("empty-state", !hasFiles);
+            fileList.classList.toggle("grid-mode", viewMode === "grid");
+        }
+
+        if (fileTableHead) {
+            fileTableHead.style.display = (viewMode === "grid" || !hasFiles) ? "none" : "";
+        }
+
+        if (quickContainer) {
+            quickContainer.style.display = hasRecents ? "" : "none";
+        }
+
+        if (listBtn) listBtn.classList.toggle("active", viewMode === "list");
+        if (gridBtn) gridBtn.classList.toggle("active", viewMode === "grid");
+    }
+    window.updateExplorerLayoutState = updateExplorerLayoutState;
+
+    // --- View Mode ---
+    window.setViewMode = function (mode) {
         try {
             localStorage.setItem("lanvan_view_mode", mode);
             document.documentElement.setAttribute("data-view-mode", mode);
         } catch (e) { }
 
-        // Instant view mode toggle (< 1ms HTML template swap)
-        if (fileList) {
-            if (mode === "grid") {
-                fileList.classList.add("grid-mode");
-                if (fileTableHead) fileTableHead.style.display = "none";
-            } else {
-                fileList.classList.remove("grid-mode");
-                if (fileTableHead) fileTableHead.style.display = "";
-            }
-        }
-        if (listBtn) listBtn.classList.toggle("active", mode === "list");
-        if (gridBtn) gridBtn.classList.toggle("active", mode === "grid");
+        updateExplorerLayoutState({ viewMode: mode });
 
         // Force immediate synchronous re-render so the DOM template matches the new
         // grid/list CSS layout without waiting for the scheduler's next debounce tick.
@@ -4250,7 +4266,7 @@
         var container = document.getElementById("nasFileList");
         if (container) {
             container.innerHTML =
-                '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:3rem 0; width:100%;">' +
+                '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0; height:100%; flex:1; width:100%;">' +
                 '<div style="width:40px; height:40px; border:4px solid var(--border-color); border-top:4px solid var(--primary); border-radius:50%; animation:spin 1s linear infinite; margin-bottom:1rem;"></div>' +
                 '<div style="font-size:0.9rem; color:var(--text-muted);">Loading files...</div>' +
                 "</div>";

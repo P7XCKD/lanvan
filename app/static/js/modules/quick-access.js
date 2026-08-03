@@ -24,10 +24,13 @@
             container.style.display = "none";
             return;
         }
-        container.style.display = ""; // Reset display
-
         if (!files || files.length === 0) {
             container.innerHTML = "";
+            if (typeof window.updateExplorerLayoutState === "function") {
+                window.updateExplorerLayoutState({ hasRecents: false });
+            } else {
+                container.style.display = "none";
+            }
             return;
         }
 
