@@ -3806,8 +3806,9 @@
     };
 
     function saveUploadQueueToStorage() {
-        if (!window.uploadQueue) return;
-        var serialized = window.uploadQueue.map(function (item) {
+        var queue = (typeof window.getUploadQueue === "function" ? window.getUploadQueue() : window.uploadQueue);
+        if (!Array.isArray(queue)) return;
+        var serialized = queue.map(function (item) {
             return {
                 id: item.id,
                 fileName: item.fileName || item.name,
@@ -3846,9 +3847,10 @@
         var stack = document.getElementById("uploadToastStack");
         if (!stack) return;
 
-        var queue = window.uploadQueue || [];
+        var rawQueue = (typeof window.getUploadQueue === "function" ? window.getUploadQueue() : window.uploadQueue);
+        var queue = Array.isArray(rawQueue) ? rawQueue : [];
         var activeUploads = queue.filter(function (item) {
-            return item.status === "UPLOADING" || item.status === "QUEUED" || item.status === "PROCESSING" || item.status === "PAUSED" || item.status === "COMPLETED" || item.status === "DELETED";
+            return item && (item.status === "UPLOADING" || item.status === "QUEUED" || item.status === "PROCESSING" || item.status === "PAUSED" || item.status === "COMPLETED" || item.status === "DELETED");
         });
 
         // Make sure stack is always active/visible

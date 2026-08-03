@@ -1043,6 +1043,12 @@ window.handleDropZoneClick = handleDropZoneClick;
 
 // Main file upload handler
 window.handleFiles = function (files) {
+  console.count("handleFiles");
+  console.trace("handleFiles");
+  const fileInputEl = document.getElementById('fileInput');
+  if (fileInputEl && typeof getEventListeners === 'function') {
+    console.log('[INSTRUMENTATION] getEventListeners(fileInput):', getEventListeners(fileInputEl));
+  }
   if (!files || !files.length) return;
   // Ensure we only process valid File objects
   const validFiles = Array.from(files).filter(f => f && typeof f === 'object' && typeof f.name === 'string');

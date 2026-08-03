@@ -366,8 +366,18 @@ Object.defineProperty(window, 'uploadQueue', {
     return _rawUploadQueue;
   },
   set: function (val) {
+    var oldIds = (_rawUploadQueue || []).map(function(i) { return i ? i.id : null; });
+    var incomingArray = Array.isArray(val) ? val : [];
+    var newIds = incomingArray.map(function(i) { return i ? i.id : null; });
+    
+    console.group("%c[QUEUE WRITE] window.uploadQueue setter", "color:#ef4444; font-weight:bold;");
+    console.log("Old Queue IDs (%d):", oldIds.length, oldIds);
+    console.log("Incoming Queue IDs (%d):", newIds.length, newIds);
+    console.trace("Setter Stack Trace");
+    console.groupEnd();
+
     // Normalize all statuses to UPPERCASE for consistent comparison across all modules.
-    _rawUploadQueue = Array.isArray(val) ? val : [];
+    _rawUploadQueue = incomingArray;
     for (var i = 0; i < _rawUploadQueue.length; i++) {
       if (_rawUploadQueue[i] && _rawUploadQueue[i].status) {
         _rawUploadQueue[i].status = _rawUploadQueue[i].status.toUpperCase();
@@ -379,8 +389,15 @@ Object.defineProperty(window, 'uploadQueue', {
   },
   configurable: true
 });
-let uploadQueue = window.uploadQueue; // Local reference
-let uploadIdCounter = uploadQueue.reduce((max, item) => Math.max(max, item.id || 0), 0);
+function getUploadQueue() {
+  if (window.LanvanStore && window.LanvanStore.state && Array.isArray(window.LanvanStore.state.uploadQueue)) {
+    return window.LanvanStore.state.uploadQueue;
+  }
+  return _rawUploadQueue || [];
+}
+window.getUploadQueue = getUploadQueue;
+
+let uploadIdCounter = getUploadQueue().reduce((max, item) => Math.max(max, item.id || 0), 0);
 
 // Restore from server (cleared every server restart = cleared when data clears)
 fetch("/api/upload-history")
@@ -392,11 +409,12 @@ fetch("/api/upload-history")
           item.status = 'PAUSED';
         }
       });
-      // Merge into the shared array reference
-      uploadQueue.length = 0;
-      restoredQueue.forEach(item => uploadQueue.push(item));
-      window.uploadQueue = uploadQueue;
-      uploadIdCounter = uploadQueue.reduce((max, item) => Math.max(max, item.id || 0), 0);
+      if (window.LanvanStore) {
+        window.LanvanStore.dispatch('SYNC_QUEUE', { queue: restoredQueue });
+      } else {
+        window.uploadQueue = restoredQueue;
+      }
+      uploadIdCounter = getUploadQueue().reduce((max, item) => Math.max(max, item.id || 0), 0);
       if (typeof window.renderUploadTray === "function") window.renderUploadTray();
     } else {
       // Server empty means data was cleared — wipe localStorage too
@@ -413,10 +431,12 @@ fetch("/api/upload-history")
           parsed.forEach(item => {
             if (item.status === 'UPLOADING' || item.status === 'QUEUED') item.status = 'PAUSED';
           });
-          uploadQueue.length = 0;
-          parsed.forEach(item => uploadQueue.push(item));
-          window.uploadQueue = uploadQueue;
-          uploadIdCounter = uploadQueue.reduce((max, item) => Math.max(max, item.id || 0), 0);
+          if (window.LanvanStore) {
+            window.LanvanStore.dispatch('SYNC_QUEUE', { queue: parsed });
+          } else {
+            window.uploadQueue = parsed;
+          }
+          uploadIdCounter = getUploadQueue().reduce((max, item) => Math.max(max, item.id || 0), 0);
           if (typeof window.renderUploadTray === "function") window.renderUploadTray();
         }
       }
@@ -900,6 +920,7 @@ function createUploadItem(file, uploadId, explicitBaseFolder) {
 }
 
 function addToUploadQueue(files) {
+  console.count("addToUploadQueue");
   const baseActiveFolder = (typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "")).replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
   console.log("%c[LANVAN UPLOAD] 📥 Queued %d file(s) | Active Folder: '%s'", "color:#8b5cf6; font-weight:bold; font-size:12px;", files.length, baseActiveFolder || "Home (Root)");
 
@@ -908,11 +929,13 @@ function addToUploadQueue(files) {
     const uploadId = ++uploadIdCounter;
     const uploadItem = createUploadItem(file, uploadId, baseActiveFolder);
     console.log("%c[LANVAN UPLOAD] 📄 '%s' (%s MB) -> finalUploadPath: '%s'", "color:#ec4899; font-weight:500; font-size:11px;", uploadItem.fileName, ((uploadItem.fileSize || 0) / (1024 * 1024)).toFixed(1), uploadItem.finalUploadPath || "Home (Root)");
-    uploadQueue.push(uploadItem);
+    if (window.LanvanStore) {
+      window.LanvanStore.dispatch('ADD_UPLOAD_ITEM', { item: uploadItem });
+    } else {
+      window.uploadQueue.push(uploadItem);
+    }
     renderUploadItem(uploadItem);
   }
-
-  window.uploadQueue = uploadQueue;
 
   if (typeof window.onUploadQueueAdded === "function") {
     try {
@@ -1445,7 +1468,7 @@ function clearDeviceLogs() {
 }
 
 function updateUploadManager() {
-  window.uploadQueue = uploadQueue;
+  const uploadQueue = getUploadQueue();
   // Throttle tray re-renders to avoid flicker during rapid chunk progress
   if (typeof window.scheduleUploadTrayRender === "function") {
     window.scheduleUploadTrayRender();
@@ -1478,14 +1501,13 @@ function updateUploadManager() {
     //  Re-sort and re-render upload items in proper order
     sortAndRenderUploadQueue();
   }
-  // Users can manually use the logs to check completed uploads
-  // The upload manager will stay visible so users can see their upload progress
 }
 
 //  Sort and re-render upload queue with proper priority order
 function sortAndRenderUploadQueue() {
   const queue = document.getElementById('uploadQueue');
   if (!queue) return;
+  const uploadQueue = getUploadQueue();
 
   // Sort upload queue: UPLOADING > PAUSED > QUEUED > COMPLETED > FAILED > CANCELLED > DELETED
   const sortedQueue = [...uploadQueue].sort((a, b) => {
@@ -1635,10 +1657,6 @@ function updateUploadItem(uploadItem, forceUpdate = false) {
 
 // Separated UI update logic to allow async processing
 function performUIUpdate(uploadItem, forceUpdate = false) {
-  // Keep window.uploadQueue in sync but do NOT re-render the whole tray
-  // on every chunk (that causes flicker). updateUploadManager handles tray refresh.
-  window.uploadQueue = uploadQueue;
-
   // Event-driven DOM update for file list row on upload progress
   if (typeof window.updateRowProgress === 'function') {
     window.updateRowProgress(uploadItem);
@@ -1746,7 +1764,8 @@ function performUIUpdate(uploadItem, forceUpdate = false) {
 }
 
 function cancelUpload(uploadId) {
-  const currentQueue = window.uploadQueue || uploadQueue;
+  if (typeof window.logQueueIdentities === "function") window.logQueueIdentities("cancelUpload");
+  const currentQueue = getUploadQueue();
   const uploadItem = currentQueue.find(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
   if (!uploadItem) return;
 
@@ -1823,13 +1842,12 @@ function cancelUpload(uploadId) {
     startNextUpload();
   }, 100);
 
-  // Check for remaining active uploads using canonical Store state, not local queue
-  // (local queue may be stale after Store dispatch spliced the cancelled item)
+  // Check for remaining active uploads using canonical Store state
   function isActiveStatus(s) {
     var upper = String(s || '').toUpperCase();
     return upper === 'UPLOADING' || upper === 'QUEUED' || upper === 'PAUSED';
   }
-  var currentStateQueue = window.LanvanStore ? window.LanvanStore.getState().uploadQueue : uploadQueue;
+  var currentStateQueue = getUploadQueue();
   const hasActiveUploads = currentStateQueue.some(function (item) {
     return item && isActiveStatus(item.status);
   });
@@ -1847,14 +1865,15 @@ function cancelUpload(uploadId) {
 }
 
 function pauseUpload(uploadId) {
-  const uploadItem = uploadQueue.find(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
+  const currentQueue = getUploadQueue();
+  const uploadItem = currentQueue.find(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
   if (!uploadItem) return;
 
   const folderName = window.getItemFolder ? window.getItemFolder(uploadItem) : "";
   const isFolderUpload = folderName !== "";
 
   if (isFolderUpload) {
-    uploadQueue.forEach(item => {
+    currentQueue.forEach(item => {
       if (!item) return;
       const fName = window.getItemFolder ? window.getItemFolder(item) : "";
       if (fName === folderName && (item.status === 'UPLOADING' || item.status === 'QUEUED' || item.status === 'PROCESSING')) {
@@ -1882,16 +1901,17 @@ function pauseUpload(uploadId) {
 }
 
 function resumeUpload(uploadId) {
-  const uploadItem = uploadQueue.find(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
+  const currentQueue = getUploadQueue();
+  const uploadItem = currentQueue.find(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
   if (!uploadItem) return;
 
-  const folderName = window.getItemFolder(uploadItem);
+  const folderName = window.getItemFolder ? window.getItemFolder(uploadItem) : "";
   const isFolderUpload = folderName !== "";
 
   if (isFolderUpload) {
-    uploadQueue.forEach(item => {
+    currentQueue.forEach(item => {
       if (!item) return;
-      const fName = window.getItemFolder(item);
+      const fName = window.getItemFolder ? window.getItemFolder(item) : "";
       if (fName === folderName && item.status === 'PAUSED') {
         if (window.LanvanStore) {
           window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: item.id, status: 'UPLOADING' });
@@ -1906,7 +1926,7 @@ function resumeUpload(uploadId) {
     uploadLargeFileChunked(uploadItem);
   }
 
-  const otherPaused = uploadQueue.some(item => item && item.status === 'PAUSED');
+  const otherPaused = currentQueue.some(item => item && item.status === 'PAUSED');
   if (!otherPaused) {
     window.uploadManagerExpanded = false;
   }
@@ -1918,22 +1938,23 @@ function resumeUpload(uploadId) {
 }
 
 function cancelAllUploads() {
-  const itemsBeingCancelled = uploadQueue.filter(item =>
+  const currentQueue = getUploadQueue();
+  const itemsBeingCancelled = currentQueue.filter(item =>
     ['QUEUED', 'UPLOADING', 'PAUSED'].includes(item.status)
   );
 
   console.log(` Cancelling ${itemsBeingCancelled.length} active uploads...`);
 
-  uploadQueue.forEach(item => {
+  currentQueue.forEach(item => {
     if (['QUEUED', 'UPLOADING', 'PAUSED'].includes(item.status)) {
       cancelUpload(item.id);
     }
   });
 
   // After all cancellations, ensure clear button is shown
-  // Use a slight delay to ensure all individual cancel operations complete
   setTimeout(() => {
-    const hasActiveUploads = uploadQueue.some(item =>
+    const q = getUploadQueue();
+    const hasActiveUploads = q.some(item =>
       item.status === 'UPLOADING' || item.status === 'QUEUED' || item.status === 'PAUSED'
     );
 
@@ -1946,7 +1967,8 @@ function cancelAllUploads() {
 }
 
 function showClearCompletedButton() {
-  const completedItems = uploadQueue.filter(item =>
+  const currentQueue = getUploadQueue();
+  const completedItems = currentQueue.filter(item =>
     item && ['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)
   );
 
@@ -1973,8 +1995,8 @@ function showClearCompletedButton() {
 }
 
 function clearCompletedUploads() {
-  // Remove completed, cancelled, and error items from DOM and queue
-  const itemsToRemove = uploadQueue.filter(item =>
+  const currentQueue = getUploadQueue();
+  const itemsToRemove = currentQueue.filter(item =>
     ['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)
   );
 
@@ -1985,20 +2007,19 @@ function clearCompletedUploads() {
     }
   });
 
-  // Filter out completed items from queue
-  uploadQueue = uploadQueue.filter(item =>
-    !['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)
-  );
+  // Dispatch to Store — authoritative state transition
+  if (window.LanvanStore) {
+    window.LanvanStore.dispatch('CLEAR_COMPLETED_UPLOADS');
+  }
 
-  // Hide clear button if no more items to clear
+  const updatedQueue = getUploadQueue();
   const clearBtn = document.getElementById('clearCompletedBtn');
-  if (clearBtn && uploadQueue.filter(item => ['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)).length === 0) {
+  if (clearBtn && updatedQueue.filter(item => ['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)).length === 0) {
     clearBtn.style.display = 'none';
   }
 
   updateUploadManager();
 
-  // NOW refresh the file list since user manually cleared
   setTimeout(() => {
     refreshFileList();
   }, 500);
@@ -2026,8 +2047,10 @@ function removeCompletedUpload(itemId) {
     itemDiv.remove();
   }
 
-  // Remove from queue
-  uploadQueue = uploadQueue.filter(upload => upload.id !== itemId);
+  // Remove from queue via Store
+  if (window.LanvanStore) {
+    window.LanvanStore.dispatch('CANCEL_UPLOAD', { id: itemId });
+  }
 
   // Update the upload manager display
   updateUploadManager();
@@ -2035,8 +2058,9 @@ function removeCompletedUpload(itemId) {
   console.log(` Removed completed upload: ${item.file ? item.file.name : item.text || 'clipboard item'}`);
 
   // If this was the last completed item, hide the clear all button
+  const currentQ = getUploadQueue();
   const clearBtn = document.getElementById('clearCompletedBtn');
-  if (clearBtn && uploadQueue.filter(item => ['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)).length === 0) {
+  if (clearBtn && currentQ.filter(item => ['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)).length === 0) {
     clearBtn.style.display = 'none';
   }
 
@@ -2049,6 +2073,9 @@ function removeCompletedUpload(itemId) {
 }
 
 function startNextUpload() {
+  if (typeof window.logQueueIdentities === "function") window.logQueueIdentities("startNextUpload");
+  console.count("startNextUpload");
+  const uploadQueue = getUploadQueue();
   // Resolve ghost items restored from JSON storage without binary File handles
   // BUT only when this is NOT a test scenario (items without a .file AND without specific test IDs)
   var isTesting = uploadQueue.some(function (item) {
@@ -3585,6 +3612,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
+  console.count("setupEventListeners");
   // Set up clipboard "Add Text" button with high-priority event listener
   const addTextBtn = document.getElementById('addTextToClipboardBtn');
   if (addTextBtn) {
