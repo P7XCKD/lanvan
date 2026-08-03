@@ -3,6 +3,9 @@ import socket
 import subprocess
 import sys
 import signal
+import time
+import json
+import shutil
 
 # Auto-activate virtual environment if not already activated
 def ensure_venv():
@@ -249,26 +252,83 @@ def generate_certs_if_needed():
             return False
     return True
 
-def print_banner(ip, port, use_https):
-    scheme = "https" if use_https else "http"
+def check_and_run_build_if_needed(force=False, clean=False):
+    """
+    Automatic production build detection:
+    - Uses SHA-256 build manifest tracking (dist/build-manifest.json).
+    - Monitored watched frontend directories: app/static/js, app/static/css, app/templates.
+    - Supports --force / rebuild flags and clean flag.
+    - Automatically executes python build.py if missing or stale.
+    - Returns build status string ('Up-to-date' or 'Rebuilt (0.14s)').
+    """
+    manifest_path = os.path.join("dist", "build-manifest.json")
     
-    # Don't show port for standard HTTP/HTTPS ports
-    show_port = not ((port == 80 and scheme == "http") or (port == 443 and scheme == "https"))
+    if clean and os.path.exists("dist"):
+        print("[*] Cleaning dist/ directory...")
+        shutil.rmtree("dist", ignore_errors=True)
+        
+    print("Checking production assets...\n")
     
-    print(f"\n[OK] Server running at:")
-    if show_port:
-        print(f"Local:  {scheme}://127.0.0.1:{port}")
-        print(f"LAN:    {scheme}://{ip}:{port}")
+    needs_rebuild = force or clean or not os.path.exists("dist") or not os.path.exists(manifest_path)
+    
+    if not needs_rebuild:
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+            stored_hash = manifest.get("frontend_hash", "")
+            
+            from build import compute_frontend_hash
+            current_hash = compute_frontend_hash()
+            
+            if stored_hash != current_hash:
+                needs_rebuild = True
+                print("Source changes detected.\n")
+        except Exception:
+            needs_rebuild = True
+
+    if needs_rebuild:
+        print("Rebuilding...")
+        start_t = time.time()
+        res = subprocess.run([sys.executable, "build.py"])
+        if res.returncode != 0:
+            print("[!] Production build failed!")
+            sys.exit(1)
+        dur = time.time() - start_t
+        print(f"\n✔ Build complete ({dur:.2f} s)\n")
+        return f"Rebuilt ({dur:.2f}s)"
     else:
-        print(f"Local:  {scheme}://127.0.0.1")
-        print(f"LAN:    {scheme}://{ip}")
+        print("✔ Production assets are up-to-date.\n")
+        return "Up-to-date"
+
+def print_banner(ip, port, use_https, is_production=False, build_status=None):
+    protocol_str = "HTTPS" if use_https else "HTTP"
+    mode_str = "Production" if is_production else "Development"
+    assets_str = "dist/static" if is_production else "app/static"
+    
+    scheme = "https" if use_https else "http"
+    show_port = not ((port == 80 and scheme == "http") or (port == 443 and scheme == "https"))
+    url_local = f"{scheme}://127.0.0.1:{port}" if show_port else f"{scheme}://127.0.0.1"
+    url_lan = f"{scheme}://{ip}:{port}" if show_port else f"{scheme}://{ip}"
+
+    print("========================================")
+    print("Lanvan v1.0")
+    print()
+    print(f"Mode      : {mode_str}")
+    print(f"Protocol  : {protocol_str}")
+    print(f"Assets    : {assets_str}")
+    if is_production and build_status:
+        print(f"Build     : {build_status}")
+    print()
+    print("URL")
+    print(f"Local : {url_local}")
+    print(f"LAN   : {url_lan}")
+    print("========================================")
     print()
 
 def open_browser(ip, port, use_https):
     scheme = "https" if use_https else "http"
     try:
         import webbrowser
-        # Don't include port in URL for standard ports
         if (port == 80 and scheme == "http") or (port == 443 and scheme == "https"):
             webbrowser.open(f"{scheme}://{ip}")
         else:
@@ -281,15 +341,12 @@ def kill_servers_on_port(port):
     try:
         for proc in psutil.process_iter(['pid', 'name']):
             try:
-                # Fix: Use net_connections() instead of deprecated connections()
                 try:
                     connections = proc.net_connections()
                 except (psutil.AccessDenied, AttributeError):
-                    # If net_connections() fails, try the old method as fallback
                     try:
                         connections = proc.connections()
                     except AttributeError:
-                        # Skip this process if we can't get connections
                         continue
                 
                 if connections:
@@ -306,39 +363,34 @@ def kill_servers_on_port(port):
                 pass
     except Exception as e:
         print(f"[!] Error killing servers (non-critical): {e}")
-        # Don't let this error stop the server startup
-
-# (signal_handler removed - uvicorn installs its own SIGINT handler inside server.run()
-#  and overrides any handler registered here, so our handler never fired.  Uvicorn will
-#  set server.should_exit = True on Ctrl+C which causes server.run() to return cleanly.)
 
 # === MAIN ENTRY ===
 if __name__ == "__main__":
     
     ip = get_ip()
     args = sys.argv
+    cli_flags = {a.lower() for a in args[1:]}
     
-    # Parse arguments
-    use_https = False
-    port = get_safe_port(HTTP_PORT, FALLBACK_HTTP_PORT)
-    ios_mode = False
-    
-    # Check for arguments
-    for arg in [a.lower() for a in args[1:]]:
-        if arg in ["https", "--https"]:
-            use_https = True
-            port = get_safe_port(HTTPS_PORT, FALLBACK_HTTPS_PORT)
-        elif arg in ["ios", "--ios", "--safari"]:
-            ios_mode = True
-            use_https = False  # Force HTTP for iOS compatibility
-            port = get_safe_port(HTTP_PORT, FALLBACK_HTTP_PORT)
-            print("[iOS] iOS Compatibility Mode activated")
-        elif arg in ["dual", "--dual", "--both"]:
-            # Start both HTTP and HTTPS (like iOS fix utility)
-            print("[DUAL] Dual protocol mode - starting both HTTP and HTTPS servers")
-            # This will be handled by calling the iOS fix utility
-    
-    # Check for custom port
+    is_production = any(flag in cli_flags for flag in ["prod", "production", "--prod", "--production"])
+    use_https = any(flag in cli_flags for flag in ["https", "--https"])
+    ios_mode = any(flag in cli_flags for flag in ["ios", "--ios", "--safari"])
+    force_rebuild = any(flag in cli_flags for flag in ["force", "--force", "rebuild"])
+    clean_build = "clean" in cli_flags
+
+    if is_production:
+        os.environ["LANVAN_ENV"] = "production"
+        os.environ["PRODUCTION"] = "true"
+        build_status = check_and_run_build_if_needed(force=force_rebuild, clean=clean_build)
+    else:
+        os.environ["LANVAN_ENV"] = "development"
+        os.environ["PRODUCTION"] = "false"
+        build_status = None
+
+    if use_https and not ios_mode:
+        port = get_safe_port(HTTPS_PORT, FALLBACK_HTTPS_PORT)
+    else:
+        port = get_safe_port(HTTP_PORT, FALLBACK_HTTP_PORT)
+        
     for i, arg in enumerate(args):
         if arg == "--port" and i + 1 < len(args):
             try:
@@ -359,7 +411,7 @@ if __name__ == "__main__":
             use_https = False
             port = get_safe_port(HTTP_PORT, FALLBACK_HTTP_PORT)
 
-    print_banner(ip, port, use_https)
+    print_banner(ip, port, use_https, is_production, build_status)
     
     # Display connection information based on actual ports used
     if ios_mode:

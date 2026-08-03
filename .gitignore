@@ -6,7 +6,6 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -20,6 +19,14 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+
+# --------------------------------------------------
+# Lanvan Production Build Output
+# --------------------------------------------------
+dist/
+
+# Production source maps safeguard
+*.map
 
 # Environment files
 .env

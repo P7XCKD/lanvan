@@ -513,7 +513,25 @@ app.add_middleware(EnsureDataDirMiddleware)
 app.add_middleware(IOSSafariMiddleware)
 app.add_middleware(ShutdownMiddleware)
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+def is_production_mode() -> bool:
+    return os.environ.get("LANVAN_ENV", "").lower() in ("production", "prod", "1") or os.environ.get("PRODUCTION", "").lower() in ("1", "true")
+
+class ProductionStaticFiles(StaticFiles):
+    """
+    Transparently resolves static assets:
+    - In Production mode: Serves minified .min.js assets from dist/static/js if available.
+    - In Development mode: Serves original unminified .js source files directly from app/static/js.
+    """
+    async def get_response(self, path: str, scope):
+        if is_production_mode() and path.endswith(".js") and not path.endswith(".min.js"):
+            min_path = path[:-3] + ".min.js"
+            full_min_path = os.path.join(self.directory, min_path)
+            if os.path.exists(full_min_path):
+                return await super().get_response(min_path, scope)
+        return await super().get_response(path, scope)
+
+static_dir = os.path.abspath("dist/static") if (is_production_mode() and os.path.exists("dist/static")) else os.path.abspath("app/static")
+app.mount("/static", ProductionStaticFiles(directory=static_dir), name="static")
 
 from app.ws_manager import clipboard_ws_router, upload_status_ws_router, file_events_ws_router, ui_events_ws_router
 
@@ -562,46 +580,18 @@ def are_resources_ready():
 @app.exception_handler(404)
 @app.exception_handler(StarletteHTTPException)
 async def smart_404_handler(request: Request, exc):
-    """Redirect 404s to loading page only if resources aren't ready"""
-    if hasattr(exc, 'status_code') and exc.status_code == 404:
-        # Get the original path
-        original_path = str(request.url.path)
-        
-        # Never redirect loading page to itself
-        if original_path == '/loading':
-            from fastapi.responses import PlainTextResponse
-            return PlainTextResponse("Not Found", status_code=404)
-        
-        # Don't redirect API calls or static resources
-        if (original_path.startswith('/api/') or 
-            original_path.startswith('/static/') or
-            original_path.startswith('/_')):
-            from fastapi.responses import PlainTextResponse
-            return PlainTextResponse("Not Found", status_code=404)
-        
-        # Only redirect to loading page if resources aren't ready
-        if not are_resources_ready():
-            return RedirectResponse(
-                url=f"/loading?redirect={original_path}",
-                status_code=302
-            )
-    
-    # For everything else, let the normal 404 happen
     from fastapi.responses import PlainTextResponse
-    return PlainTextResponse("Not Found", status_code=404)
+    status_code = getattr(exc, 'status_code', 404)
+    return PlainTextResponse("Not Found" if status_code == 404 else str(exc), status_code=status_code)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handle validation errors - only use loading page if resources not ready"""
-    if not are_resources_ready():
-        return RedirectResponse(url="/loading?redirect=/", status_code=302)
-    # Otherwise, let the validation error be handled normally
-    raise exc
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=422, content={"status": "error", "msg": "Validation Error", "details": str(exc)})
 
 @app.exception_handler(500)
 @app.exception_handler(Exception)
 async def smart_internal_error_handler(request: Request, exc: Exception):
-    """Handle server errors smartly with clear console traceback & JSON error responses for API calls."""
     if _is_client_disconnect_error(exc):
         print(f"[INFO] Client disconnected during request to {request.url.path} (wrapped)")
         return PlainTextResponse("Client disconnected", status_code=400)
@@ -613,23 +603,14 @@ async def smart_internal_error_handler(request: Request, exc: Exception):
     print("================================")
     
     path = str(request.url.path)
-    if path.startswith("/api/") or path.startswith("/upload") or path.startswith("/delete") or request.headers.get("x-requested-with") == "XMLHttpRequest":
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "msg": str(exc) or "Internal Server Error",
-                "path": path,
-                "error_type": type(exc).__name__
-            }
-        )
-
-    if not are_resources_ready():
-        return RedirectResponse(url="/loading?redirect=/", status_code=302)
-
     return JSONResponse(
         status_code=500,
-        content={"status": "error", "msg": str(exc) or "Internal Server Error"}
+        content={
+            "status": "error",
+            "msg": str(exc) or "Internal Server Error",
+            "path": path,
+            "error_type": type(exc).__name__
+        }
     )
 
 def _is_client_disconnect_error(exc) -> bool:

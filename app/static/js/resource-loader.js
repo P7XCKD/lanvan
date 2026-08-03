@@ -109,20 +109,19 @@
       }
     };
 
-    // JSZip Async Loader with Safari Optimization
+    // JSZip Async Loader (Local Offline Bundle)
     window.jsZipReady = false;
     window.jsZipCallbacks = [];
 
     function loadJSZip() {
+      var jszipUrl = (window.LanvanConfig && window.LanvanConfig.jszipUrl) ? window.LanvanConfig.jszipUrl : '/static/js/jszip.min.js';
       window.resourceLoader.loadScript(
-        'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+        jszipUrl,
         function (error) {
           if (error) {
-            console.warn('JSZip failed to load from CDN, functionality limited');
-            // Could implement local fallback here
+            console.warn('JSZip failed to load locally');
           } else {
             window.jsZipReady = true;
-            console.log(' JSZip loaded successfully');
           }
 
           // Execute waiting callbacks

@@ -4841,10 +4841,9 @@ function generateQRCode(text, size = 200) {
   // Primary: Use our offline QR generator (works without internet)
   const offlineQR = `/api/qr-code?text=${encodeURIComponent(text)}&size=${qrSize}`;
 
-  // Fallback services (only if offline generator fails)
+  // Fallback services (strictly local offline endpoints)
   const fallbackServices = [
-    `https://quickchart.io/qr?text=${encodeURIComponent(text)}&size=${qrSize}&format=png&margin=1`,
-    `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(text)}&margin=10&format=png`,
+    `/api/qr-code?text=${encodeURIComponent(text)}&size=${qrSize}`,
   ];
 
   return {
@@ -5063,8 +5062,7 @@ async function showConnectionInfo() {
   const qrResult = generateQRCode(fullUrl, qrSize);
   const primaryQRUrl = qrResult.primary || qrResult.toString();
   const fallbackQRUrls = qrResult.fallbacks || [
-    `https://quickchart.io/qr?text=${encodeURIComponent(fullUrl)}&size=${qrSize}&format=png&margin=1`,
-    `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(fullUrl)}&margin=10&format=png`,
+    `/api/qr-code?text=${encodeURIComponent(fullUrl)}&size=${qrSize}`,
   ];
 
   // If preloaded QR matches, use it instantly, otherwise use offline generator
@@ -5399,7 +5397,7 @@ function showIPQRCode() {
   qrDialog.innerHTML = `
     <h3 style="margin: 0 0 1rem 0; color: #333;"> IP Access QR Code</h3>
     <div style="margin: 1rem 0;">
-      <img src="https://quickchart.io/qr?text=${encodeURIComponent(networkInfo.lanIpUrl)}&size=200&format=png&margin=1" 
+      <img src="/api/qr-code?text=${encodeURIComponent(networkInfo.lanIpUrl)}&size=200" 
            style="border: 2px solid #ddd; border-radius: 10px; max-width: 200px; height: auto;" 
            alt="IP QR Code">
     </div>
@@ -5537,7 +5535,7 @@ function tryFallbackQR() {
   const url = document.getElementById('connection-url').textContent;
 
   if (fallbackQR) {
-    fallbackQR.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}&margin=10&format=png`;
+    fallbackQR.src = `/api/qr-code?text=${encodeURIComponent(url)}&size=200`;
   }
 }
 

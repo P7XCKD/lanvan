@@ -234,8 +234,8 @@
       const qrContainer = document.getElementById('qr-container');
       const primaryUrl = 'http://10.110.4.169:5000';
       
-      // Create a simple QR code using a QR code service
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(primaryUrl)}`;
+      // Create a simple QR code using local endpoint
+      const qrUrl = `/api/qr-code?text=${encodeURIComponent(primaryUrl)}&size=200`;
       
       qrContainer.innerHTML = `
         <img src="${qrUrl}" alt="QR Code for ${primaryUrl}" style="border: 2px solid #3498db; border-radius: 8px;">
