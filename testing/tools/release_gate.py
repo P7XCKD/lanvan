@@ -75,17 +75,21 @@ def main():
 
     results = []
 
+    tools_dir = os.path.dirname(os.path.abspath(__file__))
+    arch_scan_path = os.path.join(tools_dir, "arch_scan.py")
+    quality_scan_path = os.path.join(tools_dir, "quality_scan.py")
+
     results.append(("Regression Suite", run_gate(
         "qt.py --fast (baseline 160/162)",
         [sys.executable, "qt.py", "--fast"], check_qt)))
 
     results.append(("Architecture Scan", run_gate(
         "arch_scan.py (<=17 defects)",
-        [sys.executable, "arch_scan.py"], check_arch)))
+        [sys.executable, arch_scan_path], check_arch)))
 
     results.append(("Quality Scan", run_gate(
         "quality_scan.py",
-        [sys.executable, "quality_scan.py"],
+        [sys.executable, quality_scan_path],
         lambda o: (True, "informational"))))
 
     if not args.skip_chaos:

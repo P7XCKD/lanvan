@@ -140,7 +140,7 @@ python qt.py --fast
 python qt.py
 
 # Run architectural defect scanner
-python arch_scan.py
+python testing/tools/arch_scan.py
 ```
 
 ---
@@ -216,7 +216,7 @@ lanvan/
   ├── docs/                 # Platform setups and requirements manifests
   │   └── termux/           # Automated setup assets for Android Termux
   ├── testing/              # Test workspace and unit diagnostic suites
-  ├── arch_scan.py          # Automated architectural defect scanner
+  │   └── tools/            # Automated scanners (arch_scan, quality_scan, release_gate, etc.)
   ├── build.py             # Industry-standard production build system
   ├── run.py                # Platform-aware server launcher entry point (dev & prod)
   └── qt.py                 # Core component reliability test runner
