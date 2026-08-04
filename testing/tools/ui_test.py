@@ -533,8 +533,51 @@ class BrowserSuite:
         await self.test_notification_tray_dom_stability()
         await self.test_state_corruption_and_fuzzing_matrix()
         await self.test_same_name_subfolder_browser_navigation()
+        await self.test_version_history_ui()
         await self.test_connect_qr()
         await self.test_no_js_errors()
+
+    async def test_version_history_ui(self):
+        HEAD("VERSION HISTORY DRAWER & VERSION BADGES (§15)")
+        try:
+            vh_ui_checks = await self.page.evaluate("""()=>{
+                if (!window.LanvanVersionHistoryPanel) return { drawerExists: false, isDrawerVisible: false, versionPill: false };
+                window._fileMetadataMap = window._fileMetadataMap || {};
+                window._fileMetadataMap['versioned_doc.pdf'] = {
+                    logicalFileId: 'lf_test_v_doc',
+                    versionCount: 2,
+                    hasVersions: true
+                };
+
+                var renderer = window.M3FileRenderer || window;
+                var html = renderer.buildListItem ? renderer.buildListItem('versioned_doc.pdf', { avatarClass: 'avatar-doc', iconName: 'file-text' }, '242.5 KB', '12:00 PM', 'File', false, false, 0, null, 'COMPLETED') : '';
+                var hasPill = html.indexOf('version-pill-badge') !== -1 && html.indexOf('v2') !== -1;
+
+                window.LanvanVersionHistoryPanel.open('lf_test_v_doc', 'versioned_doc.pdf');
+                var drawer = document.getElementById('versionHistoryModal');
+                var isDrawerVisible = drawer && window.getComputedStyle(drawer).display === 'flex';
+
+                return {
+                    drawerExists: !!drawer,
+                    isDrawerVisible: isDrawerVisible,
+                    versionPill: hasPill
+                };
+            }""")
+            self._check(vh_ui_checks.get('drawerExists', False), "Version History Drawer container (#versionHistoryModal) created dynamically")
+            self._check(vh_ui_checks.get('versionPill', False), "Option 1 Version Pill Badge (v2) rendered in file row")
+            self._check(vh_ui_checks.get('isDrawerVisible', False), "Version History Drawer slides in with display:flex")
+
+            # Test Escape Key dismiss
+            await self.page.keyboard.press("Escape")
+            await self.page.wait_for_timeout(300)
+
+            is_closed = await self.page.evaluate("""()=>{
+                var drawer = document.getElementById('versionHistoryModal');
+                return !drawer || drawer.style.display === 'none' || drawer.style.opacity === '0';
+            }""")
+            self._check(is_closed, "Pressing Escape key closes Version History Drawer cleanly")
+        except Exception as e:
+            self._check(False, f"Version History UI test error: {e}")
 
     async def test_same_name_subfolder_browser_navigation(self):
         HEAD("SAME-NAME SUBFOLDER BROWSER NAVIGATION")
@@ -761,6 +804,38 @@ class BrowserSuite:
         }""")
         self._check(repo_checks.get('abortFallback', False), "UC-31: Repository returns cached folder files on AbortError instead of []")
         self._check(repo_checks.get('cacheCloned', False), "UC-32: Repository getFolderCache returns cloned array slice to prevent reference mutation")
+
+        # Test 3b: Version History Drawer UI & Version Pill Badge (UC-33)
+        vh_ui_checks = await self.page.evaluate("""()=>{
+            if (!window.LanvanVersionHistoryPanel) return { drawerExists: false, escapeHandler: false, versionPill: false };
+            window._fileMetadataMap = window._fileMetadataMap || {};
+            window._fileMetadataMap['versioned_doc.pdf'] = {
+                logicalFileId: 'lf_test_v_doc',
+                versionCount: 2,
+                hasVersions: true
+            };
+
+            var renderer = window.M3FileRenderer || window;
+            var html = renderer.buildListItem ? renderer.buildListItem('versioned_doc.pdf', { avatarClass: 'avatar-doc', iconName: 'file-text' }, '242.5 KB', '12:00 PM', 'File', false, false, 0, null, 'COMPLETED') : '';
+            var hasPill = html.indexOf('version-pill-badge') !== -1 && html.indexOf('v2') !== -1;
+
+            window.LanvanVersionHistoryPanel.open('lf_test_v_doc', 'versioned_doc.pdf');
+            var drawer = document.getElementById('versionHistoryModal');
+            var isDrawerVisible = drawer && window.getComputedStyle(drawer).display === 'flex';
+
+            // Simulate Escape key
+            var escEvent = new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true });
+            document.dispatchEvent(escEvent);
+
+            return {
+                drawerExists: !!drawer,
+                isDrawerVisible: isDrawerVisible,
+                versionPill: hasPill
+            };
+        }""")
+        self._check(vh_ui_checks.get('drawerExists', False), "UC-33a: Version History Drawer container (#versionHistoryModal) created dynamically")
+        self._check(vh_ui_checks.get('versionPill', False), "UC-33b: Version Pill Badge (v2) rendered in file row for versioned files")
+        self._check(vh_ui_checks.get('isDrawerVisible', False), "UC-33c: Version History Drawer opens with display:flex on LanvanVersionHistoryPanel.open()")
 
         # Test 4: State Fuzzing - Random sequence of 20 operations
         await self.page.evaluate("""()=>{

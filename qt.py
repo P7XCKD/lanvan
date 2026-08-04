@@ -266,6 +266,22 @@ class Suite:
         self._ck("No files matching" in app_init, "No search results empty state present in app-init.js", "search-system")
         self._ck(".slice(0, 4)" in app_init, "Capped top 4 search suggestions slice present in app-init.js", "search-system")
 
+    def test_versioning_static_integrity(self):
+        HEAD("NATIVE FILE VERSIONING INTEGRITY (§15)")
+        vh_panel = (JS_DIR / "modules" / "version-history-panel.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "version-history-panel.js").exists() else ""
+        renderer = (JS_DIR / "modules" / "m3-file-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "m3-file-renderer.js").exists() else ""
+        version_routes = (ROUTER_DIR / "version_routes.py").read_text(encoding="utf-8", errors="ignore") if (ROUTER_DIR / "version_routes.py").exists() else ""
+        files_py = (ROUTER_DIR / "files.py").read_text(encoding="utf-8", errors="ignore")
+
+        self._ck("version-history-drawer-panel" in vh_panel, "Option 1 Right-Side Slide-Over Drawer panel present in version-history-panel.js", "versioning")
+        self._ck('e.key === \'Escape\'' in vh_panel, "Escape key dismiss handler present in version-history-panel.js", "versioning")
+        self._ck("version-pill-badge" in renderer and "v' + versionCount" in renderer, "Option 1 Version Pill Badge (v2) rendering present in m3-file-renderer.js", "versioning")
+        self._ck("VersionManager.create_version_transaction" in files_py, "VersionManager.create_version_transaction wired in files.py upload finalization", "versioning")
+        self._ck("VersionManager.delete_logical_file" in files_py, "VersionManager.delete_logical_file wired in delete_file endpoint", "versioning")
+        self._ck("VersionManager.rename_logical_file" in files_py, "VersionManager.rename_logical_file wired in rename_file endpoint", "versioning")
+        self._ck("VersionManager.move_logical_file" in files_py, "VersionManager.move_logical_file wired in move_file endpoint", "versioning")
+        self._ck("broadcast_file_event_sync(\"restore\"" in version_routes, "Correct string tuple broadcast_file_event_sync call in version_routes.py", "versioning")
+
     # ═══════ SERVER ═══════
     async def start_server(self, use_https=False):
         from app.main import app; import uvicorn
@@ -724,6 +740,43 @@ class Suite:
             async with s.post(f"{self.base_url}/download-zip", json=req_data) as r_alias:
                 self._ck(r_alias.status == 200, "POST /download-zip (alias) -> 200", "api")
 
+    async def test_versioning_system(self):
+        HEAD("NATIVE FILE VERSIONING API & TRANSACTIONS (§15)")
+        fn = f"qt_v_{secrets.token_hex(3)}.txt"
+        
+        # 1. Upload initial file -> Version 1
+        d1 = aiohttp.FormData(); d1.add_field("files", b"version 1 content", filename=fn)
+        st1, body1 = await self._api("POST", "/upload-auto", data=d1)
+        self._ck(st1 == 200 and body1.get("status") == "success", f"Upload Version 1 for '{fn}'", "versioning")
+
+        # 2. Upload same file again -> Version 2 transaction
+        d2 = aiohttp.FormData(); d2.add_field("files", b"version 2 content update", filename=fn)
+        st2, body2 = await self._api("POST", "/upload-auto", data=d2)
+        self._ck(st2 == 200 and body2.get("status") == "success", f"Re-upload '{fn}' -> Version 2 transaction", "versioning")
+
+        # 3. Check listing contains logicalFileId and versionCount == 2
+        st3, body3 = await self._api("GET", "/api/files")
+        items = body3.get("files_data", [])
+        target_item = [f for f in items if f["name"] == fn]
+        has_v_fields = len(target_item) > 0 and target_item[0].get("versionCount") == 2 and target_item[0].get("hasVersions") is True
+        lf_id = target_item[0].get("logicalFileId") if target_item else None
+        self._ck(has_v_fields and lf_id is not None, f"Listing returns logicalFileId & versionCount=2 for '{fn}'", "versioning")
+
+        if lf_id:
+            # 4. Fetch history via API
+            st_hist, hist_body = await self._api("GET", f"/api/files/{lf_id}/history")
+            v_list = hist_body.get("versions", []) if isinstance(hist_body, dict) else []
+            self._ck(st_hist == 200 and len(v_list) == 2, f"GET /api/files/{lf_id}/history -> 200 OK ({len(v_list)} versions)", "versioning")
+
+            # 5. Restore Version 1 via API
+            if len(v_list) >= 2:
+                v1_id = [v["id"] for v in v_list if v.get("versionNumber") == 1 or not v.get("isLatest")][0]
+                st_rest, rest_body = await self._api("POST", f"/api/files/{lf_id}/restore", json={"versionId": v1_id})
+                self._ck(st_rest == 200 and rest_body.get("status") == "success", f"POST /api/files/{lf_id}/restore -> Version 3 created", "versioning")
+
+        # Cleanup
+        await self._api("POST", f"/delete/{fn}")
+
     async def test_mdns_platform_cors(self):
         HEAD("mDNS + PLATFORM + CORS")
         try:
@@ -775,6 +828,7 @@ class Suite:
             self.test_notification_tray_integrity()
             self.test_zero_flicker_dom_stability()
             self.test_search_system_integrity()
+            self.test_versioning_static_integrity()
 
         async def _run_suite(use_https=False):
             proto_str = "HTTPS" if use_https else "HTTP"
@@ -791,6 +845,7 @@ class Suite:
                     await self.test_active_stream_cancellation_on_rename()
                     await self.test_race_conditions_and_state_consistency()
                     await self.test_batch_zip_download()
+                    await self.test_versioning_system()
                     await self.test_mdns_platform_cors()
                 if run_all or args.mode in ("file-ops"):
                     await self.test_file_operations()
