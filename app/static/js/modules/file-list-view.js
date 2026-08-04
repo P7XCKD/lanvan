@@ -20,7 +20,6 @@
     var bar = row.querySelector('.row-progress-bar');
     if (bar) {
       bar.style.transform = "scaleX(" + (progress / 100) + ")";
-      bar.style.width = progress + "%";
     }
   }
 

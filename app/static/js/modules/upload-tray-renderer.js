@@ -21,7 +21,7 @@
         if (item.status === 'DELETED' || item.status === 'CANCELLED' || item.status === 'FAILED') {
             var label = item.status === 'DELETED' ? 'Deleted' : (item.status === 'FAILED' ? 'Failed' : 'Cancelled');
             metaText = sizeStr + " • " + label;
-            fillStyle = 'background: rgba(220, 38, 38, 0.06); width: 100%;';
+            fillStyle = 'background: rgba(220, 38, 38, 0.12); width: ' + pct + '%;';
             actionHtml = '<span style="color: #dc2626; font-size:0.75rem; font-weight:600; margin-right: 8px;">' + label + '</span>';
         } else if (item.status === 'COMPLETED' || (pct >= 100 && item.status !== 'UPLOADING' && item.status !== 'PAUSED')) {
             var timeStr = item.uploadTime ? item.uploadTime + "s" : "completed";

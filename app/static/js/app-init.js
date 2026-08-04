@@ -3668,7 +3668,6 @@
                     var bar = row.querySelector('.row-progress-bar');
                     if (bar) {
                         bar.style.transform = "scaleX(" + (progress / 100) + ")";
-                        bar.style.width = progress + "%";
                     }
 
                     // Update grid B4 overlay elements
@@ -3912,19 +3911,7 @@
             return (a.id || 0) - (b.id || 0);
         });
 
-        // Record old positions of existing elements for FLIP transition
         var bodyEl = stack.querySelector(".upload-toast-body");
-        var oldRects = {};
-        if (bodyEl) {
-            var children = bodyEl.children;
-            for (var n = 0; n < children.length; n++) {
-                var child = children[n];
-                var idAttr = child.getAttribute("id");
-                if (idAttr) {
-                    oldRects[idAttr] = child.getBoundingClientRect();
-                }
-            }
-        }
 
         // Calculations
         var totalCount = activeUploads.length;
@@ -4146,11 +4133,10 @@
                 var fillStyle = "";
                 var actionHtml = "";
 
-                if (item.status === 'DELETED') {
-                    metaText = sizeStr;
+                if (item.status === 'DELETED' || item.status === 'CANCELLED') {
+                    metaText = sizeStr + " • " + (item.status === 'DELETED' ? 'Deleted' : 'Cancelled');
                     fillStyle = 'rgba(220, 38, 38, 0.12)';
-                    pct = 100;
-                    actionHtml = '<span style="color: #dc2626; display: flex; align-items: center; margin-right: 8px;"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></span>';
+                    actionHtml = '<span style="color: #dc2626; display: flex; align-items: center; margin-right: 8px;"><i data-lucide="' + (item.status === 'DELETED' ? 'trash-2' : 'x') + '" style="width:16px;height:16px;"></i></span>';
                 } else if (item.status === 'COMPLETED' || (pct >= 100 && item.status !== 'UPLOADING' && item.status !== 'PAUSED')) {
                     var timeStr = item.uploadTime ? item.uploadTime + "s" : "completed";
                     metaText = sizeStr + " • Completed (" + timeStr + ")";
@@ -4203,29 +4189,6 @@
                     itemEl.remove();
                 }
             }
-        }
-
-        // 5. Trigger FLIP animation for smooth sliding position transitions
-        if (bodyEl) {
-            var children = bodyEl.children;
-            requestAnimationFrame(function () {
-                for (var n = 0; n < children.length; n++) {
-                    var child = children[n];
-                    var idAttr = child.getAttribute("id");
-                    if (idAttr && oldRects[idAttr]) {
-                        var oldRect = oldRects[idAttr];
-                        var newRect = child.getBoundingClientRect();
-                        var deltaY = oldRect.top - newRect.top;
-                        if (deltaY !== 0) {
-                            child.style.transition = 'none';
-                            child.style.transform = 'translateY(' + deltaY + 'px)';
-                            child.offsetHeight; // Force reflow
-                            child.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)';
-                            child.style.transform = 'translateY(0)';
-                        }
-                    }
-                }
-            });
         }
 
         refreshLucideIcons(stack);
@@ -4671,7 +4634,6 @@
                     var bar = row.querySelector('.row-progress-bar');
                     if (bar) {
                         bar.style.transform = "scaleX(" + (progress / 100) + ")";
-                        bar.style.width = progress + "%";
                     }
 
                     // Grid view updates

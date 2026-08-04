@@ -291,7 +291,7 @@
                 var cancelItemIndex = nextState.uploadQueue.findIndex(function (i) { return String(i.id) === String(cancelId); });
                 var cancelItem = cancelItemIndex >= 0 ? nextState.uploadQueue[cancelItemIndex] : null;
                 if (cancelItem && isValidTransition(cancelItem.status, 'CANCELLED')) {
-                    nextState.uploadQueue.splice(cancelItemIndex, 1);
+                    cancelItem.status = 'CANCELLED';
                     nextState.uploadGeneration = (this.state.uploadGeneration || 0) + 1;
                 }
                 break;

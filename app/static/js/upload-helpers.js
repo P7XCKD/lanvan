@@ -190,49 +190,53 @@
       var sz = (typeof getItemSize === 'function') ? getItemSize(item) : (item.fileSize || (item.file && item.file.size) || 0);
       var status = (typeof getItemStatus === 'function') ? getItemStatus(item) : (item.status || 'QUEUED');
 
+      totalBytes += sz;
       if (status === 'CANCELLED' || status === 'DELETED') {
         cancelledFiles++;
-        cancelledBytes += sz;
-      } else {
-        totalBytes += sz;
-        if (status === 'COMPLETED') {
-          completedFiles++;
-          uploadedBytes += sz;
-        } else if (status === 'FAILED' || status === 'ERROR') {
-          failedFiles++;
-        } else if (status === 'PAUSED') {
-          pausedFiles++;
-          var pausedDone = item.bytesUploaded || item.uploadedBytes || 0;
-          if (!pausedDone && item.progress && sz) {
-            pausedDone = Math.round((sz * item.progress) / 100);
-          }
-          uploadedBytes += pausedDone;
-        } else if (status === 'UPLOADING' || status === 'PROCESSING') {
-          activeFiles++;
-          var activeDone = item.bytesUploaded || item.uploadedBytes || 0;
-          if (!activeDone && item.progress && sz) {
-            activeDone = Math.round((sz * item.progress) / 100);
-          }
-          uploadedBytes += activeDone;
-          sumSpeed += (item.speed || 0);
-
-          var remItem = sz - activeDone;
-          if (item.speed > 0 && remItem > 0) {
-            var etaItem = remItem / item.speed;
-            if (etaItem > maxEtaSeconds) maxEtaSeconds = etaItem;
-          }
-        } else {
-          queuedFiles++;
+        var cancelledDone = item.bytesUploaded || item.uploadedBytes || 0;
+        if (!cancelledDone && item.progress && sz) {
+          cancelledDone = Math.round((sz * item.progress) / 100);
         }
+        var unuploadedBytes = Math.max(0, sz - cancelledDone);
+        cancelledBytes += unuploadedBytes;
+        uploadedBytes += cancelledDone;
+      } else if (status === 'COMPLETED') {
+        completedFiles++;
+        uploadedBytes += sz;
+      } else if (status === 'FAILED' || status === 'ERROR') {
+        failedFiles++;
+      } else if (status === 'PAUSED') {
+        pausedFiles++;
+        var pausedDone = item.bytesUploaded || item.uploadedBytes || 0;
+        if (!pausedDone && item.progress && sz) {
+          pausedDone = Math.round((sz * item.progress) / 100);
+        }
+        uploadedBytes += pausedDone;
+      } else if (status === 'UPLOADING' || status === 'PROCESSING') {
+        activeFiles++;
+        var activeDone = item.bytesUploaded || item.uploadedBytes || 0;
+        if (!activeDone && item.progress && sz) {
+          activeDone = Math.round((sz * item.progress) / 100);
+        }
+        uploadedBytes += activeDone;
+        sumSpeed += (item.speed || 0);
+
+        var remItem = sz - activeDone;
+        if (item.speed > 0 && remItem > 0) {
+          var etaItem = remItem / item.speed;
+          if (etaItem > maxEtaSeconds) maxEtaSeconds = etaItem;
+        }
+      } else {
+        queuedFiles++;
       }
     }
 
     var effectiveTotalFiles = Math.max(0, totalFiles - cancelledFiles);
     var effectiveTotalBytes = Math.max(0, totalBytes - cancelledBytes);
-    var remainingBytes = Math.max(0, effectiveTotalBytes - uploadedBytes);
+    var remainingBytes = Math.max(0, totalBytes - uploadedBytes);
 
-    var rawPercent = effectiveTotalBytes > 0
-      ? Math.min(100, Math.floor((uploadedBytes / effectiveTotalBytes) * 100))
+    var rawPercent = totalBytes > 0
+      ? Math.min(100, Math.floor((uploadedBytes / totalBytes) * 100))
       : 0;
 
     // Compute explicit batch state
@@ -264,12 +268,14 @@
     // Monotonic Progress Guard (Rule 7 Invariant): Progress MUST NEVER move backward during active transfers
     var percent = rawPercent;
     if (state === 'UPLOADING' || state === 'PAUSED') {
-      if (typeof window._maxBatchPercent === 'undefined' || window._lastBatchTotalFiles !== totalFiles) {
+      if (typeof window._maxBatchPercent === 'undefined') {
         window._maxBatchPercent = 0;
-        window._lastBatchTotalFiles = totalFiles;
       }
       percent = Math.max(rawPercent, window._maxBatchPercent);
       window._maxBatchPercent = percent;
+    } else if (state === 'COMPLETED') {
+      percent = 100;
+      window._maxBatchPercent = 100;
     } else {
       window._maxBatchPercent = 0;
     }

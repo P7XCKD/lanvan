@@ -1764,10 +1764,15 @@ function performUIUpdate(uploadItem, forceUpdate = false) {
 }
 
 function cancelUpload(uploadId) {
-  if (typeof window.logQueueIdentities === "function") window.logQueueIdentities("cancelUpload");
   const currentQueue = getUploadQueue();
   const uploadItem = currentQueue.find(item => item && (item.id == uploadId || String(item.id) === String(uploadId)));
   if (!uploadItem) return;
+
+  // Rule 1 & Rule 2: Capture whether item was active (UPLOADING/PROCESSING) BEFORE state mutation.
+  // Only active items consume/release a slot and trigger startNextUpload.
+  // Queued or paused items NEVER execute endUpload() or startNextUpload().
+  const rawStatus = String(uploadItem.status || '').toUpperCase();
+  const wasActive = rawStatus === 'UPLOADING' || rawStatus === 'PROCESSING';
 
   // 1. Abort XHR (side-effect, must happen before state change)
   if (uploadItem.xhr) {
@@ -1804,7 +1809,7 @@ function cancelUpload(uploadId) {
   // 3. Log cancelled upload stats
   const itemSize = window.getItemSize(uploadItem);
   const itemProg = window.getItemProgress(uploadItem);
-  console.log(`[LANVAN UPLOAD] ❌ Upload cancelled: ${fileName} at ${itemProg.toFixed(1)}%`);
+  console.log(`[LANVAN UPLOAD] ❌ Upload cancelled (${wasActive ? 'Active' : 'Queued'}): ${fileName} at ${itemProg.toFixed(1)}%`);
   const cancelledStats = {
     type: 'Cancelled Upload',
     filename: fileName,
@@ -1830,17 +1835,19 @@ function cancelUpload(uploadId) {
   saveStatsToLog(cancelledStats);
 
   // 4. ATOMIC STATE TRANSITION: Dispatch through Store — single gate.
-  //    Store validates the transition, removes from queue, increments generation.
-  //    Subscribers → RenderScheduler → single render with final state.
   if (window.LanvanStore) {
     window.LanvanStore.dispatch('CANCEL_UPLOAD', { id: uploadId });
   }
 
-  // 5. Side effects after state is committed
-  endUpload();
-  setTimeout(() => {
-    startNextUpload();
-  }, 100);
+  // 5. Side effects after state is committed:
+  // ONLY active uploads release a worker slot and trigger startNextUpload.
+  // Queued or paused cancellations update UI only and must NEVER free a slot or call startNextUpload.
+  if (wasActive) {
+    endUpload();
+    setTimeout(() => {
+      startNextUpload();
+    }, 100);
+  }
 
   // Check for remaining active uploads using canonical Store state
   function isActiveStatus(s) {
@@ -1871,27 +1878,37 @@ function pauseUpload(uploadId) {
 
   const folderName = window.getItemFolder ? window.getItemFolder(uploadItem) : "";
   const isFolderUpload = folderName !== "";
+  const rawStatus = String(uploadItem.status || '').toUpperCase();
+  const wasActive = rawStatus === 'UPLOADING' || rawStatus === 'PROCESSING';
 
   if (isFolderUpload) {
+    let folderHadActive = false;
     currentQueue.forEach(item => {
       if (!item) return;
       const fName = window.getItemFolder ? window.getItemFolder(item) : "";
       if (fName === folderName && (item.status === 'UPLOADING' || item.status === 'QUEUED' || item.status === 'PROCESSING')) {
-        // Abort XHR before state change
+        if (item.status === 'UPLOADING' || item.status === 'PROCESSING') folderHadActive = true;
         if (item.xhr) { try { item.xhr.abort(); } catch (err) { } }
-        // Dispatch through Store — FSM validates, increments uploadGeneration
         if (window.LanvanStore) {
           window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: item.id, status: 'PAUSED' });
         }
       }
     });
     window.uploadManagerExpanded = true;
+    if (folderHadActive) {
+      endUpload();
+      setTimeout(() => startNextUpload(), 100);
+    }
   } else if (uploadItem.status === 'UPLOADING' || uploadItem.status === 'QUEUED' || uploadItem.status === 'PROCESSING') {
     if (uploadItem.xhr) { try { uploadItem.xhr.abort(); } catch (err) { } }
     if (window.LanvanStore) {
       window.LanvanStore.dispatch('UPDATE_UPLOAD_STATUS', { id: uploadId, status: 'PAUSED' });
     }
     window.uploadManagerExpanded = true;
+    if (wasActive) {
+      endUpload();
+      setTimeout(() => startNextUpload(), 100);
+    }
   }
 
   console.log(`Paused upload ${uploadId}`);
