@@ -1965,8 +1965,35 @@ function uploadSingleFileWithProgress(uploadItem) {
   if (parentPath) {
     formData.append('parent_path', parentPath);
   }
-  console.log("%c[UPLOAD PIPELINE TRACE] 🚀 XHR Dispatch | File: '%s' | FinalDestination: '%s'", "color:#06b6d4; font-weight:bold; font-size:12px;", uploadItem.fileName, parentPath || "Home (Root)");
+  const isAESEnabled = isEncryptionEnabled && document.getElementById('enableEncryption').checked;
+  formData.append('encrypt', isAESEnabled.toString());
 
+  const xhr = new XMLHttpRequest();
+  uploadItem.xhr = xhr;
+
+  // Track upload progress with simple speed calculation
+  xhr.upload.addEventListener('progress', (e) => {
+    if (e.lengthComputable) {
+      const progress = (e.loaded / e.total) * 100;
+
+      const elapsed = (Date.now() - uploadItem.startTime) / 1000;
+      const speed = e.loaded / elapsed; // bytes per second
+      const remaining = speed > 0 ? (e.total - e.loaded) / speed : 0;
+
+      uploadItem.progress = progress;
+      uploadItem.lastProgressUpdate = Date.now(); // Track for safety net
+
+      // Start safety net for active uploads
+      startProgressUpdateSafetyNet();
+      uploadItem.uploadedBytes = e.loaded;
+      uploadItem.speed = speed;
+      uploadItem.timeRemaining = remaining;
+
+      // When upload reaches 100%, immediately show processing for larger files
+      if (progress >= 100) {
+        const fileSizeMB = uploadItem.file.size / (1024 * 1024);
+        if (fileSizeMB > 10) {
+          uploadItem.status = 'PROCESSING';
           console.log(` Upload complete - Setting ${uploadItem.fileName} to processing status immediately`);
           const statusText = document.getElementById(`status-${uploadItem.id}`);
           const speedText = document.getElementById(`speed-${uploadItem.id}`);
@@ -1986,6 +2013,7 @@ function uploadSingleFileWithProgress(uploadItem) {
       updateUploadItem(uploadItem);
     }
   });
+
 
   xhr.addEventListener('load', () => {
     if (xhr.status === 200) {
