@@ -157,8 +157,13 @@ def initiate_graceful_shutdown_process():
         print("[!] Server is now inactive...")
         shutdown_event.set()
         
-        # Force exit to ensure immediate shutdown
-        os._exit(0)
+        # On Android, exit the thread cleanly instead of killing the JVM process
+        # This keeps the host APK running while stopping the FastAPI server
+        import sys
+        if "ANDROID_STORAGE" in os.environ:
+            sys.exit(0)
+        else:
+            os._exit(0)
     
     # Start countdown in background thread
     shutdown_thread = threading.Thread(target=countdown_and_shutdown, daemon=True)
@@ -568,7 +573,6 @@ def are_resources_ready():
     
     # During startup grace period, check if essential services are available
     try:
-        # Check if templates directory exists and is accessible
         template_dir = "app/templates"
         static_dir = "app/static"
         if os.path.exists(template_dir) and os.path.exists(static_dir):
@@ -594,6 +598,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(500)
 @app.exception_handler(Exception)
 async def smart_internal_error_handler(request: Request, exc: Exception):
+    from fastapi.responses import PlainTextResponse, JSONResponse
     if _is_client_disconnect_error(exc):
         print(f"[INFO] Client disconnected during request to {request.url.path} (wrapped)")
         return PlainTextResponse("Client disconnected", status_code=400)
@@ -614,6 +619,7 @@ async def smart_internal_error_handler(request: Request, exc: Exception):
             "error_type": type(exc).__name__
         }
     )
+
 
 def _is_client_disconnect_error(exc) -> bool:
     """Check if exception is caused by client disconnect"""

@@ -59,8 +59,12 @@ class ThreadManager:
         
         # Register shutdown handlers
         atexit.register(self.shutdown_all)
-        signal.signal(signal.SIGTERM, self._signal_handler)
-        signal.signal(signal.SIGINT, self._signal_handler)
+        try:
+            signal.signal(signal.SIGTERM, self._signal_handler)
+            signal.signal(signal.SIGINT, self._signal_handler)
+        except ValueError:
+            # Expected on Android background threads
+            self.logger.warning("Could not register signal handlers (running in background thread)")
         
         print("[INFO] Thread Manager initialized")
     

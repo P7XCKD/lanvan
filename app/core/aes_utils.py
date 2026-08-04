@@ -607,6 +607,7 @@ def encrypt_file_stream(file_data: bytes, user_password: Optional[str] = None, c
     
     if file_size_mb > 1.0 and memory_delta > file_size_mb * 2:
         print(f"[WARN]  [AES-Stream-Encrypt] HIGH MEMORY USAGE! Delta: {memory_delta:.1f}MB > 2x File: {file_size_mb:.1f}MB")
+
     
     metadata = {
         'salt': salt.hex(),

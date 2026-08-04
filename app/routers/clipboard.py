@@ -22,15 +22,18 @@ from app.utils.universal_optimizer import get_adaptive_chunk_size
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
-
 class _DynamicCacheVersion:
     def __str__(self):
         return str(int(time.time()))
 
 templates.env.globals["cache_version"] = _DynamicCacheVersion()
 
-# State & Persistence Configurations
-CLIPBOARD_FOLDER = Path("data/clipboard")
+try:
+    from app.utils.android_compat import get_base_data_dir
+    CLIPBOARD_FOLDER = get_base_data_dir() / "data/clipboard"
+except ImportError:
+    CLIPBOARD_FOLDER = Path("data/clipboard")
+
 CLIPBOARD_HISTORY_FILE = CLIPBOARD_FOLDER / "clipboard_history.json"
 clipboard_history = []
 clipboard_id_counter = 1
@@ -159,7 +162,8 @@ async def add_to_clipboard(
         clipboard_id_counter += 1
         timestamp = time.time()
 
-        if file:
+        if file and isinstance(file, UploadFile):
+
             # Handle file upload to clipboard
             if not file.filename:
                 return JSONResponse(
@@ -220,7 +224,8 @@ async def add_to_clipboard(
                 "is_image_preview": content_type == 'image' and preview.startswith('data:')
             }
 
-        elif data:
+        elif data and isinstance(data, str):
+
             # Handle text/data content
             content_size = len(data.encode('utf-8'))
 
@@ -282,6 +287,9 @@ async def add_to_clipboard(
         })
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+
         return JSONResponse(
             status_code=500,
             content={"status": "error", "msg": f"Failed to add to clipboard: {str(e)}"}
@@ -341,6 +349,7 @@ async def get_clipboard_item(item_id: int, request: Request, download: Optional[
 
         if item["type"] == "file":
             # Return file as download or inline preview
+
             file_data = item["data"]
             filename = item["filename"]
             
@@ -365,6 +374,7 @@ async def get_clipboard_item(item_id: int, request: Request, download: Optional[
                     "Content-Length": str(len(file_data))
                 }
             )
+
         else:
             if is_download:
                 raw_text = item.get("data") or ""
@@ -382,6 +392,7 @@ async def get_clipboard_item(item_id: int, request: Request, download: Optional[
                 )
 
             # Return text content JSON for non-download API callers
+
             return JSONResponse(content={
                 "status": "success",
                 "item": {
@@ -471,7 +482,6 @@ async def download_clipboard_zip(request: Request):
             content={"status": "error", "msg": f"Failed to create ZIP archive: {str(e)}"}
         )
 
-
 @router.delete("/api/clipboard/clear", name="clipboard_clear")
 async def clear_clipboard():
     """Clear all clipboard items from history and persistent storage."""
@@ -509,6 +519,7 @@ async def remove_clipboard_item(item_id: int):
     )
 
 
+
 @router.get("/api/clipboard", name="clipboard_status")
 async def clipboard_status():
     """Get simple clipboard status status information."""
@@ -541,6 +552,9 @@ async def clipboard_write(request: Request):
             content={"status": "error", "msg": "No clipboard data provided"}
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+
         return JSONResponse(
             status_code=500,
             content={"status": "error", "msg": f"Clipboard write failed: {str(e)}"}

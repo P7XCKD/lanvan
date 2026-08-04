@@ -25,14 +25,19 @@ try:
     import zeroconf
     ZEROCONF_VERSION = getattr(zeroconf, '__version__', '0.0.0')
     ZEROCONF_NEW_API = tuple(map(int, ZEROCONF_VERSION.split('.')[:2])) >= (0, 132)
+    ZEROCONF_AVAILABLE = True
     HAS_ZEROCONF = True
-except (ImportError, Exception):
+except (ImportError, Exception) as e:
     ServiceInfo = Zeroconf = ServiceBrowser = None
     ZEROCONF_NEW_API = True
+    ZEROCONF_AVAILABLE = False
     HAS_ZEROCONF = False
+
 
 def check_mdns_dependencies() -> tuple[bool, str]:
     """Check if mDNS dependencies are available, especially for Termux"""
+    if not ZEROCONF_AVAILABLE:
+        return False, "[ERR] mDNS not available: Zeroconf library failed to load (blocked by security policy)."
     try:
         from zeroconf import Zeroconf
         
@@ -110,6 +115,7 @@ class SimpleMDNSManager:
         self.lan_ip = None
         self.device_id = self._generate_device_id()
         self._lock = threading.Lock()
+        self.ref_count = 0
         self._announcement_thread = None
         self._stop_announcements = False
         
@@ -506,14 +512,17 @@ class SimpleMDNSManager:
         """Start mDNS service with offline support, collision detection, and Termux compatibility"""
         try:
             with self._lock:
+                self.ref_count += 1
                 if self.is_running:
-                    print("[INFO] mDNS service already running")
+                    print(f"[INFO] mDNS service already running (ref_count={self.ref_count})")
                     return True
                 
                 # Check if mDNS is available
-                if not self.mdns_available:
-                    print(f"[ERR] {self.mdns_status}")
+                if not self.mdns_available or not ZEROCONF_AVAILABLE:
+                    print("[ERR] mDNS/Zeroconf is unavailable (library not loaded or blocked)")
                     return False
+
+
                 
                 print("[SEARCH] Starting mDNS service (offline-compatible, Termux-optimized)...")
                 print(f"   {self.mdns_status}")
@@ -695,6 +704,10 @@ class SimpleMDNSManager:
         """Stop the mDNS service with enhanced cleanup for Termux/Android"""
         try:
             with self._lock:
+                self.ref_count -= 1
+                if self.ref_count > 0:
+                    print(f"[INFO] mDNS service stop requested, but other instances are active (ref_count={self.ref_count})")
+                    return
                 if not self.is_running:
                     return
                 

@@ -198,6 +198,17 @@ settings.local.py
 !.agents/AGENTS.md
 
 scratch/
-android/.gradle/
+
+# Android builds and packages
+.gradle/
+local.properties
+.cxx/
 *.apk
+*.aab
 *.zip
+android/.gradle/
+android/app/build/
+temp_gradle/
+android/app/src/main/assets/certs/
+android/app/src/main/assets/app/
+

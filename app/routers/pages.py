@@ -15,14 +15,13 @@ import time
 # Initialize router and Jinja2 templates engine
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
-
-
 # Dynamic cache buster — generates a fresh timestamp on every template render
 # so the browser always loads the latest JS/CSS without needing a server restart
 class _DynamicCacheVersion:
     def __str__(self):
         return str(int(time.time()))
 templates.env.globals["cache_version"] = _DynamicCacheVersion()
+
 
 def safe_template_response(templates, request, name, context):
     context = dict(context)
@@ -101,6 +100,18 @@ async def home(request: Request):
     return safe_template_response(templates, request, "index.html", template_context)
 
 
+@router.get("/ios-help", response_class=HTMLResponse)
+async def ios_help_page(request: Request):
+    """iOS Safari troubleshooting and help page."""
+    return safe_template_response(templates, request, "ios-help.html", {})
+
+
+@router.get("/loading", response_class=HTMLResponse, name="loading")
+async def loading_page(request: Request, redirect: str = "/"):
+    """Loading page shown while resources are being prepared."""
+    return safe_template_response(templates, request, "loading.html", {
+        "redirect_url": redirect
+    })
 
 
 

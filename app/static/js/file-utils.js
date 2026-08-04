@@ -28,40 +28,68 @@ function generateOfflineQR(text, canvas) {
     console.log('⏸ QR computation blocked during upload');
     return false;
   }
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> android/app
   // This is the FALLBACK when the server /api/qr-code endpoint is unavailable.
   // Instead of drawing a fake unscannable pattern, show the URL text clearly
   // so users can type it manually on their device.
   const ctx = canvas.getContext('2d');
   canvas.width = 200;
   canvas.height = 200;
+<<<<<<< HEAD
 
   // White background
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+=======
+  
+  // White background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+>>>>>>> android/app
   // Border
   ctx.strokeStyle = '#cccccc';
   ctx.lineWidth = 2;
   ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> android/app
   // Icon area
   ctx.fillStyle = '#666666';
   ctx.font = '36px Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('📱', 100, 60);
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> android/app
   // "Scan QR at:" label
   ctx.fillStyle = '#333333';
   ctx.font = 'bold 13px Arial, sans-serif';
   ctx.fillText('Open in browser:', 100, 90);
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> android/app
   // URL text (word-wrap if needed)
   ctx.fillStyle = '#0066cc';
   ctx.font = '12px monospace';
   const maxWidth = 180;
   const url = text || 'URL unavailable';
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> android/app
   // Simple word wrap for the URL
   if (ctx.measureText(url).width <= maxWidth) {
     ctx.fillText(url, 100, 115);
@@ -71,13 +99,21 @@ function generateOfflineQR(text, canvas) {
     ctx.fillText(url.substring(0, mid), 100, 110);
     ctx.fillText(url.substring(mid), 100, 128);
   }
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> android/app
   // Helper text
   ctx.fillStyle = '#999999';
   ctx.font = '10px Arial, sans-serif';
   ctx.fillText('Type this URL on your device', 100, 155);
   ctx.fillText('QR will appear when server is ready', 100, 170);
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> android/app
   return canvas.toDataURL();
 }
 
@@ -186,6 +222,7 @@ function formatClipboardSize(bytes) {
  */
 function getStatusDisplay(status) {
   const statusMap = {
+<<<<<<< HEAD
     'QUEUED': 'Queued',
     'UPLOADING': 'Uploading',
     'COMPLETED': ' Complete',
@@ -193,6 +230,13 @@ function getStatusDisplay(status) {
     'CANCELLED': '⏸ Cancelled',
     'PAUSED': 'Paused',
     'DELETED': 'Deleted'
+=======
+    'queued': 'Queued',
+    'uploading': 'Uploading',
+    'completed': ' Complete',
+    'error': ' Error', 
+    'cancelled': '⏸ Cancelled'
+>>>>>>> android/app
   };
   return statusMap[status] || status;
 }
@@ -390,7 +434,11 @@ function startProgressUpdateSafetyNet() {
       if (timeSinceUpdate > 800) {
         // Only log if critically stuck for more than 30 seconds to reduce spam
         if (timeSinceUpdate > 30000) {
+<<<<<<< HEAD
           console.warn(` Upload critically stuck for ${uploadItem.fileName} (${(timeSinceUpdate / 1000).toFixed(1)}s), forcing update`);
+=======
+          console.warn(` Upload critically stuck for ${uploadItem.fileName} (${(timeSinceUpdate/1000).toFixed(1)}s), forcing update`);
+>>>>>>> android/app
         }
         updateUploadItem(uploadItem, true); // Force update flag
       }
@@ -599,10 +647,37 @@ function updateNetworkSpeed(speedMBps) {
 }
 
 // Function to create an upload item
+<<<<<<< HEAD
 // NOTE: createUploadItem is intentionally defined ONLY in main-app.js so that
 // the captured target folder (targetDir) is consistent across all uploads.
 // Do not add a duplicate definition here; doing so would overwrite the
 // folder-aware version after file-utils.js loads asynchronously.
+=======
+function createUploadItem(file, uploadId) {
+  // Check if AES encryption is enabled
+  const isAESEnabled = isEncryptionEnabled && document.getElementById('enableEncryption').checked;
+
+  return {
+    id: uploadId,
+    file: file,
+    fileName: file.name,
+    fileSize: file.size,
+    status: 'queued', // queued, uploading, completed, error, cancelled
+    progress: 0,
+    uploadedBytes: 0,
+    startTime: null,
+    speed: 0,
+    timeRemaining: 0,
+    xhr: null,
+    error: null,
+    isAESEnabled: isAESEnabled, // Store AES encryption state
+    uploadedChunks: 0, // For resume functionality
+    totalChunks: 0, // For chunked uploads
+    //  Statistics tracking
+    resumeCount: 0
+  };
+}
+>>>>>>> android/app
 
 // Function to close settings menu when clicking outside
 function closeSettingsOnOutsideClick(event) {
