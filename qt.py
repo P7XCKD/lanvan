@@ -33,6 +33,7 @@ CSS_DIR = APP_DIR / "static" / "css"
 TEMPLATE_DIR = APP_DIR / "templates"
 ROUTER_DIR = APP_DIR / "routers"
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "testing" / "tools"))
 if hasattr(sys.stdout, "reconfigure"):
     try: sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception: pass
@@ -798,14 +799,19 @@ class Suite:
     # ═══════ RUN ═══════
     async def _browser_ui(self):
         try:
-            from ui_test import run_browser_tests
+            try:
+                from ui_test import run_browser_tests
+            except ImportError:
+                sys.path.insert(0, str(ROOT / "testing" / "tools"))
+                from ui_test import run_browser_tests
+
             print(f"\n  {C.CYAN}\u2192{C.RESET} Starting browser UI tests...")
             ui_r = await run_browser_tests(self.base_url)
             self.r["pass"] += ui_r["pass"]; self.r["fail"] += ui_r["fail"]
             self.r["checks"].extend(ui_r["checks"])
             return ui_r["fail"] == 0
-        except ImportError:
-            print(WARN("Playwright not installed - skipping browser UI tests"))
+        except ImportError as ie:
+            print(WARN(f"Playwright not installed or ui_test.py missing - skipping browser UI tests ({ie})"))
             return True
         except Exception as e:
             print(WARN(f"Browser UI error: {e}")); return True
