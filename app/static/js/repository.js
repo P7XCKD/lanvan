@@ -29,7 +29,10 @@
                     window._fileMetadataMap[item.name] = {
                         size: item.size || '--',
                         mtime: item.mtime || 0,
-                        isFolder: item.isFolder
+                        isFolder: item.isFolder,
+                        logicalFileId: item.logicalFileId,
+                        versionCount: item.versionCount || 1,
+                        hasVersions: !!item.hasVersions
                     };
                 }
             }

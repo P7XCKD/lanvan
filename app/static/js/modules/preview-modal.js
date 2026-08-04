@@ -116,7 +116,7 @@
 
     function openFilePreview(filename) {
         if (!filename) return;
-        if (window.selectedItems && window.selectedItems.length > 0) return;
+        if (window.selectedItems && window.selectedItems.length > 1) return;
         window.currentPreviewFilename = filename;
         var modal = document.getElementById("previewModal");
         var titleEl = document.getElementById("previewTitle");
@@ -150,6 +150,30 @@
             } else {
                 streamBtn.style.display = "none";
             }
+        }
+
+        var historyBtn = document.getElementById("previewHistoryBtn");
+        if (historyBtn) {
+            var hasV = false;
+            var lfId = null;
+            var baseN = filename ? filename.split("/").pop().split("\\").pop() : "";
+            if (window._fileMetadataMap) {
+                var meta = window._fileMetadataMap[filename] || window._fileMetadataMap[baseN];
+                if (meta) {
+                    hasV = !!meta.hasVersions;
+                    lfId = meta.logicalFileId;
+                }
+            }
+            if (!lfId) lfId = "lf_" + baseN;
+            historyBtn.style.display = hasV ? "inline-flex" : "none";
+            if (hasV && typeof window.refreshLucideIcons === "function") {
+                window.refreshLucideIcons(historyBtn);
+            }
+            historyBtn.onclick = function () {
+                if (window.LanvanVersionHistoryPanel) {
+                    window.LanvanVersionHistoryPanel.open(lfId, baseN);
+                }
+            };
         }
 
         if (imageExts.indexOf(ext) !== -1) {

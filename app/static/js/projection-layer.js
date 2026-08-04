@@ -85,6 +85,10 @@
                     }
                 }
 
+                var vCount = (typeof df === 'object' && df !== null) ? (df.versionCount || 1) : (window._fileMetadataMap && window._fileMetadataMap[df] ? (window._fileMetadataMap[df].versionCount || 1) : 1);
+                var hasV = (typeof df === 'object' && df !== null) ? !!df.hasVersions : (window._fileMetadataMap && window._fileMetadataMap[df] ? !!window._fileMetadataMap[df].hasVersions : (vCount > 1));
+                var logId = (typeof df === 'object' && df !== null) ? df.logicalFileId : (window._fileMetadataMap && window._fileMetadataMap[df] ? window._fileMetadataMap[df].logicalFileId : null);
+
                 normalizedDiskFiles.push({
                     name: fileName,
                     identity: (taggedPath || currentFolder) ? ((taggedPath || currentFolder) + '/' + fileName) : fileName,
@@ -93,7 +97,10 @@
                     isFolder: isFolderVal,
                     uploading: false,
                     uploadProgress: 100,
-                    uploadStatus: 'COMPLETED'
+                    uploadStatus: 'COMPLETED',
+                    versionCount: vCount,
+                    hasVersions: hasV,
+                    logicalFileId: logId
                 });
             }
         }

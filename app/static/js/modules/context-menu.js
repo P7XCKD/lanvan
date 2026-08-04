@@ -113,6 +113,23 @@
             }
         }
 
+        // Show/Hide "History" option if single item and target file has version history
+        var historyItem = document.getElementById("historyMenuItem");
+        if (historyItem) {
+            var hasV = false;
+            var baseN = targetName ? targetName.split("/").pop().split("\\").pop() : "";
+            if (window._fileMetadataMap) {
+                var meta = window._fileMetadataMap[targetName] || window._fileMetadataMap[baseN];
+                if (meta) {
+                    hasV = !!meta.hasVersions;
+                }
+            }
+            historyItem.style.display = (isSingle && !isTargetFolder && hasV) ? "flex" : "none";
+            if (hasV && typeof window.refreshLucideIcons === "function") {
+                window.refreshLucideIcons(historyItem);
+            }
+        }
+
         // Position at cursor, only reposition if menu won't fit
         var top = event.clientY;
         var left = event.clientX;
@@ -121,6 +138,18 @@
         menu.style.left = left + "px";
         menu.style.top = top + "px";
         menu.style.display = "block";
+    }
+
+    function handleOpenVersionHistoryFromMenu() {
+        closeContextMenu();
+        var targetName = window._contextMenuTarget || (window.selectedItems && window.selectedItems[0]);
+        if (!targetName) return;
+        var baseN = targetName.split("/").pop().split("\\").pop();
+        var meta = window._fileMetadataMap && (window._fileMetadataMap[targetName] || window._fileMetadataMap[baseN]);
+        var lfId = meta ? meta.logicalFileId : ("lf_" + baseN);
+        if (window.LanvanVersionHistoryPanel) {
+            window.LanvanVersionHistoryPanel.open(lfId, baseN);
+        }
     }
 
     // Dismiss listeners
@@ -147,5 +176,6 @@
     window.ContextMenu = ContextMenu;
     window.openRowMenu = openRowMenu;
     window.closeContextMenu = closeContextMenu;
+    window.handleOpenVersionHistoryFromMenu = handleOpenVersionHistoryFromMenu;
 
 })(window);

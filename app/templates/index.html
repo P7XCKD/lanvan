@@ -386,6 +386,12 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
         <span>Preview</span>
       </div>
     </div>
+    <div class="context-item" id="historyMenuItem" onclick="handleOpenVersionHistoryFromMenu()" style="display:none;">
+      <div class="context-item-left">
+        <i data-lucide="history"></i>
+        <span>History</span>
+      </div>
+    </div>
     <div class="context-item" id="copyStreamLinkMenuItem" onclick="handleCopyStreamLinkFromMenu()"
       style="display:none;">
       <div class="context-item-left">
@@ -677,6 +683,12 @@ defaultView: "{{ default_view if default_view is defined else 'file' }}"
           style="display:none; background:rgba(59,130,246,0.15); color:#60a5fa; border:1px solid rgba(59,130,246,0.3); margin-right:4px;">
           <i data-lucide="tv" style="width:16px;height:16px;color:#60a5fa;"></i>
           <span>Copy Stream Link</span>
+        </button>
+        <button id="previewHistoryBtn" class="lv-action-btn"
+          title="Version History"
+          style="display:none; background:rgba(59,130,246,0.15); color:#60a5fa; border:1px solid rgba(59,130,246,0.3); margin-right:4px;">
+          <i data-lucide="history" style="width:16px;height:16px;color:#60a5fa;"></i>
+          <span>History</span>
         </button>
         <a id="previewDownloadBtn" href="#" download class="lv-action-btn" title="Download file">
           <i data-lucide="download" style="width:16px;height:16px;"></i>

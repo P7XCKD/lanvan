@@ -309,6 +309,7 @@ def get_file_list():
     UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
     retry_pending_deletions()
     items = []
+    from app.core.version_manager import VersionManager
     for f in UPLOAD_FOLDER.iterdir():
         if f.name.startswith('.') or f.name.endswith('.tmp') or should_ignore_file(f.name):
             continue
@@ -320,11 +321,19 @@ def get_file_list():
                 "isFolder": True
             })
         elif f.is_file():
+            lf = VersionManager.get_logical_file_by_path("", f.name)
+            v_count = lf.get("versionCount", 1) if lf else 1
+            lf_id = lf.get("id") if lf else f"lf_{f.name}"
+            latest_v_id = lf.get("latestVersionId") if lf else None
             items.append({
                 "name": f.name,
                 "size": format_size(f.stat().st_size),
                 "mtime": f.stat().st_mtime,
-                "isFolder": False
+                "isFolder": False,
+                "logicalFileId": lf_id,
+                "versionCount": v_count,
+                "hasVersions": (v_count > 1),
+                "latestVersionId": latest_v_id
             })
     return sorted(items, key=lambda x: x["mtime"], reverse=True)
 
@@ -333,6 +342,7 @@ async def get_file_list_async():
     retry_pending_deletions()
     items = []
     file_count = 0
+    from app.core.version_manager import VersionManager
     
     for f in UPLOAD_FOLDER.iterdir():
         if f.name.startswith('.') or f.name.endswith('.tmp') or should_ignore_file(f.name):
@@ -346,11 +356,19 @@ async def get_file_list_async():
             })
             file_count += 1
         elif f.is_file():
+            lf = VersionManager.get_logical_file_by_path("", f.name)
+            v_count = lf.get("versionCount", 1) if lf else 1
+            lf_id = lf.get("id") if lf else f"lf_{f.name}"
+            latest_v_id = lf.get("latestVersionId") if lf else None
             items.append({
                 "name": f.name,
                 "size": format_size(f.stat().st_size),
                 "mtime": f.stat().st_mtime,
-                "isFolder": False
+                "isFolder": False,
+                "logicalFileId": lf_id,
+                "versionCount": v_count,
+                "hasVersions": (v_count > 1),
+                "latestVersionId": latest_v_id
             })
             file_count += 1
             
@@ -360,14 +378,8 @@ async def get_file_list_async():
     return sorted(items, key=lambda x: x["mtime"], reverse=True)
 
 def get_unique_filename(directory: Path, filename: str) -> str:
-    base = Path(filename).stem
-    ext = Path(filename).suffix
-    counter = 1
-    new_name = filename
-    while (directory / new_name).exists():
-        new_name = f"{base}_{counter}{ext}"
-        counter += 1
-    return new_name
+    """Return original filename directly — VersionManager manages version history for identical names."""
+    return filename
 
 async def save_upload_file_async(upload_file: UploadFile, destination: Path, encrypt=False):
     """
@@ -859,9 +871,8 @@ async def upload_files(
                 target_dir = resolved.target_directory
                 target_dir.mkdir(parents=True, exist_ok=True)
                 
-                # Ensure unique filename if collision exists
-                file_path = get_unique_filename(target_dir, resolved.filename)
-                destinations.append(target_dir / file_path)
+                file_path = target_dir / resolved.filename
+                destinations.append(file_path)
             else:
                 destinations.append(UPLOAD_FOLDER / "unnamed_file")
         
@@ -876,9 +887,23 @@ async def upload_files(
         successful_uploads = []
         failed_uploads = []
         
+        from app.core.version_manager import VersionManager
         for result in results:
             if result.get("success", False):
-                successful_uploads.append(result.get("filename", "unknown"))
+                fn = result.get("filename", "unknown")
+                successful_uploads.append(fn)
+                dest_p = result.get("destination")
+                if dest_p and Path(dest_p).exists():
+                    try:
+                        VersionManager.create_version_transaction(
+                            target_dir=parent_path,
+                            filename=fn,
+                            incoming_file_path=Path(dest_p),
+                            uploaded_by=request.client.host if request and request.client else "upload",
+                            change_type="uploaded"
+                        )
+                    except Exception as ve:
+                        print(f"[VERSION] Version creation log: {ve}")
             else:
                 failed_uploads.append(result.get("error", "Unknown error"))
         
@@ -1064,7 +1089,7 @@ async def upload_auto_file(
             print(f"[TRACE STEP 1] Absolute: {resolved.full_path.resolve()}")
 
             save_name = resolved.filename + ".enc" if encrypt else resolved.filename
-            filepath = target_dir / get_unique_filename(target_dir, save_name)
+            filepath = target_dir / save_name
 
             print(f"[SAVE] Will save file {i+1} as: {filepath.name}")
             
@@ -1129,14 +1154,17 @@ async def upload_auto_file(
             print(f"[ERR] File {i+1} upload failed: {result.get('error', 'Unknown error')}")
     
     uploaded = []
+    from app.core.version_manager import VersionManager
     
     # Process results and add background tasks
     for i, result in enumerate(upload_results):
         if result.get('success'):
             filepath = Path(result['destination'])
+            rel_dir = parent_path or ""
+            VersionManager.create_version_transaction(rel_dir, filepath.name, filepath)
             background_tasks.add_task(scan_file, filepath)
             uploaded.append(filepath.name)
-            print(f"[OK] File {i+1} uploaded successfully: {filepath.name}")
+            print(f"[OK] File {i+1} uploaded successfully via VersionManager: {filepath.name}")
         else:
             print(f"[ERR] File {i+1} failed: {result.get('error', 'Unknown error')}")
 
@@ -1864,6 +1892,15 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
                     LOCKED_DELETIONS_SET.add(str(file_path))
                     LOCKED_DELETIONS_SET.add(filename)
             
+        # Clean up version history and metadata for logical file
+        try:
+            from app.core.version_manager import VersionManager
+            lf = VersionManager.get_logical_file_by_path(target_parent, safe_name) or VersionManager.get_logical_file_by_path(target_parent, filename)
+            if lf:
+                VersionManager.delete_logical_file(lf["id"])
+        except Exception as ve:
+            print(f"[VERSION_MANAGER] Delete cleanup warning: {ve}")
+
         cleanup_temp_file_for_filename(filename, target_parent)
         # Broadcast via file_events WebSocket for instant cross-device sync
         try:
@@ -2209,7 +2246,7 @@ async def finalize_upload(
                 
                 # Determine final filename
                 final_filename = safe_filename + ".enc" if encrypt else safe_filename
-                final_path = UPLOAD_FOLDER / get_unique_filename(UPLOAD_FOLDER, final_filename)
+                final_path = UPLOAD_FOLDER / f"{final_filename}.chunk.tmp"
                 
                 # [START] Fast chunk combination with proper error handling
                 with open(final_path, "wb") as final_file:
@@ -2307,7 +2344,7 @@ async def finalize_upload(
 
         if final_path and final_path.exists() and final_path.parent != target_dir:
             import shutil
-            new_final_path = target_dir / get_unique_filename(target_dir, final_path.name)
+            new_final_path = target_dir / final_path.name
             shutil.move(str(final_path), str(new_final_path))
             final_path = new_final_path
 
@@ -2689,12 +2726,23 @@ async def list_folder_contents(folder_path: str):
         print(f"[TRACE] list_folder_contents: '{folder_path}' → Raw items on disk: {[f.name for f in raw_items]}")
 
         files = []
+        from app.core.version_manager import VersionManager
+        clean_rel_folder = str(folder_path_obj.relative_to(UPLOAD_FOLDER)).replace("\\", "/") if folder_path_obj != UPLOAD_FOLDER else ""
         for f in folder_path_obj.iterdir():
             if f.is_file() and not f.name.endswith('.tmp') and not should_ignore_file(f.name):
+                lf = VersionManager.get_logical_file_by_path(clean_rel_folder, f.name)
+                v_count = lf.get("versionCount", 1) if lf else 1
+                lf_id = lf.get("id") if lf else f"lf_{f.name}"
+                latest_v_id = lf.get("latestVersionId") if lf else None
                 files.append({
                     "name": f.name,
                     "size": format_size(f.stat().st_size),
-                    "mtime": f.stat().st_mtime
+                    "mtime": f.stat().st_mtime,
+                    "isFolder": False,
+                    "logicalFileId": lf_id,
+                    "versionCount": v_count,
+                    "hasVersions": (v_count > 1),
+                    "latestVersionId": latest_v_id
                 })
             elif f.is_dir() and not f.name.startswith('.'):
                 files.append({
@@ -2776,6 +2824,12 @@ async def rename_file(filename: str = Form(...), new_name: str = Form(...), pare
             await asyncio.sleep(delay)
         try:
             os.rename(src_path, dst_path)
+            # Update VersionManager metadata for renamed file
+            try:
+                from app.core.version_manager import VersionManager
+                VersionManager.rename_logical_file(parent_path, safe_filename, safe_new)
+            except Exception as ve:
+                print(f"[VERSION_MANAGER] Rename sync warning: {ve}")
             # Rename .enc.meta sidecar if present
             meta_src = src_path.with_name(src_path.name + ".meta") if src_path.name.endswith(".enc") else src_path.with_suffix('.enc.meta')
             if meta_src.exists():
@@ -2853,6 +2907,13 @@ async def move_file(filename: str = Form(...), destination: str = Form(...)):
 
     try:
         shutil.move(str(src_path), str(dst_path))
+        # Update VersionManager metadata for moved file
+        try:
+            from app.core.version_manager import VersionManager
+            old_parent = str(src_path.parent.relative_to(UPLOAD_FOLDER)).replace("\\", "/") if src_path.parent != UPLOAD_FOLDER else ""
+            VersionManager.move_logical_file(old_parent, destination, safe_filename)
+        except Exception as ve:
+            print(f"[VERSION_MANAGER] Move sync warning: {ve}")
         print(f"[MOVE] Moved '{safe_filename}' to '{destination}'")
         broadcast_file_event_sync("move", destination or "", safe_filename)
         return JSONResponse(content={

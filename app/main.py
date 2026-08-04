@@ -534,10 +534,12 @@ static_dir = os.path.abspath("dist/static") if (is_production_mode() and os.path
 app.mount("/static", ProductionStaticFiles(directory=static_dir), name="static")
 
 from app.ws_manager import clipboard_ws_router, upload_status_ws_router, file_events_ws_router, ui_events_ws_router
+from app.routers.version_routes import router as version_router
 
 # [OK] Register app routes
 app.include_router(pages_router)
 app.include_router(files_router)
+app.include_router(version_router)
 app.include_router(clipboard_router)
 app.include_router(system_router)
 app.include_router(clipboard_ws_router)

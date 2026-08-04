@@ -95,13 +95,23 @@
         var displayDate = isUploading ? (uploadStatus === 'PAUSED' ? 'Paused' : (uploadStatus === 'QUEUED' ? 'Queued' : 'Uploading')) : formattedDate.display;
         var dateTooltip = isUploading ? "" : (formattedDate.tooltip || formattedDate.display);
 
+        var hasVersions = false;
+        var versionCount = 1;
+        if (window._fileMetadataMap && window._fileMetadataMap[name]) {
+            hasVersions = !!window._fileMetadataMap[name].hasVersions;
+            versionCount = window._fileMetadataMap[name].versionCount || 1;
+        }
+        var versionBadgeHtml = hasVersions
+            ? '<span class="version-pill-badge" title="Version ' + versionCount + ' (Has version history)" style="font-size:0.72rem; font-weight:700; padding:2px 8px; border-radius:12px; margin-left:8px; background:var(--primary-bg, rgba(37,99,235,0.12)); color:var(--primary, #2563eb); border:1px solid var(--primary-border, rgba(37,99,235,0.3)); vertical-align:middle; display:inline-flex; align-items:center; letter-spacing:0.02em;">v' + versionCount + '</span>'
+            : '';
+
         return (
             '<div class="m3-list-item' + (isUploading ? ' uploading' : '') + '" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '" style="' + (isUploading ? 'position:relative; overflow:hidden;' : '') + '">' +
             progressBarHtml +
             '<div class="file-name-cell" style="position:relative; z-index:2;">' +
             '<div class="avatar-icon ' + itemInfo.avatarClass + '"><i data-lucide="' + itemInfo.iconName + '"></i></div>' +
             '<div class="item-main">' +
-            '<div class="item-title">' + escName + '</div>' +
+            '<div class="item-title">' + escName + versionBadgeHtml + '</div>' +
             '<div class="item-subtitle">' + subtitleText + '</div>' +
             '</div>' +
             '</div>' +
@@ -193,12 +203,22 @@
             ? '<div class="item-subtitle" style="font-size:0.7rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + subtitle + '</div>'
             : '';
 
+        var hasVersions = false;
+        var versionCount = 1;
+        if (window._fileMetadataMap && window._fileMetadataMap[name]) {
+            hasVersions = !!window._fileMetadataMap[name].hasVersions;
+            versionCount = window._fileMetadataMap[name].versionCount || 1;
+        }
+        var versionBadgeHtml = hasVersions
+            ? '<span class="version-pill-badge" title="Version ' + versionCount + ' (Has version history)" style="font-size:0.68rem; font-weight:700; padding:1px 6px; border-radius:10px; margin-left:6px; background:var(--primary-bg, rgba(37,99,235,0.12)); color:var(--primary, #2563eb); border:1px solid var(--primary-border, rgba(37,99,235,0.3)); vertical-align:middle; display:inline-flex; align-items:center; letter-spacing:0.02em;">v' + versionCount + '</span>'
+            : '';
+
         return (
             '<div class="m3-list-item' + (isUploading ? ' uploading' : '') + '" data-filename="' + escName + '" data-is-folder="' + (isFolder ? '1' : '0') + '" style="position:relative; overflow:hidden;">' +
             '<div class="grid-card-head" style="position:relative; z-index:20; background:var(--card-bg, #ffffff);">' +
             '<div class="avatar-icon ' + itemInfo.avatarClass + '"><i data-lucide="' + itemInfo.iconName + '"></i></div>' +
             '<div style="display:flex; flex-direction:column; min-width:0; flex:1;">' +
-            '<div class="item-title" title="' + escName + '">' + escName + '</div>' +
+            '<div class="item-title" title="' + escName + '">' + escName + versionBadgeHtml + '</div>' +
             subtitleHtml +
             '</div>' +
             '<button class="btn-icon" title="More actions" data-action="menu" data-filename="' + escName + '" style="width:24px;height:24px;padding:0;flex-shrink:0;">' +

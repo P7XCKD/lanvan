@@ -104,16 +104,8 @@ class StreamingChunkAssembler:
         
         if not streaming_file.final_path:
             final_path = self.upload_folder / streaming_file.filename
-            # Ensure unique filename check includes both final path and its temp path
-            counter = 1
-            original_path = final_path
-            while final_path.exists() or final_path.with_suffix(final_path.suffix + '.tmp').exists():
-                stem = original_path.stem
-                suffix = original_path.suffix
-                final_path = self.upload_folder / f"{stem}_{counter}{suffix}"
-                counter += 1
             streaming_file.final_path = final_path
-            streaming_file.temp_path = final_path.with_suffix(final_path.suffix + '.tmp')
+            streaming_file.temp_path = final_path.with_name(final_path.name + '.stream.tmp')
 
         # Find consecutive chunks starting from 1
         consecutive_chunks = []
@@ -148,16 +140,8 @@ class StreamingChunkAssembler:
         try:
             if not streaming_file.final_path:
                 final_path = self.upload_folder / streaming_file.filename
-                # Ensure unique filename check includes both final path and its temp path
-                counter = 1
-                original_path = final_path
-                while final_path.exists() or final_path.with_suffix(final_path.suffix + '.tmp').exists():
-                    stem = original_path.stem
-                    suffix = original_path.suffix
-                    final_path = self.upload_folder / f"{stem}_{counter}{suffix}"
-                    counter += 1
                 streaming_file.final_path = final_path
-                streaming_file.temp_path = final_path.with_suffix(final_path.suffix + '.tmp')
+                streaming_file.temp_path = final_path.with_name(final_path.name + '.stream.tmp')
 
             # Write any remaining chunks in order to temp file
             if streaming_file.chunk_data:
@@ -170,29 +154,24 @@ class StreamingChunkAssembler:
             # Clear chunk data to free memory
             streaming_file.chunk_data.clear()
             
-            # Atomic rename from temp_path to final_path
+            # Atomic commit via VersionManager
             import shutil
-            is_windows = os.name == 'nt'
-            max_retries = 3 if is_windows else 1
-            retry_delay = 0.3 if is_windows else 0.1
+            from app.core.version_manager import VersionManager
             
-            # Make sure we sleep briefly to release file handles if needed
-            if is_windows:
-                time.sleep(0.1)
-                
-            for attempt in range(max_retries):
-                try:
-                    if is_windows:
-                        shutil.move(str(streaming_file.temp_path), str(streaming_file.final_path))
-                    else:
-                        streaming_file.temp_path.rename(streaming_file.final_path)
-                    break
-                except Exception as rename_err:
-                    if attempt < max_retries - 1:
-                        time.sleep(retry_delay)
-                        retry_delay *= 1.5
-                    else:
-                        raise rename_err
+            success, lf = VersionManager.create_version_transaction(
+                target_dir="",
+                filename=streaming_file.filename,
+                incoming_file_path=streaming_file.temp_path,
+                uploaded_by="streaming_assembly",
+                change_type="uploaded"
+            )
+            
+            if not success and streaming_file.temp_path.exists():
+                is_windows = os.name == 'nt'
+                if is_windows:
+                    shutil.move(str(streaming_file.temp_path), str(streaming_file.final_path))
+                else:
+                    streaming_file.temp_path.rename(streaming_file.final_path)
 
             streaming_file.completed = True
             
