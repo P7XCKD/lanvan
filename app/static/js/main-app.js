@@ -450,9 +450,6 @@ window.toggleMobileSearch = function () {
   }
 };
 
-  };
-  return statusMap[status] || status;
-}
 
 function getControlButtons(uploadItem) {
   if (uploadItem.status === 'UPLOADING') {
@@ -1278,7 +1275,6 @@ function clearDeviceLogs() {
 }
 
 function updateUploadManager() {
-<<<<<<< HEAD
   const uploadQueue = getUploadQueue();
   // Throttle tray re-renders to avoid flicker during rapid chunk progress
   if (typeof window.scheduleUploadTrayRender === "function") {
@@ -1300,18 +1296,15 @@ function updateUploadManager() {
     //  Re-sort and re-render upload items in proper order
     sortAndRenderUploadQueue();
   }
-=======
-  // Users can manually use the logs to check completed uploads
-  // The upload manager will stay visible so users can see their upload progress
->>>>>>> android/app
+
 }
 
 //  Sort and re-render upload queue with proper priority order
 function sortAndRenderUploadQueue() {
   const queue = document.getElementById('uploadQueue');
   if (!queue) return;
-<<<<<<< HEAD
   const uploadQueue = getUploadQueue();
+
 
   // Sort upload queue: UPLOADING > PAUSED > QUEUED > COMPLETED > FAILED > CANCELLED > DELETED
   const sortedQueue = [...uploadQueue].sort((a, b) => {
@@ -1754,18 +1747,12 @@ function showClearCompletedButton() {
     item && ['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)
   );
 
-  if (completedItems.length === 0) return;
-
-=======
-  // Check if clear button already exists
->>>>>>> android/app
   let clearBtn = document.getElementById('clearCompletedBtn');
   if (clearBtn) {
     clearBtn.style.display = 'inline-block';
     return;
   }
 
-<<<<<<< HEAD
   const btnEl = document.querySelector('#uploadManager .upload-manager-btn');
   if (!btnEl || !btnEl.parentElement) return;
 
@@ -1806,15 +1793,14 @@ function clearCompletedUploads() {
 
   updateUploadManager();
 
-=======
   // NOW refresh the file list since user manually cleared
->>>>>>> android/app
   setTimeout(() => {
     refreshFileList();
   }, 500);
 
   console.log(` Cleared ${itemsToRemove.length} completed uploads`);
 }
+
 
 function removeCompletedUpload(itemId) {
   // Find the upload item in queue
@@ -1825,8 +1811,8 @@ function removeCompletedUpload(itemId) {
   }
 
   // Only allow removal of completed, cancelled, or error items
-<<<<<<< HEAD
   if (!['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)) {
+
     console.warn(` Cannot remove upload ${itemId} with status: ${item.status}`);
     return;
   }
@@ -2661,11 +2647,9 @@ function startAutoRefresh() {
         // Even if file count is same, ensure display is current (files might have changed)
         updateFileCount(currentFileCount);
       }
-    } catch (error) {
-      console.error(' Auto-refresh failed:', error);
-<<<<<<< HEAD
     }
   }, 5000); // Check every 5 seconds
+
 }
 
 function stopAutoRefresh() {
@@ -5186,9 +5170,7 @@ document.addEventListener('paste', function (event) {
   // Immediate visual feedback - disable button temporarily
   if (addButton) {
     addButton.disabled = true;
-=======
     addButton.textContent = '⏳ Adding...';
->>>>>>> android/app
     addButton.style.opacity = '0.7';
   }
 
@@ -5196,7 +5178,6 @@ document.addEventListener('paste', function (event) {
   formData.append('data', text);
 
   try {
-<<<<<<< HEAD
     const response = await fetch('/api/clipboard/add', {
       method: 'POST',
       body: formData
@@ -5239,15 +5220,11 @@ function clearClipboardInput() {
 // Refresh clipboard history
 async function refreshClipboardHistory() {
   try {
-=======
-    // Use requestIdleCallback if available to avoid blocking upload progress
->>>>>>> android/app
     const performRefresh = async () => {
       const response = await fetch('/api/clipboard/list');
       const data = await response.json();
 
       if (data.status === 'success') {
-<<<<<<< HEAD
         window.clipboardHistoryData = data.items;
         clipboardHistoryData = data.items;
         requestAnimationFrame(() => renderClipboardHistory(data.items));
@@ -5267,6 +5244,7 @@ async function refreshClipboardHistory() {
     showToast(' Failed to load clipboard history', 3000);
   }
 }
+
 
 // Render clipboard history with image previews
 function renderClipboardHistory(items) {

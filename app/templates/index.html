@@ -17,9 +17,14 @@
 
 
 {% block extra_config %}
-showClipboardOnly: {{ 'true' if show_clipboard_only is defined and show_clipboard_only else 'false' }},
-defaultView: "{{ default_view if default_view is defined else 'file' }}"
+<script>
+    if (window.LanvanConfig) {
+        window.LanvanConfig.showClipboardOnly = {{ 'true' if show_clipboard_only is defined and show_clipboard_only else 'false' }};
+        window.LanvanConfig.defaultView = "{{ default_view if default_view is defined else 'file' }}";
+    }
+</script>
 {% endblock %}
+
 
 {% block content %}
 
