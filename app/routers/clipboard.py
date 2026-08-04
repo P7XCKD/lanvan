@@ -7,7 +7,9 @@ Includes persistence mechanisms to save clipboard logs onto disk.
 import json
 import time
 import io
+import asyncio
 from pathlib import Path
+
 from typing import Optional
 from mimetypes import guess_type
 
@@ -159,13 +161,30 @@ async def add_to_clipboard(
     global clipboard_id_counter, clipboard_history
 
     try:
+        # Fallback extraction if FastAPI parameter binding didn't capture file/data
+        if not file and not data:
+            try:
+                content_type_header = request.headers.get("content-type", "")
+                if "application/json" in content_type_header:
+                    json_body = await request.json()
+                    data = json_body.get("data") or json_body.get("text")
+                else:
+                    form = await request.form()
+                    if "file" in form:
+                        file = form["file"]
+                    elif "data" in form:
+                        data = form["data"]
+            except Exception as e:
+                print(f"[DEBUG clipboard_add fallback err]: {e}")
+
         clipboard_id_counter += 1
         timestamp = time.time()
 
-        if file and isinstance(file, UploadFile):
+        if file and (isinstance(file, UploadFile) or hasattr(file, "filename")):
+            filename = getattr(file, "filename", None) or f"clipboard-image-{int(timestamp)}.png"
 
             # Handle file upload to clipboard
-            if not file.filename:
+            if not filename:
                 return JSONResponse(
                     status_code=400,
                     content={"status": "error", "msg": "No filename provided"}
@@ -179,7 +198,7 @@ async def add_to_clipboard(
                 'other': ['zip', 'rar', '7z']
             }
 
-            file_ext = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
+            file_ext = filename.split('.')[-1].lower() if '.' in filename else ''
             content_type = 'other'
 
             for type_name, extensions in allowed_types.items():
@@ -193,29 +212,33 @@ async def add_to_clipboard(
             file_content = b""
             file_size = 0
 
-            while True:
-                chunk = await file.read(CHUNK_SIZE)
-                if not chunk:
-                    break
-                file_size += len(chunk)
+            # Read content from UploadFile or bytes
+            if hasattr(file, "read"):
+                while True:
+                    chunk = await file.read(CHUNK_SIZE) if asyncio.iscoroutinefunction(file.read) else file.read(CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    file_size += len(chunk)
 
-                # Check size limit as we read
-                if file_size > MAX_SIZE:
-                    return JSONResponse(
-                        status_code=400,
-                        content={"status": "error", "msg": "File too large for clipboard (max 10MB)"}
-                    )
+                    if file_size > MAX_SIZE:
+                        return JSONResponse(
+                            status_code=400,
+                            content={"status": "error", "msg": "File too large for clipboard (max 10MB)"}
+                        )
 
-                file_content += chunk
+                    file_content += chunk
+            elif isinstance(file, bytes):
+                file_content = file
+                file_size = len(file)
 
             # Create clipboard item for file (with base64 image preview)
-            preview = generate_simple_file_preview(file.filename, file_content, content_type)
+            preview = generate_simple_file_preview(filename, file_content, content_type)
 
             clipboard_item = {
                 "id": clipboard_id_counter,
                 "type": "file",
                 "content_type": content_type,
-                "filename": file.filename,
+                "filename": filename,
                 "size": file_size,
                 "data": file_content,
                 "timestamp": timestamp,
@@ -223,6 +246,7 @@ async def add_to_clipboard(
                 "preview": preview,
                 "is_image_preview": content_type == 'image' and preview.startswith('data:')
             }
+
 
         elif data and isinstance(data, str):
 

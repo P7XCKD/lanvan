@@ -52,12 +52,12 @@
         }
 
         var displaySize = isFolder ? "-" : sizeStr;
-        var progressBarHtml = isUploading
+        var progressBarHtml = (isUploading && !isFolder)
             ? '<div class="row-progress-bar" style="position:absolute; top:0; bottom:0; left:0; width:100%; height:100%; background:rgba(59, 130, 246, 0.08); transform:scaleX(' + (pct / 100) + '); transform-origin:left center; transition:transform 0.25s ease-out, width 0.25s ease-out; pointer-events:none; z-index:1;"></div>'
             : '';
 
         var actionsHtml = '';
-        if (isUploading) {
+        if (isUploading && !isFolder) {
             var playPauseBtn = '';
             var svgPlay = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
             var svgPause = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
@@ -91,8 +91,9 @@
                 '</button>';
         }
 
-        var formattedDate = (typeof formatLastModified === 'function' && !isUploading && dateText && dateText !== '--') ? formatLastModified(dateText) : { display: dateText || "--", tooltip: dateText || "" };
-        var displayDate = isUploading ? (uploadStatus === 'PAUSED' ? 'Paused' : (uploadStatus === 'QUEUED' ? 'Queued' : 'Uploading')) : formattedDate.display;
+        var formattedDate = (typeof formatLastModified === 'function' && (!isUploading || isFolder) && dateText && dateText !== '--') ? formatLastModified(dateText) : { display: dateText || "--", tooltip: dateText || "" };
+        var displayDate = (isUploading && !isFolder) ? (uploadStatus === 'PAUSED' ? 'Paused' : (uploadStatus === 'QUEUED' ? 'Queued' : 'Uploading')) : formattedDate.display;
+
         var dateTooltip = isUploading ? "" : (formattedDate.tooltip || formattedDate.display);
 
         var hasVersions = false;
@@ -136,7 +137,7 @@
         var pct = typeof uploadProgress === 'number' ? Math.min(100, Math.max(0, uploadProgress)) : 0;
 
         var progressBarHtml = '';
-        if (hasActiveUpload) {
+        if (hasActiveUpload && !isFolder) {
             var displayPct = Math.round(pct);
             var statusText = uploadStatus === 'PAUSED' ? 'Paused' : (uploadStatus === 'QUEUED' ? 'Queued' : 'Uploading');
             progressBarHtml =
@@ -150,6 +151,7 @@
                 '</div>' +
                 '</div>';
         }
+
 
         var previewHtml = '';
         if (isFolder) {
