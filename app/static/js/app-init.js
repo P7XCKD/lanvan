@@ -4614,7 +4614,8 @@
                 var progress = Math.round(item.progress || 0);
                 var escName = escapeHtml(item.fileName);
                 var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
-                if (row) {
+                if (row && row.getAttribute('data-is-folder') !== '1') {
+
                     // List view updates
                     var subtitleCell = row.querySelector('.item-subtitle');
                     if (subtitleCell) {
