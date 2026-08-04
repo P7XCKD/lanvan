@@ -24,10 +24,19 @@ class LogWriter:
     def isatty(self):
         return False
 
-def run_fastapi_server(port="5000", use_https="false", files_dir=None):
+def run_fastapi_server(port="5000", use_https="false", files_dir=None, is_debug=True):
     """
     Launches uvicorn server in Android JVM thread.
+    - is_debug=True: Development mode (python run.py / run.py https) using app/static
+    - is_debug=False: Production mode (python run.py prod) using dist/static
     """
+    if is_debug:
+        os.environ['LANVAN_ENV'] = 'development'
+        os.environ['PRODUCTION'] = 'false'
+    else:
+        os.environ['LANVAN_ENV'] = 'production'
+        os.environ['PRODUCTION'] = 'true'
+
     if files_dir:
         log_path = os.path.join(files_dir, "lanvan_app.log")
         
@@ -42,10 +51,13 @@ def run_fastapi_server(port="5000", use_https="false", files_dir=None):
         
         # Print a clear separator for this execution session
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        mode_label = "Development (python run.py / run.py https)" if is_debug else "Production (python run.py prod)"
         print(f"\n==========================================")
         print(f" SERVER STARTUP AT {timestamp}")
+        print(f" Mode: {mode_label}")
         print(f" Working Directory: {os.getcwd()}")
         print(f"==========================================\n")
+
         
         # Clean up stale .tmp files and orphaned chunks from cancelled uploads
         try:
