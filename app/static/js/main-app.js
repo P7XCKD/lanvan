@@ -1224,12 +1224,11 @@ function clearDeviceLogs() {
       return;
     }
 
-=======
     // Confirm before clearing
     if (!confirm(`Are you sure you want to clear all ${currentHistory.length} device log entries?\n\nThis action cannot be undone.`)) {
       return;
     }
->>>>>>> android/app
+
 
     // Clear the device-specific history
     sessionStorage.removeItem(sessionKey);
@@ -2639,10 +2638,7 @@ function startAutoRefresh() {
         } else if (currentFileCount < lastFileCount) {
           console.log(` ${lastFileCount - currentFileCount} file(s) removed from other device(s)`);
         }
-=======
 
-        // lastFileCount is updated inside updateFileDisplay now
->>>>>>> android/app
       } else {
         // Even if file count is same, ensure display is current (files might have changed)
         updateFileCount(currentFileCount);
