@@ -1458,56 +1458,61 @@ function performUIUpdate(uploadItem, forceUpdate = false) {
     window.updateRowProgress(uploadItem);
   }
 
-  // Individual file completion is handled by the XHR load handler (main-app.js:2203)
-  // and the Store subscriber → Scheduler pipeline. This duplicate refresh path is removed
-  // to eliminate flicker from redundant DOM rebuilds.
+  const itemDiv = document.getElementById(`upload-${uploadItem.id}`);
+  if (itemDiv) {
+    const statusText = document.getElementById(`status-${uploadItem.id}`);
+    const speedText = document.getElementById(`speed-${uploadItem.id}`);
+    const remainingText = document.getElementById(`remaining-${uploadItem.id}`);
 
-      statusDisplay = ' Processing...';
+    if (statusText) {
+      let statusDisplay = typeof getStatusDisplay === 'function' ? getStatusDisplay(uploadItem.status) : (uploadItem.status || '');
+      if (uploadItem.status === 'UPLOADING') {
+        statusDisplay = `${Math.round(uploadItem.progress || 0)}%`;
+      } else if (uploadItem.status === 'PROCESSING') {
+        statusDisplay = ' Processing...';
+      }
+      if (statusText.textContent !== statusDisplay) {
+        statusText.textContent = statusDisplay;
+      }
     }
 
-    // Only update if text actually changed to prevent unnecessary redraws
-    if (statusText.textContent !== statusDisplay) {
-      statusText.textContent = statusDisplay;
+    // SMOOTH SPEED: Stable speed display with minimal flicker
+    if (speedText && uploadItem.status === 'UPLOADING') {
+      const newSpeedText = `${formatSpeed(uploadItem.speed)}`;
+      if (speedText.textContent !== newSpeedText) {
+        speedText.textContent = newSpeedText;
+      }
+    } else if (speedText && uploadItem.status === 'CANCELLED') {
+      speedText.textContent = 'Cancelled';
+    } else if (speedText && uploadItem.status === 'PROCESSING') {
+      speedText.textContent = 'Server processing';
     }
-  }
 
-  //  SMOOTH SPEED: Stable speed display with minimal flicker
-  if (speedText && uploadItem.status === 'UPLOADING') {
-    const newSpeedText = `${formatSpeed(uploadItem.speed)}`;
-    if (speedText.textContent !== newSpeedText) {
-      speedText.textContent = newSpeedText;
+    // STABLE TIME: Update time remaining with debouncing
+    if (remainingText && uploadItem.timeRemaining > 0 && uploadItem.status === 'UPLOADING') {
+      const newTimeText = `${formatTime(uploadItem.timeRemaining)} left`;
+      if (remainingText.textContent !== newTimeText) {
+        remainingText.textContent = newTimeText;
+      }
+    } else if (remainingText && uploadItem.status === 'CANCELLED') {
+      remainingText.textContent = '';
     }
-  } else if (speedText && uploadItem.status === 'CANCELLED') {
-    speedText.textContent = 'Cancelled';
-  } else if (speedText && uploadItem.status === 'PROCESSING') {
-    speedText.textContent = 'Server processing';
-  }
 
-  // ⏱ STABLE TIME: Update time remaining with debouncing
-  if (remainingText && uploadItem.timeRemaining > 0 && uploadItem.status === 'UPLOADING') {
-    const newTimeText = `${formatTime(uploadItem.timeRemaining)} left`;
-    if (remainingText.textContent !== newTimeText) {
-      remainingText.textContent = newTimeText;
+    // Update cancel button state for cancelled, completed, and processing items
+    const cancelBtn = itemDiv.querySelector('.upload-control-btn.cancel');
+    if (cancelBtn) {
+      if (uploadItem.status === 'CANCELLED' || uploadItem.status === 'COMPLETED' || uploadItem.status === 'PROCESSING') {
+        cancelBtn.style.display = 'none';
+      } else {
+        cancelBtn.style.display = 'inline-block';
+      }
     }
-  } else if (remainingText && uploadItem.status === 'CANCELLED') {
-    remainingText.textContent = '';
-  }
 
-  // Update cancel button state for cancelled, completed, and processing items
-  const cancelBtn = document.querySelector(`#upload-${uploadItem.id} .upload-control-btn.cancel`);
-  if (cancelBtn) {
-    if (uploadItem.status === 'CANCELLED' || uploadItem.status === 'COMPLETED' || uploadItem.status === 'PROCESSING') {
-      cancelBtn.style.display = 'none'; // Hide cancel button for cancelled, completed, and processing items
-      console.log(` Cancel button hidden for ${uploadItem.fileName} (status: ${uploadItem.status})`);
-    } else {
-      cancelBtn.style.display = 'inline-block'; // Show cancel button for active uploads
+    // Update item styling based on status (only if changed)
+    const newClassName = `upload-item ${uploadItem.status}`;
+    if (itemDiv.className !== newClassName) {
+      itemDiv.className = newClassName;
     }
-  }
-
-  // Update item styling based on status (only if changed)
-  const newClassName = `upload-item ${uploadItem.status}`;
-  if (itemDiv.className !== newClassName) {
-    itemDiv.className = newClassName;
   }
 
   // Trigger main view (Grid cards & List rows) progress sync
@@ -1519,6 +1524,7 @@ function performUIUpdate(uploadItem, forceUpdate = false) {
     window.triggerInstantUIUpdate();
   }
 }
+
 
 function cancelUpload(uploadId) {
   const currentQueue = getUploadQueue();
