@@ -3889,8 +3889,13 @@ function setupEventListeners() {
   DOM_CACHE.folderInput.addEventListener('click', (e) => e.stopPropagation());
 
   // Set up toast click handler
+  if (!DOM_CACHE.toast) {
+    DOM_CACHE.toast = document.getElementById('toast');
+  }
+
   if (DOM_CACHE.toast) {
     DOM_CACHE.toast.addEventListener('click', function () {
+
       console.log(' Toast clicked');
       const toast = this;
 
