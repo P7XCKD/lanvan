@@ -3967,9 +3967,8 @@ function setupEventListeners() {
         toast.title = 'Persistent message - click anywhere else to dismiss';
       }
     });
-  } else {
-    console.warn(' Toast element not found in setupEventListeners');
   }
+
 
   //  Add global click handler to dismiss persistent toasts
   document.addEventListener('click', function globalToastClickHandler(e) {
