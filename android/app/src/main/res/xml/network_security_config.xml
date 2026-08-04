@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Base Config: Globally disallow cleartext traffic and restrict trust strictly to system anchors -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Permit cleartext traffic ONLY on localhost and local loopbacks -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">::1</domain>
+    </domain-config>
+
+    <!-- Permit cleartext traffic ONLY inside private RFC 1918 LAN subnets for peer-to-peer sharing -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- 10.0.0.0/8 -->
+        <domain includeSubdomains="true">10.in-addr.arpa</domain> 
+        <domain includeSubdomains="true">10.0.0.0</domain>
+        <!-- 172.16.0.0/12 -->
+        <domain includeSubdomains="true">172.16.0.0</domain>
+        <!-- 192.168.0.0/16 -->
+        <domain includeSubdomains="true">192.168.0.0</domain>
+        <!-- 169.254.0.0/16 Link-Local -->
+        <domain includeSubdomains="true">169.254.0.0</domain>
+    </domain-config>
+</network-security-config>

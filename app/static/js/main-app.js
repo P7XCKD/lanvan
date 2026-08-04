@@ -81,30 +81,6 @@ if (typeof show_clipboard_only !== 'undefined' && show_clipboard_only) {
           clearInterval(clipboardPollingInterval);
           clipboardPollingInterval = null;
         }
-
-        // Start health check for Safari
-        if (window.isiOSSafari) {
-          wsHealthCheck = setInterval(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              try { ws.send('ping'); } catch (e) { /* ignore */ }
-            }
-          }, 30000);
-        }
-
-        if (typeof refreshClipboardHistory === 'function') {
-          setTimeout(() => refreshClipboardHistory(), window.isiOSSafari ? 300 : 50);
-        }
-      };
-
-      ws.onmessage = (event) => {
-        if (event.data === 'refresh') {
-          if (typeof refreshClipboardHistory === 'function') {
-            setTimeout(() => refreshClipboardHistory(), window.isiOSSafari ? 200 : 0);
-          }
-        }
-      };
-
-      ws.onclose = () => {
         clearTimeout(connectTimeout);
         if (wsHealthCheck) {
           clearInterval(wsHealthCheck);
@@ -348,105 +324,6 @@ if (document.readyState === 'loading') {
   initFileEventsWebSocket();
 }
 
-//  Global Variables
-// Page mode detection
-
-let droppedFiles = [];
-let isDragging = false;
-let isUploadInProgress = false;
-let pond;
-let uploadType = 'regular';
-let encryptionKey = null;
-let isEncryptionEnabled = false;
-let fetchInterceptorActive = false;
-
-let _rawUploadQueue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
-Object.defineProperty(window, 'uploadQueue', {
-  get: function () {
-    return _rawUploadQueue;
-  },
-  set: function (val) {
-    var oldIds = (_rawUploadQueue || []).map(function(i) { return i ? i.id : null; });
-    var incomingArray = Array.isArray(val) ? val : [];
-    var newIds = incomingArray.map(function(i) { return i ? i.id : null; });
-    
-    console.group("%c[QUEUE WRITE] window.uploadQueue setter", "color:#ef4444; font-weight:bold;");
-    console.log("Old Queue IDs (%d):", oldIds.length, oldIds);
-    console.log("Incoming Queue IDs (%d):", newIds.length, newIds);
-    console.trace("Setter Stack Trace");
-    console.groupEnd();
-
-    // Normalize all statuses to UPPERCASE for consistent comparison across all modules.
-    _rawUploadQueue = incomingArray;
-    for (var i = 0; i < _rawUploadQueue.length; i++) {
-      if (_rawUploadQueue[i] && _rawUploadQueue[i].status) {
-        _rawUploadQueue[i].status = _rawUploadQueue[i].status.toUpperCase();
-      }
-    }
-    if (typeof window.LanvanStore !== 'undefined' && window.LanvanStore.state) {
-      window.LanvanStore.state.uploadQueue = _rawUploadQueue;
-    }
-  },
-  configurable: true
-});
-function getUploadQueue() {
-  if (window.LanvanStore && window.LanvanStore.state && Array.isArray(window.LanvanStore.state.uploadQueue)) {
-    return window.LanvanStore.state.uploadQueue;
-  }
-  return _rawUploadQueue || [];
-}
-window.getUploadQueue = getUploadQueue;
-
-let uploadIdCounter = getUploadQueue().reduce((max, item) => Math.max(max, item.id || 0), 0);
-
-// Restore from server (cleared every server restart = cleared when data clears)
-fetch("/api/upload-history")
-  .then(r => r.json())
-  .then(restoredQueue => {
-    if (Array.isArray(restoredQueue) && restoredQueue.length > 0) {
-      restoredQueue.forEach(item => {
-        if (item.status === 'UPLOADING' || item.status === 'QUEUED') {
-          item.status = 'PAUSED';
-        }
-      });
-      if (window.LanvanStore) {
-        window.LanvanStore.dispatch('SYNC_QUEUE', { queue: restoredQueue });
-      } else {
-        window.uploadQueue = restoredQueue;
-      }
-      uploadIdCounter = getUploadQueue().reduce((max, item) => Math.max(max, item.id || 0), 0);
-      if (typeof window.renderUploadTray === "function") window.renderUploadTray();
-    } else {
-      // Server empty means data was cleared — wipe localStorage too
-      try { localStorage.removeItem("lanvan_upload_queue"); } catch (e) { }
-    }
-  })
-  .catch(() => {
-    // Fallback: localStorage if server unreachable
-    try {
-      const stored = localStorage.getItem("lanvan_upload_queue");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          parsed.forEach(item => {
-            if (item.status === 'UPLOADING' || item.status === 'QUEUED') item.status = 'PAUSED';
-          });
-          if (window.LanvanStore) {
-            window.LanvanStore.dispatch('SYNC_QUEUE', { queue: parsed });
-          } else {
-            window.uploadQueue = parsed;
-          }
-          uploadIdCounter = getUploadQueue().reduce((max, item) => Math.max(max, item.id || 0), 0);
-          if (typeof window.renderUploadTray === "function") window.renderUploadTray();
-        }
-      }
-    } catch (e) {
-      console.error("Failed to load upload queue from storage:", e);
-    }
-  });
-
-let isUploadManagerVisible = false;
-let clipboardHistoryData = [];
 
 //  Progress Update Safety Net - Ultra-responsive for live feel
 let progressUpdateInterval = null;
@@ -573,167 +450,6 @@ window.toggleMobileSearch = function () {
   }
 };
 
-//  State Management - Centralized state tracking
-const LANVAN_STATE = {
-  uploads: new Map(),         // Track active uploads by file ID
-  downloads: new Map(),       // Track active downloads by file ID
-  errors: [],                 // Error history for debugging
-  performance: {              // Performance metrics
-    totalUploaded: 0,
-    totalDownloaded: 0,
-    averageSpeed: 0,
-    sessionsStartTime: Date.now()
-  },
-  ui: {
-    activeToasts: 0,          // Track active toast count
-    lastUpdate: 0             // Last UI update timestamp
-  },
-  memory: {
-    lastCleanup: Date.now(),  // Last memory cleanup time
-    cleanupInterval: 300000,  // Cleanup every 5 minutes
-    maxErrorHistory: 10,      // Maximum error entries to keep
-    maxFileMetadata: 50       // Maximum file metadata entries
-  }
-};
-
-//  Memory Management & Cleanup Functions
-function performMemoryCleanup() {
-  const now = Date.now();
-
-  // Only run cleanup if enough time has passed
-  if (now - LANVAN_STATE.memory.lastCleanup < LANVAN_STATE.memory.cleanupInterval) {
-    return;
-  }
-
-  console.log(' Performing memory cleanup...');
-
-  // Cleanup error history
-  if (LANVAN_STATE.errors.length > LANVAN_STATE.memory.maxErrorHistory) {
-    LANVAN_STATE.errors.splice(0, LANVAN_STATE.errors.length - LANVAN_STATE.memory.maxErrorHistory);
-  }
-
-  // Cleanup localStorage file metadata
-  try {
-    const metadata = JSON.parse(localStorage.getItem('fileMetadata') || '{}');
-    const entries = Object.entries(metadata);
-    if (entries.length > LANVAN_STATE.memory.maxFileMetadata) {
-      // Sort by timestamp and keep most recent
-      const sorted = entries.sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
-      const newMetadata = {};
-      sorted.slice(0, LANVAN_STATE.memory.maxFileMetadata).forEach(([key, value]) => {
-        newMetadata[key] = value;
-      });
-      localStorage.setItem('fileMetadata', JSON.stringify(newMetadata));
-      console.log(` Cleaned file metadata: ${entries.length} → ${LANVAN_STATE.memory.maxFileMetadata}`);
-    }
-  } catch (e) {
-    console.log(' Error cleaning file metadata:', e);
-  }
-
-  // Cleanup transfer logs
-  try {
-    const logs = JSON.parse(localStorage.getItem('transferLogs') || '[]');
-    if (logs.length > 20) {
-      logs.splice(20);
-      localStorage.setItem('transferLogs', JSON.stringify(logs));
-      console.log(' Cleaned transfer logs');
-    }
-  } catch (e) {
-    console.log(' Error cleaning transfer logs:', e);
-  }
-
-  // Force garbage collection if available
-  if (typeof window.gc === 'function') {
-    window.gc();
-    console.log(' Forced garbage collection');
-  }
-
-  LANVAN_STATE.memory.lastCleanup = now;
-}
-
-//  Deduplication for rapid file selection changes
-let lastFileSelectionTime = 0;
-let lastFileSelectionHash = '';
-const FILE_SELECTION_DEBOUNCE = 500; // 500ms debounce
-// Removed shouldProcessFileSelection function; moved to file-utils.js
-
-//  Smart Concurrent Upload Management System
-let activeUploads = 0;
-let currentMaxConcurrent = LANVAN_CONFIG.CONCURRENT.NETWORK_MEDIUM; // Start with medium
-let networkSpeedSamples = [];
-let uploadCompletionTimes = [];
-let lastConcurrencyAdjustment = 0;
-let totalUploadsProcessed = 0;
-// Removed getOptimalConcurrency function; moved to file-utils.js
-
-function updateNetworkSpeed(speedMBps) {
-  networkSpeedSamples.push(speedMBps);
-
-  // Keep only recent samples
-  if (networkSpeedSamples.length > LANVAN_CONFIG.CONCURRENT.SPEED_SAMPLE_SIZE) {
-    networkSpeedSamples.shift();
-  }
-
-  // Adapt concurrency every N uploads
-  totalUploadsProcessed++;
-  if (totalUploadsProcessed % LANVAN_CONFIG.CONCURRENT.ADAPTATION_INTERVAL === 0) {
-    const newOptimal = getOptimalConcurrency();
-    if (newOptimal !== currentMaxConcurrent) {
-      console.log(` Adaptive concurrency: ${currentMaxConcurrent} → ${newOptimal} (avg speed: ${(networkSpeedSamples.reduce((a, b) => a + b, 0) / networkSpeedSamples.length).toFixed(1)} MB/s)`);
-      currentMaxConcurrent = newOptimal;
-      lastConcurrencyAdjustment = Date.now();
-
-      // Update UI to reflect new concurrency
-      updateUploadManager();
-
-      // Start additional uploads if we increased concurrency
-      if (newOptimal > activeUploads) {
-        setTimeout(() => {
-          startNextUpload();
-        }, 100);
-      }
-    }
-  }
-}
-
-function canStartUpload() {
-  return activeUploads < currentMaxConcurrent;
-}
-
-function startUpload() {
-  activeUploads++;
-  window.log.upload(`Upload started (${activeUploads}/${currentMaxConcurrent} active, optimal: ${getOptimalConcurrency()})`);
-
-  // Pause auto-refresh during uploads to avoid conflicts
-  if (activeUploads === 1) {
-    handleUploadStart();
-  }
-}
-// Removed endUpload function; moved to file-utils.js
-// Utility functions for upload display
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-function formatFileSize(bytes) {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-function getStatusDisplay(status) {
-  const statusMap = {
-    'QUEUED': ' Queued',
-    'UPLOADING': ' Uploading',
-    'PAUSED': ' Paused',
-    'COMPLETED': ' Completed',
-    'FAILED': ' Failed',
-    'CANCELLED': ' Cancelled',
-    'DELETED': ' Deleted'
   };
   return statusMap[status] || status;
 }
@@ -915,45 +631,6 @@ function createUploadItem(file, uploadId, explicitBaseFolder) {
     targetDir: finalTargetDir,
     parent_path: finalTargetDir,
     finalUploadPath: finalTargetDir,
-    xhr: null
-  };
-}
-
-function addToUploadQueue(files) {
-  console.count("addToUploadQueue");
-  const baseActiveFolder = (typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "")).replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
-  console.log("%c[LANVAN UPLOAD] 📥 Queued %d file(s) | Active Folder: '%s'", "color:#8b5cf6; font-weight:bold; font-size:12px;", files.length, baseActiveFolder || "Home (Root)");
-
-  for (let file of files) {
-    if (!file || typeof file !== 'object' || typeof file.name !== 'string') continue;
-    const uploadId = ++uploadIdCounter;
-    const uploadItem = createUploadItem(file, uploadId, baseActiveFolder);
-    console.log("%c[LANVAN UPLOAD] 📄 '%s' (%s MB) -> finalUploadPath: '%s'", "color:#ec4899; font-weight:500; font-size:11px;", uploadItem.fileName, ((uploadItem.fileSize || 0) / (1024 * 1024)).toFixed(1), uploadItem.finalUploadPath || "Home (Root)");
-    if (window.LanvanStore) {
-      window.LanvanStore.dispatch('ADD_UPLOAD_ITEM', { item: uploadItem });
-    } else {
-      window.uploadQueue.push(uploadItem);
-    }
-    renderUploadItem(uploadItem);
-  }
-
-  if (typeof window.onUploadQueueAdded === "function") {
-    try {
-      window.onUploadQueueAdded(files);
-    } catch (e) {
-      console.error("Error in onUploadQueueAdded callback", e);
-    }
-  }
-
-  console.log(' Updating upload manager display...');
-  updateUploadManager();
-
-  if (typeof window.triggerInstantUIUpdate === "function") {
-    window.triggerInstantUIUpdate();
-  }
-
-  // Instantly start processing new uploads
-  startNextUpload();
 }
 
 function showUploadManager() {
@@ -1260,7 +937,134 @@ function displayDeviceLogsWithPagination(logs, contentElement, paginationElement
   renderPagination();
 }
 
+//  Helper functions for enhanced upload history display
+function groupLogsByBatch(logs) {
+  const grouped = [];
+  const batchGroups = {};
+  const processedFiles = new Set(); // Track which files have been processed
 
+  // First pass: Create batch groups and collect batch files
+  logs.forEach(log => {
+    if (log.type === 'Batch Upload Complete' && log.batchId) {
+      // Create batch group
+      if (!batchGroups[log.batchId]) {
+        batchGroups[log.batchId] = {
+          isBatch: true,
+          batchLog: log,
+          individualFiles: []
+        };
+      }
+    }
+  });
+
+  // Second pass: Assign individual files to their batches
+  logs.forEach(log => {
+    if (log.batchId && batchGroups[log.batchId] && log.type !== 'Batch Upload Complete') {
+      // This is an individual file that belongs to a batch
+      batchGroups[log.batchId].individualFiles.push(log);
+      processedFiles.add(log.timestamp + log.filename); // Mark as processed
+    }
+  });
+
+  // Third pass: Add standalone uploads (not part of any batch)
+  logs.forEach(log => {
+    const fileKey = log.timestamp + log.filename;
+    if (!log.batchId && !processedFiles.has(fileKey) && log.type !== 'Batch Upload Complete') {
+      // This is a standalone single upload
+      grouped.push({ isBatch: false, log: log });
+    }
+  });
+
+  // Add batch groups to main array
+  Object.values(batchGroups).forEach(batchGroup => {
+    // Enhance batch with detailed file information
+    const batchFiles = batchGroup.individualFiles;
+    const enhancedBatchLog = {
+      ...batchGroup.batchLog,
+      detailedFiles: batchFiles.map(file => ({
+        name: file.filename || 'Unknown',
+        size: file.size || 'Unknown',
+        speed: file.speed || 'Unknown',
+        time: file.time || 'Unknown',
+        chunked: file.chunksUsed || false,
+        chunks: file.chunkCount || file.chunks || 0,
+        protocol: file.protocol || 'Unknown',
+        encrypted: file.encrypted || false,
+        extension: file.fileExtension || 'unknown'
+      }))
+    };
+
+    grouped.push({
+      isBatch: true,
+      batchLog: enhancedBatchLog,
+      individualFiles: batchFiles
+    });
+  });
+
+  // Sort by timestamp (newest first)
+  return grouped.sort((a, b) => {
+    const aTime = a.isBatch ? a.batchLog.timestampISO : a.log.timestampISO;
+    const bTime = b.isBatch ? b.batchLog.timestampISO : b.log.timestampISO;
+    return new Date(bTime) - new Date(aTime);
+  });
+}
+
+function renderBatchUpload(batchGroup, isEven) {
+  const batch = batchGroup.batchLog;
+  const detailedFiles = batch.detailedFiles || [];
+
+  return `
+      <div style="background: ${isEven ? 'var(--section-bg)' : 'var(--input-bg)'}; padding: 1rem; margin-bottom: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); border-left: 4px solid #4a90e2;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.8rem;">
+          <div style="font-weight: bold; color: var(--text-color); flex: 1;">
+             ${batch.filename} 
+            <span style="font-weight: normal; color: var(--text-color); opacity: 0.7; font-size: 0.9rem;">(${batch.fileTypes || 'Mixed types'})</span>
+          </div>
+          <div style="color: var(--text-color); opacity: 0.7; font-size: 0.85rem;">${batch.timestamp}</div>
+        </div>
+        
+        <!-- Batch Summary Stats -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem; font-size: 0.9rem; margin-bottom: 1rem; background: var(--input-bg); padding: 0.8rem; border-radius: 4px;">
+          <div><strong> Total Size:</strong> ${batch.size}</div>
+          <div><strong> Speed:</strong> ${batch.speed}</div>
+          <div><strong>⏱ Time:</strong> ${batch.time}</div>
+          <div><strong> Protocol:</strong> ${batch.protocol}</div>
+          <div><strong> Files:</strong> ${batch.filesCount}</div>
+          <div><strong> Chunked:</strong> ${batch.filesChunked || 0}</div>
+          <div><strong> Avg Size:</strong> ${batch.avgFileSize || 'Unknown'}</div>
+        </div>
+        
+        <!-- Individual Files in Batch (Always Visible with Detailed Stats) -->
+        <div style="margin-top: 1rem;">
+          <div style="font-weight: bold; color: #333; margin-bottom: 0.8rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.5rem;">
+             Files in this Batch (${detailedFiles.length})
+          </div>
+          <div style="margin-left: 1rem;">
+            ${detailedFiles.map((file, index) => `
+              <div style="background: var(--input-bg); padding: 0.8rem; margin: 0.4rem 0; border-radius: 4px; border-left: 3px solid var(--settings-bg);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                  <div style="font-weight: bold; color: var(--text-color);">
+                    ${file.name} <span style="font-size: 0.8rem; color: var(--text-color); opacity: 0.7;">.${file.extension}</span>
+                  </div>
+                  <div style="font-size: 0.8rem; color: var(--text-color); opacity: 0.7;">#${index + 1}</div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.4rem; font-size: 0.85rem; color: var(--text-color);">
+                  <div><strong> Size:</strong> ${file.size}</div>
+                  <div><strong> Speed:</strong> ${file.speed}</div>
+                  <div><strong>⏱ Time:</strong> ${file.time}</div>
+                  <div><strong> Protocol:</strong> ${file.protocol}</div>
+                  <div><strong>⏸ Pauses:</strong> ${file.paused ? `<span style="color: #ffc107;">${file.pauseCount}x</span>` : '<span style="color: #28a745;">None</span>'}</div>
+                  <div><strong> Chunks:</strong> ${file.chunked ? `<span style="color: #17a2b8;">${file.chunks}</span>` : '<span style="color: var(--text-color); opacity: 0.7;">Direct</span>'}</div>
+                  <div><strong> Encrypted:</strong> ${file.encrypted ? '<span style="color: #dc3545;">Yes</span>' : '<span style="color: var(--text-color); opacity: 0.7;">No</span>'}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+}
 
 function renderSingleUpload(log, isEven) {
   const chunkInfo = log.chunksUsed ? `<span style="color: #0056b3 !important;"> ${log.chunkCount || log.chunks || 'Unknown'} chunks</span>` : '<span style="color: var(--text-color) !important; opacity: 0.7;"> Direct</span>';
@@ -1423,6 +1227,12 @@ function clearDeviceLogs() {
       return;
     }
 
+=======
+    // Confirm before clearing
+    if (!confirm(`Are you sure you want to clear all ${currentHistory.length} device log entries?\n\nThis action cannot be undone.`)) {
+      return;
+    }
+>>>>>>> android/app
 
     // Clear the device-specific history
     sessionStorage.removeItem(sessionKey);
@@ -1468,23 +1278,12 @@ function clearDeviceLogs() {
 }
 
 function updateUploadManager() {
+<<<<<<< HEAD
   const uploadQueue = getUploadQueue();
   // Throttle tray re-renders to avoid flicker during rapid chunk progress
   if (typeof window.scheduleUploadTrayRender === "function") {
     window.scheduleUploadTrayRender();
   }
-  const countElement = document.getElementById('uploadCount');
-  const uploadQueue_element = document.getElementById('uploadQueue');
-
-  const activeUploads = uploadQueue.filter(item =>
-    ['QUEUED', 'UPLOADING', 'PAUSED'].includes(item.status)
-  ).length;
-
-  const completedUploads = uploadQueue.filter(item =>
-    ['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)
-  ).length;
-
-  const currentlyUploading = uploadQueue.filter(item => item.status === 'UPLOADING').length;
 
   if (countElement) {
     // Show both active count and completed info
@@ -1501,12 +1300,17 @@ function updateUploadManager() {
     //  Re-sort and re-render upload items in proper order
     sortAndRenderUploadQueue();
   }
+=======
+  // Users can manually use the logs to check completed uploads
+  // The upload manager will stay visible so users can see their upload progress
+>>>>>>> android/app
 }
 
 //  Sort and re-render upload queue with proper priority order
 function sortAndRenderUploadQueue() {
   const queue = document.getElementById('uploadQueue');
   if (!queue) return;
+<<<<<<< HEAD
   const uploadQueue = getUploadQueue();
 
   // Sort upload queue: UPLOADING > PAUSED > QUEUED > COMPLETED > FAILED > CANCELLED > DELETED
@@ -1666,45 +1470,6 @@ function performUIUpdate(uploadItem, forceUpdate = false) {
   // and the Store subscriber → Scheduler pipeline. This duplicate refresh path is removed
   // to eliminate flicker from redundant DOM rebuilds.
 
-  const now = Date.now();
-  lastUIUpdate[uploadItem.id] = now;
-
-  const progressFill = document.getElementById(`progress-fill-${uploadItem.id}`);
-  const progressText = document.getElementById(`progress-text-${uploadItem.id}`);
-  const statusText = document.getElementById(`status-${uploadItem.id}`);
-  const speedText = document.getElementById(`speed-${uploadItem.id}`);
-  const remainingText = document.getElementById(`remaining-${uploadItem.id}`);
-  const itemDiv = document.getElementById(`upload-${uploadItem.id}`);
-
-  if (!itemDiv) return;
-
-  //  SMOOTH PROGRESS: Use immediate updates for forced updates, requestAnimationFrame for normal ones
-  if (progressFill && uploadItem.progress !== undefined) {
-    if (forceUpdate) {
-      // Immediate update for safety net - no animation delay
-      progressFill.style.width = `${uploadItem.progress}%`;
-    } else {
-      // Smooth animation for normal updates
-      requestAnimationFrame(() => {
-        progressFill.style.width = `${uploadItem.progress}%`;
-      });
-    }
-  }
-
-  // Update progress text with stable rounding
-  if (progressText) {
-    const displayProgress = Math.round(uploadItem.progress * 10) / 10; // One decimal place
-    progressText.textContent = `${displayProgress}%`;
-  }
-
-  //  STABLE STATUS: Update status with anti-flicker logic
-  if (statusText) {
-    let statusDisplay = uploadItem.status.charAt(0).toUpperCase() + uploadItem.status.slice(1);
-
-    // Special handling for status displays
-    if (uploadItem.status === 'CANCELLED') {
-      statusDisplay = ' Cancelled';
-    } else if (uploadItem.status === 'PROCESSING') {
       statusDisplay = ' Processing...';
     }
 
@@ -1991,12 +1756,16 @@ function showClearCompletedButton() {
 
   if (completedItems.length === 0) return;
 
+=======
+  // Check if clear button already exists
+>>>>>>> android/app
   let clearBtn = document.getElementById('clearCompletedBtn');
   if (clearBtn) {
     clearBtn.style.display = 'inline-block';
     return;
   }
 
+<<<<<<< HEAD
   const btnEl = document.querySelector('#uploadManager .upload-manager-btn');
   if (!btnEl || !btnEl.parentElement) return;
 
@@ -2037,6 +1806,9 @@ function clearCompletedUploads() {
 
   updateUploadManager();
 
+=======
+  // NOW refresh the file list since user manually cleared
+>>>>>>> android/app
   setTimeout(() => {
     refreshFileList();
   }, 500);
@@ -2053,6 +1825,7 @@ function removeCompletedUpload(itemId) {
   }
 
   // Only allow removal of completed, cancelled, or error items
+<<<<<<< HEAD
   if (!['COMPLETED', 'CANCELLED', 'FAILED', 'DELETED'].includes(item.status)) {
     console.warn(` Cannot remove upload ${itemId} with status: ${item.status}`);
     return;
@@ -2111,15 +1884,6 @@ function startNextUpload() {
     });
   }
 
-  // Protect against interfering with active uploads
-  if (uploadQueue.length === 0) {
-    console.log(' Upload queue is empty');
-    return;
-  }
-
-  // Find all queued items that can be uploaded (must have a File handle)
-  // Accept both 'queued' and 'QUEUED' (setter normalizes to UPPERCASE)
-  const queuedItems = uploadQueue.filter(item => (item.status === 'QUEUED' || item.status === 'QUEUED') && item.file);
 
   if (queuedItems.length === 0) {
     console.log(' No queued uploads found');
@@ -2212,35 +1976,6 @@ function uploadSingleFileWithProgress(uploadItem) {
   }
   console.log("%c[UPLOAD PIPELINE TRACE] 🚀 XHR Dispatch | File: '%s' | FinalDestination: '%s'", "color:#06b6d4; font-weight:bold; font-size:12px;", uploadItem.fileName, parentPath || "Home (Root)");
 
-  const isAESEnabled = isEncryptionEnabled && document.getElementById('enableEncryption').checked;
-  formData.append('encrypt', isAESEnabled.toString());
-
-  const xhr = new XMLHttpRequest();
-  uploadItem.xhr = xhr;
-
-  // Track upload progress with simple speed calculation
-  xhr.upload.addEventListener('progress', (e) => {
-    if (e.lengthComputable) {
-      const progress = (e.loaded / e.total) * 100;
-
-      const elapsed = (Date.now() - uploadItem.startTime) / 1000;
-      const speed = e.loaded / elapsed; // bytes per second
-      const remaining = speed > 0 ? (e.total - e.loaded) / speed : 0;
-
-      uploadItem.progress = progress;
-      uploadItem.lastProgressUpdate = Date.now(); // Track for safety net
-
-      // Start safety net for active uploads
-      startProgressUpdateSafetyNet();
-      uploadItem.uploadedBytes = e.loaded;
-      uploadItem.speed = speed;
-      uploadItem.timeRemaining = remaining;
-
-      // When upload reaches 100%, immediately show processing for larger files
-      if (progress >= 100) {
-        const fileSizeMB = uploadItem.file.size / (1024 * 1024);
-        if (fileSizeMB > 10) {
-          uploadItem.status = 'PROCESSING';
           console.log(` Upload complete - Setting ${uploadItem.fileName} to processing status immediately`);
           const statusText = document.getElementById(`status-${uploadItem.id}`);
           const speedText = document.getElementById(`speed-${uploadItem.id}`);
@@ -2299,50 +2034,6 @@ function uploadSingleFileWithProgress(uploadItem) {
       const fileSize = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
       const uploadTime = ((Date.now() - uploadItem.startTime) / 1000).toFixed(1);
       uploadItem.uploadTime = uploadTime;
-      const avgSpeed = (fileSize / uploadTime).toFixed(1);
-      const speedMBps = parseFloat(avgSpeed);
-
-      // Update network speed tracking for smart concurrency
-      updateNetworkSpeed(speedMBps);
-
-      //  Show toast notification for individual file completion with smart refresh detection
-      const currentFileCount = document.querySelectorAll('.file-card').length;
-      showToast(` ${uploadItem.file.name} uploaded successfully (${fileSize} MB in ${uploadTime}s @ ${avgSpeed} MB/s)`, 4000);
-
-      // Files will auto-load via the auto-refresh system, no manual intervention needed
-
-      //  Save individual upload stats to history with enhanced metadata
-      const uploadStats = {
-        type: 'Single File Upload',
-        filename: uploadItem.file.name,
-        size: `${fileSize} MB`,
-        sizeBytes: uploadItem.file.size,
-        time: `${uploadTime}s`,
-        timeSeconds: parseFloat(uploadTime),
-        speed: `${avgSpeed} MB/s`,
-        speedMBps: parseFloat(avgSpeed),
-        timestamp: new Date().toLocaleString(),
-        timestampISO: new Date().toISOString(),
-        startTime: new Date(uploadItem.startTime).toLocaleString(),
-        endTime: new Date().toLocaleString(),
-        startTimeISO: new Date(uploadItem.startTime).toISOString(),
-        endTimeISO: new Date().toISOString(),
-        protocol: window.location.protocol === 'https:' ? 'HTTPS' : 'HTTP',
-        method: 'Direct Upload',
-        encrypted: isAESEnabled && document.getElementById('enableEncryption').checked,
-        // Enhanced stats
-        chunksUsed: false,
-        chunkCount: 0,
-        chunkSize: 'N/A',
-        uploadId: uploadItem.id,
-        sessionId: getCurrentDeviceId(),
-        fileExtension: uploadItem.fileName.split('.').pop()?.toLowerCase() || 'unknown',
-        uploadMethod: 'Direct (Single Request)',
-        supportsResume: false,
-        resumeCount: 0,
-        transferEfficiency: '100%', // Direct uploads are 100% efficient
-        networkCondition: uploadItem.speed > (5 * 1024 * 1024) ? 'Fast' : uploadItem.speed > (1 * 1024 * 1024) ? 'Medium' : 'Slow',
-        status: 'COMPLETED' // Add status field for successful uploads
       };
       saveStatsToLog(uploadStats);
 
@@ -2597,12 +2288,6 @@ async function uploadLargeFileChunked(uploadItem) {
       if (chunkIndex === 0) {
         console.log("%c[LANVAN CHUNK] 📦 Starting Chunked Upload: '%s' (%s MB) -> Destination: '%s'", "color:#3b82f6; font-weight:bold; font-size:12px;", file.name, (file.size / (1024 * 1024)).toFixed(1), parentPath || "Home (Root)");
       }
-
-      // Upload chunk with XMLHttpRequest for progress tracking
-      const success = await uploadChunkWithProgress(uploadItem, formData, chunkIndex, totalChunks);
-
-      // Check again if paused during the chunk upload
-      if (uploadItem.status === 'PAUSED') {
         console.log(`⏸ Upload paused during chunk ${chunkIndex + 1} upload`);
         return;
       }
@@ -2710,19 +2395,6 @@ async function finalizeChunkedUpload(uploadItem) {
     formData.append('parent_path', parentPath);
   }
 
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-
-    xhr.addEventListener('load', () => {
-      if (xhr.status === 200) {
-        const response = JSON.parse(xhr.responseText);
-
-        // Check if streaming assembly was used
-        const isStreamingAssembly = response.streaming_assembly || false;
-        const assemblyMethod = response.assembly_method || 'traditional chunk combination';
-
-        // Show appropriate processing status
-        uploadItem.status = 'PROCESSING';
         const statusText = document.getElementById(`status-${uploadItem.id}`);
         const speedText = document.getElementById(`speed-${uploadItem.id}`);
 
@@ -2767,47 +2439,6 @@ async function finalizeChunkedUpload(uploadItem) {
         const fileSize = (uploadItem.file.size / (1024 * 1024)).toFixed(1);
         const uploadTime = ((Date.now() - uploadItem.startTime) / 1000).toFixed(1);
         uploadItem.uploadTime = uploadTime;
-        const currentFileCount = document.querySelectorAll('.file-card').length;
-        showToast(` ${uploadItem.fileName} uploaded successfully via chunked upload (${fileSize} MB, ${uploadItem.totalChunks} chunks)`, 5000);
-
-        // Files will auto-load via the auto-refresh system, no manual intervention needed
-
-        // Save enhanced chunked upload stats
-        const uploadStats = {
-          type: 'Chunked File Upload',
-          filename: uploadItem.fileName,
-          size: `${fileSize} MB`,
-          sizeBytes: uploadItem.file.size,
-          time: `${uploadTime}s`,
-          timeSeconds: parseFloat(uploadTime),
-          speed: `${(parseFloat(fileSize) / parseFloat(uploadTime)).toFixed(1)} MB/s`,
-          speedMBps: parseFloat(fileSize) / parseFloat(uploadTime),
-          timestamp: new Date().toLocaleString(),
-          timestampISO: new Date().toISOString(),
-          startTime: new Date(uploadItem.startTime).toLocaleString(),
-          endTime: new Date().toLocaleString(),
-          startTimeISO: new Date(uploadItem.startTime).toISOString(),
-          endTimeISO: new Date().toISOString(),
-          protocol: window.location.protocol === 'https:' ? 'HTTPS' : 'HTTP',
-          method: 'Chunked Upload (Resume Capable)',
-          encrypted: uploadItem.isAESEnabled || false,
-          // Enhanced chunked stats with adaptive optimization info
-          chunksUsed: true,
-          chunkCount: uploadItem.totalChunks,
-          chunkSize: uploadItem.systemOptimized ? `${(uploadItem.adaptiveChunkSize / 1024 / 1024).toFixed(1)} MB (Adaptive)` : '1 MB (Fallback)',
-          systemOptimized: uploadItem.systemOptimized || false,
-          adaptiveChunkSize: uploadItem.adaptiveChunkSize || (1024 * 1024),
-          resumeCount: uploadItem.resumeCount || 0,
-          uploadId: uploadItem.id,
-          sessionId: getCurrentDeviceId(),
-          fileExtension: uploadItem.fileName.split('.').pop()?.toLowerCase() || 'unknown',
-          uploadMethod: 'Chunked (Large File)',
-          supportsResume: true,
-          transferEfficiency: uploadItem.resumeCount > 0 ? `${(100 - (uploadItem.resumeCount * 5)).toFixed(1)}%` : '100%',
-          networkCondition: uploadItem.speed > (3 * 1024 * 1024) ? 'Fast' : uploadItem.speed > (1 * 1024 * 1024) ? 'Medium' : 'Slow',
-          chunkFailures: 0, // Tracked chunk failures (initial state)
-          avgChunkTime: `${(parseFloat(uploadTime) / uploadItem.totalChunks).toFixed(2)}s`,
-          status: 'COMPLETED' // Add status field for successful chunked uploads
         };
         saveStatsToLog(uploadStats);
 
@@ -3022,12 +2653,17 @@ function startAutoRefresh() {
         } else if (currentFileCount < lastFileCount) {
           console.log(` ${lastFileCount - currentFileCount} file(s) removed from other device(s)`);
         }
+=======
+
+        // lastFileCount is updated inside updateFileDisplay now
+>>>>>>> android/app
       } else {
         // Even if file count is same, ensure display is current (files might have changed)
         updateFileCount(currentFileCount);
       }
     } catch (error) {
       console.error(' Auto-refresh failed:', error);
+<<<<<<< HEAD
     }
   }, 5000); // Check every 5 seconds
 }
@@ -3293,13 +2929,6 @@ function handleServerShutdown(reason = 'Server has been shut down', gracefulTime
     clearInterval(shutdownCheckInterval);
     shutdownCheckInterval = null;
   }
-
-  // Stop all uploads immediately with proper feedback
-  if (uploadQueue.length > 0) {
-    uploadQueue.forEach(item => {
-      if (item.xhr) item.xhr.abort();
-      if (item.currentXhr) item.currentXhr.abort();
-      item.status = 'CANCELLED';
       item.error = 'Server shutdown';
     });
     updateUploadManager();
@@ -3425,7 +3054,9 @@ function handleServerShutdown(reason = 'Server has been shut down', gracefulTime
 
 // Clear all files function
 async function clearAllFiles() {
-
+  if (!confirm('Are you sure you want to clear all uploaded files?\n\nNote: Files currently being uploaded may need to be cleared again after upload completes.')) {
+    return;
+  }
 
   try {
     console.log(' Clearing all files...');
@@ -3630,175 +3261,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupEventListeners() {
   console.count("setupEventListeners");
-  // Set up clipboard "Add Text" button with high-priority event listener
-  const addTextBtn = document.getElementById('addTextToClipboardBtn');
-  if (addTextBtn) {
-    // Use high-priority event listener that works even during heavy uploads
-    addTextBtn.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      // Use setTimeout(0) to ensure this always runs in next event loop
-      setTimeout(() => addTextToClipboard(), 0);
-    }, { capture: true, passive: false }); // High priority capture event
-    console.log(' Clipboard Add Text button event listener set up');
-  }
-
-  // Set up modal clipboard "Add Text" button as well
-  const addTextBtnModal = document.getElementById('addTextToClipboardBtnModal');
-  if (addTextBtnModal) {
-    addTextBtnModal.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      setTimeout(() => addTextToClipboard(), 0);
-    }, { capture: true, passive: false });
-    console.log(' Modal Clipboard Add Text button event listener set up');
-  }
-
-  // Set up Enter key support for clipboard text input
-  const clipboardTextInput = document.getElementById('clipboardTextInput');
-  if (clipboardTextInput) {
-    clipboardTextInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        e.stopPropagation();
-        setTimeout(() => addTextToClipboard(), 0);
-      }
-    }, { capture: true, passive: false });
-    console.log(' Clipboard text input Enter key support set up');
-  }
-
-  // Skip file upload event listeners if we're on clipboard-only page
-  const isClipboardOnly = typeof show_clipboard_only !== 'undefined' && show_clipboard_only;
-
-  if (isClipboardOnly) {
-    console.log(' Clipboard-only mode: Skipping file upload event listeners');
-
-    // Only set up toast click handler for clipboard mode
-    if (DOM_CACHE.toast) {
-      DOM_CACHE.toast.addEventListener('click', function () {
-        console.log(' Toast clicked');
-        const toast = this;
-
-        // Clear any auto-hide timeout using the new system
-        if (toastTimeout) {
-          clearTimeout(toastTimeout);
-          toastTimeout = null;
-        }
-
-        hideToast();
-      });
-    } else {
-      console.warn(' Toast element not found in setupEventListeners');
-    }
-
-    console.log(' Clipboard event listeners set up successfully');
-    return;
-  }
-
-  // Check if DOM elements are available before adding listeners (file sharing mode)
-  if (!DOM_CACHE.dropZone || !DOM_CACHE.fileInput) {
-    console.error(' Critical DOM elements not found:', {
-      dropZone: !!DOM_CACHE.dropZone,
-      fileInput: !!DOM_CACHE.fileInput
-    });
-    return;
-  }
-
-  // Window-level Drag & Drop detection (activates overlay instantly anywhere on screen)
-  let windowDragCounter = 0;
-  const globalOverlay = document.getElementById('globalDragOverlay');
-
-  window.addEventListener('dragenter', e => {
-    // Only activate for file drags
-    if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
-      e.preventDefault();
-      windowDragCounter++;
-      if (globalOverlay) globalOverlay.classList.add('active');
-    }
-  });
-
-  window.addEventListener('dragover', e => {
-    if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-    }
-  });
-
-  window.addEventListener('dragleave', e => {
-    if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
-      e.preventDefault();
-      windowDragCounter--;
-      if (windowDragCounter <= 0) {
-        windowDragCounter = 0;
-        if (globalOverlay) globalOverlay.classList.remove('active');
-      }
-    }
-  });
-
-  // Shared async recursive directory scanner via HTML5 FileSystem API
-  async function scanFileSystemEntry(entry, path = '') {
-    if (!entry) return [];
-    if (entry.isFile) {
-      return new Promise(resolve => {
-        entry.file(file => {
-          const relPath = path ? path + file.name : file.name;
-          try {
-            Object.defineProperty(file, 'webkitRelativePath', {
-              value: relPath,
-              writable: false,
-              configurable: true
-            });
-          } catch (err) { }
-          resolve([file]);
-        }, () => resolve([]));
-      });
-    } else if (entry.isDirectory) {
-      const dirReader = entry.createReader();
-      const entries = await new Promise(resolve => {
-        dirReader.readEntries(results => resolve(results || []), () => resolve([]));
-      });
-      const nestedPromises = entries.map(childEntry => scanFileSystemEntry(childEntry, path + entry.name + '/'));
-      const nestedResults = await Promise.all(nestedPromises);
-      return nestedResults.flat();
-    }
-    return [];
-  }
-
-  window.addEventListener('drop', async e => {
-    e.preventDefault();
-    windowDragCounter = 0;
-    if (globalOverlay) globalOverlay.classList.remove('active');
-
-    const dtItems = e.dataTransfer ? e.dataTransfer.items : null;
-    const dtFiles = e.dataTransfer ? e.dataTransfer.files : null;
-
-    let collectedFiles = [];
-
-    if (dtItems && dtItems.length > 0 && dtItems[0].webkitGetAsEntry) {
-      const entryPromises = [];
-      for (let i = 0; i < dtItems.length; i++) {
-        const entry = dtItems[i].webkitGetAsEntry();
-        if (entry) {
-          entryPromises.push(scanFileSystemEntry(entry));
-        }
-      }
-      const results = await Promise.all(entryPromises);
-      collectedFiles = results.flat();
-    }
-
-    // Fallback if FileSystem API yields no files or is unsupported
-    if (collectedFiles.length === 0 && dtFiles && dtFiles.length > 0) {
-      collectedFiles = Array.from(dtFiles);
-    }
-
-    if (collectedFiles.length > 0) {
-      console.log(' Global window drop detected:', collectedFiles.length, 'file(s) extracted');
-      if (typeof window.handleFiles === 'function') {
-        window.handleFiles(collectedFiles);
-      }
-    }
-  });
-
   ['dragenter', 'dragover'].forEach(evt =>
     DOM_CACHE.dropZone.addEventListener(evt, e => {
       e.preventDefault();
@@ -4288,179 +3750,6 @@ function uploadFilesRegular(files, isAESEnabled) {
     formData.append('parent_path', parentPath);
   }
 
-  //  PERFORMANCE: Calculate total size efficiently
-  let totalSize = 0;
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    formData.append('files', file);
-    totalSize += file.size;
-  }
-
-  const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
-  const isHTTPS = location.protocol === 'https:';
-  const protocolMsg = isHTTPS ? "HTTPS" : "HTTP";
-
-  //  Pass AES status to backend (using correct parameter name)
-  if (isAESEnabled) {
-    formData.append('encrypt', 'true');
-    // Show enhanced AES operation progress
-    updateToastContent(` AES-256 encryption enabled - Processing ${totalSizeMB} MB file(s) for secure upload...`);
-    console.log(' Starting AES encryption for regular upload');
-  }
-
-  const xhr = new XMLHttpRequest();
-  progressBar.style.display = 'block';
-  progressBar.value = 0;
-
-  // Smoothly update the existing toast instead of creating a new one
-  updateToastContent(`⏳ Starting ${protocolMsg} upload...`);
-
-  const startTime = new Date().getTime();
-  let lastProgressUpdate = 0;
-  const PROGRESS_UPDATE_INTERVAL = LANVAN_CONFIG.INTERVALS.PROGRESS_UPDATE; // Unified interval from config
-
-  xhr.upload.onprogress = function (e) {
-    if (e.lengthComputable) {
-      const percent = (e.loaded / e.total) * 100;
-      progressBar.value = percent;
-
-      //  Anti-blink: Update toast much less frequently
-      const now = Date.now();
-      if (now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL || percent >= 100) {
-        const elapsed = (now - startTime) / 1000;
-        const speed = e.loaded / 1024 / 1024 / elapsed;
-        const uploadedMB = (e.loaded / 1024 / 1024).toFixed(1);
-
-        //  Enhanced progress message for multiple files with AES status
-        let progressMessage;
-        if (files.length === 1) {
-          const aesStatus = isAESEnabled ? " " : "";
-          progressMessage = ` Uploading${aesStatus} ${percent.toFixed(1)}% (${uploadedMB}/${totalSizeMB} MB) @ ${speed.toFixed(2)} MB/s`;
-        } else {
-          const aesStatus = isAESEnabled ? " (AES Encrypted)" : "";
-          progressMessage = ` Uploading ${files.length} files${aesStatus} • ${percent.toFixed(1)}% (${uploadedMB}/${totalSizeMB} MB) @ ${speed.toFixed(2)} MB/s`;
-        }
-        updateProgressToast(progressMessage);
-      }
-    }
-  };
-
-  xhr.onload = function () {
-    const endTime = new Date().getTime();
-    const totalElapsed = ((endTime - startTime) / 1000).toFixed(1);
-    const avgSpeed = (totalSize / 1024 / 1024 / totalElapsed).toFixed(2);
-
-    if (xhr.status === 200 || xhr.status === 302) {
-      // Update performance metrics in LANVAN_STATE
-      LANVAN_STATE.performance.totalUploaded += totalSize;
-      const currentSession = (endTime - LANVAN_STATE.performance.sessionsStartTime) / 1000;
-      LANVAN_STATE.performance.averageSpeed = LANVAN_STATE.performance.totalUploaded / (1024 * 1024) / currentSession;
-
-      // Save upload stats to logs
-      const uploadStats = {
-        type: 'Direct Upload',
-        filename: files.length > 1 ? `${files.length} files` : files[0].name,
-        size: totalSizeMB + ' MB',
-        time: totalElapsed + 's',
-        speed: avgSpeed + ' MB/s',
-        method: 'Direct Upload (No Chunks)',
-        chunks_used: 0, // No chunks for direct upload
-        encrypted: isAESEnabled,
-        protocol: protocolMsg,
-        files_count: files.length,
-        timestamp: new Date().toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
-        startTime: new Date(startTime).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }),
-        endTime: new Date(endTime).toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true })
-      };
-      saveStatsToLog(uploadStats);
-
-      //  Store file metadata for better download experience
-      storeFileMetadata(files, totalSize);
-
-      //  Enhanced completion message for multiple files
-      if (files.length === 1) {
-        showToast(` Upload complete via ${protocolMsg} (${totalSizeMB} MB) • ${totalElapsed}s @ ${avgSpeed} MB/s`, 0, uploadStats);
-      } else {
-        showToast(` ${files.length} files uploaded via ${protocolMsg} (${totalSizeMB} MB total) • ${totalElapsed}s @ ${avgSpeed} MB/s`, 0, uploadStats);
-      }
-
-      //  Delay file list refresh to show completion status
-      setTimeout(() => {
-        refreshFileList();
-      }, 3000); // 3 second delay to let user see completion
-
-      // Store flag to reload page when toast is dismissed (optional)
-      window._shouldReloadAfterToast = false; // Changed to false since we auto-refresh
-
-      // Unblock QR generation after successful upload
-      window._qrBlocked = false;
-
-      // End upload tracking
-      endUpload();
-    } else {
-      showToast(' Upload failed • Click anywhere to dismiss', 0);
-      // Unblock QR generation after failed upload
-      window._qrBlocked = false;
-      endUpload(); // End upload tracking on failure
-    }
-  };
-
-  xhr.onerror = function () {
-    showToast(' Upload error • Click anywhere to dismiss', 0);
-    endUpload(); // End upload tracking on error
-  };
-
-  xhr.open('POST', '/upload');
-  xhr.send(formData);
-}
-
-//  Device capability detection functions for guest device support
-function detectGuestDevice() {
-  try {
-    // Check for limited device indicators
-    const isLimitedMemory = navigator.deviceMemory && navigator.deviceMemory <= 2; // 2GB or less
-    const isLimitedConcurrency = navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2; // 2 cores or less
-
-    const isIncognito = typeof checkIncognitoMode === 'function' ? checkIncognitoMode() : false;
-    const hasLimitedStorage = typeof checkStorageQuota === 'function' ? checkStorageQuota() : false;
-    const isSlowDevice = typeof checkDevicePerformance === 'function' ? checkDevicePerformance() : false;
-
-    return isLimitedMemory || isLimitedConcurrency || isIncognito || hasLimitedStorage || isSlowDevice;
-  } catch (e) {
-    console.log('Device detection failed, assuming guest device for safety:', e);
-    return true; // Default to guest device for safety
-  }
-}
-
-function checkStorageQuota() {
-  try {
-    if ('storage' in navigator && 'estimate' in navigator.storage) {
-      navigator.storage.estimate().then(estimate => {
-        const quota = estimate.quota || 0;
-        const usage = estimate.usage || 0;
-        return quota < 1024 * 1024 * 1024; // Less than 1GB available
-      });
-    }
-    return false;
-  } catch (e) {
-    return true; // Assume limited if check fails
-  }
-}
-
-function checkDevicePerformance() {
-  try {
-    const start = performance.now();
-    // Simple CPU test
-    for (let i = 0; i < 100000; i++) {
-      Math.random();
-    }
-    const duration = performance.now() - start;
-    return duration > 50; // Slow if takes more than 50ms
-  } catch (e) {
-    return true; // Assume slow if test fails
-  }
-}
-
 //  Toast Notification System - Complete implementation
 let toastTimeout = null;
 let lastToastMessage = '';
@@ -4878,19 +4167,6 @@ window.downloadAsZip = downloadAsZip;
 window.downloadIndividually = downloadIndividually;
 window.closeDownloadModal = closeDownloadModal;
 window.generateQRCode = generateQRCode;
-
-//  Enhanced QR Code Generation for Connection Info - Offline-First
-function generateQRCode(text, size = 200) {
-  // Use larger QR for better visibility, but still optimized for guests
-  const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
-  const qrSize = isGuest ? 180 : size;
-
-  // Primary: Use our offline QR generator (works without internet)
-  const offlineQR = `/api/qr-code?text=${encodeURIComponent(text)}&size=${qrSize}`;
-
-  // Fallback services (strictly local offline endpoints)
-  const fallbackServices = [
-    `/api/qr-code?text=${encodeURIComponent(text)}&size=${qrSize}`,
   ];
 
   return {
@@ -5483,7 +4759,48 @@ function closeConnectionModal() {
   }
 }
 
+//  Update mDNS status in protocol indicator
+async function updateMDNSStatus() {
+  try {
+    const response = await fetch('/api/network-info');
+    if (response.ok) {
+      const networkInfo = await response.json();
 
+      // Check if mDNS status changed
+      const previousStatus = window._lastMDNSStatus;
+      const currentStatus = networkInfo.mdns?.status || 'disabled';
+
+      // Update stored status
+      window._lastMDNSStatus = currentStatus;
+
+      // Show toast notification on status change
+      if (previousStatus && previousStatus !== currentStatus) {
+        if (currentStatus === 'active') {
+          showToast(' mDNS Active: Guests can use ' + (networkInfo.mdns?.domain || 'lanvan.local'), 4000);
+          console.log(' mDNS became active:', networkInfo.mdns?.domain);
+        } else {
+          showToast(' mDNS Unavailable: Guests must use IP address', 4000);
+          console.log(' mDNS became unavailable');
+        }
+
+        // Auto-refresh QR codes and connection info
+        refreshConnectionInfo();
+      }
+
+      // Update protocol status indicator if needed
+      const protocolStatus = document.getElementById('protocolStatus');
+      if (protocolStatus && currentStatus === 'active') {
+        // Add mDNS indicator to protocol status
+        const qrHintText = protocolStatus.querySelector('#qrHintText');
+        if (qrHintText && !qrHintText.innerHTML.includes('mDNS')) {
+          qrHintText.innerHTML = ' mDNS Ready • Click for QR codes';
+        }
+      }
+    }
+  } catch (error) {
+    console.log('mDNS status check failed:', error);
+  }
+}
 
 //  Refresh connection info and QR codes
 function refreshConnectionInfo() {
@@ -5540,18 +4857,6 @@ async function updateMDNSStatus() {
           if (typeof setConnectMode === 'function') {
             setConnectMode('mdns');
           }
-          refreshConnectionInfo();
-        }
-      } else if (qrHintText && qrHintText.innerHTML.includes('mDNS:')) {
-        // mDNS was active but now inactive - revert to default
-        qrHintText.innerHTML = '• Click for QR code';
-        qrHintText.style.color = 'var(--protocol-text)';
-        qrHintText.title = '';
-
-        if (typeof setConnectMode === 'function') {
-          setConnectMode('ip');
-        }
-
         // Show info toast
         showToast('ℹ mDNS service is not active - using IP address', 3000);
       }
@@ -5707,17 +5012,6 @@ window.tryFallbackQR = tryFallbackQR;
 window.showOfflineQR = showOfflineQR;
 window.refreshFileListManually = refreshFileListManually;
 window.refreshFileList = refreshFileList;
-window.toggleSettingsMenu = toggleSettingsMenu;
-window.cancelAllUploads = cancelAllUploads;
-window.clearAllFiles = clearAllFiles;
-window.showDownloadOptions = showDownloadOptions;
-window.showToast = showToast;
-window.toggleDeviceLogs = toggleDeviceLogs;
-window.showAccessControlSettings = showAccessControlSettings;
-window.downloadAsZip = downloadAsZip;
-window.cancelUpload = cancelUpload;
-window.pauseUpload = pauseUpload;
-window.resumeUpload = resumeUpload;
 window.downloadDeviceLogs = downloadDeviceLogs;
 window.clearDeviceLogs = clearDeviceLogs;
 window.closeDeviceLogsModal = closeDeviceLogsModal;
@@ -5881,80 +5175,6 @@ document.addEventListener('paste', function (event) {
   }
 }, true);
 
-// Handle image paste from clipboard
-function handleImagePaste(blob) {
-  console.log(' Image pasted from clipboard, size:', blob.size);
-  showToast(' Processing pasted image...', 2000);
-
-  // Create file object
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const filename = `clipboard-image-${timestamp}.png`;
-
-  // Add to clipboard via API
-  const formData = new FormData();
-  formData.append('file', blob, filename);
-
-  fetch('/api/clipboard/add', {
-    method: 'POST',
-    body: formData
-  })
-    .then(response => response.json())
-    .then(data => {
-      if (data.status === 'success') {
-        showToast(` Image added to clipboard: ${filename}`, 3000);
-        refreshClipboardHistory();
-      } else {
-        showToast(` Failed to add image: ${data.msg}`, 4000);
-      }
-    })
-    .catch(error => {
-      console.error('Error adding image to clipboard:', error);
-      showToast(' Failed to add image to clipboard', 4000);
-    });
-}
-
-// Enhanced image upload function for clipboard with simple naming and better quality
-function uploadImageToClipboard(blob) {
-  // Get next image number for simple naming
-  const imageCount = getClipboardImageCount() + 1;
-  const filename = `${imageCount}.png`;
-
-  // Add to clipboard via API
-  const formData = new FormData();
-  formData.append('file', blob, filename);
-
-  fetch('/api/clipboard/add', {
-    method: 'POST',
-    body: formData
-  })
-    .then(response => response.json())
-    .then(data => {
-      if (data.status === 'success') {
-        showToast(` Image added to clipboard: ${filename}`, 3000);
-        refreshClipboardHistory();
-      } else {
-        showToast(` Failed to add image: ${data.msg}`, 4000);
-      }
-    })
-    .catch(error => {
-      console.error('Error adding image to clipboard:', error);
-      showToast(' Failed to add image to clipboard', 4000);
-    });
-}
-
-// Get count of images in clipboard for simple numbering
-function getClipboardImageCount() {
-  return clipboardHistoryData.filter(item =>
-    item.type === 'file' &&
-    item.content_type === 'image'
-  ).length;
-}
-
-// Add text content to clipboard with instant responsiveness
-async function addTextToClipboard() {
-  const textInput = document.getElementById('clipboardInput') || document.getElementById('clipboardTextInput');
-  const addButton = document.querySelector('.clipboard-action-bar .m3-primary-btn') || document.getElementById('addTextToClipboardBtn');
-  const text = textInput ? textInput.value : '';
 
   // Immediate validation with instant feedback
   if (!text || !text.trim()) { // Only check if completely empty
@@ -5966,6 +5186,9 @@ async function addTextToClipboard() {
   // Immediate visual feedback - disable button temporarily
   if (addButton) {
     addButton.disabled = true;
+=======
+    addButton.textContent = '⏳ Adding...';
+>>>>>>> android/app
     addButton.style.opacity = '0.7';
   }
 
@@ -5973,6 +5196,7 @@ async function addTextToClipboard() {
   formData.append('data', text);
 
   try {
+<<<<<<< HEAD
     const response = await fetch('/api/clipboard/add', {
       method: 'POST',
       body: formData
@@ -6015,11 +5239,15 @@ function clearClipboardInput() {
 // Refresh clipboard history
 async function refreshClipboardHistory() {
   try {
+=======
+    // Use requestIdleCallback if available to avoid blocking upload progress
+>>>>>>> android/app
     const performRefresh = async () => {
       const response = await fetch('/api/clipboard/list');
       const data = await response.json();
 
       if (data.status === 'success') {
+<<<<<<< HEAD
         window.clipboardHistoryData = data.items;
         clipboardHistoryData = data.items;
         requestAnimationFrame(() => renderClipboardHistory(data.items));
@@ -6366,7 +5594,9 @@ async function downloadClipboardHistory() {
 
 // Clear all clipboard history
 function clearAllClipboardHistory() {
-
+  if (!confirm('Are you sure you want to clear all clipboard history? This cannot be undone.')) {
+    return;
+  }
 
   fetch('/api/clipboard/clear', {
     method: 'DELETE'

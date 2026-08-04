@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#121212"
+    android:fitsSystemWindows="true">
+
+    <!-- Header bar -->
+    <LinearLayout
+        android:id="@+id/header_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:background="#1E1E1E"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/app_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Lanvan"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_toggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Start Server"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#6200EE"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp" />
+
+        <ImageButton
+            android:id="@+id/btn_settings"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_hamburger"
+            android:contentDescription="Settings Menu"
+            android:tint="#FFFFFF"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
+    <!-- Status indicator bar -->
+    <TextView
+        android:id="@+id/txt_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Server is inactive."
+        android:textColor="#BBBBBB"
+        android:textSize="14sp"
+        android:padding="12dp"
+        android:gravity="center"
+        android:background="#252525" />
+
+    <!-- QR Code & Link Container -->
+    <LinearLayout
+        android:id="@+id/qr_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Scan to connect from another device:"
+            android:textColor="#BBBBBB"
+            android:textSize="14sp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Clickable QR Code -->
+        <ImageView
+            android:id="@+id/img_qrcode"
+            android:layout_width="220dp"
+            android:layout_height="220dp"
+            android:layout_marginBottom="24dp"
+            android:background="#FFFFFF"
+            android:padding="8dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="QR Code to connect to server" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Or click to open in your browser:"
+            android:textColor="#BBBBBB"
+            android:textSize="14sp"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Clickable Main IP Link -->
+        <TextView
+            android:id="@+id/txt_ip_link"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="http://localhost:5000"
+            android:textColor="#3078FF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="12dp"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <!-- Clickable mDNS Link -->
+        <TextView
+            android:id="@+id/txt_mdns_link"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="http://lanvan.local:5000"
+            android:textColor="#3078FF"
+            android:textSize="16sp"
+            android:layout_marginBottom="16dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+    <!-- Inactive placeholder -->
+    <LinearLayout
+        android:id="@+id/inactive_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Lanvan File Transfer"
+            android:textColor="#888888"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tap Start Server to launch local sharing"
+            android:textColor="#666666"
+            android:textSize="14sp"
+            android:layout_marginBottom="16dp" />
+    </LinearLayout>
+
+    <!-- Storage Usage Info Footer -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:gravity="center"
+        android:visibility="gone"
+        android:background="#1E1E1E">
+
+        <TextView
+            android:id="@+id/txt_storage_usage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="App Storage: Calculating..."
+            android:textColor="#888888"
+            android:textSize="13sp" />
+            
+    </LinearLayout>
+
+</LinearLayout>

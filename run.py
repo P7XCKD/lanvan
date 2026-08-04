@@ -1,3 +1,6 @@
+# Lanvan - Secure Local File Transfer
+# Copyright (C) 2025 P7XCKD
+
 import os
 import socket
 import subprocess
@@ -337,32 +340,67 @@ def open_browser(ip, port, use_https):
         print("[!] Failed to open browser.")
 
 def kill_servers_on_port(port):
-    """Kill all servers running on the specified port - fixed psutil compatibility"""
+    """Kill all servers running on the specified port or fallback ports, and release socket hooks."""
+    # Defensively clean up all possible ports for both HTTP and HTTPS
+    target_ports = {port, 80, 443, 5000, 5001}
+    
+    # Try psutil process tree cleanup first
     try:
         for proc in psutil.process_iter(['pid', 'name']):
             try:
+                # Get connections safely
                 try:
                     connections = proc.net_connections()
                 except (psutil.AccessDenied, AttributeError):
                     try:
                         connections = proc.connections()
-                    except AttributeError:
+                    except (psutil.AccessDenied, AttributeError):
                         continue
                 
                 if connections:
                     for conn in connections:
                         if (hasattr(conn, 'laddr') and 
                             hasattr(conn.laddr, 'port') and 
-                            conn.laddr.port == port and 
+                            conn.laddr.port in target_ports and 
                             hasattr(conn, 'status') and
                             conn.status == psutil.CONN_LISTEN):
-                            print(f"[WARNING] Killing process {proc.info['pid']} ({proc.info['name']}) on port {port}")
-                            proc.terminate()
-                            proc.wait(timeout=3)
+                            
+                            # Filter: Don't kill our own runner process
+                            if proc.info['pid'] == os.getpid():
+                                continue
+                                
+                            print(f"[CLEAN] Killing stale background server process {proc.info['pid']} ({proc.info['name']}) on port {conn.laddr.port}")
+                            proc.kill() # Force kill immediately to release socket hook
+                            proc.wait(timeout=2)
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, AttributeError):
                 pass
     except Exception as e:
-        print(f"[!] Error killing servers (non-critical): {e}")
+        print(f"[!] Process scan warning: {e}")
+        
+    # Fallback/Diagnostic: Double check via socket test
+    for p in target_ports:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(('127.0.0.1', p))
+            s.close()
+        except OSError:
+            # Port is still blocked, trigger a system terminal release call for Windows
+            if platform.system() == 'Windows':
+                try:
+                    import subprocess
+                    # Query process listening on the port
+                    cmd = f'Get-NetTCPConnection -LocalPort {p} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess'
+                    pid_out = subprocess.check_output(["powershell", "-Command", cmd], text=True).strip()
+                    if pid_out:
+                        for pid_str in pid_out.split():
+                            pid = int(pid_str)
+                            if pid > 0 and pid != os.getpid():
+                                print(f"[CLEAN] Releasing port {p} by terminating process ID {pid}...")
+                                subprocess.run(["powershell", "-Command", f"Stop-Process -Id {pid} -Force"], capture_output=True)
+                except Exception:
+                    pass
+
 
 # === MAIN ENTRY ===
 if __name__ == "__main__":
@@ -533,10 +571,13 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             print("\n[INFO] Ctrl+C received - stopping server...")
             try:
+                proc.terminate() # Actively stop the child uvicorn process
                 proc.wait(timeout=8)   # give uvicorn time to finish gracefully
             except subprocess.TimeoutExpired:
                 print("[WARN] Server did not stop in time - force killing...")
                 proc.kill()
+
+
 
         print("[OK] Server stopped.")
         os._exit(0)

@@ -59,16 +59,23 @@ from app.core.stream_manager import get_stream_manager, StreamSession
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
-UPLOAD_FOLDER = Path("data/uploads")
+try:
+    from app.utils.android_compat import get_base_data_dir
+    DATA_DIR = get_base_data_dir() / "data"
+except ImportError:
+    DATA_DIR = Path("data")
+
+UPLOAD_FOLDER = DATA_DIR / "uploads"
 UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
 # Upload history file - cleared on every server startup
-UPLOAD_HISTORY_FILE = Path("data/upload_history.json")
+UPLOAD_HISTORY_FILE = DATA_DIR / "upload_history.json"
 # Clear history on startup so it resets with every server restart
 try:
     UPLOAD_HISTORY_FILE.write_text("[]", encoding="utf-8")
 except Exception:
     pass
+
 
 # Startup cleanup of orphan .tmp files in upload folder
 try:

@@ -10,6 +10,7 @@ i[data-lucide] {
   stroke-width: 2;
   flex-shrink: 0;
 }
+<<<<<<< HEAD
 
 /* Slightly larger in headings */
 h1 [data-lucide],
@@ -20,6 +21,13 @@ h4 [data-lucide] {
   height: 1.1em;
 }
 
+=======
+/* Slightly larger in headings */
+h1 [data-lucide], h2 [data-lucide], h3 [data-lucide], h4 [data-lucide] {
+  width: 1.1em;
+  height: 1.1em;
+}
+>>>>>>> android/app
 /* Icon inside buttons - add small right gap */
 button [data-lucide],
 .btn [data-lucide],
@@ -924,17 +932,25 @@ progress {
 }
 
 /*  Smooth section switching transitions */
+<<<<<<< HEAD
 #fileTransferSection,
 #fileListSection,
 #clipboardSection {
+=======
+#fileTransferSection, #fileListSection, #clipboardSection {
+>>>>>>> android/app
   transition: opacity 0.2s ease-in-out;
 }
 
 /*  Smooth tick indicator transitions */
+<<<<<<< HEAD
 #fileTickMain,
 #clipboardTickMain,
 #fileTickClipboard,
 #clipboardTickClipboard {
+=======
+#fileTickMain, #clipboardTickMain, #fileTickClipboard, #clipboardTickClipboard {
+>>>>>>> android/app
   transition: opacity 0.15s ease-in-out;
 }
 
@@ -1123,7 +1139,11 @@ progress {
     margin: 0.2rem;
     border-radius: 8px;
   }
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> android/app
   /*  Toast responsive styles for mobile */
   #toast {
     bottom: 20px !important;
@@ -1141,7 +1161,11 @@ progress {
     border-radius: 8px !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
   }
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> android/app
   /*  Upload History mobile responsive styles */
   #uploadHistorySection {
     margin-top: 1rem !important;

@@ -259,7 +259,9 @@ class FileOperationLock:
     
     def __init__(self, base_path: Union[str, Path]):
         self.base_path = Path(base_path)
-        self.locks_dir = Path("data/locks")
+        from app.utils.android_compat import get_base_data_dir
+        self.locks_dir = get_base_data_dir() / "data/locks"
+
         self.locks_dir.mkdir(parents=True, exist_ok=True)
     
     @contextlib.asynccontextmanager
