@@ -137,6 +137,24 @@ class UIEventsConnectionManager:
             await self.disconnect(conn_id)
 
 
+    async def shutdown(self):
+        """
+        Gracefully closes all active WebSocket connections and clears
+        the connection registry. Called during server shutdown.
+        """
+        async with self.lock:
+            connection_ids = list(self.active_connections.keys())
+        for conn_id in connection_ids:
+            try:
+                data = self.active_connections.get(conn_id)
+                if data and "ws" in data:
+                    await data["ws"].close(code=1001, reason="Server shutting down")
+            except Exception:
+                pass
+        async with self.lock:
+            self.active_connections.clear()
+        logger.info("[WS UI EVENTS] All connections closed — manager shut down")
+
 ui_events_manager = UIEventsConnectionManager()
 
 

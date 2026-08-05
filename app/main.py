@@ -117,6 +117,7 @@ connection_manager = ConnectionManager()
 
 # [TARGET] Console command monitor for "close" command
 from app.ws_manager import clipboard_ws_router, upload_status_ws_router
+from app.core.shutdown import shutdown_manager
 
 def console_command_monitor():
     """Monitor console for 'close' command"""
@@ -277,9 +278,11 @@ async def lifespan(app: FastAPI):
     # Stop WebSocket managers
     print("[WS] Stopping WebSocket connection managers...")
     try:
-        from app.ws_manager import clipboard_ws_manager, upload_status_manager
+        from app.ws_manager import clipboard_ws_manager, upload_status_manager, file_events_manager, ui_events_manager
         await clipboard_ws_manager.shutdown()
         await upload_status_manager.shutdown()
+        await file_events_manager.shutdown()
+        await ui_events_manager.shutdown()
         print("[OK] WebSocket managers shutdown successfully")
     except Exception as ws_err:
         print(f"[WARN] WebSocket managers shutdown warning: {ws_err}")
@@ -449,33 +452,40 @@ class IOSSafariMiddleware(BaseHTTPMiddleware):
 
 class ShutdownMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # Check if shutdown is requested
-        if shutdown_event.is_set():
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "error": "Server is shutting down",
-                    "message": "[WARN] Server has been shut down. Please refresh the page or restart the server.",
-                    "shutdown": True
-                }
-            )
-        
+        # Reject new work during shutdown — existing connections and static
+        # assets are still served so the frontend can display the shutdown notice.
+        if shutdown_manager.is_stopping():
+            path = request.url.path
+            # Allow static assets, already-open pages, and the shutdown endpoint itself
+            if not (
+                path.startswith("/static/")
+                or path.startswith("/api/shutdown")
+                or path.startswith("/api/server-status")
+                or path.startswith("/ws/")
+            ):
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "status": "error",
+                        "message": "Server is shutting down",
+                    },
+                )
+
         # Track this request connection
         await connection_manager.add_connection(request)
-        
+
         try:
             response = await call_next(request)
             return response
         except Exception as e:
             # If shutdown occurred during request, return shutdown message
-            if shutdown_event.is_set():
+            if shutdown_manager.is_stopping():
                 return JSONResponse(
                     status_code=503,
                     content={
-                        "error": "Server shutdown during request",
-                        "message": "[WARN] Server was shut down while processing your request. Please restart the server.",
-                        "shutdown": True
-                    }
+                        "status": "error",
+                        "message": "Server is shutting down",
+                    },
                 )
             raise
         finally:
