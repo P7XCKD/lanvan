@@ -1,11 +1,10 @@
 /**
- * @file context-menu.js
- * @description Context Menu presentation, positioning, rendering, and keyboard/outside-click dismiss.
- * @module ContextMenu
- * 
- * Rules:
- * - Owns ONLY presentation (DOM creation, positioning, lifecycle, keyboard handling).
- * - Action triggers (delete, rename, download, share) dispatch to existing window handlers.
+ * Context Menu
+ *
+ * Owns presentation-layer concerns for the right-click context menu:
+ * DOM creation, positioning, lifecycle, and keyboard/outside-click dismiss.
+ * Action triggers (delete, rename, download, share) delegate to existing
+ * window handlers rather than implementing business logic directly.
  */
 
 (function (window) {
