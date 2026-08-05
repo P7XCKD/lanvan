@@ -287,6 +287,8 @@ async def emergency_shutdown(request: Request):
         
     import asyncio
     from app.main import shutdown_event, connection_manager
+    from app.core.shutdown import shutdown_manager
+    from app.ws_manager.ui_events import emit_ui_event
     
     print("[!] EMERGENCY SHUTDOWN REQUESTED!")
     print("[WARN] Notifying all connected clients...")
@@ -294,13 +296,24 @@ async def emergency_shutdown(request: Request):
     # Set the shutdown flag immediately
     shutdown_event.set()
     
-    # Send shutdown notifications to all active clients
-    async def notify_clients():
+    # Broadcast server_shutdown event through the existing UI events WebSocket
+    # BEFORE disconnecting clients, so the frontend receives the notification.
+    async def broadcast_shutdown_and_cleanup():
+        # 1. Broadcast shutdown event to all connected UI event clients
+        try:
+            await emit_ui_event("server_shutdown", {"message": "Server is shutting down"})
+        except Exception as e:
+            print(f"[WARN] Shutdown broadcast failed: {e}")
+        
+        # 2. Allow a brief window for the WebSocket message to flush to clients
+        await asyncio.sleep(0.3)
+        
+        # 3. Disconnect all clients
         await connection_manager.disconnect_all()
         print("[OK] All clients notified and disconnected")
     
     # Schedule client notification in background
-    asyncio.create_task(notify_clients())
+    asyncio.create_task(broadcast_shutdown_and_cleanup())
     
     # Force server shutdown after brief delay for response
     async def force_shutdown():

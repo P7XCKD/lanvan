@@ -79,10 +79,60 @@
         }
     }
 
+    /**
+     * Handles the server_shutdown event broadcast before the server stops.
+     *
+     * Clears all client-side state, cancels reconnect timers and polling
+     * intervals, and updates the UI to reflect that the server is no longer
+     * running. This prevents stale "Running" UI, orphaned intervals, and
+     * infinite reconnect loops.
+     */
+    function shutdownHandler(payload) {
+        if (typeof window.showToast === 'function') {
+            window.showToast('Server stopped. You may restart it from the app.', 6000);
+        }
+
+        // 1. Cancel WebSocket reconnect timers so we don't keep trying
+        //    to reach a server that intentionally shut down.
+        clearReconnectTimer();
+        stopHeartbeat();
+        if (socket) {
+            try { socket.close(); } catch (ignored) { }
+            socket = null;
+        }
+        setState(STATE.DISCONNECTED);
+        reconnectAttempts = 0;
+
+        // 2. Clear upload tray polling interval
+        if (window._uploadTrayInterval) {
+            clearInterval(window._uploadTrayInterval);
+            window._uploadTrayInterval = null;
+        }
+
+        // 3. Clear state store so the file list, upload queue, and
+        //    selection don't show stale data when the app reopens.
+        if (window.LanvanStore && typeof window.LanvanStore.dispatch === 'function') {
+            window.LanvanStore.dispatch('SYNC_QUEUE', { queue: [] });
+        }
+        window.uploadQueue = [];
+
+        // 4. Clear cached network info (QR code, LAN URL, mDNS data)
+        window._currentNetworkInfo = null;
+
+        // 5. Clear clipboard cache
+        window.clipboardHistoryData = [];
+
+        // 6. Update UI to stopped state if the helper is available
+        if (typeof window.updateSelectionToolbar === 'function') {
+            window.updateSelectionToolbar();
+        }
+    }
+
     // Initialize Map registry with default presentation handlers
     handlers.set(TYPES.TOAST, defaultToastHandler);
     handlers.set(TYPES.PRESENCE, defaultPresenceHandler);
     handlers.set(TYPES.CONNECTION, defaultConnectionHandler);
+    handlers.set('server_shutdown', shutdownHandler);
 
     function registerHandler(type, fn) {
         if (typeof type === 'string' && typeof fn === 'function') {

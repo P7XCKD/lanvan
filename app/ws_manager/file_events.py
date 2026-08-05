@@ -67,6 +67,24 @@ class FileEventsConnectionManager:
                 for conn_id in dead_connections:
                     self.active_connections.pop(conn_id, None)
 
+    async def shutdown(self):
+        """
+        Gracefully closes all active WebSocket connections and clears
+        the connection registry. Called during server shutdown.
+        """
+        async with self.lock:
+            connection_ids = list(self.active_connections.keys())
+        for conn_id in connection_ids:
+            try:
+                ws = self.active_connections.get(conn_id)
+                if ws:
+                    await ws.close(code=1001, reason="Server shutting down")
+            except Exception:
+                pass
+        async with self.lock:
+            self.active_connections.clear()
+        logger.info("[WS FILE EVENTS] All connections closed — manager shut down")
+
 file_events_manager = FileEventsConnectionManager()
 
 def broadcast_file_event_sync(action: str, target_dir: str = "", path: str = ""):

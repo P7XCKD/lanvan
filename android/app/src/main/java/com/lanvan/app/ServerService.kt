@@ -26,6 +26,14 @@ class ServerService : Service() {
     private var instancePort = "5000"
     private var instanceUseHttps = "false"
 
+    // Idempotent shutdown guard — prevents double-stop races between
+    // onStartCommand(ACTION_NOTIFICATION_SHUTDOWN) and onDestroy().
+    @Volatile private var isStopping = false
+
+    // Tracks whether an error status was already broadcast so the finally
+    // block does not overwrite STATUS_FAILED with STATUS_STOPPED.
+    @Volatile private var wasErrorReported = false
+
     companion object {
         const val CHANNEL_ID = "lanvan_server_service_channel"
         const val NOTIFICATION_ID = 12001
@@ -55,8 +63,10 @@ class ServerService : Service() {
         const val EXTRA_STATUS = "status"
         
         const val STATUS_RUNNING = "running"
+        const val STATUS_STOPPING = "stopping"
         const val STATUS_STOPPED = "stopped"
         const val STATUS_ERROR = "error"
+        const val STATUS_FAILED = "failed"
     }
 
     override fun onCreate() {
@@ -75,6 +85,19 @@ class ServerService : Service() {
 
         when (action) {
             ACTION_STOP, ACTION_NOTIFICATION_SHUTDOWN -> {
+                // Idempotent guard — only run shutdown once
+                if (isStopping) return START_NOT_STICKY
+                isStopping = true
+
+                // Immediately remove the foreground notification so the user
+                // sees instant feedback that the server is stopping.
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.cancel(NOTIFICATION_ID)
+
+                // Broadcast stopping state so MainActivity updates the UI
+                sendServerStatus(STATUS_STOPPING)
+
                 stopServer()
                 return START_NOT_STICKY
             }
@@ -216,9 +239,20 @@ class ServerService : Service() {
     }
 
     override fun onDestroy() {
-        stopServer()
+        // Only call stopServer if we haven't already started shutting down
+        // via the notification action path.
+        if (!isStopping) {
+            isStopping = true
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.cancel(NOTIFICATION_ID)
+            sendServerStatus(STATUS_STOPPING)
+            stopServer()
+        }
         super.onDestroy()
-    }    private fun stopServer() {
+    }
+
+    private fun stopServer() {
         // 1. Force exit Uvicorn directly via Python reference to avoid zombied loops
         try {
             if (Python.isStarted()) {
