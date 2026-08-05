@@ -1,35 +1,40 @@
 /**
- * Lanvan Unidirectional Architecture: Render Scheduler & Fast-Path Engine
- * Manages single-flight rAF DOM render coalescing and Fast-Path in-place progress updates.
- * Implements fallback error protection (lastValidViewModel) so UI never crashes.
- * Includes self-healing DOM-vs-ViewModel verification (DEBUG_MODE only).
+ * Render Scheduler & Fast-Path Engine
+ *
+ * Coordinates requestAnimationFrame DOM render coalescing, fast-path in-place progress mutations,
+ * and fallback ViewModel error protection.
  */
 
 (function (window) {
     'use strict';
 
     /**
-     * Build a fast, deterministic hash of the ViewModel.
-     * Does NOT use JSON.stringify — uses structural fields only.
+     * Builds a deterministic structural hash of a ViewModel array.
+     *
+     * @param {Array} viewModel Collection of rendered item views.
+     * @param {string} currentFolder Active folder scope.
+     * @returns {string} Hash string for render change detection.
      */
     function buildViewModelHashFast(viewModel, currentFolder) {
         var parts = [currentFolder || ''];
         for (var i = 0; i < viewModel.length; i++) {
-            var f = viewModel[i];
-            if (!f) continue;
+            var item = viewModel[i];
+            if (!item) continue;
             parts.push(
-                f.name || '',
-                f.isFolder ? 'd' : 'f',
-                f.uploading ? 'u' : '-',
-                f.uploadStatus || ''
+                item.name || '',
+                item.isFolder ? 'd' : 'f',
+                item.uploading ? 'u' : '-',
+                item.uploadStatus || ''
             );
         }
         return parts.join('|');
     }
 
     /**
-     * Self-Healing: Verify DOM consistency after every render.
-     * DEBUG_MODE only — zero overhead in production.
+     * Verifies DOM elements against ViewModel records in debug environments.
+     *
+     * @param {Array} viewModel Target view model array.
+     * @param {string} currentFolder Active folder path.
      */
     function verifyDOMConsistency(viewModel, currentFolder) {
         var container = document.getElementById('nasFileList');
@@ -56,7 +61,7 @@
             }
             domNames[fn] = true;
 
-            // Check: does this DOM row have a corresponding ViewModel entry?
+            // Verify existence of matching entry in ViewModel snapshot
             var found = false;
             for (var k = 0; k < viewModel.length; k++) {
                 if (viewModel[k] && viewModel[k].name === fn) {

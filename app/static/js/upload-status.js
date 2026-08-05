@@ -1,8 +1,7 @@
 /**
- * @file upload-status.js
- * @description Upload Status Enum — Single source of truth for upload state transitions.
- * Every upload status assignment MUST use these constants, never raw strings.
- * @dependency None (Ultra-safe: must load before any other script)
+ * Upload Status Enum
+ *
+ * Provides single source of truth for upload state transitions, validation, and status assertions.
  */
 
 (function (window) {
@@ -10,12 +9,10 @@
 
     // ── Defensive: prevent double-load ──────────────────────────────────
     if (window.UploadStatus) {
-        console.log("[UploadStatus] Already loaded — skipping duplicate initialization");
         return;
     }
 
-    // ── Allowed State Transitions ──────────────────────────────────────
-    // Format: currentStatus -> [allowedNextStatuses]
+    // State Transition Configuration
     var TRANSITIONS = {
         'QUEUED':      ['UPLOADING', 'PAUSED', 'CANCELLED', 'FAILED'],
         'UPLOADING':   ['PROCESSING', 'PAUSED', 'FAILED', 'CANCELLED'],
@@ -28,7 +25,7 @@
         'DELETED':     []
     };
 
-    // ── Enum Definition ────────────────────────────────────────────────
+    // State Constants Definition
     var STATUS = {
         QUEUED:      'QUEUED',
         UPLOADING:   'UPLOADING',
@@ -41,7 +38,7 @@
         DELETED:     'DELETED'
     };
 
-    // ── Assertion Helpers ──────────────────────────────────────────────
+    // Environment & Assertion Configuration
     var DEV_MODE = window.DEBUG_MODE === true || window.__LANVAN_DEV__ === true;
 
     /**
@@ -156,6 +153,6 @@
         }
     };
 
-    console.log("[UploadStatus] ✅ Loaded. " + Object.keys(STATUS).length + " status values defined. Dev mode: " + DEV_MODE);
+    // Module loaded — UploadStatus is now globally available.
 
 })(window);

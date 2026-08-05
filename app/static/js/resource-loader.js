@@ -1,10 +1,11 @@
 /**
- * @file resource-loader.js
- * @description progressive loader module for Lanvan client. Handles asynchronous script 
- *              fetching, CDN fallbacks (like JSZip), and environment feature detections (Safari/iOS).
- * @module Loader
+ * Progressive Resource Loader
+ *
+ * Handles asynchronous script fetching, CDN fallbacks (JSZip),
+ * and environment feature detection (Safari/iOS) with platform-specific
+ * timeout tuning and cache-recovery for bfcache restores.
  */
-    // iOS Safari Detection and Optimization
+    // Platform detection for Safari/iOS-specific timeout and caching behavior.
     window.isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
     window.isiOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     window.isiOSSafari = window.isiOS && window.isSafari;
@@ -94,12 +95,12 @@
       },
 
       init: function () {
-        // Load critical resources immediately
         this.critical.forEach(fn => {
           try { fn(); } catch (e) { console.warn('Critical load error:', e); }
         });
 
-        // Load enhanced resources after a delay (Safari-optimized)
+        // Load enhanced resources after a platform-aware delay.
+        // Safari benefits from a longer initial settling period before secondary loads.
         const delay = window.isiOSSafari ? 500 : 100;
         setTimeout(() => {
           this.enhanced.forEach(fn => {
@@ -109,7 +110,7 @@
       }
     };
 
-    // JSZip Async Loader (Local Offline Bundle)
+    // JSZip Async Loader — loads the local bundle without blocking rendering.
     window.jsZipReady = false;
     window.jsZipCallbacks = [];
 
@@ -124,7 +125,6 @@
             window.jsZipReady = true;
           }
 
-          // Execute waiting callbacks
           window.jsZipCallbacks.forEach(cb => cb(!error));
           window.jsZipCallbacks = [];
         },

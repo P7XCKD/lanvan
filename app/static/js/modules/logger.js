@@ -1,9 +1,8 @@
 /**
- * @file logger.js
- * @description Centralized, safe, toggleable production logging system for Lanvan application.
- *              Suppresses dev debug console outputs in production while preserving console.warn,
- *              console.error, uncaught exceptions, promise rejections, and network/browser errors.
- * @module Logger
+ * Centralized Application Logger
+ *
+ * Provides toggleable log output levels, suppresses verbose debug traces in production,
+ * and guarantees warning/error visibility.
  */
 
 (function (window) {

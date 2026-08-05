@@ -1,7 +1,8 @@
 /**
- * @file selection-manager.js
- * @description Lanvan Selection State Manager & toolbar renderer.
- * @module SelectionManager
+ * Selection Manager
+ *
+ * Manages item selection state, selection toolbar controls, clipboard/file tab mode detection,
+ * and bulk operations (rename, move, download, delete).
  */
 
 (function (window) {
