@@ -25,8 +25,13 @@ from app.utils.universal_optimizer import get_adaptive_chunk_size
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 class _DynamicCacheVersion:
+    """Cache-busting version string that changes only on server restart, not every second.
+    Uses server start time converted to a compact hex string, so cache is valid
+    for the entire server session but invalidates on restart."""
+    def __init__(self):
+        self._version = hex(int(time.time()))[2:10]
     def __str__(self):
-        return str(int(time.time()))
+        return self._version
 
 templates.env.globals["cache_version"] = _DynamicCacheVersion()
 

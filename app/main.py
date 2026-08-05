@@ -513,7 +513,105 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
         return response
 
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """
+    Lightweight in-memory rate limiting middleware.
+    Uses a sliding-window counter per client IP with automatic TTL eviction.
+    No external dependencies required.
+    
+    Limits (per second, per IP):
+      - Upload endpoints:     30 req/s  (/upload, /upload-auto, /encrypt_http_safe)
+      - Chunk endpoints:      60 req/s  (/upload_chunk)
+      - Clipboard writes:     20 req/s  (/api/clipboard/add, /api/clipboard, /api/clipboard/download-zip)
+      - API reads:           100 req/s  (/api/* GET endpoints)
+      - Default:             200 req/s  (everything else — static files, pages, WebSocket upgrades)
+    
+    These limits are generous for LAN usage and only protect against
+    accidental or malicious flooding from a single client.
+    
+    To disable rate limiting entirely, set env: LANVAN_RATE_LIMIT=off
+    """
+    def __init__(self, app, **kwargs):
+        super().__init__(app)
+        # Check if rate limiting is disabled via environment variable
+        self._enabled = os.environ.get("LANVAN_RATE_LIMIT", "").lower() not in ("off", "0", "false", "no")
+        # Structure: { "ip:window_key": (count, expiry) }
+        self._windows: dict[str, tuple[int, float]] = {}
+        self._lock = threading.Lock()
+        self._cleanup_interval = 60  # seconds between stale entry sweeps
+        self._last_cleanup = time.time()
+
+    def _get_limit(self, path: str) -> int:
+        """Return the per-second rate limit for a given request path."""
+        if path in ("/upload", "/upload-auto", "/encrypt_http_safe"):
+            return 30
+        if path == "/upload_chunk":
+            return 60
+        if path in ("/api/clipboard/add", "/api/clipboard", "/api/clipboard/download-zip"):
+            return 20
+        if path.startswith("/api/") or path.startswith("/api"):
+            return 100
+        return 200  # default for static files, pages, WebSocket upgrades
+
+    def _get_key(self, request: Request) -> str:
+        """Derive a rate-limit key from the client IP and current second window."""
+        client_ip = request.client.host if request.client else "unknown"
+        # Use 1-second windows for per-second limiting
+        window = int(time.time())
+        return f"{client_ip}:{window}"
+
+    def _maybe_cleanup(self, now: float):
+        """Periodically evict stale window entries to prevent unbounded growth."""
+        if now - self._last_cleanup < self._cleanup_interval:
+            return
+        with self._lock:
+            stale = [k for k, (_, expiry) in self._windows.items() if now > expiry]
+            for k in stale:
+                del self._windows[k]
+            self._last_cleanup = now
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        limit = self._get_limit(path)
+        
+        # WebSocket upgrade requests bypass rate limiting
+        if request.headers.get("upgrade", "").lower() == "websocket":
+            return await call_next(request)
+        
+        key = self._get_key(request)
+        now = time.time()
+        
+        with self._lock:
+            self._maybe_cleanup(now)
+            
+            current = self._windows.get(key)
+            if current is None:
+                # First request in this second window
+                self._windows[key] = (1, now + 10)  # expiry in 10 seconds
+                count = 1
+            else:
+                count, expiry = current
+                count += 1
+                self._windows[key] = (count, expiry)
+        
+        if count > limit:
+            # Rate limit exceeded — return 429 Too Many Requests
+            # Note: We've already incremented the counter, which is correct —
+            # the first request over the limit triggers the 429.
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "status": "error",
+                    "msg": "Too many requests. Please slow down."
+                }
+            )
+        
+        return await call_next(request)
+
+
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(EnsureDataDirMiddleware)
 app.add_middleware(IOSSafariMiddleware)
 app.add_middleware(ShutdownMiddleware)
@@ -526,14 +624,32 @@ class ProductionStaticFiles(StaticFiles):
     Transparently resolves static assets:
     - In Production mode: Serves minified .min.js assets from dist/static/js if available.
     - In Development mode: Serves original unminified .js source files directly from app/static/js.
+    - Adds Cache-Control headers: 1 year for versioned assets, 1 hour for unversioned.
     """
     async def get_response(self, path: str, scope):
         if is_production_mode() and path.endswith(".js") and not path.endswith(".min.js"):
             min_path = path[:-3] + ".min.js"
             full_min_path = os.path.join(self.directory, min_path)
             if os.path.exists(full_min_path):
-                return await super().get_response(min_path, scope)
-        return await super().get_response(path, scope)
+                response = await super().get_response(min_path, scope)
+                # Versioned/minified assets get long-lived cache (1 year)
+                response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+                return response
+        response = await super().get_response(path, scope)
+        # Set appropriate cache headers based on file type
+        if path.endswith((".min.js", ".min.css", ".woff2", ".woff", ".ttf")):
+            # Versioned/hashed assets: 1 year
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif path.endswith((".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp")):
+            # Images: 1 week
+            response.headers["Cache-Control"] = "public, max-age=604800"
+        elif path.endswith((".html", ".htm")):
+            # HTML templates: no cache
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        else:
+            # Other assets (CSS, JS, fonts): 1 hour
+            response.headers["Cache-Control"] = "public, max-age=3600"
+        return response
 
 static_dir = os.path.abspath("dist/static") if (is_production_mode() and os.path.exists("dist/static")) else os.path.abspath("app/static")
 app.mount("/static", ProductionStaticFiles(directory=static_dir), name="static")
@@ -603,22 +719,31 @@ async def smart_internal_error_handler(request: Request, exc: Exception):
         print(f"[INFO] Client disconnected during request to {request.url.path} (wrapped)")
         return PlainTextResponse("Client disconnected", status_code=400)
     
-    import traceback
-    tb_str = traceback.format_exc()
-    print("=== [SERVER ERROR TRACEBACK] ===")
-    print(tb_str)
-    print("================================")
+    # Log the full traceback internally via the logger (not to stdout)
+    # but NEVER leak stack traces, paths, or exception types to clients.
+    import logging
+    logger = logging.getLogger("lanvan")
+    logger.error("Unhandled exception on %s: %s", request.url.path, exc, exc_info=True)
     
-    path = str(request.url.path)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "status": "error",
-            "msg": str(exc) or "Internal Server Error",
-            "path": path,
-            "error_type": type(exc).__name__
-        }
-    )
+    # In production mode, return a generic message. In dev mode, include details.
+    if is_production_mode():
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "msg": "Internal Server Error"
+            }
+        )
+    else:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "msg": str(exc) or "Internal Server Error",
+                "path": str(request.url.path),
+                "error_type": type(exc).__name__
+            }
+        )
 
 
 def _is_client_disconnect_error(exc) -> bool:

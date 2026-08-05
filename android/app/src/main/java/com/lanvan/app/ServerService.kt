@@ -129,9 +129,27 @@ class ServerService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        // Recursively extract app/static and app/templates assets to filesDir
-        copyAssetsToFilesDir("app")
-        copyAssetsToFilesDir("certs")
+        // Recursively extract app/static and app/templates assets to filesDir.
+        // Skip extraction if a version marker exists matching the current versionCode,
+        // avoiding 1-5 seconds of redundant I/O on every service start.
+        val markerFile = java.io.File(filesDir, ".asset_version")
+        val currentVersion = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageManager.getPackageInfo(packageName, 0).longVersionCode.toString()
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, 0).versionCode.toString()
+        }
+        val cachedVersion = if (markerFile.exists()) {
+            try { markerFile.readText().trim() } catch (_: Exception) { "" }
+        } else { "" }
+
+        if (cachedVersion != currentVersion) {
+            copyAssetsToFilesDir("app")
+            copyAssetsToFilesDir("certs")
+            try {
+                markerFile.writeText(currentVersion)
+            } catch (_: Exception) { /* best-effort */ }
+        }
 
         val oldThread = serverThread
         // Launch Python FastAPI thread
@@ -212,32 +230,18 @@ class ServerService : Service() {
             e.printStackTrace()
         }
 
-        // 2. Fallback localhost shutdown API request to trigger clean cleanup sequence
-        val port = instancePort
-        val isHttps = instanceUseHttps.lowercase() == "true"
+        // 2. Fallback localhost shutdown API request to trigger clean cleanup sequence.
+        //    Use plain HTTP to 127.0.0.1 — the shutdown endpoint already enforces localhost-only
+        //    at the application layer (system.py:282). TLS is unnecessary for a local loopback call
+        //    and avoids the need for a trust-all SSL context (which is a security risk).
         Thread {
             try {
-                val scheme = if (isHttps) "https" else "http"
-                val url = java.net.URL("$scheme://127.0.0.1:$port/api/shutdown")
-                val conn = url.openConnection()
-                if (isHttps && conn is javax.net.ssl.HttpsURLConnection) {
-                    val trustAll = arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
-                        override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
-                        override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
-                        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
-                    })
-                    val sslContext = javax.net.ssl.SSLContext.getInstance("TLS")
-                    sslContext.init(null, trustAll, java.security.SecureRandom())
-                    conn.sslSocketFactory = sslContext.socketFactory
-                    conn.hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true }
-                }
-                
-                if (conn is java.net.HttpURLConnection) {
-                    conn.requestMethod = "POST"
-                    conn.connectTimeout = 1500
-                    conn.readTimeout = 1500
-                    conn.responseCode
-                }
+                val url = java.net.URL("http://127.0.0.1:$instancePort/api/shutdown")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 1500
+                conn.readTimeout = 1500
+                conn.responseCode
             } catch (e: Exception) {
                 // Ignore
             }

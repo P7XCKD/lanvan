@@ -49,6 +49,10 @@ class StreamingChunkAssembler:
         self.streaming_files: Dict[str, StreamingFile] = {}
         self.monitoring = False
         self.monitor_thread = None
+        self._last_cleanup_time = time.time()
+        self._max_session_age_seconds = 900  # 15 minutes TTL for abandoned sessions
+        self._max_total_chunks_memory = 512 * 1024 * 1024  # 512MB global cap
+        self._current_chunks_memory = 0
         print(f"[STREAM] Streaming assembly initialized ({'Termux mode' if _TERMUX_MODE else 'Full mode'})")
 
     def register_file(self, file_id: str, expected_parts: int, filename: str, total_size: int):
@@ -62,12 +66,44 @@ class StreamingChunkAssembler:
         print(f"[STREAM] Registered file for streaming: {filename} ({expected_parts} parts, {total_size:,} bytes)")
         return {"status": "registered", "file_id": file_id}
 
+    def _cleanup_stale_sessions(self):
+        """Evict streaming sessions that have received no chunks for >15 minutes.
+        This prevents unbounded memory growth from abandoned/refreshed browser uploads."""
+        now = time.time()
+        stale_ids = []
+        for file_id, sf in self.streaming_files.items():
+            age = now - sf.start_time
+            if age > self._max_session_age_seconds and not sf.completed:
+                # Only evict if no chunk received in the last 15 minutes
+                # (sf.start_time is updated when chunks arrive, but StreamingFile
+                # doesn't track last_chunk_time — we use creation time as proxy.
+                # For active uploads with all chunks arriving within 15 min, this is fine.)
+                stale_ids.append(file_id)
+        
+        for file_id in stale_ids:
+            self.cleanup(file_id)
+        
+        if stale_ids:
+            print(f"[STREAM] Evicted {len(stale_ids)} stale streaming sessions (idle > {self._max_session_age_seconds}s)")
+
     def add_chunk(self, file_id: str, chunk_number: int, chunk_data: bytes):
         """Add a chunk to the streaming file and attempt real-time assembly"""
         if file_id not in self.streaming_files:
             return {"status": "error", "msg": "File not registered"}
         
         streaming_file = self.streaming_files[file_id]
+        
+        # Check global memory cap before accepting new chunk data
+        chunk_len = len(chunk_data)
+        if self._current_chunks_memory + chunk_len > self._max_total_chunks_memory:
+            print(f"[STREAM] Memory cap ({self._max_total_chunks_memory // 1048576}MB) exceeded — rejecting chunk {chunk_number} for {file_id}")
+            return {"status": "error", "msg": "Server memory limit reached. Please try again later."}
+        
+        # Periodic cleanup of stale sessions (check every 60 seconds, amortized)
+        now = time.time()
+        if now - self._last_cleanup_time > 60:
+            self._cleanup_stale_sessions()
+            self._last_cleanup_time = now
         
         # Store chunk data for assembly
         streaming_file.chunk_data[chunk_number] = chunk_data

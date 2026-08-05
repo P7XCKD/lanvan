@@ -381,15 +381,16 @@ class FileValidator(AdvancedFileValidator):
         # Extension check
         file_ext = Path(filename).suffix.lower()
         
-        # [!] SECURITY: Block dangerous extensions (HTTPS mode only)
-        # In HTTP mode, the blocklist is bypassed per user configuration
-        if is_https and file_ext in cls.BLOCKED_EXTENSIONS:
-
-            errors.append(f"File type '{file_ext}' is blocked for security reasons (potentially dangerous)")
+        # [!] SECURITY: Always block known-dangerous executable extensions regardless of protocol.
+        # Executables (.exe, .bat, .dll, .vbs, .jar, .class, .bin, .sh, etc.) have no
+        # legitimate use case in a LAN file-sharing application.
+        if file_ext in cls.BLOCKED_EXTENSIONS:
+            errors.append(f"File type '{file_ext}' is blocked for security reasons (potentially dangerous executable)")
             return {'valid': False, 'errors': errors, 'security_risk': 'HIGH'}
         
-        # [OK] SECURITY: Allow most extensions but warn about unknown ones
-        if file_ext and file_ext not in cls.ALLOWED_EXTENSIONS:
+        # [OK] SECURITY: In HTTPS mode, also warn about uncommon/unknown extensions.
+        # In HTTP mode, we're more permissive since users explicitly opted for it.
+        if is_https and file_ext and file_ext not in cls.ALLOWED_EXTENSIONS:
             warnings.append(f"File type '{file_ext}' is uncommon - will be scanned for security")
         
         # Pattern checks for suspicious filenames
