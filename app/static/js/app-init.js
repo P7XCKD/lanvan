@@ -844,16 +844,10 @@
                     touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
                     isLongPress = false;
 
-                    var currentSelection = window.selectedItems || [];
-                    if (currentSelection.length === 0) {
-                        longPressTimer = setTimeout(function () {
-                            isLongPress = true;
-                            handleListItemClick(item, index, files);
-                            if (window.navigator && window.navigator.vibrate) {
-                                try { window.navigator.vibrate(40); } catch (err) { }
-                            }
-                        }, 500);
-                    }
+                    longPressTimer = setTimeout(function () {
+                        isLongPress = true;
+                        handleListItemClick(item, index, files, { isLongPress: true });
+                    }, 400);
                 }, { passive: true });
 
                 item.addEventListener("touchmove", function (e) {
@@ -1074,7 +1068,8 @@
         if (!name) return;
         console.log("%c[LANVAN UI] 👆 Item clicked: '%s'", "color:#10b981; font-weight:bold;", name);
         var current = Array.isArray(window.selectedItems) ? window.selectedItems.slice() : [];
-        var isMulti = e && (e.ctrlKey || e.metaKey);
+        var isTouchLongPress = e && e.isLongPress;
+        var isMulti = (e && (e.ctrlKey || e.metaKey)) || isTouchLongPress || (current.length > 0);
         var isShift = e && e.shiftKey;
 
         if (isShift && window._lastSelectedIndex !== undefined && window._lastSelectedIndex !== null) {

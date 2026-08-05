@@ -1749,6 +1749,14 @@ async def clear_files():
         locked_files = results['locked_files']
         processes_using_files = results['processes_using_files']
         
+        # Reset version metadata to clean slate when all files are cleared
+        try:
+            from app.core.version_manager import VersionManager
+            VersionManager.reset_all_metadata()
+            print("[CLEAN] Version metadata reset to clean slate.")
+        except Exception as v_err:
+            print(f"[WARN] Failed to reset version metadata during clear: {v_err}")
+
         # Create detailed response
         if files_locked > 0:
             # Provide helpful information about locked files

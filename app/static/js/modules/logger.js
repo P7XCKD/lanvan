@@ -85,6 +85,7 @@
         window.DEBUG_MODE = true;
         restoreConsole();
         OriginalConsole.log('%c[LOGGER] 🐞 Debug mode ENABLED. Full logging active.', 'color: #3b82f6; font-weight: bold;');
+        return 'Debug mode ENABLED. Console logs are now unsuppressed.';
     }
 
     function disableDebugMode() {
@@ -92,6 +93,7 @@
         window.DEBUG_MODE = false;
         suppressConsole();
         OriginalConsole.log('%c[LOGGER] 🔇 Debug mode DISABLED. Console logs suppressed.', 'color: #6b7280; font-style: italic;');
+        return 'Debug mode DISABLED. Console logs are now suppressed.';
     }
 
     // 3. Central Logger API
