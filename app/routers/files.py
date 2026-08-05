@@ -58,6 +58,11 @@ from app.core.streaming_assembly import get_streaming_assembler, add_streaming_c
 from app.core.stream_manager import get_stream_manager, StreamSession
 
 router = APIRouter()
+
+# Download concurrency semaphore — limits simultaneous downloads to prevent
+# file descriptor exhaustion. Default 20; overridable via LANVAN_MAX_CONCURRENT_DOWNLOADS.
+_MAX_DOWNLOADS = int(os.environ.get("LANVAN_MAX_CONCURRENT_DOWNLOADS", "20"))
+_download_semaphore = asyncio.Semaphore(_MAX_DOWNLOADS)
 templates = Jinja2Templates(directory="app/templates")
 try:
     from app.utils.android_compat import get_base_data_dir
@@ -77,13 +82,22 @@ except Exception:
     pass
 
 
-# Startup cleanup of orphan .tmp files in upload folder
+# Startup cleanup of orphan .tmp files in upload folder.
+# Only scans top-level (non-recursive) for performance — orphaned .tmp files
+# in deep subdirectories are cleaned up lazily on access.
 try:
-    for orphan_tmp in UPLOAD_FOLDER.rglob("*.tmp"):
+    for orphan_tmp in UPLOAD_FOLDER.glob("*.tmp"):
         if orphan_tmp.is_file():
             try:
                 orphan_tmp.unlink()
                 print(f"[STARTUP CLEANUP] Removed orphan temporary file: {orphan_tmp}")
+            except Exception:
+                pass
+    # Also clean temp_chunks
+    for orphan_tmp in TEMP_CHUNKS_FOLDER.glob("*.tmp"):
+        if orphan_tmp.is_file():
+            try:
+                orphan_tmp.unlink()
             except Exception:
                 pass
 except Exception:
@@ -563,11 +577,6 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
                         # Progress for large files (reduce spam)
                         if bytes_written > 10 * 1024 * 1024 and bytes_written % (20 * 1024 * 1024) == 0:
                             print(f"[PKG] Progress: {bytes_written // 1024 // 1024}MB")
-                            
-                            # OPTIMIZED: Strategic memory management - only GC for very large files
-                            if should_run_gc():
-                                universal_optimizer.memory_cleanup(force=False)
-                                await asyncio.sleep(0.01)  # Brief pause for GC
                 
                 # File handle is now closed, add extra delay for Windows
                 print(f"[OK] Upload to temp file completed: {temp_destination.name} ({bytes_written:,} bytes)")
@@ -1286,31 +1295,37 @@ async def download_file(filename: str, request: Request):
         }
         return Response(content="", headers=headers, status_code=200)
     
-    # OK: Determine protocol (HTTP vs HTTPS)
-    is_https = request.url.scheme == "https"
-    
-    # [AUTH] Enforcement Rules:
-    # 1. .enc files: Always use full download (no chunking)
-    # 2. Files ≥250MB: Use chunked download if not .enc
-    # 3. Files <250MB: Always use full download
-    
-    is_enc_file = safe_name.endswith(".enc")
-    is_large_file = file_size >= 250 * 1024 * 1024  # 250MB threshold
-    
-    # Check for HTTP Range header (crucial for HTML5 video/audio seeking & scrubbing)
-    range_header = request.headers.get("range") or request.headers.get("Range")
-    if range_header and not is_enc_file:
-        return await range_download_file(file_path, safe_name, mime_type, file_size, range_header, disposition_type=disposition_type, request=request)
+    # Download concurrency limiting — acquire semaphore to prevent
+    # file descriptor exhaustion under heavy load.
+    await _download_semaphore.acquire()
+    try:
+        # OK: Determine protocol (HTTP vs HTTPS)
+        is_https = request.url.scheme == "https"
+        
+        # [AUTH] Enforcement Rules:
+        # 1. .enc files: Always use full download (no chunking)
+        # 2. Files ≥250MB: Use chunked download if not .enc
+        # 3. Files <250MB: Always use full download
+        
+        is_enc_file = safe_name.endswith(".enc")
+        is_large_file = file_size >= 250 * 1024 * 1024  # 250MB threshold
+        
+        # Check for HTTP Range header (crucial for HTML5 video/audio seeking & scrubbing)
+        range_header = request.headers.get("range") or request.headers.get("Range")
+        if range_header and not is_enc_file:
+            return await range_download_file(file_path, safe_name, mime_type, file_size, range_header, disposition_type=disposition_type, request=request)
 
-    print(f"[SEARCH] Download strategy - Encrypted: {is_enc_file}, Large: {is_large_file}")
-    
-    # [PKG] Chunked download logic
-    if is_large_file and not is_enc_file:
-        print("[PKG] Using chunked download")
-        return await chunked_download_file(file_path, safe_name, mime_type, file_size, request, disposition_type=disposition_type)
-    else:
-        print("[FILE] Using full download")
-        return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type)
+        print(f"[SEARCH] Download strategy - Encrypted: {is_enc_file}, Large: {is_large_file}")
+        
+        # [PKG] Chunked download logic
+        if is_large_file and not is_enc_file:
+            print("[PKG] Using chunked download")
+            return await chunked_download_file(file_path, safe_name, mime_type, file_size, request, disposition_type=disposition_type)
+        else:
+            print("[FILE] Using full download")
+            return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type)
+    finally:
+        _download_semaphore.release()
 
 async def range_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, range_header: str, disposition_type: str = "inline", request: Optional[Request] = None):
     """Serve HTTP Range Requests (206 Partial Content) with ETag caching & dynamic buffer scaling."""
@@ -1414,8 +1429,10 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
     print(f"[OUT] Starting full download ({disposition_type}) for: {safe_name}")
     session = get_stream_manager().register_stream(file_path, "http-client")
     
-    # [START] Much larger buffer for maximum speed - 32MB buffer (4x improvement)
-    STREAM_BUFFER_SIZE = 32 * 1024 * 1024  # 32MB buffer (was 8MB)
+    # Adaptive stream buffer: scales from 64KB to 32MB based on file size.
+    # Small files get small buffers (avoids wasting 32MB on a 1KB text file).
+    # Large files get up to 32MB for maximum LAN throughput.
+    STREAM_BUFFER_SIZE = max(65536, min(file_size, 32 * 1024 * 1024, max(65536, file_size // 4)))
     
     def stream_file_ultra_optimized(path: Path):
         print(f"[RETRY] Streaming file: {path}")
@@ -1506,9 +1523,7 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                 except Exception as e:
                     print(f"[WARN] Error closing file handle: {e}")
             
-            # Force garbage collection to release any remaining handles
-            import gc
-            gc.collect()
+
 
     # For encrypted files, we need to adjust the Content-Length after decryption
     final_file_size = file_size

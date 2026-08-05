@@ -75,6 +75,20 @@ android {
                 srcDirs = ["src/main/python", "../../"]
                 include "start_server.py"
                 include "app/**"
+                exclude "app/**/__pycache__/**"
+                exclude "app/**/*.pyc"
+                exclude "testing/**"
+                exclude "tests/**"
+                exclude "docs/**"
+                exclude "app/README.md"
+                exclude "app/core/README.md"
+                exclude "app/routers/README.md"
+                exclude "app/utils/README.md"
+                exclude "app/ws_manager/README.md"
+                exclude "app/templates/README.md"
+                exclude "copilot/**"
+                exclude ".git/**"
+                exclude ".gitignore"
             }
         }
     }

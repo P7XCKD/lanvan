@@ -304,19 +304,32 @@ class UploadStatusConnectionManager:
 
     async def cleanup_completed_uploads(self):
         """
-        Cleans up upload sessions that have been completed for longer than 1 hour to release memory.
+        Cleans up upload sessions that have been completed for longer than 5 minutes to release memory.
+        Also caps total sessions at 200, evicting oldest completed sessions first.
         """
         current_time = time.time()
+        retention_seconds = 300  # 5 minutes (reduced from 1 hour)
+        
         old_sessions = [
             upload_id for upload_id, session in self.upload_sessions.items()
             if (session.get('status') == 'completed' and 
-                current_time - session.get('completed_at', 0) > 3600)  # 1 hour retention
+                current_time - session.get('completed_at', 0) > retention_seconds)
         ]
         
         for upload_id in old_sessions:
             if upload_id in self.session_connections:
                 del self.session_connections[upload_id]
             del self.upload_sessions[upload_id]
+        
+        # Cap total sessions at 200 — evict oldest completed sessions if exceeded
+        if len(self.upload_sessions) > 200:
+            completed = [(uid, s) for uid, s in self.upload_sessions.items() if s.get('status') == 'completed']
+            completed.sort(key=lambda x: x[1].get('completed_at', 0))  # oldest first
+            excess = len(self.upload_sessions) - 200
+            for uid, _ in completed[:excess]:
+                if uid in self.session_connections:
+                    del self.session_connections[uid]
+                del self.upload_sessions[uid]
 
     def get_stats(self) -> Dict[str, Any]:
         """
