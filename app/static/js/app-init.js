@@ -1,15 +1,15 @@
 /**
- * app-init.js — Lanvan UI Integration & Rendering Layer
+ * Application Initialization & UI Integration Layer
  *
- * This is a THIN TRANSLATION LAYER. It does not implement business logic,
- * networking, encryption, upload management, or clipboard sync.
- * It wraps production rendering functions and connects Lanvan UI events
- * to existing production functions.
+ * Thin translation adapter that bridges the state store, repository,
+ * projection engine, and render scheduler to the DOM. Does not implement
+ * business logic, networking, encryption, or upload management.
  *
- * Rules:
- * - No duplicate state (single source of truth always in production)
- * - No production JS modifications
- * - Wrap, don't replace
+ * Design invariants:
+ * - All state flows through LanvanStore (single source of truth)
+ * - DOM renders are scheduled through RenderScheduler (rAF coalescing)
+ * - File cache reads route through FileRepository (AbortController aware)
+ * - Upload state transitions are validated by UploadStatus FSM
  */
 
 (function () {

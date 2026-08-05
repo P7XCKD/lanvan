@@ -1,14 +1,9 @@
 /**
- * @file upload-eta.js
- * @description Dedicated ETA (Estimated Time of Arrival) calculator for active uploads.
+ * Upload ETA Calculator
  *
- * Rules:
- *  - ETA is computed ONLY for items with status === 'UPLOADING' and speed > 0.
- *  - ETA is shown ONLY in list-view row subtitles (not in the notification tray, not in grid badges).
- *  - All calculation lives here — no ETA logic is scattered elsewhere.
- *
- * Public API (exposed as window.UploadETA):
- *  - format(item)   → string like "1m 23s" | "45s" | "" (empty when unavailable)
+ * Derives estimated time remaining for active uploads using transfer speed
+ * and remaining bytes. Declines to produce a result when the item is not
+ * actively uploading or when speed/size data is unavailable.
  */
 (function (window) {
     'use strict';

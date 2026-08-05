@@ -30,9 +30,7 @@ function completeProgress(color = 'green') {
   }
 }
 
-//  Show persistent toast with elapsed time (Legacy - replaced by new system)
-
-//  Handle download button clicks with direct download strategy - Lanvan Ultra-Fast Implementation
+// Handles download button interactions using direct streaming download handlers
 function setupDownloadHandlers() {
   //  PERFORMANCE: Clean up existing listeners first to prevent memory leaks
   document.querySelectorAll('.file-card a.download-btn').forEach(btn => {

@@ -1,9 +1,9 @@
 /**
- * @file file-utils.js
- * @description Pure utility helper layer for Lanvan. Provides mathematical size formatting, 
- *              transfer speed conversion, HTML escaping, and diagnostics (incognito detection).
- * @module Utilities
- * @dependency None (Ultra-safe local utility script)
+ * File Utilities & Diagnostics
+ *
+ * Provides size formatting, transfer speed conversion, HTML escaping,
+ * browser detection, incognito detection, and WebSocket clipboard helpers.
+ * All functions are pure or side-effect-free where possible.
  */
 
 /**
@@ -25,7 +25,6 @@ function generateFileListHash(files) {
 function generateOfflineQR(text, canvas) {
   // Skip computation if uploads are blocked to prevent UI blocking
   if (window._qrBlocked) {
-    console.log('⏸ QR computation blocked during upload');
     return false;
   }
   
@@ -105,7 +104,7 @@ function getSystemResourceUsage() {
       usage.downlink = navigator.connection.downlink || 0;
     }
   } catch (e) {
-    console.log('Resource monitoring not available');
+    // Resource monitoring unavailable on this platform — silently use fallback values.
   }
 
   return usage;
@@ -247,8 +246,8 @@ function getBrowserInfo(userAgent) {
  * Update HTTP security warning display
  */
 function updateHttpSecurityWarning() {
-  // HTTP-Safe mode is automatic when AES is enabled over HTTP
-  console.log(' HTTP-Safe mode: automatic when AES enabled over HTTP');
+  // HTTP-Safe mode is automatic when AES is enabled over HTTP.
+  // No-op stub preserved for backward compatibility with existing callers.
 }
 
 /**
@@ -391,9 +390,10 @@ function startProgressUpdateSafetyNet() {
       // More aggressive: force update every 800ms for ultra-responsive feel
       if (timeSinceUpdate > 800) {
         // Only log if critically stuck for more than 30 seconds to reduce spam
-        if (timeSinceUpdate > 30000) {
-          console.warn(` Upload critically stuck for ${uploadItem.fileName} (${(timeSinceUpdate / 1000).toFixed(1)}s), forcing update`);
-
+    if (timeSinceUpdate > 30000) {
+          if (typeof window.Logger !== 'undefined' && window.Logger.warn) {
+            window.Logger.warn('Upload critically stuck for ' + uploadItem.fileName + ' (' + (timeSinceUpdate / 1000).toFixed(1) + 's), forcing update');
+          }
         }
         updateUploadItem(uploadItem, true); // Force update flag
       }
@@ -407,7 +407,6 @@ function startProgressUpdateSafetyNet() {
     if (anyUploads.length === 0) {
       clearInterval(progressUpdateInterval);
       progressUpdateInterval = null;
-      console.log(' Safety net stopped - no active uploads');
     }
   }, 300); // Check every 300ms for ultra-responsive feel
 }
@@ -423,7 +422,6 @@ function shouldProcessFileSelection(files) {
 
   // Check if this is a duplicate selection within debounce period
   if (now - lastFileSelectionTime < FILE_SELECTION_DEBOUNCE && fileHash === lastFileSelectionHash) {
-    console.log(' Duplicate file selection ignored (debounced)');
     return false;
   }
 
@@ -584,7 +582,6 @@ function updateNetworkSpeed(speedMBps) {
   if (totalUploadsProcessed % LANVAN_CONFIG.CONCURRENT.ADAPTATION_INTERVAL === 0) {
     const newOptimal = getOptimalConcurrency();
     if (newOptimal !== currentMaxConcurrent) {
-      console.log(` Adaptive concurrency: ${currentMaxConcurrent} → ${newOptimal} (avg speed: ${(networkSpeedSamples.reduce((a, b) => a + b, 0) / networkSpeedSamples.length).toFixed(1)} MB/s)`);
       currentMaxConcurrent = newOptimal;
       lastConcurrencyAdjustment = Date.now();
 
@@ -632,7 +629,6 @@ function getCurrentDeviceId() {
     deviceId = `${deviceInfo.name}_${timestamp}_${randomId}`;
     sessionStorage.setItem('Lanvan_device_id', deviceId);
 
-    console.log(` New device session created: ${deviceInfo.displayName}`);
   }
   return deviceId;
 }
@@ -683,7 +679,6 @@ function getDeviceInfo() {
     displayName = `${displayName} (${browserInfo.name})`;
 
   } catch (error) {
-    console.log('Could not detect device info, using fallback');
     deviceName = 'Unknown_Device';
     displayName = 'Unknown Device';
   }
@@ -714,9 +709,8 @@ function saveToDeviceUploadHistory(stats) {
     // Session will auto-clear when browser closes
 
     sessionStorage.setItem(sessionKey, JSON.stringify(deviceHistory));
-    console.log(` Saved to device history (${deviceId}):`, stats.type, stats.size, stats.time);
   } catch (e) {
-    console.log(' Failed to save to device upload history:', e);
+    // Session storage may be unavailable (e.g., incognito mode) — silently skip persistence.
   }
 }
 
