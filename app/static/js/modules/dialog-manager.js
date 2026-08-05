@@ -1,7 +1,8 @@
 /**
- * @file dialog-manager.js
- * @description Modal dialog launcher, backdrop manager, and focus trap utility.
- * @module DialogManager
+ * Dialog Manager
+ *
+ * Centralized launcher for modal dialogs (new folder, connect QR).
+ * Manages dialog display state and input focus.
  */
 
 (function (window) {

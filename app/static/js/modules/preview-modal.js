@@ -1,7 +1,10 @@
 /**
- * @file preview-modal.js
- * @description Preview Modal presentation layer for images, videos, audio, documents, and code text files.
- * @module PreviewModal
+ * Preview Modal
+ *
+ * Presentation layer for the file preview dialog. Renders images (with
+ * zoom/pan), videos, audio, PDFs, Office documents (via docx.js), and
+ * plain-text code files. Manages keyboard shortcuts and media cleanup
+ * on close.
  */
 
 (function (window) {

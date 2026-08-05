@@ -1,7 +1,8 @@
 /**
- * @file connect-panel.js
- * @description Connect Panel UI, QR Code rendering, LAN/mDNS tab switching, and URL copy handlers.
- * @module ConnectPanel
+ * Connect Panel
+ *
+ * Renders QR codes for LAN and mDNS connection URLs, manages tab switching
+ * between IP and mDNS modes, and provides clipboard copy handlers.
  */
 
 (function (window) {

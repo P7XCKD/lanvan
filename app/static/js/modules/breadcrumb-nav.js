@@ -1,7 +1,8 @@
 /**
- * @file breadcrumb-nav.js
- * @description Breadcrumb navigation renderer & click handler manager.
- * @module BreadcrumbNav
+ * Breadcrumb Navigation
+ *
+ * Renders the folder path breadcrumb trail and wires click handlers
+ * for navigating to ancestor directories.
  */
 
 (function (window) {
