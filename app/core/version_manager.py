@@ -362,6 +362,22 @@ class VersionManager:
             return True
 
     @classmethod
+    def reset_all_metadata(cls) -> bool:
+        """Purges all logical files and version history entries, resetting metadata to a clean slate."""
+        with _version_lock:
+            meta = _empty_metadata()
+            if VERSIONS_DIR.exists():
+                try:
+                    for child in VERSIONS_DIR.iterdir():
+                        if child.is_dir():
+                            shutil.rmtree(str(child))
+                        elif child.is_file():
+                            child.unlink()
+                except Exception as e:
+                    print(f"[VERSION_MANAGER] Warning purging versions directory: {e}")
+            return save_metadata(meta)
+
+    @classmethod
     def rename_logical_file(cls, target_dir: Optional[str], old_name: str, new_name: str) -> bool:
         """Renames logical file without breaking version history chain."""
         with _version_lock:

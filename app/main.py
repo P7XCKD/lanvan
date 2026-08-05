@@ -534,8 +534,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """
     def __init__(self, app, **kwargs):
         super().__init__(app)
-        # Check if rate limiting is disabled via environment variable
-        self._enabled = os.environ.get("LANVAN_RATE_LIMIT", "").lower() not in ("off", "0", "false", "no")
+        # Check if rate limiting is disabled (default off unless explicitly enabled)
+        env_val = os.environ.get("LANVAN_RATE_LIMIT", "").lower()
+        self._enabled = env_val in ("on", "1", "true", "yes")
         # Structure: { "ip:window_key": (count, expiry) }
         self._windows: dict[str, tuple[int, float]] = {}
         self._lock = threading.Lock()
@@ -572,6 +573,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             self._last_cleanup = now
 
     async def dispatch(self, request: Request, call_next):
+        # Rate limiting is disabled throughout the application for fast page loading and transfers
+        if not self._enabled:
+            return await call_next(request)
+
         path = request.url.path
         limit = self._get_limit(path)
         
