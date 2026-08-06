@@ -18,7 +18,6 @@ _TERMUX_MODE = False
 try:
     # Check for Termux environment
     if is_android_environment():
-        
         print("[!] Termux detected - using ultra-minimal safe mode")
         _TERMUX_MODE = True
 
@@ -74,10 +73,6 @@ class StreamingChunkAssembler:
         for file_id, sf in self.streaming_files.items():
             age = now - sf.start_time
             if age > self._max_session_age_seconds and not sf.completed:
-                # Only evict if no chunk received in the last 15 minutes
-                # (sf.start_time is updated when chunks arrive, but StreamingFile
-                # doesn't track last_chunk_time — we use creation time as proxy.
-                # For active uploads with all chunks arriving within 15 min, this is fine.)
                 stale_ids.append(file_id)
         
         for file_id in stale_ids:
@@ -105,10 +100,11 @@ class StreamingChunkAssembler:
             self._cleanup_stale_sessions()
             self._last_cleanup_time = now
         
-        # Store chunk data for assembly
+        # Store chunk data for assembly & update memory counter
         streaming_file.chunk_data[chunk_number] = chunk_data
         streaming_file.received_parts.add(chunk_number)
         streaming_file.assembled_size += len(chunk_data)
+        self._current_chunks_memory += len(chunk_data)
         
         # Log progress at 10% increments to prevent log flooding
         expected = streaming_file.expected_parts
@@ -129,10 +125,8 @@ class StreamingChunkAssembler:
         """Attempt real-time assembly of consecutive chunks to save memory"""
         streaming_file = self.streaming_files[file_id]
         if _TERMUX_MODE:
-            # In Termux mode, flush every chunk immediately to prevent OOM kills
             self._assemble_available_chunks(file_id)
         elif len(streaming_file.chunk_data) >= 5:
-            # On PC, buffer a few more chunks for performance
             self._assemble_available_chunks(file_id)
 
     def _assemble_available_chunks(self, file_id: str):
@@ -141,9 +135,7 @@ class StreamingChunkAssembler:
         
         if not streaming_file.final_path:
             final_path = self.upload_folder / streaming_file.filename
-            # Ensure unique filename check includes both final path and its temp path
             counter = 1
-
             original_path = final_path
             while final_path.exists() or final_path.with_suffix(final_path.suffix + '.tmp').exists():
                 stem = original_path.stem
@@ -152,7 +144,6 @@ class StreamingChunkAssembler:
                 counter += 1
             streaming_file.final_path = final_path
             streaming_file.temp_path = final_path.with_suffix(final_path.suffix + '.tmp')
-
 
         # Find consecutive chunks starting from last_assembled_chunk + 1
         consecutive_chunks = []
@@ -165,19 +156,18 @@ class StreamingChunkAssembler:
                 break
 
         if consecutive_chunks:
-            # Write consecutive chunks to temp file
             mode = 'ab' if streaming_file.temp_path.exists() else 'wb'
             try:
+                freed_bytes = 0
                 with open(streaming_file.temp_path, mode) as f:
                     for chunk_num in consecutive_chunks:
                         chunk_data = streaming_file.chunk_data.pop(chunk_num)
+                        freed_bytes += len(chunk_data)
                         f.write(chunk_data)
                 
+                self._current_chunks_memory = max(0, self._current_chunks_memory - freed_bytes)
                 print(f"[STREAM] Real-time assembled chunks {consecutive_chunks[0]}-{consecutive_chunks[-1]} for {streaming_file.filename}")
                 streaming_file.last_assembled_chunk = consecutive_chunks[-1]
-
-                
-                # Mark as processing started
                 streaming_file.processing_started = True
                 
             except Exception as e:
@@ -200,9 +190,6 @@ class StreamingChunkAssembler:
                 streaming_file.final_path = final_path
                 streaming_file.temp_path = final_path.with_suffix(final_path.suffix + '.tmp')
 
-
-
-
             # Write any remaining chunks in order to temp file
             if streaming_file.chunk_data:
                 mode = 'ab' if streaming_file.temp_path.exists() else 'wb'
@@ -212,6 +199,8 @@ class StreamingChunkAssembler:
                         f.write(chunk_data)
 
             # Clear chunk data to free memory
+            freed_bytes = sum(len(d) for d in streaming_file.chunk_data.values())
+            self._current_chunks_memory = max(0, self._current_chunks_memory - freed_bytes)
             streaming_file.chunk_data.clear()
             
             # Atomic commit via VersionManager
@@ -251,10 +240,8 @@ class StreamingChunkAssembler:
                         else:
                             raise rename_err
 
-
             streaming_file.completed = True
             
-            # Verify file size
             actual_size = streaming_file.final_path.stat().st_size
             duration = time.time() - streaming_file.start_time
             
@@ -288,7 +275,6 @@ class StreamingChunkAssembler:
                 "filename": streaming_file.filename
             }
         
-        # Check if we have all parts
         if len(streaming_file.received_parts) == streaming_file.expected_parts:
             return self._finalize_assembly(file_id)
         else:
@@ -304,10 +290,11 @@ class StreamingChunkAssembler:
         if file_id in self.streaming_files:
             streaming_file = self.streaming_files[file_id]
             
-            # Clear in-memory chunk data
+            # Clear in-memory chunk data & update memory counter
+            freed_bytes = sum(len(d) for d in streaming_file.chunk_data.values())
+            self._current_chunks_memory = max(0, self._current_chunks_memory - freed_bytes)
             streaming_file.chunk_data.clear()
             
-            # Clean up temporary chunk files
             try:
                 pattern = f"{streaming_file.filename}.part*"
                 for chunk_file in self.temp_folder.glob(pattern):
@@ -365,81 +352,67 @@ class StreamingChunkAssembler:
         """Clean up a file's streaming data"""
         if file_id in self.streaming_files:
             streaming_file = self.streaming_files[file_id]
-            # Clean up chunks first
             self.cleanup_chunks(file_id)
-            # Clean up partial temp file if it exists and wasn't finished
             if streaming_file.temp_path and streaming_file.temp_path.exists():
                 try:
                     streaming_file.temp_path.unlink(missing_ok=True)
                 except Exception as e:
                     print(f"[WARN] Failed to delete temp file {streaming_file.temp_path.name} in cleanup: {e}")
-            # Remove from tracking
             del self.streaming_files[file_id]
             print(f"[CLEAN] Cleaned up streaming file: {file_id}")
 
 # Convenience functions for external use
 def register_streaming_file(file_id: str, expected_parts: int, filename: str, total_size: int):
-    """Register a file for streaming assembly"""
     assembler = get_streaming_assembler()
     if assembler:
         return assembler.register_file(file_id, expected_parts, filename, total_size)
     return {"status": "error", "msg": "Streaming assembly not initialized"}
 
 def add_streaming_chunk(file_id: str, chunk_number: int, chunk_data: bytes):
-    """Add a chunk to streaming assembly"""
     assembler = get_streaming_assembler()
     if assembler:
         return assembler.add_chunk(file_id, chunk_number, chunk_data)
     return {"status": "error", "msg": "Streaming assembly not initialized"}
 
 def check_streaming_status(file_id: str):
-    """Check streaming assembly status"""
     assembler = get_streaming_assembler()
     if assembler:
         return assembler.check_status(file_id)
     return {"status": "error", "msg": "Streaming assembly not initialized"}
 
 def get_assembled_file(file_id: str):
-    """Get assembled file information"""
     assembler = get_streaming_assembler()
     if assembler:
         return assembler.get_file(file_id)
     return {"status": "error", "msg": "Streaming assembly not initialized"}
 
 def cleanup_streaming_file(file_id: str):
-    """Clean up streaming file"""
     assembler = get_streaming_assembler()
     if assembler:
         return assembler.cleanup(file_id)
     return {"status": "error", "msg": "Streaming assembly not initialized"}
 
-# Global assembler instance
 _global_assembler = None
 
 def initialize_streaming_assembly(temp_folder: Union[Path, str], upload_folder: Union[Path, str]):
-    """Initialize the global streaming assembler"""
     global _global_assembler
     _global_assembler = StreamingChunkAssembler(Path(temp_folder), Path(upload_folder))
     print("[OK] Streaming assembly initialized")
 
 def get_streaming_assembler(temp_folder: Optional[Union[Path, str]] = None, upload_folder: Optional[Union[Path, str]] = None):
-    """Get the global streaming assembler instance"""
     global _global_assembler
     if _global_assembler is None:
         if temp_folder and upload_folder:
             _global_assembler = StreamingChunkAssembler(Path(temp_folder), Path(upload_folder))
         else:
-            # Fallback values
             import tempfile
             temp_dir = Path(tempfile.gettempdir())
             _global_assembler = StreamingChunkAssembler(temp_dir, temp_dir)
     return _global_assembler
 
 def shutdown_streaming_assembly():
-    """Shutdown the streaming assembly"""
     global _global_assembler
     if _global_assembler:
-        # Clean up all active streaming files
         for file_id in list(_global_assembler.streaming_files.keys()):
             _global_assembler.cleanup(file_id)
         _global_assembler = None

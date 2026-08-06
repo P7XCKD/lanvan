@@ -20,6 +20,7 @@ import tempfile
 import asyncio
 import urllib.parse
 import threading
+import uuid
 from pathlib import Path
 from mimetypes import guess_type
 from typing import List, Optional, Dict, Any, Tuple, Set
@@ -59,10 +60,6 @@ from app.core.stream_manager import get_stream_manager, StreamSession
 
 router = APIRouter()
 
-# Download concurrency semaphore — limits simultaneous downloads to prevent
-# file descriptor exhaustion. Default 20; overridable via LANVAN_MAX_CONCURRENT_DOWNLOADS.
-_MAX_DOWNLOADS = int(os.environ.get("LANVAN_MAX_CONCURRENT_DOWNLOADS", "20"))
-_download_semaphore = asyncio.Semaphore(_MAX_DOWNLOADS)
 templates = Jinja2Templates(directory="app/templates")
 try:
     from app.utils.android_compat import get_base_data_dir
@@ -1277,9 +1274,15 @@ async def download_file(filename: str, request: Request):
         if ext in mime_map:
             mime_type = mime_map[ext]
             
-    file_size = file_path.stat().st_size
+    from app.core.download_engine import download_engine_v2
+    stat_info = download_engine_v2.stat_cache.get_stat(file_path, mime_type_hint=mime_type)
+    if not stat_info:
+        return Response("File not found", status_code=404)
+
+    file_size = stat_info["file_size"]
+    etag = stat_info["etag"]
     
-    print(f"[STATS] File info - Size: {file_size} bytes, MIME: {mime_type}")
+    print(f"[STATS] File info (cached) - Size: {file_size} bytes, MIME: {mime_type}, ETag: {etag}")
     
     is_download_requested = request.query_params.get("download") == "1"
     disposition_type = "attachment" if is_download_requested else "inline"
@@ -1291,43 +1294,47 @@ async def download_file(filename: str, request: Request):
             "Content-Type": mime_type or "application/octet-stream",
             "Content-Disposition": f'{disposition_type}; filename="{safe_name}"',
             "Accept-Ranges": "bytes",  # Indicate support for range requests
+            "ETag": etag,
             "Cache-Control": "public, max-age=86400"
         }
         return Response(content="", headers=headers, status_code=200)
     
-    # Download concurrency limiting — acquire semaphore to prevent
-    # file descriptor exhaustion under heavy load.
-    await _download_semaphore.acquire()
+    # Classify client capabilities and transfer strategy via DownloadEngine
+    plan = download_engine_v2.classify_request(request, safe_name, file_size)
+
+    # Deficit Round Robin (DRR) Fair-Share Concurrency Scheduler
+    wait_time = await download_engine_v2.scheduler.acquire_slot(plan["client_ip"])
+    session_id = uuid.uuid4().hex[:12]
+    download_engine_v2.analytics.record_start(session_id, wait_time_sec=wait_time)
+
+    client_ip = plan["client_ip"]
+    slot_acquired = True
+
+    def _release_scheduler_slot(bytes_transferred: int = 0, interrupted: bool = False):
+        nonlocal slot_acquired
+        if slot_acquired:
+            slot_acquired = False
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(download_engine_v2.scheduler.release_slot(client_ip))
+            except RuntimeError:
+                pass
+            download_engine_v2.analytics.record_completion(session_id, bytes_sent=bytes_transferred, interrupted=interrupted)
+
     try:
-        # OK: Determine protocol (HTTP vs HTTPS)
-        is_https = request.url.scheme == "https"
-        
-        # [AUTH] Enforcement Rules:
-        # 1. .enc files: Always use full download (no chunking)
-        # 2. Files ≥250MB: Use chunked download if not .enc
-        # 3. Files <250MB: Always use full download
-        
-        is_enc_file = safe_name.endswith(".enc")
-        is_large_file = file_size >= 250 * 1024 * 1024  # 250MB threshold
-        
-        # Check for HTTP Range header (crucial for HTML5 video/audio seeking & scrubbing)
-        range_header = request.headers.get("range") or request.headers.get("Range")
-        if range_header and not is_enc_file:
-            return await range_download_file(file_path, safe_name, mime_type, file_size, range_header, disposition_type=disposition_type, request=request)
-
-        print(f"[SEARCH] Download strategy - Encrypted: {is_enc_file}, Large: {is_large_file}")
-        
-        # [PKG] Chunked download logic
-        if is_large_file and not is_enc_file:
-            print("[PKG] Using chunked download")
-            return await chunked_download_file(file_path, safe_name, mime_type, file_size, request, disposition_type=disposition_type)
+        if plan["strategy"] == "range":
+            return await range_download_file(file_path, safe_name, mime_type, file_size, plan["range_header"], disposition_type=disposition_type, request=request, release_slot_cb=_release_scheduler_slot)
+        elif plan["strategy"] == "chunked":
+            print("[PKG] Using chunked download strategy via DownloadEngine")
+            return await chunked_download_file(file_path, safe_name, mime_type, file_size, request, disposition_type=disposition_type, release_slot_cb=_release_scheduler_slot)
         else:
-            print("[FILE] Using full download")
-            return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type)
-    finally:
-        _download_semaphore.release()
+            print("[FILE] Using full download strategy via DownloadEngine")
+            return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type, etag=etag, release_slot_cb=_release_scheduler_slot)
+    except Exception:
+        _release_scheduler_slot(bytes_transferred=0, interrupted=True)
+        raise
 
-async def range_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, range_header: str, disposition_type: str = "inline", request: Optional[Request] = None):
+async def range_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, range_header: str, disposition_type: str = "inline", request: Optional[Request] = None, release_slot_cb: Any = None):
     """Serve HTTP Range Requests (206 Partial Content) with ETag caching & dynamic buffer scaling."""
     try:
         # Generate stable ETag based on file modification time & size
@@ -1339,13 +1346,31 @@ async def range_download_file(file_path: Path, safe_name: str, mime_type: str | 
         if request:
             if_none_match = request.headers.get("if-none-match") or request.headers.get("If-None-Match")
             if if_none_match and if_none_match.strip() == etag:
+                if release_slot_cb:
+                    if asyncio.iscoroutinefunction(release_slot_cb):
+                        await release_slot_cb(bytes_transferred=0, interrupted=False)
+                    else:
+                        release_slot_cb(bytes_transferred=0, interrupted=False)
                 return Response(status_code=304, headers={"ETag": etag, "Accept-Ranges": "bytes"})
 
+            # Handle If-Range validation for download managers (IDM/1DM+/curl/ADM)
+            if_range = request.headers.get("if-range") or request.headers.get("If-Range")
+            if if_range:
+                if_range_clean = if_range.strip()
+                # If ETag doesn't match, serve full file (200 OK) instead of 206 Range
+                if if_range_clean.startswith('"') and if_range_clean != etag:
+                    return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type, etag=etag, release_slot_cb=release_slot_cb)
+
         if "=" not in range_header:
-            return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type)
+            return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type, release_slot_cb=release_slot_cb)
             
         unit, bytes_range = range_header.strip().split("=", 1)
         if unit.lower() != "bytes":
+            if release_slot_cb:
+                if asyncio.iscoroutinefunction(release_slot_cb):
+                    await release_slot_cb(bytes_transferred=0, interrupted=True)
+                else:
+                    release_slot_cb(bytes_transferred=0, interrupted=True)
             return Response("Invalid range unit", status_code=416)
         
         parts = bytes_range.split("-", 1)
@@ -1367,15 +1392,17 @@ async def range_download_file(file_path: Path, safe_name: str, mime_type: str | 
             end = file_size - 1
 
         if start >= file_size or end >= file_size or start > end:
+            if release_slot_cb:
+                if asyncio.iscoroutinefunction(release_slot_cb):
+                    await release_slot_cb(bytes_transferred=0, interrupted=True)
+                else:
+                    release_slot_cb(bytes_transferred=0, interrupted=True)
             headers = {"Content-Range": f"bytes */{file_size}"}
             return Response("Requested range not satisfiable", status_code=416, headers=headers)
         
         chunk_size = (end - start) + 1
         
         # Dynamic Range Buffer Scaling:
-        # - Small probes or timestamp seeks (< 1MB requested): 256KB buffer (< 1ms seek latency)
-        # - Mid-size range requests (1MB - 10MB): 512KB buffer
-        # - Large sequential Range requests (≥ 10MB): 1MB buffer for max LAN throughput on 4K movies
         if chunk_size >= 10 * 1024 * 1024:
             buffer_size = 1024 * 1024  # 1MB buffer
         elif chunk_size >= 1024 * 1024:
@@ -1386,6 +1413,8 @@ async def range_download_file(file_path: Path, safe_name: str, mime_type: str | 
         session = get_stream_manager().register_stream(file_path, "http-client")
 
         def iterfile():
+            sent = 0
+            interrupted = False
             try:
                 with open(file_path, "rb") as f:
                     session.file_handle = f
@@ -1394,17 +1423,25 @@ async def range_download_file(file_path: Path, safe_name: str, mime_type: str | 
                     while bytes_left > 0:
                         if session.cancel_event.is_set():
                             print(f"[STREAM] Range stream session {session.session_id} canceled for '{safe_name}'")
+                            interrupted = True
                             break
                         read_len = min(buffer_size, bytes_left)
                         data = f.read(read_len)
                         if not data:
                             break
                         bytes_left -= len(data)
+                        sent += len(data)
                         yield data
             except (ValueError, OSError) as e:
+                interrupted = True
                 print(f"[STREAM] Range stream session {session.session_id} closed during read: {e}")
             finally:
                 get_stream_manager().unregister_stream(session)
+                if release_slot_cb:
+                    try:
+                        release_slot_cb(bytes_transferred=sent, interrupted=interrupted or (sent < chunk_size))
+                    except Exception:
+                        pass
 
         headers = {
             "Content-Range": f"bytes {start}-{end}/{file_size}",
@@ -1422,28 +1459,25 @@ async def range_download_file(file_path: Path, safe_name: str, mime_type: str | 
         return StreamingResponse(iterfile(), status_code=206, headers=headers)
     except Exception as e:
         print(f"[ERR] Range request failed ({e}), falling back to full download")
-        return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type)
+        return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type, release_slot_cb=release_slot_cb)
 
-async def full_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, disposition_type: str = "inline"):
+async def full_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, disposition_type: str = "inline", etag: str | None = None, release_slot_cb: Any = None):
     """Ultra-optimized full file download - for small files and .enc files"""
     print(f"[OUT] Starting full download ({disposition_type}) for: {safe_name}")
     session = get_stream_manager().register_stream(file_path, "http-client")
     
-    # Adaptive stream buffer: scales from 64KB to 32MB based on file size.
-    # Small files get small buffers (avoids wasting 32MB on a 1KB text file).
-    # Large files get up to 32MB for maximum LAN throughput.
     STREAM_BUFFER_SIZE = max(65536, min(file_size, 32 * 1024 * 1024, max(65536, file_size // 4)))
     
     def stream_file_ultra_optimized(path: Path):
         print(f"[RETRY] Streaming file: {path}")
         file_handle = None  # Track file handle for proper cleanup
+        sent = 0
+        interrupted = False
         
         try:
             if path.suffix == ".enc":
                 print("[AUTH] Processing encrypted file")
-                # [AUTH] Enhanced .enc file handling with streaming decryption and metadata validation
                 try:
-                    # Check for metadata file first
                     metadata_path = path.with_suffix('.enc.meta')
                     metadata = None
                     
@@ -1457,20 +1491,18 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                         encrypted_data = file.read()
                         print(f"[STATS] Read {len(encrypted_data)} bytes of encrypted data")
                         
-                        # Use appropriate decryption method based on metadata
                         if metadata and metadata.get('encryption_method') == 'streaming':
                             from app.core.aes_utils import decrypt_file_stream
                             decrypted_data = decrypt_file_stream(encrypted_data, metadata, chunk_size=1024 * 1024)
                             print(f"[LOCK] Used streaming decryption for {path.name}")
                         else:
-                            # Note: Legacy encryption not supported - file may be corrupted
                             print(f"[WARN] Cannot decrypt {path.name} - legacy encryption no longer supported")
+                            interrupted = True
                             yield f"Error: File {path.name} uses unsupported legacy encryption".encode('utf-8')
                             return
                         
                         print(f"OK: Decrypted to {len(decrypted_data)} bytes")
                         
-                        # Validate integrity if metadata available
                         if metadata and 'original_hash' in metadata:
                             import hashlib
                             actual_hash = hashlib.sha256(decrypted_data).hexdigest()
@@ -1479,56 +1511,63 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                                 raise Exception(f"File integrity check failed! Expected: {expected_hash}, Got: {actual_hash}")
                             print(f"OK: File integrity validated successfully")
                         
-                        # [START] Stream in very large chunks for maximum speed
                         data_length = len(decrypted_data)
                         chunks_sent = 0
                         for i in range(0, data_length, STREAM_BUFFER_SIZE):
+                            if session.cancel_event.is_set():
+                                interrupted = True
+                                break
                             chunk_end = min(i + STREAM_BUFFER_SIZE, data_length)
                             chunk = decrypted_data[i:chunk_end]
                             chunks_sent += 1
+                            sent += len(chunk)
                             print(f"[OUT] Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
                             yield chunk
                             
                 except Exception as e:
+                    interrupted = True
                     print(f"[!] AES decryption failed for {path}: {e}")
-                    # Return error content instead of crashing
                     error_message = f"Error: Failed to decrypt file {path.name}. {str(e)}"
                     yield error_message.encode('utf-8')
             else:
                 print("[FILE] Processing regular file")
-                # [START] Ultra-fast regular file streaming with optimized buffer and proper cleanup
                 try:
                     file_handle = open(path, "rb")
                     session.file_handle = file_handle
                     chunks_sent = 0
                     while True:
+                        if session.cancel_event.is_set():
+                            interrupted = True
+                            break
                         chunk = file_handle.read(STREAM_BUFFER_SIZE)
                         if not chunk:
                             break
                         chunks_sent += 1
+                        sent += len(chunk)
                         print(f"[OUT] Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
                         yield chunk
                     print(f"OK: Completed streaming {chunks_sent} chunks")
                 except Exception as e:
+                    interrupted = True
                     print(f"[!] File streaming failed for {path}: {e}")
                     error_message = f"Error: Failed to read file {path.name}. {str(e)}"
                     yield error_message.encode('utf-8')
         finally:
             get_stream_manager().unregister_stream(session)
-            # Ensure file handle is always closed
             if file_handle is not None:
                 try:
                     file_handle.close()
                     print(f"[OK] File handle closed for: {path.name}")
                 except Exception as e:
                     print(f"[WARN] Error closing file handle: {e}")
-            
+            if release_slot_cb:
+                try:
+                    release_slot_cb(bytes_transferred=sent, interrupted=interrupted or (file_size > 0 and sent < file_size))
+                except Exception:
+                    pass
 
-
-    # For encrypted files, we need to adjust the Content-Length after decryption
     final_file_size = file_size
     if file_path.suffix == ".enc":
-        # Try to get the original size from metadata
         metadata_path = file_path.with_suffix('.enc.meta')
         if metadata_path.exists():
             try:
@@ -1544,13 +1583,15 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
     headers = {
         "Content-Disposition": f'{disposition_type}; filename="{safe_name}"',
         "Content-Type": mime_type or "application/octet-stream",
+        "Accept-Ranges": "bytes",
         "Cache-Control": "public, max-age=86400",
         "X-Accel-Buffering": "no",
         "X-Download-Type": "ultra-optimized-full",
         "X-Buffer-Size": "32MB"
     }
+    if etag:
+        headers["ETag"] = etag
     
-    # Only add Content-Length for non-encrypted files to avoid mismatch
     if not file_path.suffix == ".enc":
         headers["Content-Length"] = str(final_file_size)
     
@@ -1562,18 +1603,15 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
         headers=headers
     )
 
-async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, request: Request | None = None, disposition_type: str = "inline"):
+async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, request: Request | None = None, disposition_type: str = "inline", release_slot_cb: Any = None):
     """High-performance chunked file download - for large files (≥250MB) that are not .enc"""
-    # [START] Much larger chunk size for faster downloads - 16MB chunks (16x improvement)
-    CHUNK_SIZE = 16 * 1024 * 1024  # 16MB chunks (was 1MB)
+    CHUNK_SIZE = 16 * 1024 * 1024  # 16MB chunks
     
-    # Check for Range header (for proper chunked downloads)
     range_header = request.headers.get('Range') if request else None
     start = 0
     end = file_size - 1
     
     if range_header:
-        # Parse Range header: "bytes=start-end"
         try:
             range_match = range_header.replace('bytes=', '').split('-')
             if len(range_match) == 2:
@@ -1583,40 +1621,62 @@ async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str 
                     end = int(range_match[1])
                 end = min(end, file_size - 1)
         except ValueError:
-            pass  # Ignore invalid range headers
+            pass
     
     content_length = end - start + 1
+    session = get_stream_manager().register_stream(file_path, "http-client")
     
     def stream_chunks_optimized():
-        """Optimized streaming with larger buffers and better memory management"""
-        with open(file_path, "rb") as file:
-            file.seek(start)
+        """Optimized streaming with larger buffers, StreamManager registration, and proper lifecycle hooks"""
+        sent = 0
+        interrupted = False
+        file_handle = None
+        try:
+            file_handle = open(file_path, "rb")
+            session.file_handle = file_handle
+            file_handle.seek(start)
             remaining = content_length
             
-            # [START] Use larger buffer reads for maximum speed
             while remaining > 0:
-                # Dynamic chunk sizing - use full CHUNK_SIZE unless near end
+                if session.cancel_event.is_set():
+                    interrupted = True
+                    break
                 chunk_size = min(CHUNK_SIZE, remaining)
-                chunk = file.read(chunk_size)
+                chunk = file_handle.read(chunk_size)
                 if not chunk:
                     break
                 remaining -= len(chunk)
+                sent += len(chunk)
                 yield chunk
+        except Exception as e:
+            interrupted = True
+            print(f"[STREAM] Chunked download session {session.session_id} error for '{safe_name}': {e}")
+        finally:
+            get_stream_manager().unregister_stream(session)
+            if file_handle is not None:
+                try:
+                    file_handle.close()
+                except Exception:
+                    pass
+            if release_slot_cb:
+                try:
+                    release_slot_cb(bytes_transferred=sent, interrupted=interrupted or (sent < content_length))
+                except Exception:
+                    pass
 
     headers = {
         "Content-Disposition": f'{disposition_type}; filename="{safe_name}"',
         "Content-Length": str(content_length),
         "Cache-Control": "public, max-age=86400",
         "X-Accel-Buffering": "no",
-        "X-Download-Type": "high-performance-chunked",  # Updated indicator
+        "X-Download-Type": "high-performance-chunked",
         "Accept-Ranges": "bytes",
-        "X-Chunk-Size": "16MB"  # Performance indicator
+        "X-Chunk-Size": "16MB"
     }
     
-    # Add Content-Range header for partial content
     if range_header:
         headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
-        status_code = 206  # Partial Content
+        status_code = 206
     else:
         status_code = 200
 
@@ -1910,7 +1970,6 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
 
             if not deleted and file_path.exists():
                 try:
-                    import uuid
                     trash_name = file_path.parent / f".trash_{uuid.uuid4().hex[:8]}_{file_path.name}"
                     file_path.rename(trash_name)
                     try:

@@ -359,6 +359,11 @@ class VersionManager:
             meta["logicalFiles"].pop(logical_file_id, None)
 
             save_metadata(meta)
+            try:
+                from app.core.download_engine import download_engine_v2
+                download_engine_v2.stat_cache.invalidate(active_path)
+            except Exception:
+                pass
             return True
 
     @classmethod
@@ -375,6 +380,11 @@ class VersionManager:
                             child.unlink()
                 except Exception as e:
                     print(f"[VERSION_MANAGER] Warning purging versions directory: {e}")
+            try:
+                from app.core.download_engine import download_engine_v2
+                download_engine_v2.stat_cache.invalidate_all()
+            except Exception:
+                pass
             return save_metadata(meta)
 
     @classmethod
