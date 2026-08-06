@@ -41,6 +41,7 @@
             window.lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: el ? [el] : undefined });
         }
     }
+    window.refreshLucideIcons = refreshLucideIcons;
 
     function buildTrayItemHtml(item) {
         var pct = Math.round(typeof window.getItemProgress === "function" ? window.getItemProgress(item) : (item.progress || 0));

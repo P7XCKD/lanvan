@@ -609,7 +609,7 @@
                     '</div>';
             }
             window._renderHasPainted = true;
-            refreshLucideIcons(container);
+            if (typeof window.refreshLucideIcons === "function") window.refreshLucideIcons(container);
             updateSelectionToolbar();
             try {
                 renderQuickAccess(originalFilesForQuickAccess
@@ -775,7 +775,7 @@
             console.error("[LANVAN UI] Quick access render failed during file-list paint:", e);
         }
 
-        refreshLucideIcons(container);
+        if (typeof window.refreshLucideIcons === "function") window.refreshLucideIcons(container);
         syncFileTableHeadWidth();
     }
 
