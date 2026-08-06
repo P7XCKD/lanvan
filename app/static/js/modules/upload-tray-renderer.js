@@ -7,6 +7,41 @@
 (function (window) {
     'use strict';
 
+    function saveUploadQueueToStorage() {
+        var queue = (typeof window.getUploadQueue === "function" ? window.getUploadQueue() : window.uploadQueue);
+        if (!Array.isArray(queue)) return;
+        var currentFolder = typeof window.getCurrentFolderPath === 'function' ? window.getCurrentFolderPath() : (window.currentFolderPath || "");
+        var serialized = queue.map(function (item) {
+            return {
+                id: item.id,
+                fileName: item.fileName || item.name,
+                fileSize: item.fileSize || item.size,
+                progress: item.progress,
+                status: item.status,
+                uploadTime: item.uploadTime,
+                isFolder: item.isFolder,
+                targetDir: item.targetDir || currentFolder || ""
+            };
+        });
+        try { localStorage.setItem("lanvan_upload_queue", JSON.stringify(serialized)); } catch (e) { }
+    }
+
+    var _trayRenderScheduled = false;
+    function scheduleUploadTrayRender() {
+        if (_trayRenderScheduled) return;
+        _trayRenderScheduled = true;
+        requestAnimationFrame(function () {
+            _trayRenderScheduled = false;
+            renderUploadTray();
+        });
+    }
+
+    function refreshLucideIcons(el) {
+        if (window.lucide && typeof window.lucide.createIcons === "function") {
+            window.lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: el ? [el] : undefined });
+        }
+    }
+
     function buildTrayItemHtml(item) {
         var pct = Math.round(typeof window.getItemProgress === "function" ? window.getItemProgress(item) : (item.progress || 0));
         var rawName = typeof window.getItemName === "function" ? window.getItemName(item) : (item.fileName || item.name || "File");
@@ -195,7 +230,6 @@
         }
     }
 
-
     function wireTrayItemListeners(el, item) {
         if (!el || !item) return;
         var cancelBtn = el.querySelector(".upload-toast-cancel-text");
@@ -231,36 +265,357 @@
     }
 
     function renderUploadTray() {
-        var container = document.getElementById("uploadToastContainer");
-        if (!container) return;
-        var queue = window.uploadQueue || [];
+        window.renderUploadTray = renderUploadTray;
+        var stack = document.getElementById("uploadToastStack");
+        if (!stack) return;
 
-        if (queue.length === 0) {
-            container.style.display = "none";
-            return;
+        var rawQueue = (typeof window.getUploadQueue === "function" ? window.getUploadQueue() : window.uploadQueue);
+        var queue = Array.isArray(rawQueue) ? rawQueue : [];
+        var activeUploads = queue.filter(function (item) {
+            return item && (item.status === "UPLOADING" || item.status === "QUEUED" || item.status === "PROCESSING" || item.status === "PAUSED" || item.status === "COMPLETED" || item.status === "DELETED");
+        });
+
+        stack.classList.add("active");
+
+        if (!stack.__delegatedEvents) {
+            stack.__delegatedEvents = true;
+            stack.addEventListener("click", function (e) {
+                var cancelBtn = e.target.closest(".upload-toast-cancel-text");
+                if (cancelBtn) {
+                    e.stopPropagation();
+                    var uploadId = cancelBtn.getAttribute("data-upload-id");
+                    if (uploadId && typeof window.cancelUpload === "function") {
+                        window.cancelUpload(parseInt(uploadId, 10) || uploadId);
+                    }
+                    return;
+                }
+                var resumeBtn = e.target.closest(".upload-toast-resume-text");
+                if (resumeBtn) {
+                    e.stopPropagation();
+                    var uploadId = resumeBtn.getAttribute("data-upload-id");
+                    if (uploadId && typeof window.resumeUpload === "function") {
+                        window.resumeUpload(parseInt(uploadId, 10) || uploadId);
+                    }
+                    return;
+                }
+            });
         }
 
-        container.style.display = "flex";
-        var itemsContainer = document.getElementById("uploadToastItems") || container;
-        var actionsContainer = document.getElementById("uploadToastActions") || container;
+        activeUploads.sort(function (a, b) {
+            function getCategoryScore(item) {
+                if (item.status === 'UPLOADING' || item.status === 'PROCESSING') return 1;
+                if (item.status === 'QUEUED' || item.status === 'PAUSED') return 2;
+                if (item.status === 'COMPLETED') return 3;
+                if (item.status === 'DELETED') return 4;
+                return 5;
+            }
 
-        var html = "";
-        for (var i = 0; i < queue.length; i++) {
-            html += buildTrayItemHtml(queue[i]);
+            var scoreA = getCategoryScore(a);
+            var scoreB = getCategoryScore(b);
+
+            if (scoreA !== scoreB) {
+                return scoreA - scoreB;
+            }
+
+            if (scoreA === 3) {
+                var idA = a.id || 0;
+                var idB = b.id || 0;
+                return idB - idA;
+            }
+
+            return (a.id || 0) - (b.id || 0);
+        });
+
+        var bodyEl = stack.querySelector(".upload-toast-body");
+
+        var totalCount = activeUploads.length;
+        var activePendingCount = activeUploads.filter(function (item) { return item.status === "UPLOADING" || item.status === "PROCESSING" || item.status === "QUEUED"; }).length;
+        var pausedCount = activeUploads.filter(function (item) { return item.status === "PAUSED"; }).length;
+        var completedOrDeletedCount = activeUploads.filter(function (item) { return item.status === "COMPLETED" || item.status === "DELETED"; }).length;
+        var isAllCompleted = totalCount > 0 && completedOrDeletedCount === totalCount && pausedCount === 0 && activePendingCount === 0;
+
+        if (completedOrDeletedCount > 5) {
+            var activePendingItems = activeUploads.filter(function (item) {
+                return item.status === "UPLOADING" || item.status === "PROCESSING" || item.status === "QUEUED" || item.status === "PAUSED";
+            });
+            var completedItems = activeUploads.filter(function (item) {
+                return item.status === "COMPLETED" || item.status === "DELETED";
+            }).slice(0, 5);
+            activeUploads = activePendingItems.concat(completedItems);
         }
-        itemsContainer.innerHTML = html;
 
-        for (var j = 0; j < queue.length; j++) {
-            var itemEl = document.getElementById("toast-item-" + queue[j].id);
-            if (itemEl) {
-                wireTrayItemListeners(itemEl, queue[j]);
+        if (isAllCompleted && totalCount > 0) {
+            if (!window._trayAutoDismissTimer) {
+                window._trayAutoDismissTimer = setTimeout(function () {
+                    window._trayAutoDismissTimer = null;
+                    if (window.LanvanStore) {
+                        window.LanvanStore.dispatch("CLEAR_COMPLETED_UPLOADS");
+                        renderUploadTray();
+                    }
+                }, 5000);
+            }
+        } else {
+            if (window._trayAutoDismissTimer) {
+                clearTimeout(window._trayAutoDismissTimer);
+                window._trayAutoDismissTimer = null;
             }
         }
-        wireHeaderActions(actionsContainer);
+
+        activeUploads.forEach(function (item) {
+            if (item && (item.status === 'DELETED' || item.status === 'CANCELLED') && !item._dismissTimer) {
+                item._dismissTimer = setTimeout(function () {
+                    if (window.LanvanStore) {
+                        var curQueue = window.LanvanStore.getState().uploadQueue.filter(function (i) { return i && i.id != item.id; });
+                        window.LanvanStore.dispatch("SYNC_QUEUE", { queue: curQueue });
+                        renderUploadTray();
+                    }
+                }, 2000);
+            }
+        });
+
+        saveUploadQueueToStorage();
+
+        if (totalCount === 0 || window.uploadTrayDocked) {
+            stack.classList.add("empty-state");
+        } else {
+            stack.classList.remove("empty-state");
+        }
+
+        var batchSummary = window.buildUploadBatchSummary
+            ? window.buildUploadBatchSummary(window.uploadQueue || [])
+            : { totalFiles: totalCount, isComplete: isAllCompleted, percent: 0, totalSpeed: 0, status: 'IDLE' };
+        var formatted = window.formatUploadBatchStatus
+            ? window.formatUploadBatchStatus(batchSummary)
+            : { title: "Uploading...", subtitle: "", percent: 0, speedStr: "", status: "UPLOADING" };
+
+        var avgPct = formatted.percent;
+        var headerTitle = formatted.line1;
+        var headerSubtitle = formatted.line2 || "";
+
+        var headerTitleEl = stack.querySelector(".upload-toast-header-title");
+        var headerProgressBar = stack.querySelector(".header-progress-bar");
+        bodyEl = stack.querySelector(".upload-toast-body");
+
+        if (!headerTitleEl || !bodyEl) {
+            var itemsHtml = "";
+            for (var i = 0; i < activeUploads.length; i++) {
+                itemsHtml += buildTrayItemHtml(activeUploads[i]);
+            }
+
+            var isBodyCollapsed = !window.uploadManagerExpanded;
+            var bodyClass = isBodyCollapsed ? "upload-toast-body collapsed" : "upload-toast-body";
+            var headerActionsHtml = buildHeaderActionsHtml(isAllCompleted, pausedCount, window.uploadManagerExpanded, totalCount, window.uploadTrayDocked);
+
+            var widgetHtml =
+                '<div class="upload-toast-header" style="position: relative; overflow: hidden;">' +
+                '<div class="header-progress-bar" style="position: absolute; top:0; left:0; bottom:0; background: rgba(59, 130, 246, 0.08); z-index: 1; transition: width 0.2s ease-out; width: ' + avgPct + '%;"></div>' +
+                '<div style="position: relative; z-index: 2; display: flex; flex-direction: column; min-width: 0; flex: 1;">' +
+                '<span class="upload-toast-header-title">' + headerTitle + '</span>' +
+                '<div class="upload-toast-header-subtitle" style="font-size:0.72rem;color:var(--text-muted);opacity:0.85;white-space:nowrap;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:16px;">' +
+                '<span class="tray-speed-text">' + (formatted.speed || headerSubtitle || "Calculating...") + '</span>' +
+                '</div>' +
+                '</div>' +
+                '<div class="upload-toast-header-actions" style="position: relative; z-index: 2; display: flex; align-items: center;">' +
+                headerActionsHtml +
+                '</div>' +
+                '</div>' +
+                '<div class="' + bodyClass + '">' +
+                itemsHtml +
+                '</div>';
+
+            stack.innerHTML = widgetHtml;
+            refreshLucideIcons(stack);
+
+            wireHeaderActions(stack.querySelector(".upload-toast-header-actions"));
+
+            stack.querySelector(".upload-toast-header").addEventListener("click", function (e) {
+                if (!e.target.closest(".upload-toast-header-actions")) {
+                    var queue = window.uploadQueue || [];
+                    var hasItems = queue.some(function (item) {
+                        return item && (item.status === "UPLOADING" || item.status === "QUEUED" || item.status === "PROCESSING" || item.status === "PAUSED" || item.status === "COMPLETED" || item.status === "DELETED");
+                    });
+                    if (!hasItems) return;
+
+                    window.uploadManagerExpanded = !window.uploadManagerExpanded;
+                    var body = stack.querySelector(".upload-toast-body");
+                    if (body) {
+                        if (window.uploadManagerExpanded) {
+                            body.classList.remove("collapsed");
+                        } else {
+                            body.classList.add("collapsed");
+                        }
+                    }
+                    var actionsEl = stack.querySelector(".upload-toast-header-actions");
+                    if (actionsEl) {
+                        actionsEl.innerHTML = buildHeaderActionsHtml(isAllCompleted, pausedCount, window.uploadManagerExpanded, totalCount, window.uploadTrayDocked);
+                        wireHeaderActions(actionsEl);
+                    }
+                }
+            });
+
+            headerTitleEl = stack.querySelector(".upload-toast-header-title");
+            headerProgressBar = stack.querySelector(".header-progress-bar");
+            bodyEl = stack.querySelector(".upload-toast-body");
+
+            for (var i = 0; i < activeUploads.length; i++) {
+                var item = activeUploads[i];
+                var itemEl = stack.querySelector("#toast-item-" + item.id);
+                if (itemEl) {
+                    wireTrayItemListeners(itemEl, item);
+                }
+            }
+        }
+
+        if (!stack._trayDOMCache) {
+            stack._trayDOMCache = {
+                title: stack.querySelector(".upload-toast-header-title"),
+                subtitle: stack.querySelector(".upload-toast-header-subtitle"),
+                speedEl: stack.querySelector(".tray-speed-text"),
+                progressBar: stack.querySelector(".header-progress-bar")
+            };
+        }
+        var trayDOM = stack._trayDOMCache;
+
+        if (trayDOM.title && trayDOM.title.textContent !== headerTitle) {
+            trayDOM.title.textContent = headerTitle;
+        }
+        if (trayDOM.subtitle) {
+            var speedTxt = formatted.speed || headerSubtitle || ((batchSummary.state === 'UPLOADING' || batchSummary.state === 'PROCESSING') ? "Calculating..." : "");
+            if (speedTxt) {
+                if (trayDOM.speedEl && trayDOM.speedEl.textContent !== speedTxt) {
+                    trayDOM.speedEl.textContent = speedTxt;
+                }
+            }
+        }
+        if (trayDOM.progressBar) {
+            var newWidth = avgPct + "%";
+            if (trayDOM.progressBar.style.width !== newWidth) {
+                trayDOM.progressBar.style.width = newWidth;
+            }
+        }
+
+        var actionsContainer = stack.querySelector(".upload-toast-header-actions");
+        if (actionsContainer) {
+            var newActionsHtml = buildHeaderActionsHtml(isAllCompleted, pausedCount, window.uploadManagerExpanded, totalCount, window.uploadTrayDocked);
+            if (actionsContainer.getAttribute("data-last-html") !== newActionsHtml) {
+                actionsContainer.setAttribute("data-last-html", newActionsHtml);
+                actionsContainer.innerHTML = newActionsHtml;
+                wireHeaderActions(actionsContainer);
+                refreshLucideIcons(actionsContainer);
+            }
+        }
+
+        if (bodyEl) {
+            if (window.uploadManagerExpanded) {
+                bodyEl.classList.remove("collapsed");
+            } else {
+                bodyEl.classList.add("collapsed");
+            }
+        }
+
+        var activeIds = {};
+        for (var i = 0; i < activeUploads.length; i++) {
+            var item = activeUploads[i];
+            activeIds[item.id] = true;
+            var itemEl = bodyEl.querySelector("#toast-item-" + item.id);
+            if (!itemEl) {
+                var tempDiv = document.createElement("div");
+                tempDiv.innerHTML = buildTrayItemHtml(item);
+                var newItemEl = tempDiv.firstChild;
+                bodyEl.appendChild(newItemEl);
+                refreshLucideIcons(newItemEl);
+                wireTrayItemListeners(newItemEl, item);
+            } else {
+                var pct = Math.round(item.progress || 0);
+                var sizeStr = typeof formatSize === "function" ? formatSize(item.fileSize) : (item.fileSize + " B");
+
+                var metaText = "";
+                var fillStyle = "";
+                var actionHtml = "";
+
+                if (item.status === 'DELETED' || item.status === 'CANCELLED') {
+                    metaText = sizeStr + " • " + (item.status === 'DELETED' ? 'Deleted' : 'Cancelled');
+                    fillStyle = 'rgba(220, 38, 38, 0.12)';
+                    actionHtml = '<span style="color: #dc2626; display: flex; align-items: center; margin-right: 8px;"><i data-lucide="' + (item.status === 'DELETED' ? 'trash-2' : 'x') + '" style="width:16px;height:16px;"></i></span>';
+                } else if (item.status === 'COMPLETED' || (pct >= 100 && item.status !== 'UPLOADING' && item.status !== 'PAUSED')) {
+                    var timeStr = item.uploadTime ? item.uploadTime + "s" : "completed";
+                    metaText = sizeStr + " • Completed (" + timeStr + ")";
+                    fillStyle = 'rgba(24, 128, 56, 0.08)';
+                    pct = 100;
+                    actionHtml = '<span style="color: var(--green); display: inline-flex; align-items: center; justify-content: center; margin-right: 8px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>';
+                } else if (item.status === 'QUEUED') {
+                    metaText = sizeStr + " • Queued";
+                    fillStyle = 'transparent';
+                    pct = 0;
+                } else {
+                    metaText = sizeStr + " • " + pct + "%";
+                    fillStyle = 'rgba(59, 130, 246, 0.08)';
+                }
+
+                var metaEl = itemEl.querySelector(".upload-toast-meta");
+                if (metaEl && metaEl.textContent !== metaText) metaEl.textContent = metaText;
+
+                var progressFill = itemEl.querySelector(".toast-progress-bar");
+                if (progressFill) {
+                    var newWidth = pct + "%";
+                    if (progressFill.style.width !== newWidth) progressFill.style.width = newWidth;
+                    if (progressFill.style.background !== fillStyle) progressFill.style.background = fillStyle;
+                }
+
+                if (item.status === 'COMPLETED' || item.status === 'DELETED') {
+                    var itemActionsContainer = itemEl.querySelector(".upload-toast-actions");
+                    if (itemActionsContainer && itemActionsContainer.querySelector(".upload-toast-cancel-text")) {
+                        itemActionsContainer.innerHTML = actionHtml;
+                        refreshLucideIcons(itemActionsContainer);
+                    }
+                    wireTrayItemListeners(itemEl, item);
+                }
+
+                if (bodyEl.children[i] !== itemEl) {
+                    bodyEl.appendChild(itemEl);
+                }
+            }
+        }
+
+        var existingItems = bodyEl.querySelectorAll(".upload-toast");
+        for (var j = 0; j < existingItems.length; j++) {
+            var itemEl = existingItems[j];
+            var idAttr = itemEl.getAttribute("id");
+            if (idAttr) {
+                var itemId = parseInt(idAttr.replace("toast-item-", ""));
+                if (!activeIds[itemId]) {
+                    itemEl.remove();
+                }
+            }
+        }
+
+        refreshLucideIcons(stack);
+    }
+
+    var uploadTrayInterval = null;
+    function startUploadTrayPolling() {
+        if (uploadTrayInterval) return;
+        uploadTrayInterval = setInterval(function () {
+            var queue = window.uploadQueue || [];
+            var activeCount = queue.filter(function (item) {
+                return item.status === "UPLOADING" || item.status === "QUEUED" || item.status === "PROCESSING" || item.status === "PAUSED";
+            }).length;
+            if (activeCount === 0) {
+                renderUploadTray();
+                clearInterval(uploadTrayInterval);
+                uploadTrayInterval = null;
+            } else {
+                renderUploadTray();
+            }
+        }, 500);
     }
 
     window.UploadTrayRenderer = {
         render: renderUploadTray,
+        renderUploadTray: renderUploadTray,
+        scheduleUploadTrayRender: scheduleUploadTrayRender,
+        saveUploadQueueToStorage: saveUploadQueueToStorage,
+        startUploadTrayPolling: startUploadTrayPolling,
         buildTrayItemHtml: buildTrayItemHtml,
         buildHeaderActionsHtml: buildHeaderActionsHtml,
         wireHeaderActions: wireHeaderActions,
@@ -268,6 +623,9 @@
     };
 
     window.renderUploadTray = renderUploadTray;
+    window.scheduleUploadTrayRender = scheduleUploadTrayRender;
+    window.saveUploadQueueToStorage = saveUploadQueueToStorage;
+    window.startUploadTrayPolling = startUploadTrayPolling;
     window.buildTrayItemHtml = buildTrayItemHtml;
     window.buildHeaderActionsHtml = buildHeaderActionsHtml;
     window.wireHeaderActions = wireHeaderActions;
