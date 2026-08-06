@@ -2732,7 +2732,10 @@
 
         if (window._currentNetworkInfo) {
             var url = window._currentNetworkInfo.lanIpUrl;
-            if (isMdns && window._currentNetworkInfo.networkInfo && window._currentNetworkInfo.networkInfo.mdns) {
+            var isMdnsActive = window._currentNetworkInfo.networkInfo && 
+                               window._currentNetworkInfo.networkInfo.mdns && 
+                               window._currentNetworkInfo.networkInfo.mdns.status === 'active';
+            if (isMdns && isMdnsActive) {
                 url = window._currentNetworkInfo.networkInfo.mdns.url || url;
             }
             window._currentNetworkInfo.fullUrl = url;
@@ -4555,15 +4558,21 @@
                     currentMode: useMDNS ? "mdns" : "ip"
                 };
 
-                // Sync tab UI highlights with initial default URL
+                // Sync tab UI highlights & visibility with initial default URL
                 var lanTab = document.getElementById("lanIpTab");
                 var mdnsTab = document.getElementById("mdnsTab");
                 var qrLanTab = document.getElementById("connectQrLanIpTab");
                 var qrMdnsTab = document.getElementById("connectQrMdnsTab");
                 if (lanTab) lanTab.classList.toggle("active", !useMDNS);
-                if (mdnsTab) mdnsTab.classList.toggle("active", useMDNS);
+                if (mdnsTab) {
+                    mdnsTab.classList.toggle("active", useMDNS);
+                    mdnsTab.style.display = useMDNS ? "" : "none";
+                }
                 if (qrLanTab) qrLanTab.classList.toggle("active", !useMDNS);
-                if (qrMdnsTab) qrMdnsTab.classList.toggle("active", useMDNS);
+                if (qrMdnsTab) {
+                    qrMdnsTab.classList.toggle("active", useMDNS);
+                    qrMdnsTab.style.display = useMDNS ? "" : "none";
+                }
 
                 renderSidebarQR();
             }).catch(function (err) {

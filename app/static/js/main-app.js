@@ -5544,6 +5544,10 @@ async function updateMDNSStatus() {
           if (typeof setConnectMode === 'function') {
             setConnectMode('mdns');
           }
+          const mdnsTab = document.getElementById('mdnsTab');
+          const qrMdnsTab = document.getElementById('connectQrMdnsTab');
+          if (mdnsTab) mdnsTab.style.display = '';
+          if (qrMdnsTab) qrMdnsTab.style.display = '';
           refreshConnectionInfo();
         }
       } else if (qrHintText && qrHintText.innerHTML.includes('mDNS:')) {
@@ -5551,6 +5555,11 @@ async function updateMDNSStatus() {
         qrHintText.innerHTML = '• Click for QR code';
         qrHintText.style.color = 'var(--protocol-text)';
         qrHintText.title = '';
+
+        const mdnsTab = document.getElementById('mdnsTab');
+        const qrMdnsTab = document.getElementById('connectQrMdnsTab');
+        if (mdnsTab) mdnsTab.style.display = 'none';
+        if (qrMdnsTab) qrMdnsTab.style.display = 'none';
 
         if (typeof setConnectMode === 'function') {
           setConnectMode('ip');
