@@ -106,7 +106,7 @@
             });
         }
 
-        // Click card to select
+        // Click card to select & open preview
         var cards = container.querySelectorAll(".quick-card");
         for (var k = 0; k < cards.length; k++) {
             cards[k].addEventListener("click", function (e) {
@@ -123,6 +123,9 @@
                 window.selectedItems = current;
                 if (typeof window.updateSelectionToolbar === "function") {
                     window.updateSelectionToolbar();
+                }
+                if (typeof window.openFilePreview === "function") {
+                    window.openFilePreview(fname);
                 }
             });
         }

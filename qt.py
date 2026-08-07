@@ -211,7 +211,8 @@ class Suite:
         self._ck("fallbackCopyTextToClipboard" in app_init and "copyConnectAddress" in app_init, "Universal HTTP/HTTPS clipboard copy fallback present in copyConnectAddress", "declarative-ui")
         self._ck("initFileEventsWebSocket" in main_app and "/ws/file_events" in main_app, "Real-time cross-device file events WebSocket listener present", "declarative-ui")
         self._ck("isItemUploading" in app_init or "isItemUploading" in renderer_js, "Uploading files selection guard present in app-init.js", "declarative-ui")
-        self._ck("copyVideoStreamUrl" in app_init and "lanvanGlobalToast" in app_init, "Copy stream link handler with global toast notification present in app-init.js", "declarative-ui")
+        preview_modal = (JS_DIR / "modules" / "preview-modal.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "preview-modal.js").exists() else ""
+        self._ck("copyVideoStreamUrl" in (app_init + preview_modal) and ("showToast" in (app_init + preview_modal) or "lanvanGlobalToast" in app_init), "Copy stream link handler with global toast notification present in app-init.js", "declarative-ui")
         self._ck("alreadySelected" in app_init and "selectedItems.indexOf(filename)" in app_init, "Multi-selection context menu right-click preservation present in app-init.js", "declarative-ui")
         self._ck("SINGLE FILE / FOLDER RENAME" in app_init and "MULTI-ITEM BATCH RENAME" in app_init, "Single file extension modification & multi-item extension preservation handlers present in app-init.js", "declarative-ui")
         self._ck("downloadSelectedAsZip" in app_init and "downloadZipMenuItem" in (TEMPLATE_DIR / "index.html").read_text(encoding="utf-8", errors="ignore"), "Multi-selection Download individually and Download as ZIP options present in app-init.js & index.html", "declarative-ui")

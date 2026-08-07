@@ -370,6 +370,9 @@
                     if (typeof handleListItemClick === "function") {
                         handleListItemClick(item, index, files, e);
                     }
+                    if (typeof window.openFilePreview === "function") {
+                        window.openFilePreview(name);
+                    }
                 });
 
                 item.addEventListener("contextmenu", function (e) {
