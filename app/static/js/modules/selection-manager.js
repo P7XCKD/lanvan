@@ -304,15 +304,96 @@
         initMarqueeSelection();
     }
 
+    function isItemUploading(filename) {
+        if (!filename) return false;
+        var lastRenderedFiles = window.lastRenderedFiles;
+        if (lastRenderedFiles && lastRenderedFiles.length > 0) {
+            var r = lastRenderedFiles.find(function (f) {
+                return f && (f.name === filename || (typeof f === 'string' && f === filename));
+            });
+            var activeStatus = r && (r.uploadStatus === 'UPLOADING' || r.uploadStatus === 'QUEUED' ||
+                r.uploadStatus === 'PROCESSING' || r.uploadStatus === 'PAUSED');
+            if (r && (r.uploading || activeStatus)) return true;
+        }
+        var queue = window.uploadQueue || [];
+        var targetBase = filename.split("/").pop().split("\\").pop();
+        for (var i = 0; i < queue.length; i++) {
+            var item = queue[i];
+            if (!item) continue;
+            var status = item.status;
+            if (status === 'UPLOADING' || status === 'QUEUED' || status === 'PROCESSING' || status === 'PAUSED') {
+                var names = [
+                    item.fileName,
+                    item.name,
+                    item.file ? item.file.name : "",
+                    item.relativePath,
+                    typeof window.getItemName === "function" ? window.getItemName(item) : ""
+                ];
+                for (var j = 0; j < names.length; j++) {
+                    var n = names[j];
+                    if (!n) continue;
+                    if (n === filename || n.split("/").pop().split("\\").pop() === targetBase) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function handleListItemClick(item, index, files, e) {
+        var name = files[index];
+        if (!name) return;
+        console.log("%c[LANVAN UI] 👆 Item clicked: '%s'", "color:#10b981; font-weight:bold;", name);
+        var current = Array.isArray(window.selectedItems) ? window.selectedItems.slice() : [];
+        var isTouchLongPress = e && e.isLongPress;
+        var isMulti = (e && (e.ctrlKey || e.metaKey)) || isTouchLongPress || (current.length > 0);
+        var isShift = e && e.shiftKey;
+
+        if (isShift && window._lastSelectedIndex !== undefined && window._lastSelectedIndex !== null) {
+            var start = Math.min(window._lastSelectedIndex, index);
+            var end = Math.max(window._lastSelectedIndex, index);
+            for (var k = start; k <= end; k++) {
+                var fName = files[k];
+                if (fName && current.indexOf(fName) === -1 && !isItemUploading(fName)) {
+                    current.push(fName);
+                }
+            }
+        } else if (isMulti) {
+            var pos = current.indexOf(name);
+            if (pos > -1) {
+                current.splice(pos, 1);
+            } else {
+                if (!isItemUploading(name)) {
+                    current.push(name);
+                }
+            }
+            window._lastSelectedIndex = index;
+        } else {
+            var alreadyInSelection = current.indexOf(name) !== -1;
+            if (alreadyInSelection && current.length === 1) {
+                current = [];
+            } else {
+                if (!isItemUploading(name)) {
+                    current = [name];
+                }
+            }
+            window._lastSelectedIndex = index;
+        }
+        window.selectedItems = current;
+        updateSelectionToolbar();
+    }
+
     window.SelectionManager = {
         updateSelectionToolbar: updateSelectionToolbar,
         clearSelection: clearSelection,
         selectAll: selectAll,
-        initMarqueeSelection: initMarqueeSelection
+        initMarqueeSelection: initMarqueeSelection,
+        handleListItemClick: handleListItemClick,
+        isItemUploading: isItemUploading
     };
 
     window.updateSelectionToolbar = updateSelectionToolbar;
     window.clearSelection = clearSelection;
     window.selectAll = selectAll;
+    window.handleListItemClick = handleListItemClick;
 
 })(window);
