@@ -203,11 +203,14 @@ class Suite:
         self._ck("function resumeUpload" in main_app and "triggerInstantUIUpdate" in main_app, "resumeUpload mutates state and triggers triggerInstantUIUpdate", "declarative-ui")
 
         app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
+        m3_renderer = (JS_DIR / "modules" / "m3-file-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "m3-file-renderer.js").exists() else ""
+        renderer_js = app_init + m3_renderer
+
         self._ck('e.key === "Escape"' in app_init and "window.clearSelection()" in app_init, "Escape key clears selection handler present", "declarative-ui")
-        self._ck("navigateIntoFolder" in app_init, "Immediate folder click navigation handler present", "declarative-ui")
+        self._ck("navigateIntoFolder" in renderer_js, "Immediate folder click navigation handler present", "declarative-ui")
         self._ck("fallbackCopyTextToClipboard" in app_init and "copyConnectAddress" in app_init, "Universal HTTP/HTTPS clipboard copy fallback present in copyConnectAddress", "declarative-ui")
         self._ck("initFileEventsWebSocket" in main_app and "/ws/file_events" in main_app, "Real-time cross-device file events WebSocket listener present", "declarative-ui")
-        self._ck("isItemUploading" in app_init, "Uploading files selection guard present in app-init.js", "declarative-ui")
+        self._ck("isItemUploading" in app_init or "isItemUploading" in renderer_js, "Uploading files selection guard present in app-init.js", "declarative-ui")
         self._ck("copyVideoStreamUrl" in app_init and "lanvanGlobalToast" in app_init, "Copy stream link handler with global toast notification present in app-init.js", "declarative-ui")
         self._ck("alreadySelected" in app_init and "selectedItems.indexOf(filename)" in app_init, "Multi-selection context menu right-click preservation present in app-init.js", "declarative-ui")
         self._ck("SINGLE FILE / FOLDER RENAME" in app_init and "MULTI-ITEM BATCH RENAME" in app_init, "Single file extension modification & multi-item extension preservation handlers present in app-init.js", "declarative-ui")
@@ -232,6 +235,8 @@ class Suite:
     def test_zero_flicker_dom_stability(self):
         HEAD("ZERO-FLICKER DOM STABILITY (§7)")
         app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
+        m3_renderer = (JS_DIR / "modules" / "m3-file-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "m3-file-renderer.js").exists() else ""
+        renderer_js = app_init + m3_renderer
         css = (CSS_DIR / "lanvan.css").read_text(encoding="utf-8", errors="ignore")
 
         # DOM Node Re-ordering Guard
@@ -240,7 +245,7 @@ class Suite:
         # CSS layout shift prevention
         self._ck("scrollbar-gutter: stable" in css, "Scrollbar gutter stable in CSS (prevents layout shift)", "zero-flicker")
         self._ck("flex-shrink: 0" in css, "flex-shrink: 0 applied on dynamic notification action items", "zero-flicker")
-        self._ck("Drop files here" in app_init, "Spacious empty state dropzone card rules defined", "zero-flicker")
+        self._ck("Drop files here" in renderer_js, "Spacious empty state dropzone card rules defined", "zero-flicker")
 
     def test_search_system_integrity(self):
         HEAD("SEARCH SYSTEM & AUTOCOMPLETE INTEGRITY (§8)")
