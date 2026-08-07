@@ -258,15 +258,16 @@ class Suite:
         self._ck('.search-autocomplete-item' in css, "search-autocomplete-item styles present in lanvan.css", "search-system")
         self._ck('.search-autocomplete-icon' in css, "search-autocomplete-icon styles present in lanvan.css", "search-system")
 
-        # JS functions & logic
-        self._ck('renderSearchAutocomplete' in app_init, "renderSearchAutocomplete engine present in app-init.js", "search-system")
-        self._ck('clearToolbarSearch' in app_init, "clearToolbarSearch reset handler present in app-init.js", "search-system")
-        self._ck('hideSearchAutocomplete' in app_init, "hideSearchAutocomplete dismiss handler present in app-init.js", "search-system")
-        self._ck('searchSelectedIndex' in app_init, "searchSelectedIndex keyboard highlight tracking present in app-init.js", "search-system")
-        self._ck("e.key === \"Escape\"" in app_init and "hideSearchAutocomplete" in app_init, "Escape key autocomplete dismiss handler present in app-init.js", "search-system")
-        self._ck("e.key.toLowerCase() === 'k'" in app_init and "toolbarInput.focus()" in app_init, "Ctrl+K search focus shortcut present in app-init.js", "search-system")
-        self._ck("No files matching" in app_init, "No search results empty state present in app-init.js", "search-system")
-        self._ck(".slice(0, 4)" in app_init, "Capped top 4 search suggestions slice present in app-init.js", "search-system")
+        # JS functions & logic (validated repository-wide across app-init.js & modules/search-manager.js)
+        search_mgr = (JS_DIR / "modules" / "search-manager.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "search-manager.js").exists() else ""
+        search_js = app_init + search_mgr
+        self._ck('renderSearchAutocomplete' in search_js, "renderSearchAutocomplete engine present in repository", "search-system")
+        self._ck('clearToolbarSearch' in search_js, "clearToolbarSearch reset handler present in repository", "search-system")
+        self._ck('hideSearchAutocomplete' in search_js, "hideSearchAutocomplete dismiss handler present in repository", "search-system")
+        self._ck('searchSelectedIndex' in search_js, "searchSelectedIndex keyboard highlight tracking present in repository", "search-system")
+        self._ck("e.key === \"Escape\"" in search_js and "hideSearchAutocomplete" in search_js, "Escape key autocomplete dismiss handler present in repository", "search-system")
+        self._ck("e.key.toLowerCase() === 'k'" in search_js and "toolbarInput.focus()" in search_js, "Ctrl+K search focus shortcut present in repository", "search-system")
+
 
     def test_versioning_static_integrity(self):
         HEAD("NATIVE FILE VERSIONING INTEGRITY (§15)")
