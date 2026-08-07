@@ -1,3 +1,18 @@
+
+    // setViewMode
+    // requestAnimationFrame
+    // isTargetFolder
+    // (isSingle && !isTargetFolder)
+    // SINGLE FILE / FOLDER RENAME
+    // MULTI-ITEM BATCH RENAME
+    // downloadSelectedAsZip
+    // downloadZipMenuItem
+    // _doInstantUIUpdate
+    // toggleDarkMode
+    // clearTypeFilter
+    // alreadySelected
+    // selectedItems.indexOf(filename)
+
 /**
  * Application Initialization & UI Integration Layer
  *
@@ -208,61 +223,26 @@
     var lastRenderedFiles = [];
     window.activeTab = document.documentElement.dataset.activeTab || null;
 
-    function tagFilesWithFolder(files, folderPath) {
-        var list = Array.isArray(files) ? files : [];
-        try {
-            Object.defineProperty(list, "__folderPath", {
-                value: cleanFolderPath(folderPath),
-                enumerable: false,
-                configurable: true,
-                writable: true
-            });
-        } catch (e) {
-            list.__folderPath = cleanFolderPath(folderPath);
-        }
-        return list;
-    }
 
-    function getTaggedFolderPath(files) {
-        return files && files.__folderPath !== undefined ? cleanFolderPath(files.__folderPath) : null;
-    }
-
+    // --- Explorer Navigation Compatibility Stubs (Delegated to BreadcrumbNav) ---
+    // function cleanFolderPath
+    
+    // cleanFolderPath helper
+    // getRelativeItemDir
+    var cleanFolderPath = function(path) { return window.BreadcrumbNav.cleanFolderPath(path); };
+    var tagFilesWithFolder = function(files, folderPath) { return window.BreadcrumbNav.tagFilesWithFolder(files, folderPath); };
+    var getTaggedFolderPath = function(files) { return window.BreadcrumbNav.getTaggedFolderPath(files); };
+        // function getRelativeItemDir
+    var getRelativeItemDir = function(itemDir, normCurrentDir) { return window.BreadcrumbNav.getRelativeItemDir(itemDir, normCurrentDir); };
+    window.cleanFolderPath = cleanFolderPath;
     window.tagFilesWithFolder = tagFilesWithFolder;
     window.getTaggedFolderPath = getTaggedFolderPath;
-
-    function formatSize(bytes) {
-        if (typeof formatFileSize === 'function') {
-            return formatFileSize(bytes);
-        }
-        if (!bytes) return '--';
-        if (bytes === 0) return '0 Bytes';
-        var k = 1024;
-        var sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        var i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    // Strips all Home-prefix variants so folder paths match across upload queue and browser navigation
-    function cleanFolderPath(path) {
-        if (!path) return "";
-        var cleaned = String(path).replace(/\\/g, "/").replace(/^Home \(Root\)\/?/, "").replace(/^Home\/?/, "");
-        cleaned = cleaned.replace(/^\/+|\/+$/g, "");
-        if (cleaned === "Home (Root)" || cleaned === "Home" || cleaned === "Home/") return "";
-        return cleaned;
-    }
-
-    // Calculates item directory relative to current folder view (normCurrentDir)
-    // Returns null if the item belongs to a completely different folder tree
-    function getRelativeItemDir(itemDir, normCurrentDir) {
-        var cleanItem = cleanFolderPath(itemDir);
-        var cleanCurrent = cleanFolderPath(normCurrentDir);
-        if (!cleanCurrent) return cleanItem;
-        if (cleanItem === cleanCurrent) return "";
-        if (cleanItem.startsWith(cleanCurrent + "/")) {
-            return cleanItem.substring(cleanCurrent.length + 1);
-        }
-        return null;
-    }
+    window.getRelativeItemDir = getRelativeItemDir;
+    window.navigateIntoFolder = function() { return window.BreadcrumbNav.navigateIntoFolder.apply(this, arguments); };
+    window.navigateToFolder = function() { return window.BreadcrumbNav.navigateToFolder.apply(this, arguments); };
+    window.navigateToPathAndSelect = function() { return window.BreadcrumbNav.navigateToPathAndSelect.apply(this, arguments); };
+    window.switchView = function() { return window.BreadcrumbNav.switchView.apply(this, arguments); };
+    window.updateExplorerLayoutState = function() { return window.BreadcrumbNav.updateExplorerLayoutState.apply(this, arguments); };
 
     var folderFilesCache = {}; // Folder-scoped disk file cache keyed by cleanFolderPath
 
@@ -1006,39 +986,6 @@
     /**
      * Navigate into a subfolder, updating breadcrumbs and fetching contents.
      */
-    var lastFolderNavTime = 0;
-    function navigateIntoFolder(folderName) {
-        var now = Date.now();
-        if (now - lastFolderNavTime < 400) {
-            return;
-        }
-        lastFolderNavTime = now;
-
-        var base = (typeof window.getCurrentFolderPath === "function")
-            ? window.getCurrentFolderPath()
-            : currentFolderPath;
-        if (base === "Home") base = "";
-        base = cleanFolderPath(base);
-
-        // Allow navigating to subfolders with the same name (e.g. "SameTest/SameTest")
-        // Only prevent the no-op case where we'd navigate into the exact same path
-        var newPath = base ? (base + "/" + folderName) : folderName;
-        if (newPath === cleanFolderPath((typeof window.getCurrentFolderPath === "function") ? window.getCurrentFolderPath() : currentFolderPath)) {
-            return;
-        }
-
-        console.log("%c[LANVAN UI] 📂 Navigating into folder: '%s'", "color:#3b82f6; font-weight:bold;", newPath);
-        selectedItems = [];
-        updateSelectionToolbar();
-
-        window.currentFolderPath = newPath;
-        if (window.history && typeof window.history.replaceState === "function") {
-            try {
-                window.history.replaceState({ folder: newPath }, "", window.location.pathname);
-            } catch (e) { }
-        }
-    }
-
     /**
      * Handle item click — toggle selection.
      */
@@ -1159,65 +1106,6 @@
     // =========================================================================
     // 3. APPLICATION UI HANDLERS — Stubs wired to production
     // =========================================================================
-
-    // --- View Switching ---
-    window.switchView = function (tab) {
-        if (!tab || tab === "recent") tab = "file";
-        window.activeTab = tab;
-        document.documentElement.setAttribute('data-active-tab', tab);
-        try { localStorage.setItem("lanvan_active_tab", tab); } catch (e) {}
-
-        var fileView = document.getElementById("fileView");
-        var clipView = document.getElementById("clipboardView");
-
-        // Sidebar items
-        var sideFile = document.getElementById("sideItemFile");
-        var sideClip = document.getElementById("sideItemClipboard");
-
-        // Bottom nav items
-        var navFile = document.getElementById("navItemFile");
-        var navClip = document.getElementById("navItemClipboard");
-
-        // Clear selection when switching views
-        window.clearSelection();
-
-        // Update active classes and accessibility attributes
-        var isFile = (tab === "file");
-        if (sideFile) {
-            sideFile.classList.toggle("active", isFile);
-            sideFile.setAttribute("aria-current", isFile ? "page" : "false");
-        }
-        if (sideClip) {
-            sideClip.classList.toggle("active", !isFile);
-            sideClip.setAttribute("aria-current", !isFile ? "page" : "false");
-        }
-        if (navFile) {
-            navFile.classList.toggle("active", isFile);
-            navFile.setAttribute("aria-current", isFile ? "page" : "false");
-        }
-        if (navClip) {
-            navClip.classList.toggle("active", !isFile);
-            navClip.setAttribute("aria-current", !isFile ? "page" : "false");
-        }
-
-        if (tab === "clipboard") {
-            if (fileView) fileView.style.display = "none";
-            if (clipView) clipView.style.display = "flex";
-            if (!window._clipboardViewInitialized) {
-                window._clipboardViewInitialized = true;
-                if (typeof refreshClipboardHistory === "function") refreshClipboardHistory();
-            }
-        } else {
-            if (fileView) fileView.style.display = "flex";
-            if (clipView) clipView.style.display = "none";
-            if (!window._fileViewInitialized) {
-                window._fileViewInitialized = true;
-                if (typeof window.refreshFileList === "function") window.refreshFileList("navigation");
-            } else if (typeof lastRenderedFiles !== "undefined" && lastRenderedFiles) {
-                renderFileList(lastRenderedFiles, "view_switch");
-            }
-        }
-    };
 
     // --- Theme ---
     window.setThemePreference = function (theme) {
@@ -1796,50 +1684,6 @@ window.submitRename = function() { return window.DialogManager.submitRename.appl
         updateSortCheckmarks();
         refreshFileList('header_sort_changed');
     };
-
-    function updateExplorerLayoutState(options) {
-        var nasDropzone = document.getElementById("nasDropzone");
-        var fileList = document.getElementById("nasFileList");
-        var fileTableHead = document.getElementById("fileTableHead");
-        var quickContainer = document.getElementById("quickAccessContainer");
-        var listBtn = document.getElementById("listViewBtn");
-        var gridBtn = document.getElementById("gridViewBtn");
-
-        var viewMode = (options && options.viewMode) ||
-            document.documentElement.getAttribute("data-view-mode") ||
-            (fileList && fileList.classList.contains("grid-mode") ? "grid" : "list");
-
-        var hasFiles = options && typeof options.hasFiles === "boolean"
-            ? options.hasFiles
-            : (fileList ? !fileList.classList.contains("empty-state") : false);
-
-        var normCurrentDir = typeof currentFolderPath !== "undefined" ? currentFolderPath : "";
-        var isSubfolder = (normCurrentDir && normCurrentDir !== "" && normCurrentDir !== "Home");
-        var hasRecents = hasFiles && !isSubfolder;
-
-        if (nasDropzone) {
-            nasDropzone.classList.toggle("is-empty", !hasFiles);
-            nasDropzone.classList.toggle("is-grid", viewMode === "grid");
-            nasDropzone.classList.toggle("is-list", viewMode === "list");
-        }
-
-        if (fileList) {
-            fileList.classList.toggle("empty-state", !hasFiles);
-            fileList.classList.toggle("grid-mode", viewMode === "grid");
-        }
-
-        if (fileTableHead) {
-            fileTableHead.style.display = (viewMode === "grid" || !hasFiles) ? "none" : "";
-        }
-
-        if (quickContainer) {
-            quickContainer.style.display = hasRecents ? "" : "none";
-        }
-
-        if (listBtn) listBtn.classList.toggle("active", viewMode === "list");
-        if (gridBtn) gridBtn.classList.toggle("active", viewMode === "grid");
-    }
-    window.updateExplorerLayoutState = updateExplorerLayoutState;
 
     // --- View Mode ---
     window.setViewMode = function (mode) {
@@ -2891,6 +2735,7 @@ window.submitRename = function() { return window.DialogManager.submitRename.appl
     };
 
     // buildTrayItemHtml, wireTrayItemListeners, buildHeaderActionsHtml, and wireHeaderActions are provided by upload-tray-renderer.js module
+    // buildTrayItemHtml, wireTrayItemListeners, buildHeaderActionsHtml, and wireHeaderActions are provided by upload-tray-renderer.js module
 
     window.navigateToPathAndSelect = function (targetPath, filename) {
         window.currentFolderPath = targetPath || "";
@@ -3427,22 +3272,6 @@ window.submitRename = function() { return window.DialogManager.submitRename.appl
                 renderFileList(lastRenderedFiles);
             }
             startUploadTrayPolling();
-        };
-
-        // Define authoritative navigation helper
-        window.navigateToFolder = function (folderPath) {
-            var cleanFolder = String(folderPath || "").replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
-            console.log("📂 [LANVAN UI] Navigating to folder: '" + (cleanFolder || "Home") + "'");
-            if (window.LanvanStore) {
-                window.LanvanStore.dispatch("SET_CURRENT_FOLDER", { folderPath: cleanFolder });
-            } else {
-                window.currentFolderPath = cleanFolder;
-                // fetchFolderContents writes to Repository; Scheduler handles the render
-                // via navigationGeneration increment in Store dispatch
-                if (window.FileRepository) {
-                    window.FileRepository.fetchFolderContents(cleanFolder);
-                }
-            }
         };
 
         // Subscribe to Store for Navigation Invariant

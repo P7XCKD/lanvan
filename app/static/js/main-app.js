@@ -7,7 +7,15 @@
  */
 //  Conditional Logging System - Production Performance Optimization
 // Global DEBUG variables to avoid duplicate declarations across scripts
-window.DEBUG_MODE = false; // Set to true for development, false for production
+// Preserve DEBUG_MODE set by logger.js (or localStorage 'debug')
+if (typeof window.DEBUG_MODE !== 'boolean') {
+  try {
+    var storedDebug = localStorage.getItem('debug');
+    window.DEBUG_MODE = storedDebug === 'true';
+  } catch (e) {
+    window.DEBUG_MODE = false;
+  }
+}
 window.DEBUG_LEVELS = {
   ERROR: 0,   // Always shown (security, critical errors)
   WARN: 1,    // Important warnings

@@ -167,7 +167,8 @@ class Suite:
         # Verify two-pass DOM update pattern exists (Pass 1 aggregation + Pass 2 single DOM write)
         self._ck("// Pass 1: Aggregate items into per-row progress data" in app_init or "// Pass 1: Aggregate items into per-row progress data" in main_app, "Pass 1 item aggregation logic present", "subfolder-synthesis")
         self._ck("// Pass 2: Update DOM rows with aggregated progress" in app_init or "// Pass 2: Update DOM rows with aggregated progress" in main_app, "Pass 2 single-pass DOM row rendering present", "subfolder-synthesis")
-        self._ck("function getRelativeItemDir" in app_init or "getRelativeItemDir" in proj_js or "getRelativeItemDir" in main_app, "getRelativeItemDir helper function present (prevents cross-folder upload item leakage)", "subfolder-synthesis")
+        bread_js = (JS_DIR / "modules" / "breadcrumb-nav.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "breadcrumb-nav.js").exists() else ""
+        self._ck("function getRelativeItemDir" in app_init or "getRelativeItemDir" in proj_js or "getRelativeItemDir" in main_app or "getRelativeItemDir" in bread_js, "getRelativeItemDir helper function present (prevents cross-folder upload item leakage)", "subfolder-synthesis")
         self._ck("rowDataMap" in app_init or "deduplicatedFiles" in proj_js or "activeFolderMap" in proj_js, "activeNameMap deduplication present in renderFileList (prevents duplicate row flickering)", "subfolder-synthesis")
         
         files_py = (ROUTER_DIR / "files.py").read_text(encoding="utf-8", errors="ignore")

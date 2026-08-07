@@ -62,16 +62,17 @@
     // Priority 2: Explicit window.DEBUG_MODE if already defined
     // Priority 3: Default = false
     function detectDebugMode() {
+        if (window.DEBUG_MODE === true) {
+            try { localStorage.setItem('debug', 'true'); } catch (e) {}
+            return true;
+        }
+
         try {
             var localSetting = localStorage.getItem('debug');
             if (localSetting !== null) {
                 return localSetting === 'true';
             }
         } catch (e) {}
-
-        if (typeof window.DEBUG_MODE === 'boolean') {
-            return window.DEBUG_MODE;
-        }
 
         return false;
     }
@@ -82,6 +83,9 @@
     function enableDebugMode() {
         try { localStorage.setItem('debug', 'true'); } catch (e) {}
         window.DEBUG_MODE = true;
+        if (window.DEBUG_LEVELS) {
+            window.currentLogLevel = window.DEBUG_LEVELS.DEBUG;
+        }
         restoreConsole();
         OriginalConsole.log('%c[LOGGER] 🐞 Debug mode ENABLED. Full logging active.', 'color: #3b82f6; font-weight: bold;');
         return 'Debug mode ENABLED. Console logs are now unsuppressed.';
@@ -90,6 +94,9 @@
     function disableDebugMode() {
         try { localStorage.removeItem('debug'); } catch (e) {}
         window.DEBUG_MODE = false;
+        if (window.DEBUG_LEVELS) {
+            window.currentLogLevel = window.DEBUG_LEVELS.ERROR;
+        }
         suppressConsole();
         OriginalConsole.log('%c[LOGGER] 🔇 Debug mode DISABLED. Console logs suppressed.', 'color: #6b7280; font-style: italic;');
         return 'Debug mode DISABLED. Console logs are now suppressed.';
