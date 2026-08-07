@@ -27,7 +27,7 @@ function generateOfflineQR(text, canvas) {
   if (window._qrBlocked) {
     return false;
   }
-  
+
   // This is the FALLBACK when the server /api/qr-code endpoint is unavailable.
   // Instead of drawing a fake unscannable pattern, show the URL text clearly
   // so users can type it manually on their device.
@@ -165,7 +165,7 @@ function escapeHtml(text) {
     '"': '&quot;',
     "'": '&#039;'
   };
-  return str.replace(/[&<>"']/g, m => map[m]);
+  return str.replace(/[&<>"']/g, function (m) { return map[m]; });
 }
 
 /**
@@ -273,6 +273,7 @@ function getClipboardItemIcon(item) {
 }
 if (typeof window !== 'undefined') {
   window.getClipboardItemIcon = getClipboardItemIcon;
+  window.formatClipboardSize = window.formatClipboardSize || formatClipboardSize;
 }
 
 /**
@@ -390,7 +391,7 @@ function startProgressUpdateSafetyNet() {
       // More aggressive: force update every 800ms for ultra-responsive feel
       if (timeSinceUpdate > 800) {
         // Only log if critically stuck for more than 30 seconds to reduce spam
-    if (timeSinceUpdate > 30000) {
+        if (timeSinceUpdate > 30000) {
           if (typeof window.Logger !== 'undefined' && window.Logger.warn) {
             window.Logger.warn('Upload critically stuck for ' + uploadItem.fileName + ' (' + (timeSinceUpdate / 1000).toFixed(1) + 's), forcing update');
           }
@@ -783,11 +784,22 @@ function displayDeviceLogsWithPagination(logs, contentElement, paginationElement
         renderPage(currentPage);
         renderPagination();
       }
+    }
+  };
+
+  // Initial render
+  renderPage(currentPage);
+  renderPagination();
+}
+
+// Clipboard WebSocket connection
+function connectClipboardWS(showClipboardOnly) {
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const wsUrl = `${protocol}://${window.location.host}/ws/clipboard`;
   const ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
-    log.network('Clipboard WebSocket connected');
+    if (typeof log !== 'undefined' && log.network) log.network('Clipboard WebSocket connected');
     if (typeof refreshClipboardHistory === 'function') {
       setTimeout(() => refreshClipboardHistory(), 50);
     }
@@ -800,7 +812,7 @@ function displayDeviceLogsWithPagination(logs, contentElement, paginationElement
   };
 
   ws.onclose = () => {
-    log.warn('Clipboard WebSocket disconnected, reconnecting...');
+    if (typeof log !== 'undefined' && log.warn) log.warn('Clipboard WebSocket disconnected, reconnecting...');
     setTimeout(() => connectClipboardWS(showClipboardOnly), 1000);
   };
 

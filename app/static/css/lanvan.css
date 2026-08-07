@@ -1190,7 +1190,7 @@ header.app-bar,
     box-sizing: border-box;
 }
 
-.file-table-head > span {
+.file-table-head>span {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
@@ -1202,12 +1202,12 @@ header.app-bar,
     transition: color 0.15s ease;
 }
 
-.file-table-head > span:last-child {
+.file-table-head>span:last-child {
     display: flex;
     justify-content: flex-end;
 }
 
-.file-table-head > span:hover {
+.file-table-head>span:hover {
     color: var(--text-color);
 }
 
@@ -2506,12 +2506,15 @@ html[data-view-mode="list"] #gridViewBtn {
 #clipboardView {
     display: none;
 }
+
 [data-active-tab="clipboard"] #clipboardView {
     display: flex;
 }
+
 [data-active-tab="file"] #fileView {
     display: flex;
 }
+
 #fileTransferSection,
 #fileListSection,
 #clipboardSection {

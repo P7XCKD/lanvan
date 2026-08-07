@@ -6087,7 +6087,13 @@ function renderClipboardHistory(items) {
 
   legacyContainer.innerHTML = items.map(item => {
     const typeIcon = (typeof window.getClipboardItemIcon === 'function') ? window.getClipboardItemIcon(item) : (typeof getClipboardItemIcon === 'function' ? getClipboardItemIcon(item) : '');
-    const sizeText = formatClipboardSize(item.size);
+    const sizeText = (typeof window.formatClipboardSize === 'function')
+      ? window.formatClipboardSize(item.size)
+      : (item.size < 1024
+        ? item.size + ' B'
+        : item.size < 1024 * 1024
+          ? (item.size / 1024).toFixed(1) + ' KB'
+          : (item.size / (1024 * 1024)).toFixed(1) + ' MB');
     const isImage = item.type === 'file' && item.content_type === 'image';
 
     // Create image preview for image files

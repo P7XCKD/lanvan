@@ -49,7 +49,7 @@
                 '<button class="btn-icon" onclick="event.stopPropagation();removeClipboardItem(' + itemId + ');" title="Delete item" style="width:28px;height:28px;padding:0;color:var(--danger);">' +
                 '<i data-lucide="trash-2" style="width:15px;height:15px;"></i></button>';
 
-            var fnEscape = typeof window.escapeHtml === 'function' ? window.escapeHtml : function(s){ return s; };
+            var fnEscape = typeof window.escapeHtml === 'function' ? window.escapeHtml : function (s) { return s; };
 
             if (isImage) {
                 var imgTitle = "Pasted Image";
@@ -154,26 +154,26 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ item_ids: selected })
             })
-            .then(function (res) {
-                if (!res.ok) throw new Error('ZIP download failed');
-                return res.blob();
-            })
-            .then(function (blob) {
-                var url = window.URL.createObjectURL(blob);
-                var a = document.createElement('a');
-                a.href = url;
-                a.download = 'clipboard_selection.zip';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                window.URL.revokeObjectURL(url);
-                if (typeof window.clearSelection === 'function') window.clearSelection();
-                if (typeof showToast === 'function') showToast('Downloaded ' + selected.length + ' clipboard items as ZIP', 3000);
-            })
-            .catch(function (err) {
-                console.error('Clipboard ZIP error:', err);
-                if (typeof showToast === 'function') showToast('Error downloading ZIP archive', 4000);
-            });
+                .then(function (res) {
+                    if (!res.ok) throw new Error('ZIP download failed');
+                    return res.blob();
+                })
+                .then(function (blob) {
+                    var url = window.URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'clipboard_selection.zip';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                    if (typeof window.clearSelection === 'function') window.clearSelection();
+                    if (typeof showToast === 'function') showToast('Downloaded ' + selected.length + ' clipboard items as ZIP', 3000);
+                })
+                .catch(function (err) {
+                    console.error('Clipboard ZIP error:', err);
+                    if (typeof showToast === 'function') showToast('Error downloading ZIP archive', 4000);
+                });
         }
     }
 
