@@ -783,52 +783,6 @@ function displayDeviceLogsWithPagination(logs, contentElement, paginationElement
         renderPage(currentPage);
         renderPagination();
       }
-    }
-  };
-
-  // Initial render
-  renderPage(currentPage);
-  renderPagination();
-}
-
-//  Conditional Logging System - Production Performance Optimization
-// Note: DEBUG_MODE is defined in the main HTML file to avoid duplicate declarations
-// Using window.DEBUG_MODE if available, otherwise defaulting to false
-const DEBUG_MODE = window.DEBUG_MODE !== undefined ? window.DEBUG_MODE : false;
-const DEBUG_LEVELS = window.DEBUG_LEVELS || {
-  ERROR: 0,   // Always shown (security, critical errors)
-  WARN: 1,    // Important warnings
-  INFO: 2,    // General information
-  DEBUG: 3    // Detailed debugging (upload progress, etc.)
-};
-
-const currentLogLevel = DEBUG_MODE ? DEBUG_LEVELS.DEBUG : DEBUG_LEVELS.ERROR;
-
-// Use global log object if available, otherwise create fallback
-const log = window.log || {
-  error: (msg, ...args) => {
-    if (currentLogLevel >= DEBUG_LEVELS.ERROR) console.error('', msg, ...args);
-  },
-  warn: (msg, ...args) => {
-    if (currentLogLevel >= DEBUG_LEVELS.WARN) console.warn('', msg, ...args);
-  },
-  info: (msg, ...args) => {
-    if (currentLogLevel >= DEBUG_LEVELS.INFO) console.info('ℹ', msg, ...args);
-  },
-  debug: (msg, ...args) => {
-    if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('', msg, ...args);
-  },
-  upload: (msg, ...args) => {
-    if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('', msg, ...args);
-  },
-  network: (msg, ...args) => {
-    if (currentLogLevel >= DEBUG_LEVELS.DEBUG) console.log('', msg, ...args);
-  }
-};
-
-// Clipboard WebSocket connection
-function connectClipboardWS(showClipboardOnly) {
-  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const wsUrl = `${protocol}://${window.location.host}/ws/clipboard`;
   const ws = new WebSocket(wsUrl);
 

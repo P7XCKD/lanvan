@@ -49,6 +49,13 @@
             var activeTabPref = localStorage.getItem('lanvan_active_tab') || 'file';
             document.documentElement.setAttribute('data-active-tab', activeTabPref);
 
+            // Early debug flag initialization from localStorage
+            try {
+                if (localStorage.getItem('debug') === 'true') {
+                    window.DEBUG_MODE = true;
+                }
+            } catch (e) {}
+
             // Double rAF: remove startup transition suppression after first stable paint
             requestAnimationFrame(function () {
                 requestAnimationFrame(function () {
@@ -170,8 +177,10 @@
         </div>
     </div>
     <script>
-        // Clean up noisy console output on page start
-        console.clear();
+        // Only clear console on startup if NOT in debug mode
+        if (!window.DEBUG_MODE) {
+            console.clear();
+        }
 
         window.LanvanConfig = {
             fileUtilsUrl: "{{ request.url_for('static', path='js/file-utils.js') }}"
