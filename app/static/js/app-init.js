@@ -2735,61 +2735,6 @@ window.submitRename = function() { return window.DialogManager.submitRename.appl
     };
 
     // buildTrayItemHtml, wireTrayItemListeners, buildHeaderActionsHtml, and wireHeaderActions are provided by upload-tray-renderer.js module
-    // buildTrayItemHtml, wireTrayItemListeners, buildHeaderActionsHtml, and wireHeaderActions are provided by upload-tray-renderer.js module
-
-    window.navigateToPathAndSelect = function (targetPath, filename) {
-        window.currentFolderPath = targetPath || "";
-        selectedItems = [];
-        updateSelectionToolbar();
-        renderBreadcrumbs();
-        fetchFilesData().then(function (fd) {
-            renderFileList(fd);
-            setTimeout(function () {
-                var allItems = document.querySelectorAll("#nasFileList .m3-list-item");
-                var matchedEl = null;
-                var matchedName = null;
-
-                // 1. Try exact match
-                for (var i = 0; i < allItems.length; i++) {
-                    var curName = allItems[i].getAttribute("data-filename");
-                    if (curName === filename) {
-                        matchedEl = allItems[i];
-                        matchedName = curName;
-                        break;
-                    }
-                }
-
-                // 2. If no exact match (e.g. server auto-renamed duplicate "60mb file.pdf" -> "60mb file_1.pdf"), match base name & extension
-                if (!matchedEl && filename) {
-                    var dotIdx = filename.lastIndexOf(".");
-                    var base = dotIdx > 0 ? filename.substring(0, dotIdx) : filename;
-                    var ext = dotIdx > 0 ? filename.substring(dotIdx) : "";
-
-                    for (var j = 0; j < allItems.length; j++) {
-                        var cName = allItems[j].getAttribute("data-filename") || "";
-                        if (ext) {
-                            if (cName.startsWith(base) && cName.endsWith(ext)) {
-                                matchedEl = allItems[j];
-                                matchedName = cName;
-                                break;
-                            }
-                        } else if (cName.startsWith(base)) {
-                            matchedEl = allItems[j];
-                            matchedName = cName;
-                            break;
-                        }
-                    }
-                }
-
-                if (matchedEl && matchedName) {
-                    selectedItems = [matchedName];
-                    matchedEl.classList.add("selected");
-                    updateSelectionToolbar();
-                    matchedEl.scrollIntoView({ behavior: "smooth", block: "center" });
-                }
-            }, 100);
-        });
-    };
 
 
 
@@ -2798,11 +2743,6 @@ window.submitRename = function() { return window.DialogManager.submitRename.appl
     // if (!hasItems) return; // Do not expand when empty
     // bodyEl.children[i] !== itemEl
     window.buildTrayItemHtml = function() { return window.UploadTrayRenderer.buildTrayItemHtml.apply(this, arguments); };
-    window.renderUploadTray = function() { return window.UploadTrayRenderer.renderUploadTray.apply(this, arguments); };
-    window.scheduleUploadTrayRender = function() { return window.UploadTrayRenderer.scheduleUploadTrayRender.apply(this, arguments); };
-    window.saveUploadQueueToStorage = function() { return window.UploadTrayRenderer.saveUploadQueueToStorage.apply(this, arguments); };
-    window.startUploadTrayPolling = function() { return window.UploadTrayRenderer.startUploadTrayPolling.apply(this, arguments); };
-
     window.renderUploadTray = function() { return window.UploadTrayRenderer.renderUploadTray.apply(this, arguments); };
     window.scheduleUploadTrayRender = function() { return window.UploadTrayRenderer.scheduleUploadTrayRender.apply(this, arguments); };
     window.saveUploadQueueToStorage = function() { return window.UploadTrayRenderer.saveUploadQueueToStorage.apply(this, arguments); };
