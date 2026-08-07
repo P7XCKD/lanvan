@@ -186,6 +186,11 @@
     var sortDirection = "asc";
     var sortFolders = "top";
 
+    window.typeFilter = typeFilter;
+    window.sortBy = sortBy;
+    window.sortDirection = sortDirection;
+    window.sortFolders = sortFolders;
+
     // Move dialog state
 
 
@@ -376,9 +381,14 @@
             var liveUploadQueue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
             storeState.currentFolder = normCurrentDir;
             storeState.uploadQueue = liveUploadQueue;
-            storeState.sortBy = sortBy;
-            storeState.sortDirection = sortDirection;
-            storeState.sortFolders = sortFolders;
+            var curSortBy = window.sortBy || sortBy || "name";
+            var curSortDir = window.sortDirection || sortDirection || "asc";
+            var curSortFold = window.sortFolders || sortFolders || "top";
+            var curTypeFilt = window.typeFilter || typeFilter || "all";
+
+            storeState.sortBy = curSortBy;
+            storeState.sortDirection = curSortDir;
+            storeState.sortFolders = curSortFold;
             if (!storeState.pendingOps) {
                 storeState.pendingOps = {};
             }
@@ -411,9 +421,10 @@
         });
 
         // Apply client-side Type Filtering
-        if (typeFilter !== "all") {
+        var curTypeFilter = window.typeFilter || typeFilter || "all";
+        if (curTypeFilter !== "all") {
             normalizedFiles = normalizedFiles.filter(function (f) {
-                return getFileItemType(f) === typeFilter;
+                return getFileItemType(f) === curTypeFilter;
             });
         }
 
@@ -433,31 +444,35 @@
         }
 
         // Apply client-side Sorting
+        var curSortBy = window.sortBy || sortBy || "name";
+        var curSortDirection = window.sortDirection || sortDirection || "asc";
+        var curSortFolders = window.sortFolders || sortFolders || "top";
+
         normalizedFiles.sort(function (a, b) {
             // Folders top / mixed logic
-            if (sortFolders === "top") {
+            if (curSortFolders === "top") {
                 if (a.isFolder && !b.isFolder) return -1;
                 if (!a.isFolder && b.isFolder) return 1;
             }
 
             var comparison = 0;
-            if (sortBy === "name") {
+            if (curSortBy === "name") {
                 var nameA = String(a.name || "").toLowerCase();
                 var nameB = String(b.name || "").toLowerCase();
                 comparison = nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
-            } else if (sortBy === "date") {
+            } else if (curSortBy === "date") {
                 var parseDate = window.parseDateToTimestamp || function (d) { return typeof d === 'number' ? d : 0; };
                 var timeA = parseDate(a.mtime || a.date || a.modified || (a.uploading ? Date.now() / 1000 : 0));
                 var timeB = parseDate(b.mtime || b.date || b.modified || (b.uploading ? Date.now() / 1000 : 0));
                 comparison = timeA - timeB;
-            } else if (sortBy === "size") {
+            } else if (curSortBy === "size") {
                 var parseBytes = window.parseSizeToBytes || function () { return 0; };
                 var bytesA = parseBytes(a.size || a.fileSize, a.isFolder);
                 var bytesB = parseBytes(b.size || b.fileSize, b.isFolder);
                 comparison = bytesA - bytesB;
             }
 
-            return sortDirection === "asc" ? comparison : -comparison;
+            return curSortDirection === "asc" ? comparison : -comparison;
         });
 
         var savedViewModeForSignature = "grid";
@@ -468,11 +483,11 @@
         var renderSignature = [
             normCurrentDir,
             savedViewModeForSignature,
-            typeFilter,
+            curTypeFilter,
             searchQuery,
-            sortBy,
-            sortDirection,
-            sortFolders,
+            curSortBy,
+            curSortDirection,
+            curSortFolders,
             normalizedFiles.map(function (f) {
                 if (!f) return "";
                 return [
