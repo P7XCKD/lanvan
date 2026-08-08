@@ -183,6 +183,9 @@
 
     function setTypeFilter(type) {
         window.typeFilter = type;
+        if (window.LanvanStore && window.LanvanStore.state) {
+            window.LanvanStore.state.typeFilter = type;
+        }
         var wrapper = document.getElementById("typeBtnWrapper");
         if (wrapper) {
             if (type === "all") {
