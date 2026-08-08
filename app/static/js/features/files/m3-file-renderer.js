@@ -30,7 +30,7 @@
 
             // Format ETA for list row subtitles using the UploadETA module
             if (uploadStatus === 'UPLOADING' && window.UploadETA) {
-                var queue = window.uploadQueue || [];
+                var queue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
                 var qItem = null;
                 if (uploadId) {
                     qItem = queue.find(function (q) { return q && (q.id == uploadId || q.uploadId == uploadId); });
@@ -745,7 +745,7 @@
             window.selectedItems = [];
             window._contextMenuTarget = "";
 
-            var queue = window.uploadQueue || [];
+            var queue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
             var activeUploadsCount = queue.filter(function (item) {
                 return item.status === "UPLOADING" || item.status === "QUEUED" || item.status === "PROCESSING" || item.status === "PAUSED";
             }).length;

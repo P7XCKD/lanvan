@@ -288,23 +288,6 @@
     window.downloadFolderAsZip = downloadFolderAsZip;
 
     // --- Item Selection Helper ---
-    window.setSelectedItem = function (filename) {
-        if (!filename || isItemUploading(filename)) return;
-        selectedItems = [filename];
-        var items = document.querySelectorAll("#nasFileList .m3-list-item");
-        for (var i = 0; i < items.length; i++) {
-            var itemFn = items[i].getAttribute("data-filename");
-            if (itemFn === filename) {
-                items[i].classList.add("selected");
-            } else {
-                items[i].classList.remove("selected");
-            }
-        }
-        if (typeof updateSelectionToolbar === "function") {
-            updateSelectionToolbar();
-        }
-    };
-
     window.handleCopyStreamLinkFromMenu = function () {
         var menu = document.getElementById("contextMenu");
         if (menu) menu.style.display = "none";
@@ -408,12 +391,6 @@ window.submitRename = function() { return window.DialogManager.submitRename.appl
             renderFileList(lastRenderedFiles, "view_mode_switch");
         }
         syncFileTableHeadWidth();
-    };
-
-    window.cancelSelectedUpload = function () {
-        if (typeof cancelAllUploads === "function") {
-            cancelAllUploads();
-        }
     };
 
     // --- QR & Connect — Delegates to ConnectPanel / SettingsConnectManager ---
