@@ -16,7 +16,16 @@
      * @returns {string} Hash string for render change detection.
      */
     function buildViewModelHashFast(viewModel, currentFolder) {
-        var parts = [currentFolder || ''];
+        var vmMode = "grid";
+        try { vmMode = localStorage.getItem("lanvan_view_mode") || "grid"; } catch (e) { }
+        var parts = [
+            currentFolder || '',
+            window.typeFilter || 'all',
+            window.sortBy || 'name',
+            window.sortDirection || 'asc',
+            window.sortFolders || 'top',
+            vmMode
+        ];
         for (var i = 0; i < viewModel.length; i++) {
             var item = viewModel[i];
             if (!item) continue;
