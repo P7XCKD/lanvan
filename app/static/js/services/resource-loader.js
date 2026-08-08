@@ -115,7 +115,7 @@
     window.jsZipCallbacks = [];
 
     function loadJSZip() {
-      var jszipUrl = (window.LanvanConfig && window.LanvanConfig.jszipUrl) ? window.LanvanConfig.jszipUrl : '/static/js/jszip.min.js';
+      var jszipUrl = (window.LanvanConfig && window.LanvanConfig.jszipUrl) ? window.LanvanConfig.jszipUrl : '/static/js/vendor/jszip.min.js';
       window.resourceLoader.loadScript(
         jszipUrl,
         function (error) {
@@ -150,7 +150,7 @@
 
     window.progressiveLoader.addEnhanced(function () {
       window.resourceLoader.loadScript(
-        window.LanvanConfig ? window.LanvanConfig.fileUtilsUrl : '/static/js/file-utils.js',
+        window.LanvanConfig ? window.LanvanConfig.fileUtilsUrl : '/static/js/services/file-utils.js',
         function (error) {
           if (error) {
             console.warn('File utils failed to load');

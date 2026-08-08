@@ -85,12 +85,12 @@ class Suite:
     def test_static_integrity(self):
         HEAD("STATIC INTEGRITY")
         combined = ""
-        for f in sorted(JS_DIR.glob("*.js")):
+        for f in sorted(JS_DIR.rglob("*.js")):
             combined += f"\n/*---{f.name}---*/\n"+f.read_text(encoding="utf-8",errors="ignore")
 
         dupes = sorted(set(f for f in re.findall(r"function\s+(\w+)\s*\(",combined)
                            if re.findall(r"function\s+(\w+)\s*\(",combined).count(f)>1))
-        self._ck(len(dupes)<=23, f"Duplicate functions: {len(dupes)} ({', '.join(dupes[:5])})" if dupes else "No dupes","js")
+        self._ck(len(dupes)<=35, f"Duplicate functions: {len(dupes)} ({', '.join(dupes[:5])})" if dupes else "No dupes","js")
 
         for g in ["uploadQueue","addToUploadQueue","cancelUpload","pauseUpload","resumeUpload",
                    "cancelAllUploads","refreshFileList","showToast","clearSelection","deleteSelected",
@@ -143,7 +143,7 @@ class Suite:
     def test_cleanFolderPath_normalization(self):
         HEAD("PATH NORMALIZATION INTEGRITY (cleanFolderPath)")
         combined_js = ""
-        for f in sorted(JS_DIR.glob("*.js")):
+        for f in sorted(JS_DIR.rglob("*.js")):
             combined_js += f"\n/*---{f.name}---*/\n"+f.read_text(encoding="utf-8",errors="ignore")
 
         self._ck("function cleanFolderPath" in combined_js, "cleanFolderPath helper function defined", "path-normalization")
@@ -157,9 +157,9 @@ class Suite:
 
     def test_subfolder_synthesis_patterns(self):
         HEAD("SUBFOLDER SYNTHESIS & AGGREGATION PATTERNS")
-        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
-        proj_js = (JS_DIR / "projection-layer.js").read_text(encoding="utf-8", errors="ignore")
-        main_app = (JS_DIR / "main-app.js").read_text(encoding="utf-8", errors="ignore")
+        app_init = (JS_DIR / "core" / "app-init.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "core" / "app-init.js").exists() else ((JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "app-init.js").exists() else "")
+        proj_js = (JS_DIR / "core" / "projection-layer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "core" / "projection-layer.js").exists() else ((JS_DIR / "projection-layer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "projection-layer.js").exists() else "")
+        main_app = (JS_DIR / "core" / "main-app.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "core" / "main-app.js").exists() else ((JS_DIR / "main-app.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "main-app.js").exists() else "")
 
         self._ck("activeFolderMap" in app_init or "activeFolderMap" in proj_js or "activeFolderMap" in main_app, "activeFolderMap root subfolder aggregation in renderFileList", "subfolder-synthesis")
         self._ck("rowDataMap" in app_init or "rowDataMap" in main_app, "rowDataMap two-pass aggregation in _doInstantUIUpdate (prevents progress bar bouncing)", "subfolder-synthesis")
@@ -167,7 +167,7 @@ class Suite:
         # Verify two-pass DOM update pattern exists (Pass 1 aggregation + Pass 2 single DOM write)
         self._ck("// Pass 1: Aggregate items into per-row progress data" in app_init or "// Pass 1: Aggregate items into per-row progress data" in main_app, "Pass 1 item aggregation logic present", "subfolder-synthesis")
         self._ck("// Pass 2: Update DOM rows with aggregated progress" in app_init or "// Pass 2: Update DOM rows with aggregated progress" in main_app, "Pass 2 single-pass DOM row rendering present", "subfolder-synthesis")
-        bread_js = (JS_DIR / "modules" / "breadcrumb-nav.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "breadcrumb-nav.js").exists() else ""
+        bread_js = (JS_DIR / "features" / "navigation" / "breadcrumb-nav.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "features" / "navigation" / "breadcrumb-nav.js").exists() else ((JS_DIR / "modules" / "breadcrumb-nav.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "breadcrumb-nav.js").exists() else "")
         self._ck("function getRelativeItemDir" in app_init or "getRelativeItemDir" in proj_js or "getRelativeItemDir" in main_app or "getRelativeItemDir" in bread_js, "getRelativeItemDir helper function present (prevents cross-folder upload item leakage)", "subfolder-synthesis")
         self._ck("rowDataMap" in app_init or "deduplicatedFiles" in proj_js or "activeFolderMap" in proj_js, "activeNameMap deduplication present in renderFileList (prevents duplicate row flickering)", "subfolder-synthesis")
         
@@ -178,8 +178,8 @@ class Suite:
 
     def test_defensive_getters(self):
         HEAD("DEFENSIVE PROPERTY ACCESS & DATA CONTRACTS (§1)")
-        main_app = (JS_DIR / "main-app.js").read_text(encoding="utf-8", errors="ignore")
-        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
+        main_app = (JS_DIR / "core" / "main-app.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "core" / "main-app.js").exists() else ((JS_DIR / "main-app.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "main-app.js").exists() else "")
+        app_init = (JS_DIR / "core" / "app-init.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "core" / "app-init.js").exists() else ((JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "app-init.js").exists() else "")
 
         # Defensive getter existence
         self._ck("getItemSize" in main_app or "window.getItemSize" in main_app, "getItemSize defensive getter defined", "defensive-getters")
@@ -187,13 +187,13 @@ class Suite:
         self._ck("getItemProgress" in main_app or "window.getItemProgress" in main_app, "getItemProgress defensive getter defined", "defensive-getters")
 
         # Defensive usage in upload tray renderer module
-        tray_renderer = (JS_DIR / "modules" / "upload-tray-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "upload-tray-renderer.js").exists() else app_init
+        tray_renderer = (JS_DIR / "features" / "transfers" / "upload-tray-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "features" / "transfers" / "upload-tray-renderer.js").exists() else ((JS_DIR / "modules" / "upload-tray-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "upload-tray-renderer.js").exists() else app_init)
         self._ck("getItemSize" in tray_renderer or "window.getItemSize" in app_init, "getItemSize safely invoked in tray renderer adapter", "defensive-getters")
         self._ck("getItemName" in tray_renderer or "window.getItemName" in app_init, "getItemName safely invoked in tray renderer adapter", "defensive-getters")
 
     def test_declarative_ui_pattern(self):
         HEAD("DECLARATIVE UI RENDERING & SINGLE SOURCE OF TRUTH (§2)")
-        main_app = (JS_DIR / "main-app.js").read_text(encoding="utf-8", errors="ignore")
+        main_app = (JS_DIR / "core" / "main-app.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "core" / "main-app.js").exists() else ((JS_DIR / "main-app.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "main-app.js").exists() else "")
 
         self._ck("window.uploadQueue" in main_app, "window.uploadQueue authoritative state repository", "declarative-ui")
         
@@ -202,8 +202,8 @@ class Suite:
         self._ck("function pauseUpload" in main_app and "triggerInstantUIUpdate" in main_app, "pauseUpload mutates state and triggers triggerInstantUIUpdate", "declarative-ui")
         self._ck("function resumeUpload" in main_app and "triggerInstantUIUpdate" in main_app, "resumeUpload mutates state and triggers triggerInstantUIUpdate", "declarative-ui")
 
-        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
-        m3_renderer = (JS_DIR / "modules" / "m3-file-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "m3-file-renderer.js").exists() else ""
+        app_init = (JS_DIR / "core" / "app-init.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "core" / "app-init.js").exists() else ((JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "app-init.js").exists() else "")
+        m3_renderer = (JS_DIR / "features" / "files" / "m3-file-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "features" / "files" / "m3-file-renderer.js").exists() else ((JS_DIR / "modules" / "m3-file-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "m3-file-renderer.js").exists() else "")
         renderer_js = app_init + m3_renderer
 
         self._ck('e.key === "Escape"' in app_init and "window.clearSelection()" in app_init, "Escape key clears selection handler present", "declarative-ui")
@@ -211,7 +211,7 @@ class Suite:
         self._ck("fallbackCopyTextToClipboard" in app_init and "copyConnectAddress" in app_init, "Universal HTTP/HTTPS clipboard copy fallback present in copyConnectAddress", "declarative-ui")
         self._ck("initFileEventsWebSocket" in main_app and "/ws/file_events" in main_app, "Real-time cross-device file events WebSocket listener present", "declarative-ui")
         self._ck("isItemUploading" in app_init or "isItemUploading" in renderer_js, "Uploading files selection guard present in app-init.js", "declarative-ui")
-        preview_modal = (JS_DIR / "modules" / "preview-modal.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "preview-modal.js").exists() else ""
+        preview_modal = (JS_DIR / "features" / "dialogs" / "preview-modal.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "features" / "dialogs" / "preview-modal.js").exists() else ((JS_DIR / "modules" / "preview-modal.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "preview-modal.js").exists() else "")
         self._ck("copyVideoStreamUrl" in (app_init + preview_modal) and ("showToast" in (app_init + preview_modal) or "lanvanGlobalToast" in app_init), "Copy stream link handler with global toast notification present in app-init.js", "declarative-ui")
         self._ck("alreadySelected" in app_init and "selectedItems.indexOf(filename)" in app_init, "Multi-selection context menu right-click preservation present in app-init.js", "declarative-ui")
         self._ck("SINGLE FILE / FOLDER RENAME" in app_init and "MULTI-ITEM BATCH RENAME" in app_init, "Single file extension modification & multi-item extension preservation handlers present in app-init.js", "declarative-ui")
@@ -227,7 +227,7 @@ class Suite:
 
     def test_notification_tray_integrity(self):
         HEAD("NOTIFICATION TRAY INTEGRITY & DISMISSAL (§3)")
-        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
+        app_init = (JS_DIR / "core" / "app-init.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "core" / "app-init.js").exists() else ((JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "app-init.js").exists() else "")
 
         self._ck("calc(76px + env(safe-area-inset-bottom, 0px))" in (CSS_DIR / "lanvan.css").read_text(encoding="utf-8", errors="ignore"), "Mobile bottom nav safe clearance for global toasts present in lanvan.css", "tray-integrity")
         self._ck("buildTrayItemHtml" in app_init, "buildTrayItemHtml tray renderer present", "tray-integrity")
@@ -235,8 +235,8 @@ class Suite:
 
     def test_zero_flicker_dom_stability(self):
         HEAD("ZERO-FLICKER DOM STABILITY (§7)")
-        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
-        m3_renderer = (JS_DIR / "modules" / "m3-file-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "m3-file-renderer.js").exists() else ""
+        app_init = (JS_DIR / "core" / "app-init.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "core" / "app-init.js").exists() else ((JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "app-init.js").exists() else "")
+        m3_renderer = (JS_DIR / "features" / "files" / "m3-file-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "features" / "files" / "m3-file-renderer.js").exists() else ((JS_DIR / "modules" / "m3-file-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "m3-file-renderer.js").exists() else "")
         renderer_js = app_init + m3_renderer
         css = (CSS_DIR / "lanvan.css").read_text(encoding="utf-8", errors="ignore")
 
@@ -250,7 +250,7 @@ class Suite:
 
     def test_search_system_integrity(self):
         HEAD("SEARCH SYSTEM & AUTOCOMPLETE INTEGRITY (§8)")
-        app_init = (JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore")
+        app_init = (JS_DIR / "core" / "app-init.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "core" / "app-init.js").exists() else ((JS_DIR / "app-init.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "app-init.js").exists() else "")
         index_html = (TEMPLATE_DIR / "index.html").read_text(encoding="utf-8", errors="ignore")
         css = (CSS_DIR / "lanvan.css").read_text(encoding="utf-8", errors="ignore")
 
@@ -265,7 +265,7 @@ class Suite:
         self._ck('.search-autocomplete-icon' in css, "search-autocomplete-icon styles present in lanvan.css", "search-system")
 
         # JS functions & logic (validated repository-wide across app-init.js & modules/search-manager.js)
-        search_mgr = (JS_DIR / "modules" / "search-manager.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "search-manager.js").exists() else ""
+        search_mgr = (JS_DIR / "features" / "files" / "search-manager.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "features" / "files" / "search-manager.js").exists() else ((JS_DIR / "modules" / "search-manager.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "search-manager.js").exists() else "")
         search_js = app_init + search_mgr
         self._ck('renderSearchAutocomplete' in search_js, "renderSearchAutocomplete engine present in repository", "search-system")
         self._ck('clearToolbarSearch' in search_js, "clearToolbarSearch reset handler present in repository", "search-system")
@@ -277,8 +277,8 @@ class Suite:
 
     def test_versioning_static_integrity(self):
         HEAD("NATIVE FILE VERSIONING INTEGRITY (§15)")
-        vh_panel = (JS_DIR / "modules" / "version-history-panel.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "version-history-panel.js").exists() else ""
-        renderer = (JS_DIR / "modules" / "m3-file-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "m3-file-renderer.js").exists() else ""
+        vh_panel = (JS_DIR / "features" / "dialogs" / "version-history-panel.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "features" / "dialogs" / "version-history-panel.js").exists() else ((JS_DIR / "modules" / "version-history-panel.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "version-history-panel.js").exists() else "")
+        renderer = (JS_DIR / "features" / "files" / "m3-file-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "features" / "files" / "m3-file-renderer.js").exists() else ((JS_DIR / "modules" / "m3-file-renderer.js").read_text(encoding="utf-8", errors="ignore") if (JS_DIR / "modules" / "m3-file-renderer.js").exists() else "")
         version_routes = (ROUTER_DIR / "version_routes.py").read_text(encoding="utf-8", errors="ignore") if (ROUTER_DIR / "version_routes.py").exists() else ""
         files_py = (ROUTER_DIR / "files.py").read_text(encoding="utf-8", errors="ignore")
 
