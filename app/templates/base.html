@@ -150,10 +150,10 @@
     </style>
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/lanvan.css') }}?v={{ cache_version }}">
     {% block page_styles %}{% endblock %}
-    <script src="{{ request.url_for('static', path='js/modules/logger.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/resource-loader.js') }}?v={{ cache_version }}"> </script>
-    <script src="{{ request.url_for('static', path='js/upload-status.js') }}?v={{ cache_version }}"> </script>
-    <script src="/static/js/lucide.min.js"></script>
+    <script src="{{ request.url_for('static', path='js/shared/logger.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/services/resource-loader.js') }}?v={{ cache_version }}"> </script>
+    <script src="{{ request.url_for('static', path='js/features/transfers/upload-status.js') }}?v={{ cache_version }}"> </script>
+    <script src="/static/js/vendor/lucide.min.js"></script>
     <script>document.addEventListener("DOMContentLoaded", () => lucide.createIcons());</script>
     <!--
       COMPATIBILITY SIGNATURES FOR STATIC TEST SUITE (qt.py):
@@ -183,7 +183,7 @@
         }
 
         window.LanvanConfig = {
-            fileUtilsUrl: "{{ request.url_for('static', path='js/file-utils.js') }}"
+            fileUtilsUrl: "{{ request.url_for('static', path='js/services/file-utils.js') }}"
         };
 
         // --- Automated Click & UI State Interaction Logger ---
@@ -280,36 +280,36 @@
         </div>
     </div>
 
-    <script src="{{ request.url_for('static', path='js/modules/utils.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/quick-access.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/connect-panel.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/context-menu.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/preview-modal.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/version-history-panel.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/upload-helpers.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/state-store.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/repository.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/projection-layer.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/render-scheduler.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/upload-engine.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/file-list-view.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/m3-file-renderer.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/upload-eta.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/breadcrumb-nav.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/shared/utils.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/navigation/quick-access.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/dialogs/connect-panel.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/context/context-menu.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/dialogs/preview-modal.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/dialogs/version-history-panel.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/services/upload-helpers.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/core/state-store.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/core/repository.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/core/projection-layer.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/core/render-scheduler.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/transfers/upload-engine.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/files/file-list-view.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/files/m3-file-renderer.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/transfers/upload-eta.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/navigation/breadcrumb-nav.js') }}?v={{ cache_version }}"></script>
     <script
-        src="{{ request.url_for('static', path='js/modules/upload-tray-renderer.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/dialog-manager.js') }}?v={{ cache_version }}"></script>
+        src="{{ request.url_for('static', path='js/features/transfers/upload-tray-renderer.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/dialogs/dialog-manager.js') }}?v={{ cache_version }}"></script>
     <script
-        src="{{ request.url_for('static', path='js/modules/selection-manager.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/search-manager.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/sorting-manager.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/main-app.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/ui-modules.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/docx-preview.min.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/clipboard-view-adapter.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/download-manager.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/modules/dropzone-manager.js') }}?v={{ cache_version }}"></script>
-    <script src="{{ request.url_for('static', path='js/app-init.js') }}?v={{ cache_version }}"></script>
+        src="{{ request.url_for('static', path='js/features/files/selection-manager.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/files/search-manager.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/files/sorting-manager.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/core/main-app.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/legacy/ui-modules.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/vendor/docx-preview.min.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/clipboard/clipboard-view-adapter.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/transfers/download-manager.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/features/transfers/dropzone-manager.js') }}?v={{ cache_version }}"></script>
+    <script src="{{ request.url_for('static', path='js/core/app-init.js') }}?v={{ cache_version }}"></script>
 </body>
 
 </html>

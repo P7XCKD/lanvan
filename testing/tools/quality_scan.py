@@ -258,7 +258,7 @@ class QualityScanner:
     def check_19_projection_cancelled_handling(self):
         """Rule 19: Projection Layer direct file cancellation handling guard."""
         self.total_scans += 1
-        proj_file = JS_DIR / "projection-layer.js"
+        proj_file = (JS_DIR / "core" / "projection-layer.js") if (JS_DIR / "core" / "projection-layer.js").exists() else (JS_DIR / "projection-layer.js")
         if not proj_file.exists(): return
         content = proj_file.read_text(encoding="utf-8", errors="ignore")
         if 'status === \'cancelled\'' not in content or '\'cancelled\'' not in content:
@@ -269,7 +269,7 @@ class QualityScanner:
     def check_20_repository_cache_cloning(self):
         """Rule 20: Repository cache array cloning guard."""
         self.total_scans += 1
-        repo_file = JS_DIR / "repository.js"
+        repo_file = (JS_DIR / "core" / "repository.js") if (JS_DIR / "core" / "repository.js").exists() else (JS_DIR / "repository.js")
         if not repo_file.exists(): return
         content = repo_file.read_text(encoding="utf-8", errors="ignore")
         if '.slice()' not in content:
@@ -280,7 +280,7 @@ class QualityScanner:
     def check_21_abort_fallback_cached(self):
         """Rule 21: AbortError fallback to cached folder contents guard."""
         self.total_scans += 1
-        repo_file = JS_DIR / "repository.js"
+        repo_file = (JS_DIR / "core" / "repository.js") if (JS_DIR / "core" / "repository.js").exists() else (JS_DIR / "repository.js")
         if not repo_file.exists(): return
         content = repo_file.read_text(encoding="utf-8", errors="ignore")
         if 'self.getFolderCache(' not in content:
@@ -291,7 +291,7 @@ class QualityScanner:
     def check_22_update_file_display_folder_guard(self):
         """Rule 22: UpdateFileDisplay folder identity guard."""
         self.total_scans += 1
-        app_file = JS_DIR / "app-init.js"
+        app_file = (JS_DIR / "core" / "app-init.js") if (JS_DIR / "core" / "app-init.js").exists() else (JS_DIR / "app-init.js")
         if not app_file.exists(): return
         content = app_file.read_text(encoding="utf-8", errors="ignore")
         if 'UPDATE FILE DISPLAY' not in content or 'taggedFolder !== normCurrentDir' not in content:
