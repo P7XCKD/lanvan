@@ -173,29 +173,321 @@
         }
     };
 
-    RenderScheduler.prototype.fastPathUpdate = function (payload) {
-        if (!payload || !payload.id) return;
-        
-        var uploadId = payload.id;
-        var progress = payload.progress !== undefined ? payload.progress : 0;
-        var speedText = payload.speedText || "";
-        var etaText = payload.etaText || "";
+    RenderScheduler.prototype.triggerInstantUIUpdate = function () {
+        var self = this;
+        if (this._instantUIUpdateScheduled) return;
+        this._instantUIUpdateScheduled = true;
+        requestAnimationFrame(function () { self._instantUIUpdateScheduled = false; });
 
-        var row = document.querySelector('[data-upload-id="' + uploadId + '"]') || document.getElementById('file-row-' + uploadId);
-        if (row) {
-            var progressBar = row.querySelector('.upload-progress-bar') || row.querySelector('.progress-fill');
-            if (progressBar) {
-                progressBar.style.width = Math.min(100, Math.max(0, progress)) + "%";
+        if (typeof this.requestRender === 'function') {
+            this.requestRender('instant_update');
+        }
+        if (typeof window.scheduleUploadTrayRender === "function") {
+            window.scheduleUploadTrayRender();
+        } else if (typeof window.renderUploadTray === "function") {
+            window.renderUploadTray();
+        }
+    };
+
+    RenderScheduler.prototype.doInstantUIUpdate = function () {
+        if (typeof window.scheduleUploadTrayRender === "function") {
+            window.scheduleUploadTrayRender();
+        } else if (typeof window.renderUploadTray === "function") {
+            window.renderUploadTray();
+        }
+        var container = document.getElementById("nasFileList");
+        if (container && window.uploadQueue) {
+            var activeFolder = window.LanvanStore ? window.LanvanStore.state.currentFolder : "";
+            var normCurrentDir = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(activeFolder) : activeFolder;
+            var missingRow = false;
+
+            window.uploadQueue.forEach(function (item) {
+                if (item && (item.status === 'QUEUED' || item.status === 'UPLOADING' || item.status === 'PROCESSING' || item.status === 'PAUSED')) {
+                    var itemName = item.fileName || (item.file && item.file.name) || item.name;
+                    var rawDir = item.targetDir || item.parent_path || item.folder || "";
+                    var relDir = typeof window.getRelativeItemDir === "function" ? window.getRelativeItemDir(rawDir, normCurrentDir) : rawDir;
+                    if (relDir === null) return;
+                    var checkName = relDir === "" ? itemName : relDir.split("/")[0];
+                    if (checkName) {
+                        var targetKey = checkName.trim().toLowerCase();
+                        var allRows = container.querySelectorAll('.m3-list-item');
+                        var foundRow = false;
+                        for (var r = 0; r < allRows.length; r++) {
+                            var rowFn = allRows[r].getAttribute('data-filename');
+                            if (rowFn && rowFn.trim().toLowerCase() === targetKey) {
+                                foundRow = true;
+                                break;
+                            }
+                        }
+                        if (!foundRow) missingRow = true;
+                    }
+                }
+            });
+
+            var hasCancelled = window.uploadQueue.some(function (i) { return i && i.status === 'CANCELLED'; });
+            var hasTimedOut = window.uploadQueue.some(function (i) { return i && i.status === 'COMPLETED' && i._dismissTimer; });
+
+            if (missingRow && hasCancelled && !hasTimedOut) {
+                missingRow = false;
             }
-            var speedEl = row.querySelector('.upload-speed');
-            if (speedEl && speedText) {
-                speedEl.textContent = speedText;
-            }
-            var etaEl = row.querySelector('.upload-eta');
-            if (etaEl && etaText) {
-                etaEl.textContent = etaText;
+
+            if (missingRow && typeof window.lastRenderedFiles !== "undefined" && !window._instantRenderInProgress) {
+                window._instantRenderInProgress = true;
+                if (typeof window.renderFileList === "function") window.renderFileList(window.lastRenderedFiles);
+                setTimeout(function () { window._instantRenderInProgress = false; }, 200);
+            } else {
+                var rowDataMap = {};
+
+                window.uploadQueue.forEach(function (item) {
+                    if (!item) return;
+                    var itemName = item.fileName || (item.file && item.file.name) || item.name;
+                    if (!itemName) return;
+                    var rawDir = item.targetDir || item.parent_path || item.folder || "";
+                    var relDir = typeof window.getRelativeItemDir === "function" ? window.getRelativeItemDir(rawDir, normCurrentDir) : rawDir;
+                    if (relDir === null) return;
+                    var checkName = relDir === "" ? itemName : relDir.split("/")[0];
+                    var isFolder = relDir !== "";
+
+                    if (!rowDataMap[checkName]) {
+                        rowDataMap[checkName] = {
+                            isFolder: isFolder,
+                            totalBytes: 0,
+                            uploadedBytes: 0,
+                            status: 'QUEUED',
+                            hasCancelled: false,
+                            hasUploading: false,
+                            hasPaused: false,
+                            itemCount: 0
+                        };
+                    }
+
+                    var rd = rowDataMap[checkName];
+                    rd.itemCount++;
+
+                    if (item.status === 'CANCELLED') {
+                        rd.hasCancelled = true;
+                        return;
+                    }
+
+                    var fileSize = item.fileSize || (item.file && item.file.size) || 0;
+                    var bytesDone = 0;
+                    if (item.status === 'COMPLETED') {
+                        bytesDone = fileSize;
+                    } else {
+                        bytesDone = item.bytesUploaded || 0;
+                        if (!bytesDone && item.progress && fileSize) {
+                            bytesDone = (fileSize * item.progress) / 100;
+                        }
+                    }
+                    rd.totalBytes += fileSize;
+                    rd.uploadedBytes += bytesDone;
+
+                    if (item.status === 'UPLOADING' || item.status === 'PROCESSING') rd.hasUploading = true;
+                    if (item.status === 'PAUSED') rd.hasPaused = true;
+                    if (item.status === 'CANCELLED') rd.hasCancelled = true;
+                });
+
+                Object.keys(rowDataMap).forEach(function (checkName) {
+                    var rd = rowDataMap[checkName];
+                    var escName = typeof window.escapeHtml === "function" ? window.escapeHtml(checkName) : checkName;
+                    var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
+                    if (!row) return;
+
+                    var isRowFolder = row.getAttribute('data-is-folder') === '1';
+                    var progress = 0;
+                    if (rd.totalBytes > 0) {
+                        progress = Math.min(100, Math.round((rd.uploadedBytes / rd.totalBytes) * 100));
+                    }
+
+                    var statusKey = rd.hasPaused ? 'PAUSED' : (rd.hasUploading ? 'UPLOADING' : 'QUEUED');
+
+                    var subtitleCell = row.querySelector('.item-subtitle');
+                    if (subtitleCell) {
+                        var statusTxt = statusKey === 'PAUSED' ? 'Paused' : (statusKey === 'UPLOADING' ? 'Uploading' : 'Queued');
+                        subtitleCell.textContent = progress + "% • " + statusTxt;
+                    }
+                    var dateCell = row.querySelector('.item-date');
+                    if (dateCell) {
+                        dateCell.textContent = statusKey === 'PAUSED' ? 'Paused' : (statusKey === 'UPLOADING' ? 'Uploading' : 'Queued');
+                    }
+                    var bar = row.querySelector('.row-progress-bar');
+                    if (bar) {
+                        bar.style.transform = "scaleX(" + (progress / 100) + ")";
+                    }
+
+                    var b4Num = row.querySelector('.b4-num');
+                    if (b4Num) {
+                        b4Num.textContent = progress + "%";
+                    }
+                    var b4Sub = row.querySelector('.b4-sub');
+                    if (b4Sub) {
+                        b4Sub.textContent = statusKey;
+                    }
+                    var b4Strip = row.querySelector('.b4-bottom-strip > div');
+                    if (b4Strip) {
+                        b4Strip.style.width = progress + "%";
+                    }
+
+                    var waterBar = row.querySelector('.grid-water-progress-bar');
+                    if (waterBar) {
+                        waterBar.style.height = progress + "%";
+                    }
+
+                    var playPauseBtn = row.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
+                    if (playPauseBtn) {
+                        var currentAction = playPauseBtn.getAttribute("data-action");
+                        var svgPlay = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+                        var svgPause = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+
+                        if (statusKey === 'PAUSED' && currentAction === 'pause-upload') {
+                            playPauseBtn.setAttribute("data-action", "resume-upload");
+                            playPauseBtn.setAttribute("title", "Resume upload");
+                            playPauseBtn.innerHTML = svgPlay;
+                        } else if (statusKey !== 'PAUSED' && currentAction === 'resume-upload') {
+                            playPauseBtn.setAttribute("data-action", "pause-upload");
+                            playPauseBtn.setAttribute("title", "Pause upload");
+                            playPauseBtn.innerHTML = svgPause;
+                        }
+                    }
+                });
             }
         }
+    };
+
+    RenderScheduler.prototype.updateRowProgress = function (item) {
+        if (!item || !item.fileName) return;
+
+        if (item.status === 'COMPLETED') {
+            var hasOtherActiveUploads = Array.isArray(window.uploadQueue) && window.uploadQueue.some(function (qi) {
+                return qi && qi.id !== item.id && (qi.status === 'UPLOADING' || qi.status === 'QUEUED' || qi.status === 'PROCESSING' || qi.status === 'PAUSED');
+            });
+
+            if (!hasOtherActiveUploads) {
+                setTimeout(function () {
+                    if (typeof window.triggerInstantRefresh === 'function') {
+                        window.triggerInstantRefresh();
+                    } else if (typeof window.refreshFileList === 'function') {
+                        window.refreshFileList();
+                    }
+                }, 150);
+            }
+            return;
+        }
+
+        var container = document.getElementById("nasFileList");
+        if (!container) return;
+
+        var activeFolder = window.LanvanStore ? window.LanvanStore.state.currentFolder : "";
+        var normCurrentDir = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(activeFolder) : activeFolder;
+        var itemDir = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(item.targetDir || item.parent_path || item.folder || "") : "";
+
+        if (itemDir === normCurrentDir) {
+            var progress = Math.round(item.progress || 0);
+            var escName = typeof window.escapeHtml === "function" ? window.escapeHtml(item.fileName) : item.fileName;
+            var row = container.querySelector('.m3-list-item[data-filename="' + escName + '"]');
+            if (row && row.getAttribute('data-is-folder') !== '1') {
+                var subtitleCell = row.querySelector('.item-subtitle');
+                if (subtitleCell) {
+                    var statusTxt = item.status === 'PAUSED' ? 'Paused' : (item.status === 'PROCESSING' ? 'Processing' : 'Uploading');
+                    var rowSub = progress + "% • " + statusTxt;
+                    if (item.status === 'UPLOADING' && window.UploadETA) {
+                        var etaStr = window.UploadETA.format(item);
+                        if (etaStr) rowSub += " • ETA " + etaStr;
+                    }
+                    subtitleCell.textContent = rowSub;
+                }
+                var dateCell = row.querySelector('.item-date');
+                if (dateCell) {
+                    dateCell.textContent = item.status === 'PAUSED' ? 'Paused' : (item.status === 'PROCESSING' ? 'Processing' : 'Uploading');
+                }
+                var bar = row.querySelector('.row-progress-bar');
+                if (bar) {
+                    bar.style.transform = "scaleX(" + (progress / 100) + ")";
+                }
+
+                var b4Num = row.querySelector('.b4-num');
+                if (b4Num) {
+                    b4Num.textContent = progress + "%";
+                }
+                var b4Sub = row.querySelector('.b4-sub');
+                if (b4Sub) {
+                    b4Sub.textContent = item.status === 'PAUSED' ? 'PAUSED' : (item.status === 'QUEUED' ? 'QUEUED' : 'UPLOADING');
+                }
+                var b4Strip = row.querySelector('.b4-bottom-strip > div');
+                if (b4Strip) {
+                    b4Strip.style.width = progress + "%";
+                }
+
+                var playPauseBtn = row.querySelector('[data-action="pause-upload"], [data-action="resume-upload"]');
+                if (playPauseBtn) {
+                    var currentAction = playPauseBtn.getAttribute("data-action");
+                    if (item.status === 'PAUSED' && currentAction === 'pause-upload') {
+                        playPauseBtn.setAttribute("data-action", "resume-upload");
+                        playPauseBtn.setAttribute("title", "Resume upload");
+                        playPauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play"><polygon points="6 3 20 12 6 21 6 3"/></svg>';
+                    } else if (item.status !== 'PAUSED' && currentAction === 'resume-upload') {
+                        playPauseBtn.setAttribute("data-action", "pause-upload");
+                        playPauseBtn.setAttribute("title", "Pause upload");
+                        playPauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pause"><rect width="4" height="16" x="6" y="4"/><rect width="4" height="16" x="14" y="4"/></svg>';
+                    }
+                }
+            } else {
+                if (typeof window.triggerInstantUIUpdate === 'function') {
+                    window.triggerInstantUIUpdate();
+                } else if (typeof window.lastRenderedFiles !== 'undefined' && typeof window.renderFileList === 'function') {
+                    window.renderFileList(window.lastRenderedFiles);
+                }
+            }
+        }
+    };
+
+    RenderScheduler.prototype.onUploadQueueAdded = function (files) {
+        console.log("[RenderScheduler] onUploadQueueAdded hook fired!", files);
+        window.uploadTrayDocked = false;
+        if (typeof window.renderUploadTray === "function") {
+            window.renderUploadTray();
+        }
+        if (typeof window.lastRenderedFiles !== "undefined" && typeof window.renderFileList === "function") {
+            window.renderFileList(window.lastRenderedFiles);
+        }
+        if (typeof window.startUploadTrayPolling === "function") {
+            window.startUploadTrayPolling();
+        }
+    };
+
+    RenderScheduler.prototype.pauseAllUploads = function () {
+        var queue = window.uploadQueue || [];
+        queue.forEach(function (item) {
+            if (item && (item.status === "UPLOADING" || item.status === "QUEUED" || item.status === "PROCESSING")) {
+                if (typeof window.pauseUpload === "function") {
+                    window.pauseUpload(item.id);
+                } else if (typeof window.pauseUploadItem === "function") {
+                    window.pauseUploadItem(item.id);
+                } else {
+                    item.status = "PAUSED";
+                    if (item.xhr) { try { item.xhr.abort(); } catch (e) { } }
+                }
+            }
+        });
+        window.uploadManagerExpanded = true;
+        this.triggerInstantUIUpdate();
+    };
+
+    RenderScheduler.prototype.resumeAllUploads = function () {
+        var queue = window.uploadQueue || [];
+        queue.forEach(function (item) {
+            if (item && item.status === "PAUSED") {
+                if (typeof window.resumeUpload === "function") {
+                    window.resumeUpload(item.id);
+                } else if (typeof window.resumeUploadItem === "function") {
+                    window.resumeUploadItem(item.id);
+                } else {
+                    item.status = "UPLOADING";
+                }
+            }
+        });
+        window.uploadManagerExpanded = false;
+        this.triggerInstantUIUpdate();
     };
 
     var schedulerInstance = new RenderScheduler(
@@ -204,5 +496,13 @@
         window.FileRepository
     );
     window.RenderScheduler = schedulerInstance;
+
+    // Window backward compatibility exports
+    window.triggerInstantUIUpdate = function() { return schedulerInstance.triggerInstantUIUpdate.apply(schedulerInstance, arguments); };
+    window._doInstantUIUpdate = function() { return schedulerInstance.doInstantUIUpdate.apply(schedulerInstance, arguments); };
+    window.updateRowProgress = function(item) { return schedulerInstance.updateRowProgress(item); };
+    window.onUploadQueueAdded = function(files) { return schedulerInstance.onUploadQueueAdded(files); };
+    window.pauseAllUploads = function() { return schedulerInstance.pauseAllUploads(); };
+    window.resumeAllUploads = function() { return schedulerInstance.resumeAllUploads(); };
 
 })(window);
