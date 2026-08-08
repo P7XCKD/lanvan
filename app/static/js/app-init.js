@@ -242,64 +242,11 @@
     // 3. APPLICATION UI HANDLERS — Stubs wired to production
     // =========================================================================
 
-    // --- Theme ---
-    window.setThemePreference = function (theme) {
-        localStorage.setItem("theme_preference", theme);
-        // Keep legacy dark_mode_enabled in sync
-        localStorage.setItem("dark_mode_enabled", theme === "dark" ? "1" : "0");
-        if (typeof window.applyThemePreference === "function") {
-            window.applyThemePreference(theme);
-        }
-    };
-
-    window.toggleDarkMode = function () {
-        var currentPref = localStorage.getItem("theme_preference") || "system";
-        var nextPref = "system";
-        if (currentPref === "system") {
-            nextPref = "light";
-        } else if (currentPref === "light") {
-            nextPref = "dark";
-        } else {
-            nextPref = "system";
-        }
-        window.setThemePreference(nextPref);
-    };
-
-    // --- Settings Dialog ---
-    window.openSettingsDialog = function () {
-        var dialog = document.getElementById("settingsDialog");
-        if (!dialog) return;
-
-        // Sync AES toggle from production
-        var aesProd = document.getElementById("enableEncryption");
-        var aesSetting = document.getElementById("aesSettingToggle");
-        if (aesProd && aesSetting) aesSetting.checked = aesProd.checked;
-
-        // Sync theme preferences
-        var themePref = localStorage.getItem("theme_preference") || "system";
-        if (typeof window.applyThemePreference === "function") {
-            window.applyThemePreference(themePref);
-        }
-
-        dialog.style.display = "flex";
-
-        // Wire AES setting toggle to production
-        if (aesSetting) {
-            aesSetting.onchange = function () {
-                if (aesProd) {
-                    aesProd.checked = this.checked;
-                    localStorage.setItem("aes_enabled", this.checked ? "1" : "0");
-                    // Trigger change event on production toggle for ui-modules.js handlers
-                    aesProd.dispatchEvent(new Event("change", { bubbles: true }));
-                }
-            };
-        }
-    };
-
-    window.closeSettingsDialog = function () {
-        var dialog = document.getElementById("settingsDialog");
-        if (dialog) dialog.style.display = "none";
-    };
+    // --- Theme & Settings Dialog — Delegates to ConnectPanel / SettingsConnectManager ---
+    window.setThemePreference = function(theme) { return window.ConnectPanel ? window.ConnectPanel.setThemePreference(theme) : undefined; };
+    window.toggleDarkMode = function() { return window.ConnectPanel ? window.ConnectPanel.toggleDarkMode() : undefined; };
+    window.openSettingsDialog = function() { return window.ConnectPanel ? window.ConnectPanel.openSettingsDialog() : undefined; };
+    window.closeSettingsDialog = function() { return window.ConnectPanel ? window.ConnectPanel.closeSettingsDialog() : undefined; };
 
     // --- Upload Triggers ---
     window.triggerFileInput = function (type) {
@@ -676,125 +623,13 @@ window.submitRename = function() { return window.DialogManager.submitRename.appl
         }
     };
 
-    // --- QR & Connect ---
-    window.setConnectMode = function (mode) {
-        var lanTab = document.getElementById("lanIpTab");
-        var mdnsTab = document.getElementById("mdnsTab");
-        var qrLanTab = document.getElementById("connectQrLanIpTab");
-        var qrMdnsTab = document.getElementById("connectQrMdnsTab");
-
-        var isMdns = mode === "mdns";
-        if (lanTab) lanTab.classList.toggle("active", !isMdns);
-        if (mdnsTab) mdnsTab.classList.toggle("active", isMdns);
-        if (qrLanTab) qrLanTab.classList.toggle("active", !isMdns);
-        if (qrMdnsTab) qrMdnsTab.classList.toggle("active", isMdns);
-
-        if (window._currentNetworkInfo) {
-            var url = window._currentNetworkInfo.lanIpUrl;
-            var isMdnsActive = window._currentNetworkInfo.networkInfo && 
-                               window._currentNetworkInfo.networkInfo.mdns && 
-                               window._currentNetworkInfo.networkInfo.mdns.status === 'active';
-            if (isMdns && isMdnsActive) {
-                url = window._currentNetworkInfo.networkInfo.mdns.url || url;
-            }
-            window._currentNetworkInfo.fullUrl = url;
-            window._currentNetworkInfo.currentMode = mode;
-            renderSidebarQR();
-            renderDialogQR();
-        }
-
-        if (typeof updateMDNSStatus === "function") updateMDNSStatus();
-    };
-
-    window.openConnectQrDialog = function () {
-        var dialog = document.getElementById("connectQrDialog");
-        if (!dialog) return;
-        dialog.style.display = "flex";
-        renderDialogQR();
-        // Load QR from production
-        if (typeof showConnectionInfo === "function") {
-            // Populate address in connect QR dialog
-            var protoAddr = document.getElementById("connectQrDialogAddress");
-            if (protoAddr && window._currentNetworkInfo) {
-                protoAddr.textContent = window._currentNetworkInfo.fullUrl || "";
-            }
-        }
-    };
-
-    window.closeConnectQrDialog = function () {
-        var dialog = document.getElementById("connectQrDialog");
-        if (dialog) dialog.style.display = "none";
-    };
-
-    window.copyConnectAddress = function () {
-        var dialog = document.getElementById("connectQrDialog");
-        var dialogActive = dialog && dialog.style.display !== "none";
-        var addr = dialogActive ? document.getElementById("connectQrDialogAddress") : document.getElementById("connectAddress");
-        if (!addr) {
-            addr = document.getElementById("connectAddress") || document.getElementById("connectQrDialogAddress");
-        }
-        var textToCopy = addr ? addr.textContent.trim() : "";
-        if (!textToCopy || textToCopy === "...") {
-            textToCopy = (window._currentNetworkInfo && window._currentNetworkInfo.fullUrl) ? window._currentNetworkInfo.fullUrl : window.location.origin;
-        }
-
-        if (textToCopy) {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(textToCopy).catch(function () {
-                    fallbackCopyTextToClipboard(textToCopy);
-                });
-            } else {
-                fallbackCopyTextToClipboard(textToCopy);
-            }
-        }
-
-        var tooltips = document.querySelectorAll(".connect-tooltip");
-        for (var i = 0; i < tooltips.length; i++) {
-            tooltips[i].textContent = "Copied successfully!";
-            tooltips[i].classList.add("copied");
-        }
-        setTimeout(function () {
-            for (var j = 0; j < tooltips.length; j++) {
-                tooltips[j].textContent = "Click to copy";
-                tooltips[j].classList.remove("copied");
-            }
-        }, 1800);
-
-        if (typeof window.showToast === "function") {
-            window.showToast("Connection URL copied to clipboard", "success");
-        }
-    };
-
-    function fallbackCopyTextToClipboard(text) {
-        var textArea = document.createElement("textarea");
-        textArea.value = text;
-        textArea.style.position = "fixed";
-        textArea.style.top = "0";
-        textArea.style.left = "0";
-        textArea.style.width = "2em";
-        textArea.style.height = "2em";
-        textArea.style.padding = "0";
-        textArea.style.border = "none";
-        textArea.style.outline = "none";
-        textArea.style.boxShadow = "none";
-        textArea.style.background = "transparent";
-        textArea.style.opacity = "0.01";
-        textArea.style.zIndex = "999999";
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        if (typeof textArea.setSelectionRange === "function") {
-            textArea.setSelectionRange(0, 99999);
-        }
-        var success = false;
-        try {
-            success = document.execCommand('copy');
-        } catch (err) {
-            console.error('[COPY] Fallback copy error', err);
-        }
-        document.body.removeChild(textArea);
-        return success;
-    }
+    // --- QR & Connect — Delegates to ConnectPanel / SettingsConnectManager ---
+    window.setConnectMode = function (mode) { return window.ConnectPanel ? window.ConnectPanel.setConnectMode(mode) : undefined; };
+    window.openConnectQrDialog = function () { return window.ConnectPanel ? window.ConnectPanel.openConnectQrDialog() : undefined; };
+    window.closeConnectQrDialog = function () { return window.ConnectPanel ? window.ConnectPanel.closeConnectQrDialog() : undefined; };
+    window.copyConnectAddress = function () { return window.ConnectPanel ? window.ConnectPanel.copyConnectAddress() : undefined; };
+    var fallbackCopyTextToClipboard = function (text) { return window.ConnectPanel ? window.ConnectPanel.fallbackCopyTextToClipboard(text) : false; };
+    window.fallbackCopyTextToClipboard = fallbackCopyTextToClipboard;
 
     // --- Preview Modal Controller — Delegates to PreviewModal module ---
     window.closePreviewModal = function () { if (window.PreviewModal && typeof window.PreviewModal.close === "function") window.PreviewModal.close(); };
