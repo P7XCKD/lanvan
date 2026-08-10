@@ -311,3 +311,5 @@ REPOSITORY / PROJECTION STABILITY RULES
 - Tests should observe production behavior, not simulate internal architecture.
 - When validating rendering, compare Repository, Projection, and DOM together whenever possible.
 - Every render-stability regression test must produce detailed diagnostics showing mutation index, render timestamp, Repository items, Projection items, DOM items, and missing filenames.
+
+## codex reviews your entire work everytime
