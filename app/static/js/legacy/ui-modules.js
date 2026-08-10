@@ -36,28 +36,7 @@ function storeFileMetadata(files, totalSize) {
 
 
 
-// Progress styling utilities for visual feedback
-function setProgressColor(color) {
-  try {
-    // Use cached DOM element instead of repeated getElementById
-    let progressBar = DOM_CACHE.toastProgress;
-    if (!progressBar) {
-      progressBar = document.getElementById('toast-progress');
-      if (progressBar) DOM_CACHE.toastProgress = progressBar;
-    }
-    if (!progressBar) return; // Safe guard for guest devices
 
-    if (color === 'blue') {
-      progressBar.style.background = 'linear-gradient(90deg, #2196F3, #42A5F5)';
-    } else if (color === 'green') {
-      progressBar.style.background = 'linear-gradient(90deg, #4CAF50, #66BB6A)';
-    } else {
-      progressBar.style.background = color;
-    }
-  } catch (err) {
-    console.log('Progress color update skipped on this device');
-  }
-}
 
 
 
@@ -570,85 +549,7 @@ function handleFileSelection(type) {
 // Export to window so main-app.js and other scripts can call it directly
 window.handleFileSelection = handleFileSelection;
 
-async function uploadFolder(files) {
-  if (files.length === 0) {
-    showToast(' No files selected!', 3000);
-    return;
-  }
 
-  const folderGroups = new Map();
-  const standaloneFiles = [];
-
-  for (let file of files) {
-    if (file.webkitRelativePath) {
-      const parts = file.webkitRelativePath.split('/');
-      const rootFolder = parts[0];
-      if (!folderGroups.has(rootFolder)) {
-        folderGroups.set(rootFolder, []);
-      }
-      folderGroups.get(rootFolder).push(file);
-    } else {
-      standaloneFiles.push(file);
-    }
-  }
-
-  if (standaloneFiles.length > 0) {
-    if (typeof addToUploadQueue === 'function') addToUploadQueue(standaloneFiles);
-  }
-
-  for (let [folderName, folderFiles] of folderGroups) {
-    if (typeof addToUploadQueue === 'function') addToUploadQueue(folderFiles);
-  }
-
-  if (typeof showUploadManager === 'function') showUploadManager();
-  if (typeof startNextUpload === 'function') startNextUpload();
-}
-
-async function uploadSingleFolder(folderName, files) {
-  const formData = new FormData();
-  formData.append('folder_name', folderName);
-
-  const currentDir = (typeof window.getCurrentFolderPath === 'function') ? window.getCurrentFolderPath() : '';
-  if (currentDir) {
-    formData.append('parent_path', currentDir);
-  }
-
-  for (let file of files) {
-    const relativePath = file.webkitRelativePath || file.name;
-    const pathWithoutRoot = relativePath.includes('/') ? relativePath.substring(relativePath.indexOf('/') + 1) : file.name;
-    formData.append('files', file, pathWithoutRoot);
-  }
-
-  try {
-    const response = await fetch('/upload-folder', {
-      method: 'POST',
-      body: formData
-    });
-
-    const result = await response.json();
-
-    if (result.status === 'success') {
-      showToast(` Folder "${folderName}" uploaded successfully! (${result.files_uploaded.length} files)`, 4000);
-      if (typeof refreshFileListManually === 'function') {
-        refreshFileListManually();
-      }
-      if (typeof window.requestSafeVisibleFilesRefresh === 'function') {
-        window.requestSafeVisibleFilesRefresh(120);
-      } else if (typeof fetchFilesData === 'function' && typeof renderFileList === 'function') {
-        fetchFilesData().then(function (fd) { renderFileList(fd); });
-      }
-      if (typeof loadFolders === 'function') loadFolders();
-      return { success: true, folderName, fileCount: result.files_uploaded.length };
-    } else {
-      showToast(` Upload failed: ${result.msg}`, 4000);
-      return { success: false, folderName, error: result.msg };
-    }
-  } catch (error) {
-    console.error('Folder upload error:', error);
-    showToast(` Folder "${folderName}" upload failed!`, 4000);
-    return { success: false, folderName, error: error.message };
-  }
-}
 
 async function loadFolders() {
   try {
