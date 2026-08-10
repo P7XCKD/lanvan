@@ -3069,33 +3069,7 @@ function updateFileDisplay(files) {
 
 
 
-// Clear all files function
-async function clearAllFiles() {
 
-
-  try {
-    console.log(' Clearing all files...');
-
-    const response = await fetch('/clear', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (response.ok) {
-      // Update file display immediately
-      updateFileDisplay([]);
-      showToast(' All files cleared successfully!', 3000);
-      console.log(' Files cleared successfully');
-    } else {
-      throw new Error(`HTTP ${response.status}`);
-    }
-  } catch (error) {
-    console.error(' Failed to clear files:', error);
-    showToast(' Failed to clear files. Please try again.', 5000);
-  }
-}
 
 window.DOM_CACHE = window.DOM_CACHE || {};
 var DOM_CACHE = window.DOM_CACHE;
@@ -4798,7 +4772,6 @@ window.refreshFileListManually = refreshFileListManually;
 window.refreshFileList = refreshFileList;
 window.toggleSettingsMenu = toggleSettingsMenu;
 window.cancelAllUploads = cancelAllUploads;
-window.clearAllFiles = clearAllFiles;
 window.showDownloadOptions = showDownloadOptions;
 window.showToast = showToast;
 window.toggleDeviceLogs = toggleDeviceLogs;
