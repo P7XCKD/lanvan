@@ -140,10 +140,12 @@
             window.showToast("Preparing ZIP archive...", 0);
         }
 
+        var currentFolder = typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "");
+
         fetch("/api/files/download-zip", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ files: items })
+            body: JSON.stringify({ files: items, parent_path: currentFolder })
         })
             .then(function (res) {
                 if (!res.ok) {

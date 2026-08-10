@@ -103,6 +103,9 @@
         if (rMeta) {
             hasVersions = !!rMeta.hasVersions;
             versionCount = rMeta.versionCount || 1;
+        } else if (info && (info.hasVersions || info.versionCount > 1)) {
+            hasVersions = !!info.hasVersions || (info.versionCount > 1);
+            versionCount = info.versionCount || 1;
         }
         var versionBadgeHtml = hasVersions
             ? '<span class="version-pill-badge" title="Version ' + versionCount + ' (Has version history)" style="font-size:0.72rem; font-weight:700; padding:2px 8px; border-radius:12px; margin-left:8px; background:var(--primary-bg, rgba(37,99,235,0.12)); color:var(--primary, #2563eb); border:1px solid var(--primary-border, rgba(37,99,235,0.3)); vertical-align:middle; display:inline-flex; align-items:center; letter-spacing:0.02em;">v' + versionCount + '</span>'
@@ -170,7 +173,9 @@
                     '</div>' +
                     '</div>';
             } else {
-                var downloadUrl = "/download/" + encodeURIComponent(name);
+                var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window.currentFolderPath || "") : "";
+                var scopedPath = (typeof window.getCanonicalIdentity === "function") ? window.getCanonicalIdentity(curFolder, name) : (curFolder ? (curFolder + "/" + name) : name);
+                var downloadUrl = "/download/" + encodeURIComponent(scopedPath);
                 previewHtml = '<div class="grid-card-preview" style="padding:0;margin:0;background:var(--card-bg);">' +
                     '<img src="' + downloadUrl + '" alt="' + escName + '" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;" onerror="this.style.display=\'none\';" />' +
                     '</div>';
@@ -183,7 +188,9 @@
                     '</div>' +
                     '</div>';
             } else {
-                var downloadUrl = "/download/" + encodeURIComponent(name);
+                var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window.currentFolderPath || "") : "";
+                var scopedPath = (typeof window.getCanonicalIdentity === "function") ? window.getCanonicalIdentity(curFolder, name) : (curFolder ? (curFolder + "/" + name) : name);
+                var downloadUrl = "/download/" + encodeURIComponent(scopedPath);
                 previewHtml = '<div class="grid-card-preview video-preview-box" style="position:absolute;top:39px;left:0;right:0;bottom:0;width:100%;height:calc(100% - 39px);padding:0;margin:0;background:#0f172a;overflow:hidden;">' +
                     '<video src="' + downloadUrl + '#t=0.5" preload="metadata" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;pointer-events:none;" muted controlsList="nodownload no-fullscreen noremoteplayback" disablePictureInPicture></video>' +
                     '<div class="video-play-badge" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;margin:0;">' +

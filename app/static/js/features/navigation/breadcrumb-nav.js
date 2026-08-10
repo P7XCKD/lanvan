@@ -142,6 +142,8 @@
 
     function navigateToFolder(folderPath) {
         var cleanFolder = cleanFolderPath(folderPath);
+        window._contextMenuFolderPath = "";
+        window._contextMenuTarget = "";
         console.log("📂 [LANVAN UI] Navigating to folder: '" + (cleanFolder || "Home") + "'");
         if (window.LanvanStore) {
             window.LanvanStore.dispatch("SET_CURRENT_FOLDER", { folderPath: cleanFolder });
