@@ -602,7 +602,7 @@ class Suite:
         d = aiohttp.FormData(); d.add_field("files",b"x",filename=fn); d.add_field("parent_path",a)
         st,_ = await self._api("POST","/upload-auto",data=d)
         self._ck(st==200,f"Upload to '{a}'","file-ops")
-        mv = aiohttp.FormData(); mv.add_field("filename",fn); mv.add_field("destination",b)
+        mv = aiohttp.FormData(); mv.add_field("filename",fn); mv.add_field("destination",b); mv.add_field("source_path",a)
         st,_ = await self._api("POST","/api/files/move",data=mv)
         self._ck(st==200,f"Move -> '{b}'","file-ops")
         # Move non-existent
