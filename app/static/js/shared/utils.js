@@ -43,6 +43,13 @@
         return (cleaned === "Home (Root)" || cleaned === "Home" || cleaned === "Home/") ? "" : cleaned;
     }
 
+    function getCanonicalIdentity(parentPath, fileName) {
+        if (!fileName) return "";
+        var cleanParent = cleanFolderPath(parentPath);
+        var cleanName = String(fileName).trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+        return cleanParent ? (cleanParent + "/" + cleanName) : cleanName;
+    }
+
     function formatSpeed(bytesPerSecond) {
         if (bytesPerSecond === 0 || !bytesPerSecond) return '0 B/s';
         var k = 1024;
@@ -157,6 +164,7 @@
         formatBytes: formatBytes,
         formatSize: formatSize,
         cleanFolderPath: cleanFolderPath,
+        getCanonicalIdentity: getCanonicalIdentity,
         formatSpeed: formatSpeed,
         formatLastModified: formatLastModified
     });
@@ -167,6 +175,7 @@
     window.escapeHtml = window.escapeHtml || escapeHtml;
     window.formatSize = window.formatSize || formatSize;
     window.cleanFolderPath = window.cleanFolderPath || cleanFolderPath;
+    window.getCanonicalIdentity = window.getCanonicalIdentity || getCanonicalIdentity;
     window.formatSpeed = window.formatSpeed || formatSpeed;
     window.formatLastModified = window.formatLastModified || formatLastModified;
 

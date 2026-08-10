@@ -1923,16 +1923,15 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
         file_path = target_dir / safe_name
         
         if not file_path.exists():
-            # Search target_dir and subdirectories recursively for filename or safe_name
+            # Check target_dir with unescaped filename or alternate safe_name representations (strictly scoped to target_dir)
             found = False
             for target_name in set([safe_name, filename, secure_filename(filename)]):
                 if not target_name: continue
-                for candidate in UPLOAD_FOLDER.rglob(target_name):
-                    if candidate.is_file():
-                        file_path = candidate
-                        found = True
-                        break
-                if found: break
+                candidate = target_dir / target_name
+                if candidate.exists():
+                    file_path = candidate
+                    found = True
+                    break
 
             if not found:
                 # Idempotent delete: file is already unlinked from disk! Purge any leftover temp artifacts
@@ -3133,15 +3132,7 @@ async def delete_folder(folder_path: str):
             return JSONResponse(status_code=403, content={"status": "error", "msg": "Access denied"})
         
         if not folder_path_obj.exists() or not folder_path_obj.is_dir():
-            target_name = parts[-1]
-            found = False
-            for candidate in UPLOAD_FOLDER.rglob(target_name):
-                if candidate.is_dir():
-                    folder_path_obj = candidate
-                    found = True
-                    break
-            if not found:
-                return JSONResponse(content={"status": "success", "msg": "Folder deleted successfully"})
+            return JSONResponse(content={"status": "success", "msg": "Folder deleted successfully"})
         
         # Cancel any active streams for files inside this folder hierarchy
         await get_stream_manager().cancel_and_await_cleanup(folder_path_obj)

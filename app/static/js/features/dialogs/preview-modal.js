@@ -200,12 +200,11 @@
             var hasV = false;
             var lfId = null;
             var baseN = filename ? filename.split("/").pop().split("\\").pop() : "";
-            if (window._fileMetadataMap) {
-                var meta = window._fileMetadataMap[filename] || window._fileMetadataMap[baseN];
-                if (meta) {
-                    hasV = !!meta.hasVersions;
-                    lfId = meta.logicalFileId;
-                }
+            var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window.currentFolderPath) : "";
+            var meta = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, baseN) : (window._fileMetadataMap ? (window._fileMetadataMap[filename] || window._fileMetadataMap[baseN]) : null);
+            if (meta) {
+                hasV = !!meta.hasVersions;
+                lfId = meta.logicalFileId;
             }
             if (!lfId) lfId = "lf_" + baseN;
             historyBtn.style.display = hasV ? "inline-flex" : "none";

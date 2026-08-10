@@ -117,11 +117,10 @@
         if (historyItem) {
             var hasV = false;
             var baseN = targetName ? targetName.split("/").pop().split("\\").pop() : "";
-            if (window._fileMetadataMap) {
-                var meta = window._fileMetadataMap[targetName] || window._fileMetadataMap[baseN];
-                if (meta) {
-                    hasV = !!meta.hasVersions;
-                }
+            var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window.currentFolderPath) : "";
+            var meta = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, baseN) : (window._fileMetadataMap ? (window._fileMetadataMap[targetName] || window._fileMetadataMap[baseN]) : null);
+            if (meta) {
+                hasV = !!meta.hasVersions;
             }
             historyItem.style.display = (isSingle && !isTargetFolder && hasV) ? "flex" : "none";
             if (hasV && typeof window.refreshLucideIcons === "function") {
@@ -144,7 +143,8 @@
         var targetName = window._contextMenuTarget || (window.selectedItems && window.selectedItems[0]);
         if (!targetName) return;
         var baseN = targetName.split("/").pop().split("\\").pop();
-        var meta = window._fileMetadataMap && (window._fileMetadataMap[targetName] || window._fileMetadataMap[baseN]);
+        var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window.currentFolderPath) : "";
+        var meta = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, baseN) : (window._fileMetadataMap && (window._fileMetadataMap[targetName] || window._fileMetadataMap[baseN]));
         var lfId = meta ? meta.logicalFileId : ("lf_" + baseN);
         if (window.LanvanVersionHistoryPanel) {
             window.LanvanVersionHistoryPanel.open(lfId, baseN);

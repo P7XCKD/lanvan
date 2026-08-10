@@ -413,6 +413,9 @@ fetch("/api/upload-history")
   .then(restoredQueue => {
     if (Array.isArray(restoredQueue) && restoredQueue.length > 0) {
       restoredQueue.forEach(item => {
+        if (typeof item.status === 'string') {
+          item.status = item.status.toUpperCase();
+        }
         if (item.status === 'UPLOADING' || item.status === 'QUEUED') {
           item.status = 'PAUSED';
         }
@@ -717,7 +720,18 @@ function startUpload() {
     handleUploadStart();
   }
 }
-// Removed endUpload function; moved to file-utils.js
+
+function endUpload() {
+  if (activeUploads > 0) {
+    activeUploads--;
+  }
+  window.log.upload(`Upload finished (${activeUploads}/${currentMaxConcurrent} active)`);
+
+  // Resume auto-refresh when all uploads complete
+  if (activeUploads === 0) {
+    handleUploadEnd();
+  }
+}
 // Utility functions for upload display
 function escapeHtml(text) {
   const div = document.createElement('div');
@@ -1736,7 +1750,8 @@ function performUIUpdate(uploadItem, forceUpdate = false) {
 
   // ⏱ STABLE TIME: Update time remaining with debouncing
   if (remainingText && uploadItem.timeRemaining > 0 && uploadItem.status === 'UPLOADING') {
-    const newTimeText = `${formatTime(uploadItem.timeRemaining)} left`;
+    const formatTimeFn = typeof formatRemainingTime === 'function' ? formatRemainingTime : (typeof formatTime === 'function' ? formatTime : seconds => `${seconds}s`);
+    const newTimeText = `${formatTimeFn(uploadItem.timeRemaining)} left`;
     if (remainingText.textContent !== newTimeText) {
       remainingText.textContent = newTimeText;
     }
@@ -4006,16 +4021,6 @@ function setupEventListeners() {
   });
 }
 
-function updatePreview(files) {
-  DOM_CACHE.preview.innerHTML = '';
-  if (!files.length) return;
-  for (let file of files) {
-    const div = document.createElement('div');
-    div.textContent = ` ${file.name}`;
-    DOM_CACHE.preview.appendChild(div);
-  }
-}
-
 function clearFileSelection() {
   // Clear the file input (safe - doesn't affect active uploads)
   if (DOM_CACHE.fileInput) {
@@ -4116,62 +4121,6 @@ function isHttpSafeEnabled() {
   // HTTP-Safe metadata obfuscation is ONLY needed on HTTP connections.
   // On HTTPS, TLS already encrypts all headers, file names, and metadata natively.
   return isHTTP && !!(aesToggle && aesToggle.checked);
-}
-
-async function encryptFileHttpSafe(file) {
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('http_safe', 'true');
-
-  const response = await fetch('/encrypt_http_safe', {
-    method: 'POST',
-    body: formData
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP-Safe encryption failed: ${response.statusText}`);
-  }
-
-  const result = await response.json();
-  return {
-    encryptedBlob: await (await fetch(`/download_temp/${result.temp_filename}`)).blob(),
-    metadata: result.metadata,
-    obfuscatedFilename: result.obfuscated_filename,
-    originalSize: file.size,
-    encryptedSize: result.encrypted_size
-  };
-}
-
-function createObfuscatedUpload(encryptedData, originalFile) {
-  const obfuscatedFile = new File([encryptedData.encryptedBlob], encryptedData.obfuscatedFilename, {
-    type: 'application/octet-stream'
-  });
-
-  // Add metadata as hidden field
-  return {
-    file: obfuscatedFile,
-    metadata: encryptedData.metadata,
-    originalName: originalFile.name,
-    originalSize: encryptedData.originalSize,
-    encryptedSize: encryptedData.encryptedSize
-  };
-}
-
-async function generateDecoyTraffic() {
-  if (!isHttpSafeEnabled()) return;
-
-  const decoyCount = Math.floor(Math.random() * 3) + 1; // 1-3 decoys
-  for (let i = 0; i < decoyCount; i++) {
-    try {
-      await fetch('/generate_decoy', {
-        method: 'POST',
-        body: JSON.stringify({ size: Math.floor(Math.random() * 50000) + 10000 }),
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (e) {
-      // Ignore decoy failures
-    }
-  }
 }
 
 //  HTTP-Safe AES Upload Function
@@ -4530,11 +4479,6 @@ function updateToastContent(message) {
     toast.style.backgroundColor = '#333';
     toast.style.whiteSpace = 'normal';
   }
-}
-
-function updateProgressToast(message) {
-  // Same as updateToastContent for progress updates
-  updateToastContent(message);
 }
 
 function hideToast() {
@@ -4975,6 +4919,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     testImg.src = qrUrl;
   }
+
   function preloadQR(protocol, hostname, port) {
     let fullUrl = `${protocol}//${hostname}`;
     if (port && port !== '80' && port !== '443') {
@@ -6259,9 +6204,9 @@ async function downloadClipboardItem(itemId) {
     let filename = `pasted-text-${itemId}.txt`;
     const disposition = res.headers.get('Content-Disposition');
     if (disposition && disposition.indexOf('filename=') !== -1) {
-      const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+      const matches = new RegExp("filename[^;=\\n]*=((['\"]).*?\\2|[^;\\n]*)").exec(disposition);
       if (matches != null && matches[1]) {
-        filename = matches[1].replace(/['"]/g, '');
+        filename = matches[1].replace(/'/g, '').replace(/"/g, '');
       }
     }
 

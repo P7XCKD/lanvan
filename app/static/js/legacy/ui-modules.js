@@ -8,27 +8,7 @@
 window.DOM_CACHE = window.DOM_CACHE || {};
 var DOM_CACHE = window.DOM_CACHE;
 
-function completeProgress(color = 'green') {
-  try {
-    // Use cached DOM element
-    let progressBar = DOM_CACHE.toastProgress;
-    if (!progressBar) {
-      progressBar = document.getElementById('toast-progress');
-      if (progressBar) DOM_CACHE.toastProgress = progressBar;
-    }
-    if (!progressBar) return; // Safe guard for guest devices
 
-    setProgressColor(color);
-    progressBar.style.width = '100%';
-
-    // Fade out after completion
-    setTimeout(() => {
-      if (progressBar) progressBar.style.width = '0%';
-    }, 1000);
-  } catch (err) {
-    console.log('Progress completion skipped on this device');
-  }
-}
 //  Store file metadata for downloads (fixes "unknown size" issue)
 function storeFileMetadata(files, totalSize) {
   const metadata = JSON.parse(localStorage.getItem('fileMetadata') || '{}');
@@ -54,11 +34,7 @@ function storeFileMetadata(files, totalSize) {
   localStorage.setItem('fileMetadata', JSON.stringify(metadata));
 }
 
-//  Get stored file metadata (for downloads)
-function getFileMetadata(filename) {
-  const metadata = JSON.parse(localStorage.getItem('fileMetadata') || '{}');
-  return metadata[filename] || null;
-}
+
 
 // Progress styling utilities for visual feedback
 function setProgressColor(color) {
@@ -84,42 +60,7 @@ function setProgressColor(color) {
 }
 
 
-function startProgressAnimation(color = 'green', duration = 2000) {
-  try {
-    setProgressColor(color);
-    // Use cached DOM element
-    let progressBar = DOM_CACHE.toastProgress;
-    if (!progressBar) {
-      progressBar = document.getElementById('toast-progress');
-      if (progressBar) DOM_CACHE.toastProgress = progressBar;
-    }
-    if (!progressBar) return; // Safe guard for guest devices
 
-    progressBar.style.width = '0%';
-
-    // Animate to 90% over the duration
-    const startTime = Date.now();
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(90, (elapsed / duration) * 90);
-      if (progressBar) progressBar.style.width = progress + '%';
-
-      if (progress < 90 && progressBar) {
-        requestAnimationFrame(animate);
-      }
-    };
-    requestAnimationFrame(animate);
-  } catch (err) {
-    console.log('Progress animation skipped on this device');
-  }
-}
-
-function showPersistentToast(message) {
-  showToast(message, -1); // -1 means indefinite
-  return function stopPersistentToast() {
-    hideToast();
-  };
-}
 
 // Switch button dropdown and navigation logic (inlined to avoid 404 issues)
 function showSwitchDropdown(event, dropdownId) {

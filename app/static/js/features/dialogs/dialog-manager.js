@@ -633,12 +633,24 @@
             window._cancelledFilesMap[filename] = true;
 
             if (Array.isArray(window.uploadQueue)) {
-                var basename = filename.split('/').pop().split('\\').pop();
+                var getCanonId = window.getCanonicalIdentity || function (p, n) {
+                    var cp = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(p) : (p || "");
+                    var cn = String(n || "").trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+                    return cp ? (cp + "/" + cn) : cn;
+                };
+                var targetCanonical = getCanonId(cleanParent, filename);
+
                 window.uploadQueue.forEach(function (qi) {
                     if (!qi) return;
-                    var qiName = (qi.fileName || qi.name || "");
-                    var qiFolder = (qi.targetDir || qi.parent_path || qi.folder || "").replace(/^Home\/?/, "");
-                    if (qiName === basename || qiName === filename || qiFolder === filename || qiFolder.startsWith(filename + "/")) {
+                    var qiName = (qi.fileName || (qi.file && qi.file.name) || qi.name || "");
+                    var qiFolder = (qi.targetDir || qi.parent_path || qi.folder || "");
+                    var qiCanonical = getCanonId(qiFolder, qiName);
+                    var cleanQiFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(qiFolder) : qiFolder.replace(/^Home\/?/, "");
+
+                    var isExactMatch = (qiCanonical === targetCanonical);
+                    var isSubFolderMatch = (cleanQiFolder === targetCanonical || cleanQiFolder.startsWith(targetCanonical + "/"));
+
+                    if (isExactMatch || isSubFolderMatch) {
                         if (qi.xhr) {
                             try { qi.xhr.abort(); } catch (err) { }
                         }

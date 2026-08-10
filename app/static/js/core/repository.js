@@ -14,9 +14,36 @@
         return (cleaned === "Home (Root)" || cleaned === "Home" || cleaned === "Home/") ? "" : cleaned;
     }
 
+    function getCanonicalIdentity(parentPath, fileName) {
+        if (typeof window.getCanonicalIdentity === 'function') {
+            return window.getCanonicalIdentity(parentPath, fileName);
+        }
+        if (!fileName) return "";
+        var cleanParent = cleanPath(parentPath);
+        var cleanName = String(fileName).trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+        return cleanParent ? (cleanParent + "/" + cleanName) : cleanName;
+    }
+
     if (!window._fileMetadataMap) {
         window._fileMetadataMap = {};
     }
+
+    function setFileMetadata(parentPath, name, metadata) {
+        if (!name) return;
+        if (!window._fileMetadataMap) window._fileMetadataMap = {};
+        var canonicalKey = getCanonicalIdentity(parentPath, name);
+        window._fileMetadataMap[canonicalKey] = metadata;
+        window._fileMetadataMap[name] = metadata;
+    }
+
+    function getFileMetadata(parentPath, name) {
+        if (!name) return null;
+        if (!window._fileMetadataMap) window._fileMetadataMap = {};
+        var canonicalKey = getCanonicalIdentity(parentPath, name);
+        return window._fileMetadataMap[canonicalKey] || window._fileMetadataMap[name] || null;
+    }
+    window.setFileMetadata = setFileMetadata;
+    window.getFileMetadata = getFileMetadata;
 
     function tagFiles(files, folderPath) {
         var list = Array.isArray(files) ? files : [];
@@ -26,14 +53,14 @@
             if (item && typeof item === 'object') {
                 item.isFolder = !!(item.isFolder || item.is_dir || item.is_folder);
                 if (item.name) {
-                    window._fileMetadataMap[item.name] = {
+                    setFileMetadata(targetPath, item.name, {
                         size: item.size || '--',
                         mtime: item.mtime || 0,
                         isFolder: item.isFolder,
                         logicalFileId: item.logicalFileId,
                         versionCount: item.versionCount || 1,
                         hasVersions: !!item.hasVersions
-                    };
+                    });
                 }
             }
         }

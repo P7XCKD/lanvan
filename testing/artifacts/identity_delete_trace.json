@@ -1,0 +1,49 @@
+﻿{
+  " delete_test\: {
+ \selected_folder\: \Inside\,
+ \selected_items\: [\A\, \B\, \C\],
+ \requests\: [
+ { \url\: \/delete/A\, \filename\: \A\, \parent_path\: \Inside\, \canonicalIdentity\: \Inside/A\ },
+ { \url\: \/delete/B\, \filename\: \B\, \parent_path\: \Inside\, \canonicalIdentity\: \Inside/B\ },
+ { \url\: \/delete/C\, \filename\: \C\, \parent_path\: \Inside\, \canonicalIdentity\: \Inside/C\ }
+ ],
+ \backend_operations\: [
+ { \filename\: \A\, \parent_path\: \Inside\, \target_dir\: \data/uploads/Inside\, \absolute_path\: \data/uploads/Inside/A\, \exists_before\: true, \unlink_success\: true, \exists_after\: false },
+ { \filename\: \B\, \parent_path\: \Inside\, \target_dir\: \data/uploads/Inside\, \absolute_path\: \data/uploads/Inside/B\, \exists_before\: true, \unlink_success\: true, \exists_after\: false },
+ { \filename\: \C\, \parent_path\: \Inside\, \target_dir\: \data/uploads/Inside\, \absolute_path\: \data/uploads/Inside/C\, \exists_before\: true, \unlink_success\: true, \exists_after\: false }
+ ],
+ \filesystem_before\: { \root\: [\A\, \B\, \C\, \Inside\], \inside\: [\A\, \B\, \C\] },
+ \filesystem_after\: { \root\: [\A\, \B\, \C\, \Inside\], \inside\: [] },
+ \websocket_events\: [
+ { \type\: \file_change\, \action\: \delete\, \target_dir\: \Inside\, \path\: \A\ },
+ { \type\: \file_change\, \action\: \delete\, \target_dir\: \Inside\, \path\: \B\ },
+ { \type\: \file_change\, \action\: \delete\, \target_dir\: \Inside\, \path\: \C\ }
+ ],
+ \repository_before\: { \root\: [\A\, \B\, \C\, \Inside\], \inside\: [\A\, \B\, \C\] },
+ \repository_after\: { \root\: [\A\, \B\, \C\, \Inside\], \inside\: [] },
+ \projection_before\: { \root\: [\A\, \B\, \C\, \Inside\], \inside\: [\A\, \B\, \C\] },
+ \projection_after\: { \root\: [\A\, \B\, \C\, \Inside\], \inside\: [] },
+ \dom_before\: { \root\: [\A\, \B\, \C\, \Inside\], \inside\: [\A\, \B\, \C\] },
+ \dom_after\: { \root\: [\A\, \B\, \C\, \Inside\], \inside\: [] }
+ },
+ \v2_test\: {
+ \filename\: \V2_TEST_UNIQUE_123.txt\,
+ \stages\: [
+ { \stage\: \API\, \present\: true, \canonicalIdentity\: \V2_TEST_UNIQUE_123.txt\ },
+ { \stage\: \REPOSITORY\, \present\: true, \canonicalIdentity\: \V2_TEST_UNIQUE_123.txt\ },
+ { \stage\: \PROJECTION_INPUT\, \present\: true, \canonicalIdentity\: \V2_TEST_UNIQUE_123.txt\ },
+ { \stage\: \PROJECTION_OUTPUT\, \present\: true, \canonicalIdentity\: \V2_TEST_UNIQUE_123.txt\ },
+ { \stage\: \DOM\, \present\: true, \canonicalIdentity\: \V2_TEST_UNIQUE_123.txt\ }
+ ],
+ \first_failure_stage\: null
+ },
+ \upload_queue\: {
+ \total\: 32,
+ \active\: 0,
+ \completed\: 28,
+ \failed\: 0,
+ \cancelled\: 4,
+ \items\: []
+ },
+ \identity_fallbacks\: []
+}
