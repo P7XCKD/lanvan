@@ -23,30 +23,51 @@
         document.body.removeChild(link);
     }
 
+    function getScopedFolderPath() {
+        var folder = window._contextMenuFolderPath || (typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || ""));
+        return typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(folder) : folder;
+    }
+
+    function buildScopedDownloadPath(filename) {
+        if (!filename) return "";
+        var cleanName = String(filename).replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+        if (cleanName.indexOf("/") !== -1) {
+            return cleanName;
+        }
+        var folderPath = getScopedFolderPath();
+        return folderPath ? (folderPath + "/" + cleanName) : cleanName;
+    }
+
     function downloadFileByName(filename) {
         if (!filename) return;
+        var scopedName = buildScopedDownloadPath(filename);
+        var baseName = scopedName.split("/").pop();
+        var scopedFolder = getScopedFolderPath();
         var isFolder = false;
-        var listEl = document.querySelector('#nasFileList [data-filename="' + filename.replace(/"/g, '&quot;') + '"]');
+        var listEl = document.querySelector('#nasFileList [data-filename="' + baseName.replace(/"/g, '&quot;') + '"]');
         if (listEl) {
             isFolder = listEl.getAttribute("data-is-folder") === "1";
         }
         if (!isFolder && typeof window.getDiskFileMetadata === "function") {
-            var foundMeta = window.getDiskFileMetadata(filename);
+            var foundMeta = window.getDiskFileMetadata(baseName, scopedFolder);
             if (foundMeta && (foundMeta.isFolder || foundMeta.is_dir)) isFolder = true;
         }
 
         if (isFolder) {
-            downloadFolderAsZip(filename);
+            downloadFolderAsZip(scopedName);
             return;
         }
 
         var link = document.createElement("a");
-        link.href = "/download/" + encodeURIComponent(filename);
-        link.download = filename;
+        link.href = "/download/" + encodeURIComponent(scopedName);
+        link.download = baseName;
         link.style.display = "none";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        if (window._contextMenuFolderPath) {
+            window._contextMenuFolderPath = "";
+        }
     }
 
     function downloadSelected() {
@@ -73,20 +94,23 @@
                 return;
             }
             var targetItem = items[index];
+            var scopedItem = buildScopedDownloadPath(targetItem);
+            var baseItem = scopedItem.split("/").pop();
+            var scopedFolder = getScopedFolderPath();
             var isFolder = false;
-            var listEl = document.querySelector('#nasFileList [data-filename="' + targetItem.replace(/"/g, '&quot;') + '"]');
+            var listEl = document.querySelector('#nasFileList [data-filename="' + baseItem.replace(/"/g, '&quot;') + '"]');
             if (listEl) {
                 isFolder = listEl.getAttribute("data-is-folder") === "1";
             }
             if (!isFolder && typeof window.getDiskFileMetadata === "function") {
-                var foundMeta = window.getDiskFileMetadata(targetItem);
+                var foundMeta = window.getDiskFileMetadata(baseItem, scopedFolder);
                 if (foundMeta && (foundMeta.isFolder || foundMeta.is_dir)) isFolder = true;
             }
 
             if (isFolder) {
-                downloadFolderAsZip(targetItem);
+                downloadFolderAsZip(scopedItem);
             } else {
-                downloadFileByName(targetItem);
+                downloadFileByName(scopedItem);
             }
 
             index++;

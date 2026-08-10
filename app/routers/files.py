@@ -69,6 +69,8 @@ except ImportError:
 
 UPLOAD_FOLDER = DATA_DIR / "uploads"
 UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+TEMP_CHUNKS_FOLDER = Path("data/temp_chunks")
+TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
 
 # Upload history file - cleared on every server startup
 UPLOAD_HISTORY_FILE = DATA_DIR / "upload_history.json"
@@ -77,6 +79,27 @@ try:
     UPLOAD_HISTORY_FILE.write_text("[]", encoding="utf-8")
 except Exception:
     pass
+
+
+def _clean_parent_path(parent_path: Optional[str]) -> str:
+    """Normalize a parent path to Lanvan's internal relative-folder representation."""
+    if not parent_path:
+        return ""
+    clean_parent = urllib.parse.unquote(parent_path).replace('\\', '/').strip('/')
+    if clean_parent in ("Home", "Home (Root)", "Home/"):
+        return ""
+    return clean_parent
+
+
+def _resolve_target_dir(parent_path: Optional[str]) -> Path:
+    """Resolve an exact upload subdirectory without any basename fallback."""
+    target_dir = UPLOAD_FOLDER
+    clean_parent = _clean_parent_path(parent_path)
+    if clean_parent:
+        parts = [secure_filename(p) for p in clean_parent.split('/') if p and p != ".." and p != "Home" and secure_filename(p)]
+        if parts:
+            target_dir = UPLOAD_FOLDER.joinpath(*parts)
+    return target_dir
 
 
 # Startup cleanup of orphan .tmp files in upload folder.
@@ -100,8 +123,8 @@ try:
 except Exception:
     pass
 
-def cleanup_temp_file_for_filename(filename: str, parent_path: Optional[str] = None) -> int:
-    """Find and delete all .tmp files and chunk artifacts associated with a filename."""
+def cleanup_temp_file_for_filename(filename: str, parent_path: Optional[str] = None, upload_id: Optional[str] = None, relative_path: Optional[str] = None) -> int:
+    """Delete exact upload-scoped file artifacts for a cancelled upload or finalized delete."""
     deleted_count = 0
     if not filename:
         return 0
@@ -109,50 +132,54 @@ def cleanup_temp_file_for_filename(filename: str, parent_path: Optional[str] = N
     if not safe_name:
         return 0
 
-    base_name = safe_name.rsplit('.', 1)[0] if '.' in safe_name else safe_name
+    resolved_parent = parent_path
+    if not resolved_parent and relative_path:
+        rel_clean = urllib.parse.unquote(relative_path).replace('\\', '/').strip('/')
+        if rel_clean:
+            rel_parent = Path(rel_clean).parent.as_posix()
+            resolved_parent = "" if rel_parent in (".", "Home", "Home (Root)") else rel_parent
 
-    target_dirs = [UPLOAD_FOLDER]
-    if parent_path:
-        clean_parent = urllib.parse.unquote(parent_path).replace('\\', '/').strip('/')
-        if clean_parent:
-            # Sanitize each path component to prevent traversal & filter virtual 'Home' root
-            parts = [secure_filename(p) for p in clean_parent.split('/') if p and p != "Home" and secure_filename(p)]
-            if parts:
-                sub_dir = UPLOAD_FOLDER.joinpath(*parts)
-                try:
-                    sub_dir.resolve().relative_to(UPLOAD_FOLDER.resolve())
-                    if sub_dir.exists():
-                        target_dirs.append(sub_dir)
-                except ValueError:
-                    print(f"[SECURITY] Blocked path traversal attempt in cleanup_temp_file_for_filename: '{parent_path}'")
-                    pass
+    try:
+        resolved = UploadPathResolver.resolve(resolved_parent, safe_name, UPLOAD_FOLDER)
+        target_dir = resolved.target_directory
+        exact_target = resolved.full_path
+    except Exception:
+        target_dir = _resolve_target_dir(resolved_parent)
+        exact_target = target_dir / safe_name
 
-    for d in target_dirs:
-        # Delete any partially written destination file matching safe_name or raw filename
-        for target_name in set([safe_name, filename, secure_filename(filename)]):
-            if not target_name: continue
-            exact_target = d / target_name
-            if exact_target.exists() and exact_target.is_file():
-                try:
-                    exact_target.unlink()
-                    deleted_count += 1
-                    print(f"[CLEANUP] Deleted cancelled target file: {exact_target}")
-                except Exception as e:
-                    print(f"[ERR] Failed to delete cancelled target file {exact_target}: {e}")
+    print(
+        f"[CLEANUP] operation=cancelled_upload upload_id={upload_id or ''} "
+        f"parent_path={resolved_parent or ''} filename={safe_name} "
+        f"relative_path={relative_path or ''} resolved_path={exact_target}"
+    )
 
-        for p in d.rglob("*.tmp"):
-            p_name = p.name
-            if (base_name in p_name or safe_name in p_name) and p.is_file():
-                try:
-                    p.unlink()
-                    deleted_count += 1
-                    print(f"[CLEANUP] Deleted temporary file: {p}")
-                except Exception as e:
-                    print(f"[ERR] Failed to delete temp file {p}: {e}")
+    if exact_target.exists() and exact_target.is_file():
+        try:
+            exact_target.unlink()
+            deleted_count += 1
+            print(f"[CLEANUP] Deleted cancelled target file: {exact_target}")
+        except Exception as e:
+            print(f"[ERR] Failed to delete cancelled target file {exact_target}: {e}")
 
-    temp_chunks_dir = Path("data/temp_chunks")
-    if temp_chunks_dir.exists():
-        for chunk in temp_chunks_dir.glob(f"*{base_name}*"):
+    for p in target_dir.glob(f"{safe_name}.tmp"):
+        if p.is_file():
+            try:
+                p.unlink()
+                deleted_count += 1
+                print(f"[CLEANUP] Deleted temporary file: {p}")
+            except Exception as e:
+                print(f"[ERR] Failed to delete temp file {p}: {e}")
+    for p in target_dir.glob(f"{safe_name}.chunk.tmp"):
+        if p.is_file():
+            try:
+                p.unlink()
+                deleted_count += 1
+                print(f"[CLEANUP] Deleted chunk temp file: {p}")
+            except Exception as e:
+                print(f"[ERR] Failed to delete chunk temp file {p}: {e}")
+
+    if TEMP_CHUNKS_FOLDER.exists():
+        for chunk in TEMP_CHUNKS_FOLDER.glob(f"{safe_name}.part*"):
             try:
                 if chunk.is_file():
                     chunk.unlink()
@@ -212,9 +239,6 @@ def detect_ios_device(user_agent: str) -> dict:
         'device_type': device_type,
         'user_agent': user_agent
     }
-
-TEMP_CHUNKS_FOLDER = Path("data/temp_chunks")
-TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
 
 MAX_CONCURRENT_UPLOADS = 5  # Maximum parallel uploads per session
 
@@ -1224,25 +1248,17 @@ async def download_file(filename: str, request: Request):
     
     clean_filename = urllib.parse.unquote(filename).strip("/\\")
     safe_name = secure_filename(clean_filename)
-    file_path = UPLOAD_FOLDER / clean_filename
+    file_path = _resolve_target_dir(None) / clean_filename
 
     if file_path.exists() and file_path.is_dir():
         print(f"[DIR] Directory requested via /download/{clean_filename}. Redirecting to /download-folder/{clean_filename}...")
         return RedirectResponse(url=f"/download-folder/{urllib.parse.quote(clean_filename)}", status_code=307)
 
     if not file_path.is_file():
-        file_path = UPLOAD_FOLDER / safe_name
+        file_path = _resolve_target_dir(None) / safe_name
         if not file_path.is_file():
-            # Fallback: search subdirectories recursively
-            found = False
-            for subdir_file in UPLOAD_FOLDER.rglob(safe_name):
-                if subdir_file.is_file():
-                    file_path = subdir_file
-                    found = True
-                    break
-            if not found:
-                print(f"[ERR] File not found: {clean_filename}")
-                return Response("File not found", status_code=404)
+            print(f"[ERR] File not found: {clean_filename}")
+            return Response("File not found", status_code=404)
             
     print(f"[DIR] Looking for file at: {file_path}")
 
@@ -1874,7 +1890,7 @@ async def clear_files():
 
 @router.post("/api/cancel-upload", name="cancel_upload_api")
 @router.post("/cancel-upload", name="cancel_upload_legacy")
-async def cancel_upload_api(filename: Optional[str] = Form(None), parent_path: Optional[str] = Form(None), request: Request = None):
+async def cancel_upload_api(filename: Optional[str] = Form(None), parent_path: Optional[str] = Form(None), upload_id: Optional[str] = Form(None), relative_path: Optional[str] = Form(None), request: Request = None):
     """Cancel an upload and purge any temporary .tmp files or chunks on disk."""
     try:
         target_file = filename
@@ -1884,10 +1900,12 @@ async def cancel_upload_api(filename: Optional[str] = Form(None), parent_path: O
                 form = await request.form()
                 target_file = form.get("filename")
                 target_parent = form.get("parent_path")
+                upload_id = upload_id or form.get("upload_id")
+                relative_path = relative_path or form.get("relative_path")
             except Exception:
                 pass
-        deleted = cleanup_temp_file_for_filename(target_file or "", target_parent)
-        print(f"[CANCEL] Purged {deleted} temporary file(s) for '{target_file}'")
+        deleted = cleanup_temp_file_for_filename(target_file or "", target_parent, upload_id=upload_id, relative_path=relative_path)
+        print(f"[CANCEL] Purged {deleted} temporary file(s) for '{target_file}' upload_id='{upload_id or ''}'")
         return JSONResponse(content={"status": "success", "msg": f"Cleaned up {deleted} temporary file(s)", "deleted_files": deleted})
     except Exception as e:
         print(f"[ERR] Error in cancel_upload_api: {e}")
@@ -1913,14 +1931,18 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
             except Exception:
                 pass
 
-        target_dir = UPLOAD_FOLDER
-        if target_parent:
-            clean_parent = urllib.parse.unquote(target_parent).replace('\\', '/').strip('/')
-            parts = [secure_filename(p) for p in clean_parent.split('/') if p and p != "Home" and secure_filename(p)]
-            if parts:
-                target_dir = UPLOAD_FOLDER.joinpath(*parts)
+        print("[REAL DELETE BACKEND]")
+        print(f"timestamp={time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}")
+        print(f"filename={filename}")
+        print(f"parent_path={target_parent or ''}")
+
+        target_dir = _resolve_target_dir(target_parent)
+        print(f"resolved target_dir={target_dir}")
 
         file_path = target_dir / safe_name
+        print(f"resolved absolute file_path={file_path.resolve()}")
+        exists_before_unlink = file_path.exists()
+        print(f"exists_before={exists_before_unlink}")
         
         if not file_path.exists():
             # Check target_dir with unescaped filename or alternate safe_name representations (strictly scoped to target_dir)
@@ -1935,7 +1957,7 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
 
             if not found:
                 # Idempotent delete: file is already unlinked from disk! Purge any leftover temp artifacts
-                cleanup_temp_file_for_filename(filename, target_parent)
+                cleanup_temp_file_for_filename(filename, target_parent, relative_path=target_parent + "/" + safe_name if target_parent else safe_name)
                 return JSONResponse(content={"status": "success", "msg": "File deleted successfully"})
 
         if file_path.is_dir():
@@ -1949,6 +1971,8 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
                 except Exception:
                     pass
             shutil.rmtree(file_path, onerror=handle_remove_readonly)
+            print("unlink_result=directory_deleted")
+            print(f"exists_after={file_path.exists()}")
             return JSONResponse(content={"status": "success", "msg": "Folder deleted successfully"})
         elif file_path.is_file():
             await get_stream_manager().cancel_and_await_cleanup(file_path)
@@ -1962,6 +1986,7 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
                     file_path.unlink()
                     print(f"OK: Deleted file: {file_path.name}")
                     deleted = True
+                    print("unlink_result=success")
                     break
                 except (PermissionError, OSError) as pe:
                     await get_stream_manager().cancel_and_await_cleanup(file_path)
@@ -1979,6 +2004,23 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
                     print(f"[WARN] Scheduled background deletion for locked file: {e2}")
                     LOCKED_DELETIONS_SET.add(str(file_path))
                     LOCKED_DELETIONS_SET.add(filename)
+
+            if not deleted:
+                print("unlink_result=failed_or_deferred")
+            print(f"exists_after={file_path.exists()}")
+
+            root_a = (UPLOAD_FOLDER / 'A').exists()
+            root_b = (UPLOAD_FOLDER / 'B').exists()
+            root_c = (UPLOAD_FOLDER / 'C').exists()
+            inside_a = (UPLOAD_FOLDER / 'Inside' / 'A').exists()
+            inside_b = (UPLOAD_FOLDER / 'Inside' / 'B').exists()
+            inside_c = (UPLOAD_FOLDER / 'Inside' / 'C').exists()
+            print(f"ROOT/A exists = {root_a}")
+            print(f"ROOT/B exists = {root_b}")
+            print(f"ROOT/C exists = {root_c}")
+            print(f"Inside/A exists = {inside_a}")
+            print(f"Inside/B exists = {inside_b}")
+            print(f"Inside/C exists = {inside_c}")
             
         # Clean up version history and metadata for logical file
         try:
@@ -1989,7 +2031,7 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
         except Exception as ve:
             print(f"[VERSION_MANAGER] Delete cleanup warning: {ve}")
 
-        cleanup_temp_file_for_filename(filename, target_parent)
+        cleanup_temp_file_for_filename(filename, target_parent, relative_path=target_parent + "/" + safe_name if target_parent else safe_name)
         # Broadcast via file_events WebSocket for instant cross-device sync
         try:
             broadcast_file_event_sync("delete", target_parent or "", safe_name)
@@ -2002,6 +2044,47 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
             status_code=500,
             content={"status": "error", "msg": f"Failed to delete file: {str(e)}"}
         )
+
+
+@router.post("/api/forensic/export-trace", name="forensic_export_trace")
+async def forensic_export_trace(request: Request):
+    """Persist browser-captured forensic trace to artifacts for offline analysis."""
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    trace = payload.get("trace") if isinstance(payload, dict) else None
+    if not isinstance(trace, list) or len(trace) == 0:
+        return JSONResponse(status_code=400, content={"status": "error", "msg": "RUNTIME TRACE NOT CAPTURED"})
+
+    artifacts_dir = Path("testing") / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    json_path = artifacts_dir / "identity_delete_trace.json"
+    txt_path = artifacts_dir / "identity_delete_trace.txt"
+
+    with json_path.open("w", encoding="utf-8") as jf:
+        json.dump(trace, jf, ensure_ascii=False, indent=2)
+
+    with txt_path.open("w", encoding="utf-8") as tf:
+        for row in trace:
+            if not isinstance(row, dict):
+                continue
+            tf.write("timestamp=" + str(row.get("timestamp", "")) + "\n")
+            tf.write("stage=" + str(row.get("stage", "")) + "\n")
+            tf.write("event=" + str(row.get("event", "")) + "\n")
+            tf.write("folder=" + str(row.get("folder", "")) + "\n")
+            tf.write("name=" + str(row.get("name", "")) + "\n")
+            tf.write("identity=" + str(row.get("identity", "")) + "\n")
+            tf.write("details=" + json.dumps(row.get("details", {}), ensure_ascii=False) + "\n")
+            tf.write("\n")
+
+    return {
+        "status": "success",
+        "json": str(json_path),
+        "txt": str(txt_path),
+        "count": len(trace)
+    }
 
 @router.get("/api/upload/status", name="upload_status")
 async def get_upload_status():
@@ -2063,13 +2146,11 @@ async def upload_chunk(
                 content={"status": "error", "msg": f"Part number {part_number} exceeds total parts {total_parts}."}
             )
         
-        # Secure the filename
-        safe_filename = secure_filename(filename)
-        if not safe_filename:
-            return JSONResponse(
-                status_code=HTTP_400_BAD_REQUEST,
-                content={"status": "error", "msg": "Invalid filename"}
-            )
+        # Resolve the upload path once so chunk storage stays folder-scoped.
+        resolved = UploadPathResolver.resolve(parent_path, filename, UPLOAD_FOLDER)
+        safe_filename = resolved.filename
+        scoped_key = resolved.relative_path.as_posix()
+        chunk_prefix = scoped_key.replace("/", "__")
         
         #  Enforce .enc file restrictions on HTTPS
         if is_https and safe_filename.endswith(".enc"):
@@ -2107,7 +2188,7 @@ async def upload_chunk(
             )
         
         # Create chunk filename
-        chunk_filename = f"{safe_filename}.part{part_number}"
+        chunk_filename = f"{chunk_prefix}.part{part_number}"
         chunk_path = TEMP_CHUNKS_FOLDER / chunk_filename
         
         # [SEARCH] Check for duplicate chunks (prevent overwrites)
@@ -2121,28 +2202,27 @@ async def upload_chunk(
         if part_number == 1 and total_parts:
             assembler = get_streaming_assembler()
             if assembler:
-                final_path = UPLOAD_FOLDER / safe_filename
                 # Estimate total size as chunk size * total parts (approximation)
                 estimated_size = len(chunk_data) * total_parts
-                assembler.register_file(safe_filename, total_parts, filename, estimated_size)
-                print(f"[STREAM] Registered {safe_filename} for streaming assembly")
+                assembler.register_file(scoped_key, total_parts, scoped_key, estimated_size)
+                print(f"[STREAM] Registered {scoped_key} for streaming assembly")
         
         # [START] ADD CHUNK TO STREAMING ASSEMBLY SYSTEM
         assembler = get_streaming_assembler()
         streaming_result = None
         if assembler:
             # Add chunk to streaming assembly for real-time processing
-            streaming_result = add_streaming_chunk(safe_filename, part_number, chunk_data)
+            streaming_result = add_streaming_chunk(scoped_key, part_number, chunk_data)
             if part_number == 1 or part_number == total_parts or (total_parts and part_number % max(1, total_parts // 10) == 0):
                 print(f"[STREAM] Added chunk {part_number}/{total_parts or '?'} to streaming assembly: {streaming_result.get('status', 'unknown')}")
             
             # Check if file completed via streaming assembly
             if streaming_result and streaming_result.get("status") == "completed":
-                print(f"[OK] File completed via streaming assembly: {safe_filename}")
+                print(f"[OK] File completed via streaming assembly: {scoped_key}")
                 
                 # Clean up temp chunks since file is completed via streaming
                 try:
-                    pattern = f"{safe_filename}.part*"
+                    pattern = f"{chunk_prefix}.part*"
                     temp_chunks_cleaned = 0
                     for chunk_file in TEMP_CHUNKS_FOLDER.glob(pattern):
                         chunk_file.unlink()
@@ -2233,13 +2313,11 @@ async def finalize_upload(
         # [AUTH] Protocol detection  
         is_https = request.url.scheme == "https"
         
-        # Secure the filename
-        safe_filename = secure_filename(filename)
-        if not safe_filename:
-            return JSONResponse(
-                status_code=HTTP_400_BAD_REQUEST,
-                content={"status": "error", "msg": "Invalid filename"}
-            )
+        # Resolve the upload path once so finalization stays folder-scoped.
+        resolved = UploadPathResolver.resolve(parent_path, filename, UPLOAD_FOLDER)
+        safe_filename = resolved.filename
+        scoped_key = resolved.relative_path.as_posix()
+        chunk_prefix = scoped_key.replace("/", "__")
         
         #  Enforce encryption restrictions
         if encrypt and not is_https:
@@ -2262,29 +2340,29 @@ async def finalize_upload(
         # [START] ENHANCED: Check streaming assembly status first
         if assembler:
             # Check if file was completed via streaming assembly
-            streaming_status = check_streaming_status(safe_filename)
+            streaming_status = check_streaming_status(scoped_key)
             print(f"[SEARCH] Streaming assembly status: {streaming_status}")
             
             if streaming_status and streaming_status.get('status') == 'ready':
                 # File completed via streaming assembly
-                file_info = get_assembled_file(safe_filename)
+                file_info = get_assembled_file(scoped_key)
                 if file_info and file_info.get('status') == 'ready':
                     streaming_completed = True
                     final_path = Path(file_info['path'])
-                    print(f"[OK] File completed via streaming assembly: {safe_filename}")
+                    print(f"[OK] File completed via streaming assembly: {scoped_key}")
                     print(f"   [DIR] Path: {final_path}")
                     print(f"   [STATS] Size: {final_path.stat().st_size:,} bytes")
         
         # Second, check if streaming-assembled file already exists (legacy check)
-        potential_streaming_file = UPLOAD_FOLDER / safe_filename
+        potential_streaming_file = resolved.full_path
         if not streaming_completed and potential_streaming_file.exists():
-            print(f"[STREAM] Found legacy streaming-assembled file: {safe_filename}")
+            print(f"[STREAM] Found legacy streaming-assembled file: {scoped_key}")
             streaming_completed = True
             final_path = potential_streaming_file
             
             # [START] Check if background processing was completed during streaming
             if assembler:
-                status = assembler.check_status(safe_filename)
+                status = assembler.check_status(scoped_key)
                 if status and status.get('validation_result'):
                     validation_from_background = status['validation_result']
                     background_processing_done = True
@@ -2296,13 +2374,13 @@ async def finalize_upload(
         
         # [RETRY] Failsafe: Use traditional chunk combination if streaming didn't complete
         if not streaming_completed:
-            print(f"[RETRY] Using traditional chunk assembly for {safe_filename}")
+            print(f"[RETRY] Using traditional chunk assembly for {scoped_key}")
             
             # [START] Auto-detect actual chunks (adaptive chunked upload support)
             chunk_files = []
             part_num = 1
             while True:
-                chunk_path = TEMP_CHUNKS_FOLDER / f"{safe_filename}.part{part_num}"
+                chunk_path = TEMP_CHUNKS_FOLDER / f"{chunk_prefix}.part{part_num}"
                 if chunk_path.exists():
                     chunk_files.append((part_num, chunk_path))
                     part_num += 1
@@ -2314,9 +2392,9 @@ async def finalize_upload(
             # If no chunks found but streaming was expected, assume streaming completed successfully
             if actual_chunks == 0 and assembler:
                 # Check if streaming file was created
-                potential_file = UPLOAD_FOLDER / safe_filename
+                potential_file = resolved.full_path
                 if potential_file.exists():
-                    print(f"[STREAM] Found streaming-assembled file: {safe_filename}")
+                    print(f"[STREAM] Found streaming-assembled file: {scoped_key}")
                     streaming_completed = True
                     final_path = potential_file
                 else:
@@ -2334,7 +2412,7 @@ async def finalize_upload(
                 
                 # Determine final filename
                 final_filename = safe_filename + ".enc" if encrypt else safe_filename
-                final_path = UPLOAD_FOLDER / f"{final_filename}.chunk.tmp"
+                final_path = resolved.target_directory / f"{final_filename}.chunk.tmp"
                 
                 # [START] Fast chunk combination with proper error handling
                 with open(final_path, "wb") as final_file:
@@ -2419,16 +2497,9 @@ async def finalize_upload(
                         content={"status": "error", "msg": f"AES encryption failed: {encrypt_error}"}
                     )
 
-        # Resolve target directory based on parent_path
-        target_dir = UPLOAD_FOLDER
-        if parent_path:
-            clean_parent = urllib.parse.unquote(parent_path)
-            parts = [p for p in clean_parent.split("/") if p and p != ".."]
-            for part in parts:
-                safe_part = secure_filename(part)
-                if safe_part:
-                    target_dir = target_dir / safe_part
-            target_dir.mkdir(parents=True, exist_ok=True)
+        # Resolve target directory based on the resolved upload identity.
+        target_dir = resolved.target_directory
+        target_dir.mkdir(parents=True, exist_ok=True)
 
         if final_path and final_path.exists() and final_path.parent != target_dir:
             import shutil
@@ -2874,17 +2945,16 @@ async def rename_file(filename: str = Form(...), new_name: str = Form(...), pare
 
     src_path = target_dir / safe_filename
     if not src_path.exists():
-        # Search root or subdirectories if direct parent path search failed
-        src_path = UPLOAD_FOLDER / safe_filename
-        if not src_path.exists():
-            found = False
-            for subdir_item in UPLOAD_FOLDER.rglob(safe_filename):
-                if subdir_item.is_file() or subdir_item.is_dir():
-                    src_path = subdir_item
-                    found = True
-                    break
-            if not found:
-                return JSONResponse(status_code=404, content={"status": "error", "msg": "Source not found"})
+        if parent_path:
+            return JSONResponse(status_code=404, content={"status": "error", "msg": "Source not found"})
+
+        matches = [item for item in UPLOAD_FOLDER.rglob(safe_filename) if item.is_file() or item.is_dir()]
+        if len(matches) == 1:
+            src_path = matches[0]
+        elif len(matches) > 1:
+            return JSONResponse(status_code=409, content={"status": "error", "msg": "Ambiguous source name; parent_path required"})
+        else:
+            return JSONResponse(status_code=404, content={"status": "error", "msg": "Source not found"})
     
     # Validate destination name
     safe_new = secure_filename(new_name)
@@ -2951,25 +3021,25 @@ async def rename_file(filename: str = Form(...), new_name: str = Form(...), pare
 
 
 @router.post("/api/files/move", name="move_file")
-async def move_file(filename: str = Form(...), destination: str = Form(...)):
+async def move_file(filename: str = Form(...), destination: str = Form(...), source_path: Optional[str] = Form(None), parent_path: Optional[str] = Form(None)):
     """Move a file to a different directory"""
     safe_filename = secure_filename(filename)
     if not safe_filename:
         return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid source filename"})
     
-    # Search for the file in root and all subdirectories
-    src_path = UPLOAD_FOLDER / safe_filename
-    if not src_path.exists():
-        found = False
-        for subdir_file in UPLOAD_FOLDER.rglob(safe_filename):
-            if subdir_file.is_file():
-                src_path = subdir_file
-                found = True
-                break
-        if not found:
+    source_dir = _resolve_target_dir(source_path or parent_path)
+    src_path = source_dir / safe_filename
+    if not src_path.exists() or not src_path.is_file():
+        if source_path or parent_path:
             return JSONResponse(status_code=404, content={"status": "error", "msg": "Source file not found"})
-    elif not src_path.is_file():
-        return JSONResponse(status_code=404, content={"status": "error", "msg": "Source file not found"})
+
+        matches = [item for item in UPLOAD_FOLDER.rglob(safe_filename) if item.is_file()]
+        if len(matches) == 1:
+            src_path = matches[0]
+        elif len(matches) > 1:
+            return JSONResponse(status_code=409, content={"status": "error", "msg": "Ambiguous source filename; source_path required"})
+        else:
+            return JSONResponse(status_code=404, content={"status": "error", "msg": "Source file not found"})
     
     # Validate destination directory
     safe_dest = secure_filename(destination)

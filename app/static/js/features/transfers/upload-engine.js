@@ -116,6 +116,8 @@
       var formData = new FormData();
       formData.append("filename", fileName);
       if (targetDir) formData.append("parent_path", targetDir);
+      formData.append("upload_id", String(uploadId));
+      formData.append("relative_path", targetDir ? (targetDir.replace(/^Home\/?/, '') + '/' + fileName) : fileName);
       fetch("/api/cancel-upload", { method: "POST", body: formData }).catch(function () { });
     }
 

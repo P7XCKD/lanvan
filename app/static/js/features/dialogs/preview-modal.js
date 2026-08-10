@@ -47,6 +47,19 @@
         updateImageTransform();
     }
 
+    function getPreviewScopedFolderPath() {
+        var folder = window._contextMenuFolderPath || window.currentPreviewFolderPath || (typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || ""));
+        return typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(folder) : folder;
+    }
+
+    function buildPreviewScopedPath(filename) {
+        if (!filename) return "";
+        var cleanName = String(filename).replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+        if (cleanName.indexOf("/") !== -1) return cleanName;
+        var folder = getPreviewScopedFolderPath();
+        return folder ? (folder + "/" + cleanName) : cleanName;
+    }
+
     function setupImageZoomAndPan() {
         currentImageScale = 1;
         currentImageTransX = 0;
@@ -148,30 +161,34 @@
                         mediaEls[i].removeAttribute("src");
                         if (typeof mediaEls[i].load === "function") mediaEls[i].load();
                     } catch (e) { }
-                }
-                bodyEl.innerHTML = "";
             }
-            window.currentPreviewFilename = "";
-            var ctxMenu = document.getElementById("previewContextMenu");
-            if (ctxMenu) ctxMenu.style.display = "none";
+            bodyEl.innerHTML = "";
         }
+        window.currentPreviewFilename = "";
+        window.currentPreviewFolderPath = "";
+        var ctxMenu = document.getElementById("previewContextMenu");
+        if (ctxMenu) ctxMenu.style.display = "none";
+    }
     }
 
     function openFilePreview(filename) {
         if (!filename) return;
         if (window.selectedItems && window.selectedItems.length > 1) return;
         window.currentPreviewFilename = filename;
+        if (!window.currentPreviewFolderPath) {
+            window.currentPreviewFolderPath = typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "");
+        }
         var modal = document.getElementById("previewModal");
         var titleEl = document.getElementById("previewTitle");
         var bodyEl = document.getElementById("previewBody");
         var dlBtn = document.getElementById("previewDownloadBtn");
         if (!modal || !bodyEl) return;
 
-        var downloadUrl = "/download/" + encodeURIComponent(filename);
+        var downloadUrl = "/download/" + encodeURIComponent(buildPreviewScopedPath(filename));
         if (titleEl) titleEl.textContent = filename;
         if (dlBtn) {
             dlBtn.href = downloadUrl + "?download=1";
-            dlBtn.download = filename;
+            dlBtn.download = filename.split("/").pop().split("\\").pop();
         }
 
         var ext = filename.split(".").pop().toLowerCase();
@@ -200,8 +217,8 @@
             var hasV = false;
             var lfId = null;
             var baseN = filename ? filename.split("/").pop().split("\\").pop() : "";
-            var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window.currentFolderPath) : "";
-            var meta = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, baseN) : (window._fileMetadataMap ? (window._fileMetadataMap[filename] || window._fileMetadataMap[baseN]) : null);
+            var curFolder = getPreviewScopedFolderPath();
+            var meta = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, baseN) : null;
             if (meta) {
                 hasV = !!meta.hasVersions;
                 lfId = meta.logicalFileId;
@@ -333,6 +350,12 @@
     function openFilePreviewTarget() {
         var selected = window.selectedItems || [];
         var target = window._contextMenuTarget || (selected.length > 0 ? selected[0] : "");
+        if (!window.currentPreviewFolderPath) {
+            window.currentPreviewFolderPath = typeof window.cleanFolderPath === "function"
+                ? window.cleanFolderPath(window._contextMenuFolderPath || (typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "")))
+                : (window._contextMenuFolderPath || (typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "")));
+        }
+        window._contextMenuFolderPath = "";
         window._contextMenuTarget = "";
         if (target) {
             openFilePreview(target);
@@ -342,7 +365,7 @@
     function copyVideoStreamUrl(filename) {
         var fn = filename || window.currentPreviewFilename || (window._contextMenuTarget || (window.selectedItems && window.selectedItems[0]));
         if (!fn) return;
-        var fullUrl = window.location.origin + "/download/" + encodeURIComponent(fn);
+        var fullUrl = window.location.origin + "/download/" + encodeURIComponent(buildPreviewScopedPath(fn));
 
         var copied = false;
         if (typeof window.fallbackCopyTextToClipboard === "function") {
@@ -378,8 +401,8 @@
         var fn = filename || window.currentPreviewFilename;
         if (!fn) return;
         var a = document.createElement("a");
-        a.href = "/download/" + encodeURIComponent(fn) + "?download=1";
-        a.download = fn;
+        a.href = "/download/" + encodeURIComponent(buildPreviewScopedPath(fn)) + "?download=1";
+        a.download = fn.split("/").pop().split("\\").pop();
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

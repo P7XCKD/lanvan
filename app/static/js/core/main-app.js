@@ -47,6 +47,248 @@ window.log = {
   }
 };
 
+if (!window.__LANVAN_FORENSIC_TRACE) {
+  window.__LANVAN_FORENSIC_TRACE = [];
+}
+
+if (typeof window.__lanvanForensicEmit !== 'function') {
+  window.__lanvanForensicEmit = function (stage, eventName, payload) {
+    try {
+      var data = payload || {};
+      var entry = {
+        timestamp: new Date().toISOString(),
+        stage: stage || '',
+        event: eventName || '',
+        folder: data.folder || '',
+        name: data.name || '',
+        identity: data.identity || '',
+        details: data.details || {}
+      };
+      window.__LANVAN_FORENSIC_TRACE.push(entry);
+      console.log('[LANVAN-FORENSIC]', entry);
+      return entry;
+    } catch (err) {
+      return null;
+    }
+  };
+}
+
+if (typeof window.__lanvanForensicSnapshotRepoCache !== 'function') {
+  window.__lanvanForensicSnapshotRepoCache = function (label) {
+    try {
+      var repo = window.FileRepository;
+      var cache = (repo && repo.cache) ? repo.cache : {};
+      function folderNames(folder) {
+        var list = cache[folder] || [];
+        if (!Array.isArray(list)) return [];
+        return list.map(function (item) {
+          if (!item) return null;
+          return (typeof item === 'string') ? item : item.name;
+        }).filter(Boolean);
+      }
+      var snapshot = {
+        root: folderNames(''),
+        inside: folderNames('Inside'),
+        insideNested: folderNames('Inside/Nested')
+      };
+      console.log('[REAL REPOSITORY ' + label + ']');
+      console.log('cache["\"] =', snapshot.root);
+      console.log('cache["Inside"] =', snapshot.inside);
+      console.log('cache["Inside/Nested"] =', snapshot.insideNested);
+      window.__lanvanForensicEmit('repository', 'cache_' + String(label || '').toLowerCase(), {
+        folder: (typeof window.getCurrentFolderPath === 'function' ? window.getCurrentFolderPath() : (window.currentFolderPath || '')),
+        details: snapshot
+      });
+      return snapshot;
+    } catch (err) {
+      console.error('[LANVAN-FORENSIC] repository snapshot failed', err);
+      return null;
+    }
+  };
+}
+
+if (typeof window.__lanvanForensicTraceV2 !== 'function') {
+  window.__lanvanForensicTraceV2 = function (stage, folder, item, present, source) {
+    try {
+      var name = item && item.name ? item.name : '';
+      if (!name || name.toLowerCase().indexOf('v2') === -1) return;
+      var identity = item && item.identity ? item.identity : ((typeof window.getCanonicalIdentity === 'function') ? window.getCanonicalIdentity(folder || '', name) : name);
+      var row = {
+        timestamp: new Date().toISOString(),
+        stage: stage,
+        folder: folder || '',
+        name: name,
+        identity: identity,
+        source: source || '',
+        present: !!present
+      };
+      console.log('[REAL V2 TRACE]', row);
+      window.__lanvanForensicEmit('v2', stage, {
+        folder: row.folder,
+        name: row.name,
+        identity: row.identity,
+        details: {
+          source: row.source,
+          present: row.present
+        }
+      });
+    } catch (err) {
+    }
+  };
+}
+
+if (!window.__LANVAN_FORENSIC_V2_SEEN) {
+  window.__LANVAN_FORENSIC_V2_SEEN = {};
+}
+
+if (typeof window.__lanvanForensicTraceV2List !== 'function') {
+  window.__lanvanForensicTraceV2List = function (stage, folder, items, source) {
+    try {
+      var f = folder || '';
+      var seenKey = f || '__root__';
+      if (!window.__LANVAN_FORENSIC_V2_SEEN[seenKey]) {
+        window.__LANVAN_FORENSIC_V2_SEEN[seenKey] = {};
+      }
+      var seenMap = window.__LANVAN_FORENSIC_V2_SEEN[seenKey];
+      var presentMap = {};
+      var list = Array.isArray(items) ? items : [];
+      for (var i = 0; i < list.length; i++) {
+        var item = list[i] || {};
+        var name = typeof item === 'string' ? item : item.name;
+        if (!name || String(name).toLowerCase().indexOf('v2') === -1) continue;
+        var obj = (typeof item === 'string')
+          ? { name: name, identity: (typeof window.getCanonicalIdentity === 'function' ? window.getCanonicalIdentity(f, name) : name) }
+          : item;
+        presentMap[name] = true;
+        seenMap[name] = true;
+        window.__lanvanForensicTraceV2(stage, f, obj, true, source || '');
+      }
+      var seenNames = Object.keys(seenMap);
+      for (var j = 0; j < seenNames.length; j++) {
+        var seenName = seenNames[j];
+        if (!presentMap[seenName]) {
+          window.__lanvanForensicTraceV2(stage, f, {
+            name: seenName,
+            identity: (typeof window.getCanonicalIdentity === 'function' ? window.getCanonicalIdentity(f, seenName) : seenName)
+          }, false, source || '');
+        }
+      }
+    } catch (err) {
+    }
+  };
+}
+
+if (typeof window.__lanvanForensicDumpUploadQueue !== 'function') {
+  window.__lanvanForensicDumpUploadQueue = function () {
+    var queue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
+    var totals = { total: queue.length, active: 0, queued: 0, completed: 0, cancelled: 0, failed: 0 };
+    var projectionItems = [];
+    try {
+      var folder = (typeof window.getCurrentFolderPath === 'function') ? window.getCurrentFolderPath() : (window.currentFolderPath || '');
+      var repoFiles = (window.FileRepository && typeof window.FileRepository.getFolderCache === 'function') ? window.FileRepository.getFolderCache(folder) : [];
+      var state = window.LanvanStore ? Object.assign({}, window.LanvanStore.state) : { currentFolder: folder, uploadQueue: queue, pendingOps: {} };
+      state.currentFolder = folder;
+      state.uploadQueue = queue;
+      var vm = window.ProjectionLayer && window.ProjectionLayer.buildCurrentFolderViewModel
+        ? window.ProjectionLayer.buildCurrentFolderViewModel(state, repoFiles)
+        : [];
+      projectionItems = Array.isArray(vm) ? vm : (vm.visibleFiles || []);
+    } catch (e) {
+    }
+
+    var completedMatchesDisk = 0;
+    var completedInProjection = 0;
+    var completedSuppressCandidates = 0;
+    var folderNow = (typeof window.getCurrentFolderPath === 'function') ? window.getCurrentFolderPath() : (window.currentFolderPath || '');
+    var cleanFolder = typeof window.cleanFolderPath === 'function' ? window.cleanFolderPath(folderNow) : (folderNow || '').replace(/^Home\/?/, '');
+    var repoNow = (window.FileRepository && typeof window.FileRepository.getFolderCache === 'function') ? window.FileRepository.getFolderCache(cleanFolder) : [];
+
+    console.log('[REAL UPLOAD QUEUE]');
+    for (var i = 0; i < queue.length; i++) {
+      var q = queue[i] || {};
+      var name = q.fileName || (q.file && q.file.name) || q.name || '';
+      var targetDir = q.targetDir || q.parent_path || q.folder || '';
+      var identity = q.identity || (typeof window.getCanonicalIdentity === 'function' ? window.getCanonicalIdentity(targetDir, name) : name);
+      var status = String(q.status || '').toUpperCase();
+      if (status === 'UPLOADING' || status === 'PROCESSING') totals.active++;
+      else if (status === 'QUEUED') totals.queued++;
+      else if (status === 'COMPLETED') totals.completed++;
+      else if (status === 'CANCELLED' || status === 'DELETED') totals.cancelled++;
+      else if (status === 'FAILED' || status === 'ERROR') totals.failed++;
+
+      var diskMatch = false;
+      var projMatch = false;
+      for (var r = 0; r < repoNow.length; r++) {
+        var ri = repoNow[r];
+        var rn = (typeof ri === 'string') ? ri : (ri && ri.name);
+        var rid = (ri && ri.identity) ? ri.identity : (typeof window.getCanonicalIdentity === 'function' ? window.getCanonicalIdentity(cleanFolder, rn || '') : rn || '');
+        if (rn && rn === name && rid === identity) {
+          diskMatch = true;
+          break;
+        }
+      }
+      for (var p = 0; p < projectionItems.length; p++) {
+        var pi = projectionItems[p];
+        if (!pi) continue;
+        var pn = pi.name;
+        var pid = pi.identity || (typeof window.getCanonicalIdentity === 'function' ? window.getCanonicalIdentity(cleanFolder, pn || '') : pn || '');
+        if (pn && pn === name && pid === identity) {
+          projMatch = true;
+          break;
+        }
+      }
+      if (status === 'COMPLETED') {
+        if (diskMatch) completedMatchesDisk++;
+        if (projMatch) completedInProjection++;
+        if (projMatch && !diskMatch) completedSuppressCandidates++;
+      }
+
+      console.log('queueId=' + (q.id || '') + ' name=' + name + ' targetDir=' + targetDir + ' identity=' + identity + ' status=' + status);
+      window.__lanvanForensicEmit('upload_queue', 'item', {
+        folder: cleanFolder,
+        name: name,
+        identity: identity,
+        details: { queueId: q.id || null, targetDir: targetDir, status: status }
+      });
+    }
+    console.log('total=' + totals.total + ' active=' + totals.active + ' queued=' + totals.queued + ' completed=' + totals.completed + ' cancelled=' + totals.cancelled + ' failed=' + totals.failed);
+    console.log('completed items matching disk files=' + completedMatchesDisk);
+    console.log('completed items included in Projection=' + completedInProjection);
+    console.log('completed items capable of suppressing disk items=' + completedSuppressCandidates);
+    window.__lanvanForensicEmit('upload_queue', 'summary', {
+      folder: cleanFolder,
+      details: {
+        totals: totals,
+        completedMatchesDisk: completedMatchesDisk,
+        completedInProjection: completedInProjection,
+        completedSuppressCandidates: completedSuppressCandidates
+      }
+    });
+    return {
+      totals: totals,
+      completedMatchesDisk: completedMatchesDisk,
+      completedInProjection: completedInProjection,
+      completedSuppressCandidates: completedSuppressCandidates
+    };
+  };
+}
+
+if (typeof window.__lanvanForensicExportTrace !== 'function') {
+  window.__lanvanForensicExportTrace = function () {
+    var trace = Array.isArray(window.__LANVAN_FORENSIC_TRACE) ? window.__LANVAN_FORENSIC_TRACE : [];
+    return fetch('/api/forensic/export-trace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trace: trace })
+    }).then(function (res) {
+      return res.json();
+    }).then(function (data) {
+      console.log('[LANVAN-FORENSIC] export result', data);
+      return data;
+    });
+  };
+}
+
 // Use window.log directly throughout this script to avoid any conflicts
 // No local const log declaration needed
 
@@ -315,6 +557,29 @@ function initFileEventsWebSocket() {
         if (payload.type === 'file_change') {
           console.log('[WS FILE EVENTS] ⚡ Real-time file system mutation event received across devices:', payload);
           console.log("[TRACE] WebSocket event | action: '" + payload.action + "' | target_dir: '" + payload.target_dir + "' | path: '" + payload.path + "'");
+          var wsFolder = (typeof window.getCurrentFolderPath === 'function') ? window.getCurrentFolderPath() : (window.currentFolderPath || '');
+          var wsName = payload.path || '';
+          var wsIdentity = (typeof window.getCanonicalIdentity === 'function')
+            ? window.getCanonicalIdentity(payload.target_dir || '', wsName)
+            : wsName;
+          console.log('[REAL WS RECEIVE] timestamp=' + new Date().toISOString() + ' action=' + payload.action + ' target_dir=' + (payload.target_dir || '') + ' path=' + (payload.path || '') + ' filename=' + wsName + ' canonicalIdentity=' + wsIdentity);
+          if (typeof window.__lanvanForensicEmit === 'function') {
+            window.__lanvanForensicEmit('websocket_receive', payload.action || 'file_change', {
+              folder: wsFolder,
+              name: wsName,
+              identity: wsIdentity,
+              details: {
+                action: payload.action || '',
+                target_dir: payload.target_dir || '',
+                path: payload.path || ''
+              }
+            });
+          }
+
+          var beforeSnap = (typeof window.__lanvanForensicSnapshotRepoCache === 'function')
+            ? window.__lanvanForensicSnapshotRepoCache('BEFORE')
+            : null;
+
           // Clean up recently-created folder tracking (ephemeral, no DOM mutation)
           var delTarget = payload.path || payload.target_dir || "";
           if (delTarget && window._recentlyCreatedFolders) {
@@ -322,7 +587,29 @@ function initFileEventsWebSocket() {
           }
           _activeRefreshPromise = null;
           // Canonical pipeline: API → Repository → Scheduler → Projection → Renderer
-          refreshFileList('ws_file_change');
+          var refreshResult = refreshFileList('ws_file_change');
+          if (refreshResult && typeof refreshResult.then === 'function') {
+            refreshResult.then(function () {
+              var afterSnap = (typeof window.__lanvanForensicSnapshotRepoCache === 'function')
+                ? window.__lanvanForensicSnapshotRepoCache('AFTER')
+                : null;
+              console.log('[REAL WS APPLY] repository cache modified=' + (beforeSnap && afterSnap ? JSON.stringify(beforeSnap) !== JSON.stringify(afterSnap) : 'unknown') +
+                ' folder invalidated=' + (payload.target_dir || '') + ' item removed=' + (payload.path || ''));
+              if (typeof window.__lanvanForensicEmit === 'function') {
+                window.__lanvanForensicEmit('websocket_apply', payload.action || 'file_change', {
+                  folder: wsFolder,
+                  name: wsName,
+                  identity: wsIdentity,
+                  details: {
+                    repositoryCacheModified: (beforeSnap && afterSnap ? JSON.stringify(beforeSnap) !== JSON.stringify(afterSnap) : null),
+                    folderInvalidated: payload.target_dir || '',
+                    itemRemoved: payload.path || '',
+                    renderRequested: true
+                  }
+                });
+              }
+            });
+          }
         }
       } catch (e) { }
     };
@@ -1820,6 +2107,8 @@ function cancelUpload(uploadId) {
     const formData = new FormData();
     formData.append("filename", fileName);
     if (targetDir) formData.append("parent_path", targetDir);
+    formData.append("upload_id", String(uploadItem.id));
+    formData.append("relative_path", targetDir ? (targetDir.replace(/^Home\/?/, '') + '/' + fileName) : fileName);
     fetch("/api/cancel-upload", { method: "POST", body: formData })
       .then(() => {
         if (typeof window.requestFileListRefresh === "function") {
@@ -2948,12 +3237,29 @@ async function refreshFileList(reason = 'manual_or_api') {
     _LATEST_COMPLETED_GEN_PER_FOLDER[targetFolder] = _genId;
 
     const files = data.files_data || data.files || [];
+    if (typeof window.__lanvanForensicTraceV2List === 'function') {
+      window.__lanvanForensicTraceV2List('api_response', targetFolder, files, endpoint);
+    }
+    for (var vf = 0; vf < files.length; vf++) {
+      var vfItem = files[vf];
+      var vfName = typeof vfItem === 'string' ? vfItem : (vfItem && vfItem.name);
+      if (!vfName) continue;
+      if (typeof window.__lanvanForensicTraceV2 === 'function') {
+        window.__lanvanForensicTraceV2('api_response', targetFolder, {
+          name: vfName,
+          identity: (typeof window.getCanonicalIdentity === 'function') ? window.getCanonicalIdentity(targetFolder, vfName) : vfName
+        }, true, endpoint);
+      }
+    }
     console.log("[FLICKER-TRACE] refreshFileList #" + _genId + " for folder '" + targetFolder + "' | API returned " + files.length + " items");
     console.log("[TRACE] refreshFileList API response for '" + targetFolder + "': " + JSON.stringify(files.map(function (f) { return (typeof f === 'string' ? f : f.name) + (f.isFolder ? '(dir)' : '(file)'); })));
 
     // Cache in Repository (single source of truth for disk state)
     if (window.FileRepository && typeof window.FileRepository.setFolderCache === 'function') {
       window.FileRepository.setFolderCache(targetFolder, files);
+      if (typeof window.__lanvanForensicTraceV2List === 'function' && typeof window.FileRepository.getFolderCache === 'function') {
+        window.__lanvanForensicTraceV2List('repository_cache', targetFolder, window.FileRepository.getFolderCache(targetFolder), 'FileRepository.setFolderCache');
+      }
     }
 
     // Only trigger RenderScheduler if user is STILL in the target folder when response arrives

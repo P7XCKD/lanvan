@@ -33,14 +33,13 @@
         if (!window._fileMetadataMap) window._fileMetadataMap = {};
         var canonicalKey = getCanonicalIdentity(parentPath, name);
         window._fileMetadataMap[canonicalKey] = metadata;
-        window._fileMetadataMap[name] = metadata;
     }
 
     function getFileMetadata(parentPath, name) {
         if (!name) return null;
         if (!window._fileMetadataMap) window._fileMetadataMap = {};
         var canonicalKey = getCanonicalIdentity(parentPath, name);
-        return window._fileMetadataMap[canonicalKey] || window._fileMetadataMap[name] || null;
+        return window._fileMetadataMap[canonicalKey] || null;
     }
     window.setFileMetadata = setFileMetadata;
     window.getFileMetadata = getFileMetadata;

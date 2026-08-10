@@ -43,6 +43,16 @@ class FileEventsConnectionManager:
         """
         Broadcasts a file mutation event payload to all active WebSocket connections across all devices.
         """
+        filename = path or ""
+        full_path = ((target_dir.strip('/\\') + '/' + filename.strip('/\\')).strip('/')) if (target_dir or filename) else ""
+        print("[REAL WS SEND]")
+        print(f"timestamp={time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}")
+        print(f"action={action}")
+        print(f"target_dir={target_dir}")
+        print(f"path={path}")
+        print(f"filename={filename}")
+        print(f"full_path={full_path}")
+
         payload = json.dumps({
             "type": "file_change",
             "action": action,
