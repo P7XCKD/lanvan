@@ -4677,50 +4677,17 @@ function uploadFilesRegular(files, isAESEnabled) {
 }
 
 //  Device capability detection functions for guest device support
+// Device Capability Detector extracted to features/device/device-capability-detector.js
 function detectGuestDevice() {
-  try {
-    // Check for limited device indicators
-    const isLimitedMemory = navigator.deviceMemory && navigator.deviceMemory <= 2; // 2GB or less
-    const isLimitedConcurrency = navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2; // 2 cores or less
-
-    const isIncognito = typeof checkIncognitoMode === 'function' ? checkIncognitoMode() : false;
-    const hasLimitedStorage = typeof checkStorageQuota === 'function' ? checkStorageQuota() : false;
-    const isSlowDevice = typeof checkDevicePerformance === 'function' ? checkDevicePerformance() : false;
-
-    return isLimitedMemory || isLimitedConcurrency || isIncognito || hasLimitedStorage || isSlowDevice;
-  } catch (e) {
-    console.log('Device detection failed, assuming guest device for safety:', e);
-    return true; // Default to guest device for safety
-  }
+  return window.DeviceCapabilityDetector ? window.DeviceCapabilityDetector.detectGuestDevice() : false;
 }
 
 function checkStorageQuota() {
-  try {
-    if ('storage' in navigator && 'estimate' in navigator.storage) {
-      navigator.storage.estimate().then(estimate => {
-        const quota = estimate.quota || 0;
-        const usage = estimate.usage || 0;
-        return quota < 1024 * 1024 * 1024; // Less than 1GB available
-      });
-    }
-    return false;
-  } catch (e) {
-    return true; // Assume limited if check fails
-  }
+  return window.DeviceCapabilityDetector ? window.DeviceCapabilityDetector.checkStorageQuota() : false;
 }
 
 function checkDevicePerformance() {
-  try {
-    const start = performance.now();
-    // Simple CPU test
-    for (let i = 0; i < 100000; i++) {
-      Math.random();
-    }
-    const duration = performance.now() - start;
-    return duration > 50; // Slow if takes more than 50ms
-  } catch (e) {
-    return true; // Assume slow if test fails
-  }
+  return window.DeviceCapabilityDetector ? window.DeviceCapabilityDetector.checkDevicePerformance() : false;
 }
 
 //  Toast Notification System - Complete implementation
