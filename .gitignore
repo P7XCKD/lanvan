@@ -184,6 +184,7 @@ test downlaods/
 testing/e2e/artifacts/
 testing/e2e/test_files/
 testing/e2e/test_data/
+testing/artifacts/
 
 # Local configuration overrides
 config.local.py
