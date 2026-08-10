@@ -149,6 +149,9 @@
         var state = this.store ? this.store.state : {};
         try {
             var diskFiles = this.repo ? this.repo.getFolderCache(state.currentFolder) : [];
+            if (Array.isArray(diskFiles) && typeof window.__lanvanForensicTraceV2List === 'function') {
+                window.__lanvanForensicTraceV2List('projection_input', state.currentFolder || '', diskFiles, 'repository_cache');
+            }
             console.log("%c[FLICKER-TRACE] 🖼️ Scheduler.executeRender | Timestamp: " + performance.now().toFixed(1) + "ms | Repo cache: " + (Array.isArray(diskFiles) ? diskFiles.length : 0) + " items | Store uploadQueue: " + (state.uploadQueue ? state.uploadQueue.length : 0) + " items | uploadGen: " + (state.uploadGeneration || 0) + " | navGen: " + (state.navigationGeneration || 0));
             viewModel = this.projection.buildCurrentFolderViewModel(state, diskFiles);
 
@@ -165,6 +168,15 @@
         }
 
         try {
+            if (typeof window.__lanvanForensicEmit === 'function') {
+                window.__lanvanForensicEmit('render_scheduler', 'render_requested', {
+                    folder: state.currentFolder || '',
+                    details: {
+                        hasViewModel: !!viewModel,
+                        itemCount: Array.isArray(viewModel) ? viewModel.length : ((viewModel && viewModel.visibleFiles) ? viewModel.visibleFiles.length : 0)
+                    }
+                });
+            }
             this.rendererFn(viewModel);
         } catch (renderErr) {
             console.error("  [RENDERER ERROR] Stateless renderer failed:", renderErr);

@@ -34,6 +34,10 @@
 
     function ProjectionLayer() {}
 
+    if (typeof window.__LANVAN_FORENSIC_IDENTITY_FALLBACK_COUNT !== 'number') {
+        window.__LANVAN_FORENSIC_IDENTITY_FALLBACK_COUNT = 0;
+    }
+
     /**
      * PROJECTION CONTRACT:
      * Pure function: (storeState, diskFiles) => ViewModel
@@ -63,6 +67,40 @@
         var normalizedDiskFiles = [];
         var taggedPath = rawDiskFiles.__folderPath !== undefined ? cleanFolderPath(rawDiskFiles.__folderPath) : currentFolder;
 
+        function recordIdentityFallback(kind, diskItem, uploadItem, reason) {
+            window.__LANVAN_FORENSIC_IDENTITY_FALLBACK_COUNT += 1;
+            var diskName = diskItem && diskItem.name ? diskItem.name : '';
+            var diskIdentity = diskItem && diskItem.identity ? diskItem.identity : getCanonicalIdentity(currentFolder, diskName);
+            var diskParentPath = currentFolder;
+            var uploadName = uploadItem && (uploadItem.fileName || (uploadItem.file && uploadItem.file.name) || uploadItem.name) || '';
+            var uploadTarget = uploadItem && (uploadItem.targetDir || uploadItem.parent_path || uploadItem.folder || '') || '';
+            var uploadIdentity = uploadItem && uploadItem.identity ? uploadItem.identity : getCanonicalIdentity(uploadTarget, uploadName);
+            console.log('[REAL IDENTITY FALLBACK]');
+            console.log('timestamp=' + new Date().toISOString());
+            console.log('currentFolder=' + currentFolder);
+            console.log('disk.name=' + diskName);
+            console.log('disk.identity=' + diskIdentity);
+            console.log('disk.parentPath=' + diskParentPath);
+            console.log('upload.name=' + uploadName);
+            console.log('upload.identity=' + uploadIdentity);
+            console.log('upload.targetDir=' + uploadTarget);
+            console.log('comparison=' + kind);
+            console.log('failure reason=' + reason);
+            if (typeof window.__lanvanForensicEmit === 'function') {
+                window.__lanvanForensicEmit('identity_fallback', kind, {
+                    folder: currentFolder,
+                    name: diskName || uploadName,
+                    identity: diskIdentity || uploadIdentity,
+                    details: {
+                        disk: { name: diskName, identity: diskIdentity, parentPath: diskParentPath },
+                        upload: { name: uploadName, identity: uploadIdentity, targetDir: uploadTarget },
+                        comparison: kind,
+                        failureReason: reason
+                    }
+                });
+            }
+        }
+
         // 1. Process Server Disk Files (strictly matching target folder scope)
         if (taggedPath === currentFolder) {
             for (var i = 0; i < rawDiskFiles.length; i++) {
@@ -87,7 +125,7 @@
 
                 var diskMeta = (typeof window.getFileMetadata === 'function')
                     ? window.getFileMetadata(taggedPath || currentFolder, fileName)
-                    : (window._fileMetadataMap ? (window._fileMetadataMap[getCanonicalIdentity(taggedPath || currentFolder, fileName)] || window._fileMetadataMap[fileName]) : null);
+                    : (window._fileMetadataMap ? window._fileMetadataMap[getCanonicalIdentity(taggedPath || currentFolder, fileName)] : null);
 
                 if (typeof df === 'object' && df !== null) {
                     isFolderVal = !!(df.isFolder || df.is_dir || df.is_folder);
@@ -157,6 +195,7 @@
                     for (var ei = 0; ei < normalizedDiskFiles.length; ei++) {
                         var f = normalizedDiskFiles[ei];
                         if (f && !f.isFolder && f.name.trim().toLowerCase() === itemName.trim().toLowerCase()) {
+                            recordIdentityFallback('file_name_only_match', f, item, 'identity missing or mismatched, fell back to case-insensitive name match');
                             existingIdx = ei;
                             break;
                         }
@@ -243,6 +282,7 @@
                 for (var fi = 0; fi < normalizedDiskFiles.length; fi++) {
                     var f = normalizedDiskFiles[fi];
                     if (f && f.isFolder && f.name.trim().toLowerCase() === subFolderName.trim().toLowerCase()) {
+                        recordIdentityFallback('folder_name_only_match', f, { name: subFolderName, targetDir: currentFolder }, 'folder identity missing or mismatched, fell back to case-insensitive name match');
                         existingIdx = fi;
                         break;
                     }
@@ -380,6 +420,39 @@
             } catch (e) {
                 deduplicatedFiles.__folderPath = currentFolder;
             }
+        }
+
+        console.log('[REAL PROJECTION]');
+        console.log('timestamp=' + new Date().toISOString());
+        console.log('folder=' + currentFolder);
+        if (typeof window.__lanvanForensicTraceV2List === 'function') {
+            window.__lanvanForensicTraceV2List('projection_output', currentFolder, deduplicatedFiles, 'projection_layer');
+        }
+        for (var pi = 0; pi < deduplicatedFiles.length; pi++) {
+            var pv = deduplicatedFiles[pi] || {};
+            console.log('name=' + (pv.name || '') + ' identity=' + (pv.identity || '') + ' isFolder=' + (!!pv.isFolder) + ' uploading=' + (!!pv.uploading) + ' source=' + (pv.uploading ? 'upload_overlay_or_merge' : 'disk_or_metadata'));
+            if (typeof window.__lanvanForensicEmit === 'function') {
+                window.__lanvanForensicEmit('projection', 'item', {
+                    folder: currentFolder,
+                    name: pv.name || '',
+                    identity: pv.identity || '',
+                    details: {
+                        isFolder: !!pv.isFolder,
+                        uploading: !!pv.uploading,
+                        source: (pv.uploading ? 'upload_overlay_or_merge' : 'disk_or_metadata')
+                    }
+                });
+            }
+        }
+        console.log('[REAL IDENTITY FALLBACK COUNT] count=' + window.__LANVAN_FORENSIC_IDENTITY_FALLBACK_COUNT);
+        if (typeof window.__lanvanForensicEmit === 'function') {
+            window.__lanvanForensicEmit('projection', 'summary', {
+                folder: currentFolder,
+                details: {
+                    totalItems: deduplicatedFiles.length,
+                    identityFallbackCount: window.__LANVAN_FORENSIC_IDENTITY_FALLBACK_COUNT
+                }
+            });
         }
 
         return deduplicatedFiles;

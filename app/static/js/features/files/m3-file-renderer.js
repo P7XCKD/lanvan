@@ -99,7 +99,7 @@
         var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window.currentFolderPath || "") : "";
         var hasVersions = false;
         var versionCount = 1;
-        var rMeta = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, name) : (window._fileMetadataMap ? window._fileMetadataMap[name] : null);
+        var rMeta = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, name) : null;
         if (rMeta) {
             hasVersions = !!rMeta.hasVersions;
             versionCount = rMeta.versionCount || 1;
@@ -210,7 +210,7 @@
         var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window.currentFolderPath || "") : "";
         var hasVersions = false;
         var versionCount = 1;
-        var rMetaGrid = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, name) : (window._fileMetadataMap ? window._fileMetadataMap[name] : null);
+        var rMetaGrid = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, name) : null;
         if (rMetaGrid) {
             hasVersions = !!rMetaGrid.hasVersions;
             versionCount = rMetaGrid.versionCount || 1;
@@ -604,6 +604,9 @@
         }
 
         normalizedFiles = Array.isArray(viewModel) ? viewModel : (viewModel.visibleFiles || []);
+        if (typeof window.__lanvanForensicTraceV2List === 'function') {
+            window.__lanvanForensicTraceV2List('renderer_input', normCurrentDir, normalizedFiles, 'm3-file-renderer');
+        }
         var activeUploads = (viewModel && Array.isArray(viewModel.activeUploads)) ? viewModel.activeUploads : [];
         var originalFilesForQuickAccess = normalizedFiles.slice();
 
@@ -915,6 +918,48 @@
         var oldDomItems = Array.prototype.slice.call(container.querySelectorAll(".m3-list-item")).map(function (el) { return el.getAttribute("data-filename") || el.textContent.trim(); });
         container.innerHTML = html;
         var newDomItems = Array.prototype.slice.call(container.querySelectorAll(".m3-list-item")).map(function (el) { return el.getAttribute("data-filename") || el.textContent.trim(); });
+        if (typeof window.__lanvanForensicTraceV2List === 'function') {
+            var domItemsAsObjects = newDomItems.map(function (n) {
+                return {
+                    name: n,
+                    identity: (typeof window.getCanonicalIdentity === 'function') ? window.getCanonicalIdentity(normCurrentDir, n) : n
+                };
+            });
+            window.__lanvanForensicTraceV2List('dom_rendered', normCurrentDir, domItemsAsObjects, 'nasFileList');
+        }
+
+        var activeFolderNow = typeof window.getCurrentFolderPath === 'function' ? window.getCurrentFolderPath() : (window.currentFolderPath || '');
+        console.log('[REAL DOM]');
+        console.log('currentFolder=' + activeFolderNow);
+        console.log('actual rendered filenames=', newDomItems);
+        var forensicRows = container.querySelectorAll('.m3-list-item');
+        for (var fd = 0; fd < forensicRows.length; fd++) {
+            var row = forensicRows[fd];
+            var fn = row.getAttribute('data-filename') || '';
+            var cb = row.getAttribute('data-clipboard-id') || '';
+            var parentPath = row.getAttribute('data-parent-path') || activeFolderNow || '';
+            var identity = fn
+                ? (typeof window.getCanonicalIdentity === 'function' ? window.getCanonicalIdentity(parentPath, fn) : fn)
+                : '';
+            console.log('data-filename=' + fn + ' data-clipboard-id=' + cb + ' identity=' + identity);
+            if (typeof window.__lanvanForensicEmit === 'function') {
+                window.__lanvanForensicEmit('dom', 'rendered_item', {
+                    folder: activeFolderNow,
+                    name: fn || cb,
+                    identity: identity,
+                    details: {
+                        data_filename: fn,
+                        data_clipboard_id: cb
+                    }
+                });
+            }
+            if (typeof window.__lanvanForensicTraceV2 === 'function' && fn) {
+                window.__lanvanForensicTraceV2('renderer_dom', activeFolderNow, {
+                    name: fn,
+                    identity: identity
+                }, true, 'nasFileList');
+            }
+        }
 
         console.log("[DOM-WRITE-TRACE] ✅ New Child Count: " + container.children.length + " | Visible List Items: [" + newDomItems.join(", ") + "]");
 

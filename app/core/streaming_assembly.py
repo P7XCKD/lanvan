@@ -296,7 +296,7 @@ class StreamingChunkAssembler:
             streaming_file.chunk_data.clear()
             
             try:
-                pattern = f"{streaming_file.filename}.part*"
+                pattern = f"{streaming_file.filename.replace('/', '__')}.part*"
                 for chunk_file in self.temp_folder.glob(pattern):
                     chunk_file.unlink()
                     print(f"[CLEAN] Cleaned up chunk: {chunk_file.name}")

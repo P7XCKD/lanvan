@@ -11,6 +11,7 @@
     // Move dialog operational state
     var moveCurrentPath = ["Home"];
     var moveTargetFolder = "Home";
+    var moveSourceFolder = "";
     var itemsToMove = [];
     var isCreatingFolderInMove = false;
 
@@ -141,6 +142,9 @@
 
         itemsToMove = targets.slice();
         isCreatingFolderInMove = false;
+        moveSourceFolder = typeof window.cleanFolderPath === "function"
+            ? window.cleanFolderPath(typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || ""))
+            : (typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || ""));
 
         // Set dialog title
         var titleNode = document.getElementById("moveDialogTitle");
@@ -162,6 +166,7 @@
     function closeMoveDialog() {
         itemsToMove = [];
         isCreatingFolderInMove = false;
+        moveSourceFolder = "";
         var dialog = document.getElementById("moveFileDialog");
         if (dialog) dialog.style.display = "none";
     }
@@ -407,7 +412,7 @@
             if (listEl) {
                 isFolder = listEl.getAttribute("data-is-folder") === "1";
             } else if (typeof getDiskFileMetadata === "function") {
-                var meta = getDiskFileMetadata(oldName);
+                var meta = getDiskFileMetadata(oldName, typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window._contextMenuFolderPath || window.currentFolderPath) : (window._contextMenuFolderPath || window.currentFolderPath || ""));
                 if (meta) isFolder = !!(meta.isFolder || meta.is_dir);
             }
 
@@ -504,8 +509,9 @@
         }
 
         var destination = moveCurrentPath.length > 1 ? moveCurrentPath.slice(1).join("/") : "";
-        var activeDir = typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "");
-        var sourceFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(activeDir) : activeDir;
+        var sourceFolder = moveSourceFolder || (typeof window.cleanFolderPath === "function"
+            ? window.cleanFolderPath(typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || ""))
+            : (typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "")));
 
         var repoPromise = (window.FileRepository && typeof window.FileRepository.moveItems === 'function')
             ? window.FileRepository.moveItems(filesToMove, destination, sourceFolder)
@@ -520,6 +526,7 @@
                     var formData = new FormData();
                     formData.append("filename", filename);
                     formData.append("destination", destination);
+                    if (sourceFolder) formData.append("source_path", sourceFolder);
                     return fetch("/api/files/move", { method: "POST", body: formData })
                         .then(function (r) { return r.json(); })
                         .then(function (data) {
@@ -672,7 +679,7 @@
                 }
             }
             if (!isFolder && typeof getDiskFileMetadata === "function") {
-                var foundData = getDiskFileMetadata(filename);
+                var foundData = getDiskFileMetadata(filename, typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window._contextMenuFolderPath || activeDir) : (window._contextMenuFolderPath || activeDir || ""));
                 if (foundData) isFolder = !!(foundData.isFolder || foundData.is_dir);
             }
 
@@ -687,6 +694,42 @@
             } else {
                 url = "/delete/" + encodeURIComponent(filename);
                 method = "POST";
+            }
+
+            var canonicalIdentity = (typeof window.getCanonicalIdentity === 'function')
+                ? window.getCanonicalIdentity(cleanParent, filename)
+                : (cleanParent ? (cleanParent + '/' + filename) : filename);
+            var formEntries = [];
+            try {
+                formData.forEach(function (value, key) {
+                    formEntries.push({ key: key, value: value });
+                });
+            } catch (e) {
+            }
+            console.log('[REAL DELETE REQUEST]');
+            console.log('timestamp=' + new Date().toISOString());
+            console.log('currentFolder=' + activeDir);
+            console.log('filename=' + filename);
+            console.log('parent_path=' + cleanParent);
+            console.log('canonicalIdentity=' + canonicalIdentity);
+            console.log('URL=' + url);
+            console.log('HTTP method=' + method);
+            console.log('payload=', formEntries);
+            if (typeof window.__lanvanForensicEmit === 'function') {
+                window.__lanvanForensicEmit('delete_request', 'send', {
+                    folder: activeDir || '',
+                    name: filename,
+                    identity: canonicalIdentity,
+                    details: {
+                        parent_path: cleanParent,
+                        url: url,
+                        method: method,
+                        payload: formEntries
+                    }
+                });
+            }
+            if (typeof window.__lanvanForensicDumpUploadQueue === 'function') {
+                window.__lanvanForensicDumpUploadQueue();
             }
 
             var xhr = new XMLHttpRequest();

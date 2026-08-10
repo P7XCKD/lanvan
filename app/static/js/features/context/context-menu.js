@@ -40,6 +40,9 @@
         if (itemOps) itemOps.style.display = "block";
 
         window._contextMenuTarget = filename;
+        window._contextMenuFolderPath = typeof window.getCurrentFolderPath === "function"
+            ? window.getCurrentFolderPath()
+            : (window.currentFolderPath || "");
 
         // Smart Selection Logic for Right-Click Context Menu:
         // If filename is NOT currently part of selectedItems, select ONLY filename.
@@ -72,7 +75,7 @@
             if (listEl) {
                 isTargetFolder = listEl.getAttribute("data-is-folder") === "1";
             } else if (typeof window.getDiskFileMetadata === 'function') {
-                var meta = window.getDiskFileMetadata(targetName);
+                var meta = window.getDiskFileMetadata(targetName, window._contextMenuFolderPath || "");
                 if (meta) isTargetFolder = !!meta.isFolder;
             }
         }
@@ -117,8 +120,8 @@
         if (historyItem) {
             var hasV = false;
             var baseN = targetName ? targetName.split("/").pop().split("\\").pop() : "";
-            var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window.currentFolderPath) : "";
-            var meta = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, baseN) : (window._fileMetadataMap ? (window._fileMetadataMap[targetName] || window._fileMetadataMap[baseN]) : null);
+            var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window._contextMenuFolderPath || window.currentFolderPath) : (window._contextMenuFolderPath || window.currentFolderPath || "");
+            var meta = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, baseN) : null;
             if (meta) {
                 hasV = !!meta.hasVersions;
             }
@@ -143,8 +146,8 @@
         var targetName = window._contextMenuTarget || (window.selectedItems && window.selectedItems[0]);
         if (!targetName) return;
         var baseN = targetName.split("/").pop().split("\\").pop();
-        var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window.currentFolderPath) : "";
-        var meta = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, baseN) : (window._fileMetadataMap && (window._fileMetadataMap[targetName] || window._fileMetadataMap[baseN]));
+        var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window._contextMenuFolderPath || window.currentFolderPath) : (window._contextMenuFolderPath || window.currentFolderPath || "");
+        var meta = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, baseN) : null;
         var lfId = meta ? meta.logicalFileId : ("lf_" + baseN);
         if (window.LanvanVersionHistoryPanel) {
             window.LanvanVersionHistoryPanel.open(lfId, baseN);

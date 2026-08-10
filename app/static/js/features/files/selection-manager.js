@@ -8,6 +8,96 @@
 (function (window) {
     'use strict';
 
+    function detectSelectionRepresentation(selected) {
+        if (!Array.isArray(selected) || selected.length === 0) return 'empty';
+        var hasObject = false;
+        var hasRelativePath = false;
+        var hasBasename = false;
+        var hasCanonical = false;
+        var hasOther = false;
+        for (var i = 0; i < selected.length; i++) {
+            var v = selected[i];
+            if (v && typeof v === 'object') {
+                hasObject = true;
+                continue;
+            }
+            if (typeof v !== 'string') {
+                hasOther = true;
+                continue;
+            }
+            var s = v.trim();
+            if (!s) {
+                hasOther = true;
+                continue;
+            }
+            if (s.indexOf('/') !== -1 || s.indexOf('\\') !== -1) {
+                if (typeof window.getCanonicalIdentity === 'function') {
+                    var can = window.getCanonicalIdentity('', s);
+                    hasCanonical = hasCanonical || (can === s.replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''));
+                }
+                hasRelativePath = true;
+            } else {
+                hasBasename = true;
+            }
+        }
+        var flags = [];
+        if (hasObject) flags.push('object');
+        if (hasCanonical) flags.push('canonical identity');
+        if (hasRelativePath) flags.push('relative path');
+        if (hasBasename) flags.push('basename');
+        if (hasOther) flags.push('other');
+        if (flags.length === 1) return flags[0];
+        return 'mixed(' + flags.join(', ') + ')';
+    }
+
+    function logRealSelection(eventName) {
+        try {
+            var timestamp = new Date().toISOString();
+            var currentFolder = typeof window.getCurrentFolderPath === 'function' ? window.getCurrentFolderPath() : (window.currentFolderPath || '');
+            var selected = Array.isArray(window.selectedItems) ? window.selectedItems.slice() : [];
+            var selector = '#nasFileList .m3-list-item.selected, .quick-card.selected, #clipboardHistory .clipboard-grid-card.selected';
+            var selectedEls = document.querySelectorAll(selector);
+            var details = [];
+            for (var i = 0; i < selectedEls.length; i++) {
+                var el = selectedEls[i];
+                var name = el.getAttribute('data-filename') || '';
+                var clipId = el.getAttribute('data-clipboard-id') || '';
+                var parentPath = el.getAttribute('data-parent-path') || currentFolder || '';
+                var idName = name || clipId;
+                var identity = idName
+                    ? (typeof window.getCanonicalIdentity === 'function' ? window.getCanonicalIdentity(parentPath, idName) : idName)
+                    : '';
+                console.log('name=' + name + ' data-filename=' + name + ' data-clipboard-id=' + clipId + ' parentPath=' + parentPath + ' identity=' + identity);
+                details.push({
+                    name: name,
+                    dataFilename: name,
+                    dataClipboardId: clipId,
+                    parentPath: parentPath,
+                    identity: identity
+                });
+            }
+
+            var representation = detectSelectionRepresentation(selected);
+            console.log('[REAL SELECTION]');
+            console.log('timestamp=' + timestamp);
+            console.log('currentFolder=' + currentFolder);
+            console.log('selectedItems=', selected);
+            console.log('representation=' + representation);
+
+            if (typeof window.__lanvanForensicEmit === 'function') {
+                window.__lanvanForensicEmit('selection', eventName || 'selection_changed', {
+                    folder: currentFolder,
+                    details: {
+                        selectedItems: selected,
+                        representation: representation,
+                        selectedDomItems: details
+                    }
+                });
+            }
+        } catch (err) {
+        }
+    }
+
     function isClipboardTabActive() {
         var attr = document.documentElement.getAttribute("data-active-tab");
         if (attr) return attr === "clipboard";
@@ -34,6 +124,7 @@
 
     function updateSelectionToolbar() {
         syncSelectionDOM();
+        logRealSelection('updateSelectionToolbar');
         var defaultContent = document.getElementById("toolbarDefaultContent");
         var selectionContent = document.getElementById("toolbarSelectionContent");
         if (!defaultContent || !selectionContent) return;
