@@ -3067,15 +3067,14 @@ function updateFileDisplay(files) {
   }
 }
 
-//  SERVER SHUTDOWN DETECTION
+//  SERVER SHUTDOWN & RECOVERY DETECTION
 let shutdownCheckInterval;
 let serverShutdown = false;
 
 function startServerStatusMonitoring() {
-  // Check server status every 2 seconds for faster shutdown detection
-  shutdownCheckInterval = setInterval(async () => {
-    if (serverShutdown) return; // Don't check if already shut down
+  if (shutdownCheckInterval) return;
 
+  shutdownCheckInterval = setInterval(async () => {
     try {
       const response = await fetch('/api/server-status', {
         method: 'GET',
@@ -3083,37 +3082,71 @@ function startServerStatusMonitoring() {
       });
 
       if (!response.ok || response.status === 503) {
-        handleServerShutdown('Server connection lost - server may have been shut down');
+        if (!serverShutdown) {
+          handleServerShutdown('Server connection lost - server may have been shut down');
+        }
         return;
       }
 
       const data = await response.json();
       if (data.shutdown) {
-        // Graceful shutdown notification from server
-        const shutdownMessage = data.message || 'Server is shutting down gracefully';
-        const timeRemaining = data.timeRemaining || 5;
-        handleServerShutdown(shutdownMessage, timeRemaining);
-      } else if (data.shutdownWarning) {
-        // Pre-shutdown warning
-        const warningMessage = data.warningMessage || 'Server shutdown initiated - saving your work...';
-        const countdown = data.countdown || 10;
-        showShutdownWarning(warningMessage, countdown);
+        if (!serverShutdown) {
+          const shutdownMessage = data.message || 'Server is shutting down gracefully';
+          const timeRemaining = data.timeRemaining || 5;
+          handleServerShutdown(shutdownMessage, timeRemaining);
+        }
+      } else {
+        // Server is online! If previously shut down, perform automatic seamless recovery
+        if (serverShutdown) {
+          handleServerRecovery();
+        }
       }
     } catch (error) {
-      // Network error - likely server is down
+      // Network error - server appears to be offline
       if (!serverShutdown) {
         handleServerShutdown('Server connection failed - server appears to be offline');
       }
     }
-  }, 2000); // Check every 2 seconds for faster response
+  }, 2000);
+}
+
+function handleServerRecovery() {
+  console.log(' Server connection restored - auto-recovering workspace...');
+  serverShutdown = false;
+
+  const overlay = document.getElementById('shutdownOverlay');
+  if (overlay) {
+    const pill = overlay.querySelector('.shutdown-pill-container');
+    if (pill) {
+      pill.style.borderColor = 'rgba(34, 197, 94, 0.4)';
+      pill.innerHTML = `
+        <div style="width: 10px; height: 10px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 10px rgba(34, 197, 94, 0.6); flex-shrink: 0;"></div>
+        <span>Server is Online</span>
+      `;
+    }
+
+    setTimeout(() => {
+      overlay.style.transition = 'opacity 0.4s ease';
+      overlay.style.opacity = '0';
+      setTimeout(() => {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }, 400);
+    }, 1000);
+  }
+
+  if (typeof showToast === 'function') {
+    showToast(' Server is back online!', 3000);
+  }
+
+  if (typeof startAutoRefresh === 'function') startAutoRefresh();
+  if (typeof refreshFileList === 'function') refreshFileList();
+  if (typeof connectWebSocket === 'function') connectWebSocket();
 }
 
 function showShutdownWarning(message, countdown) {
-  // Show warning toast with countdown
   const warningToast = ` ${message} (${countdown}s)`;
   showToast(warningToast, 0, null, 'warning');
 
-  // Update countdown every second
   let remainingTime = countdown;
   const countdownInterval = setInterval(() => {
     remainingTime--;
@@ -3121,135 +3154,120 @@ function showShutdownWarning(message, countdown) {
       const updatedWarning = ` ${message} (${remainingTime}s)`;
       updateToastContent(updatedWarning);
     } else {
-      // Show final shutdown message
       clearInterval(countdownInterval);
       updateToastContent(' SERVER IS SHUT DOWN - All operations halted');
-
-      // Add final visual indication
       document.body.style.borderTop = '5px solid #dc3545';
-
       console.log(' Server shutdown completed - final message displayed');
     }
   }, 1000);
 
-  // Add visual warning indicator
   document.body.style.borderTop = '5px solid #ffc107';
-
   console.log(` Shutdown warning: ${message} - ${countdown}s remaining`);
 }
 
 function handleServerShutdown(reason = 'Server has been shut down', gracefulTime = 0) {
-  if (serverShutdown) return; // Prevent multiple notifications
+  if (serverShutdown) return;
   serverShutdown = true;
-  if (shutdownCheckInterval) {
-    clearInterval(shutdownCheckInterval);
-    shutdownCheckInterval = null;
-  }
 
-  // Stop all uploads immediately with proper feedback
-  if (uploadQueue.length > 0) {
-    uploadQueue.forEach(item => {
-      if (item.xhr) item.xhr.abort();
-      if (item.currentXhr) item.currentXhr.abort();
-      item.status = 'CANCELLED';
-      item.error = 'Server shutdown';
+  // Stop active uploads gracefully
+  if (Array.isArray(window.uploadQueue) && window.uploadQueue.length > 0) {
+    window.uploadQueue.forEach(item => {
+      if (item) {
+        if (item.xhr) item.xhr.abort();
+        if (item.currentXhr) item.currentXhr.abort();
+        item.status = 'CANCELLED';
+        item.error = 'Server shutdown';
+      }
     });
-    updateUploadManager();
-    console.log(` ${uploadQueue.length} uploads cancelled due to server shutdown`);
+    if (typeof updateUploadManager === 'function') updateUploadManager();
   }
 
-  // Clear intervals
-  if (shutdownCheckInterval) clearInterval(shutdownCheckInterval);
-  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+  if (typeof pauseAutoRefresh === 'function') pauseAutoRefresh();
 
-  // Determine shutdown type and message
-  let shutdownType = 'SHUTDOWN';
-  let messageColor = '#dc3545';
-  let overlayColor = 'rgba(220, 53, 69, 0.15)';
+  // Detect theme mode dynamically (Light vs Dark Mode)
+  const isLight = document.body.classList.contains('light-theme') || 
+                  document.documentElement.classList.contains('light-theme') || 
+                  document.documentElement.dataset.theme === 'light' ||
+                  localStorage.getItem('lanvan_theme') === 'light';
 
-  if (gracefulTime > 0) {
-    shutdownType = 'GRACEFUL SHUTDOWN';
-    messageColor = '#ffc107';
-    overlayColor = 'rgba(255, 193, 7, 0.15)';
-  }
+  const overlayBg = isLight ? 'rgba(255, 255, 255, 0.55)' : 'rgba(15, 23, 42, 0.45)';
+  const pillBg = isLight ? '#ffffff' : '#0f172a';
+  const pillColor = isLight ? '#0f172a' : '#ffffff';
+  const pillShadow = isLight 
+    ? '0 12px 30px rgba(0, 0, 0, 0.12), 0 0 15px rgba(239, 68, 68, 0.15)' 
+    : '0 15px 35px rgba(15, 23, 42, 0.4), 0 0 20px rgba(239, 68, 68, 0.2)';
 
-  // Show enhanced shutdown notification with device info
-  const deviceInfo = `Device: ${navigator.platform} | Browser: ${navigator.userAgent.split(' ').pop()}`;
-  showToast(
-    ` SERVER ${shutdownType}: ${reason}\n\nAll operations halted. Files in progress have been cancelled.\n\nPlease wait for the server to restart or contact the host device.`,
-    0, // Permanent toast
-    { shutdownReason: reason, deviceInfo: deviceInfo, timestamp: new Date().toISOString() },
-    'error'
-  );
-
-  // Add enhanced shutdown overlay
-  const overlay = document.createElement('div');
-  overlay.id = 'shutdownOverlay';
-  overlay.style.cssText = `
+  let overlay = document.getElementById('shutdownOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'shutdownOverlay';
+    overlay.style.cssText = `
       position: fixed;
       top: 0;
       left: 0;
       width: 100vw;
       height: 100vh;
-      background: ${overlayColor};
-      backdrop-filter: blur(3px);
+      background: ${overlayBg};
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
       z-index: 10000;
       display: flex;
-      justify-content: center;
       align-items: center;
-      pointer-events: none;
-      animation: shutdownFadeIn 1s ease-in;
+      justify-content: center;
+      pointer-events: all;
+      cursor: not-allowed;
+      animation: shutdownFadeIn 0.3s ease;
     `;
 
-  // Add shutdown animation
-  const style = document.createElement('style');
-  style.textContent = `
+    const style = document.createElement('style');
+    style.textContent = `
       @keyframes shutdownFadeIn {
-        from { opacity: 0; backdrop-filter: blur(0px); }
-        to { opacity: 1; backdrop-filter: blur(3px); }
+        from { opacity: 0; }
+        to { opacity: 1; }
       }
-      @keyframes shutdownPulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.05); }
+      @keyframes shutdownScaleUp {
+        from { transform: scale(0.9); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+      }
+      @keyframes shutdownRedPulse {
+        0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
+        70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
       }
     `;
-  document.head.appendChild(style);
+    document.head.appendChild(style);
 
-  const shutdownMessage = document.createElement('div');
-  shutdownMessage.style.cssText = `
-      background: ${messageColor};
-      color: white;
-      padding: 2.5rem;
-      border-radius: 15px;
-      text-align: center;
-      font-size: 1.3rem;
-      font-weight: bold;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-      max-width: 600px;
-      margin: 1rem;
-      animation: shutdownPulse 2s ease-in-out infinite;
-      border: 3px solid rgba(255,255,255,0.3);
+    const pill = document.createElement('div');
+    pill.className = 'shutdown-pill-container';
+    pill.style.cssText = `
+      background: ${pillBg};
+      color: ${pillColor};
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      box-shadow: ${pillShadow};
+      border-radius: 50px;
+      padding: 0.85rem 1.65rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      pointer-events: auto;
+      cursor: not-allowed;
+      animation: shutdownScaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     `;
 
-  const currentTime = new Date().toLocaleString();
-  shutdownMessage.innerHTML = `
-       SERVER ${shutdownType}<br>
-      <div style="font-size: 1rem; margin-top: 1rem; font-weight: normal; line-height: 1.5;">
-        <strong>Reason:</strong> ${reason}<br><br>
-        <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; margin: 1rem 0;">
-          • All file transfers have been stopped<br>
-          • Upload queue has been cleared<br>
-          • Server connection lost at ${currentTime}
-        </div>
-        <div style="font-size: 0.9rem; color: rgba(255,255,255,0.9);">
-          Please contact the host device to restart the server<br>
-          or wait for automatic restart if configured.
-        </div>
+    pill.innerHTML = `
+      <div style="width: 10px; height: 10px; background: #ef4444; border-radius: 50%; animation: shutdownRedPulse 1.5s infinite; flex-shrink: 0;"></div>
+      <div style="display: flex; flex-direction: column; align-items: flex-start; text-align: left;">
+        <span style="font-weight: 600; font-size: 0.95rem; line-height: 1.2;">Server is Offline</span>
+        <span style="font-size: 0.78rem; opacity: 0.75; font-weight: 400; margin-top: 2px;">Ask host to start Lanvan</span>
       </div>
     `;
 
-  overlay.appendChild(shutdownMessage);
-  document.body.appendChild(overlay);
+    overlay.appendChild(pill);
+    document.body.appendChild(overlay);
+  }
 
   // Log detailed shutdown information
   console.error(` Server shutdown detected:`, {
