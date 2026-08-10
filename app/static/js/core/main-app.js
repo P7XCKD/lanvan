@@ -4419,14 +4419,9 @@ function autoUpload(files) {
   }
 }
 
-//  HTTP-Safe AES Functions
+// HTTP-Safe AES crypto helpers extracted to features/security/http-safe-crypto.js
 function isHttpSafeEnabled() {
-  const aesToggle = document.getElementById('enableEncryption');
-  const isHTTP = location.protocol === 'http:';
-
-  // HTTP-Safe metadata obfuscation is ONLY needed on HTTP connections.
-  // On HTTPS, TLS already encrypts all headers, file names, and metadata natively.
-  return isHTTP && !!(aesToggle && aesToggle.checked);
+  return window.HttpSafeCrypto ? window.HttpSafeCrypto.isHttpSafeEnabled() : false;
 }
 
 //  HTTP-Safe AES Upload Function
@@ -4733,85 +4728,29 @@ let toastTimeout = null;
 let lastToastMessage = '';
 let isPersistentToast = false;
 
-function showToast(message, duration = 3000, transferData = null, type = 'default') {
-  const isMobile = window.innerWidth <= 768;
-  const bottomPos = isMobile ? '90px' : '28px';
-  let toast = (DOM_CACHE && DOM_CACHE.toast) || document.getElementById('toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.id = 'toast';
-    toast.className = 'lanvan-toast';
-    toast.style.cssText = 'position:fixed; left:50%; transform:translateX(-50%) translateY(12px); background:rgba(24, 26, 34, 0.94); color:#ffffff; padding:10px 22px; border-radius:24px; font-size:0.88rem; font-weight:600; z-index:999999; border:1px solid rgba(255,255,255,0.18); backdrop-filter:blur(14px); box-shadow:0 12px 36px rgba(0,0,0,0.5); display:none; opacity:0; transition:all 0.22s cubic-bezier(0.16, 1, 0.3, 1); pointer-events:auto; font-family:inherit; text-align:center; max-width:90vw; word-break:break-word;';
-    document.body.appendChild(toast);
-    if (typeof DOM_CACHE !== "undefined") DOM_CACHE.toast = toast;
-  }
-
-  toast.style.bottom = bottomPos;
-  toast.innerText = message;
-  toast.style.display = 'block';
-  requestAnimationFrame(() => {
-    toast.style.opacity = '1';
-    toast.style.transform = 'translateX(-50%) translateY(0px)';
-  });
-
-  if (typeof toastTimeout !== "undefined" && toastTimeout) {
-    clearTimeout(toastTimeout);
-    toastTimeout = null;
-  }
-
-  if (duration > 0) {
-    const timer = setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateX(-50%) translateY(12px)';
-      setTimeout(() => {
-        toast.style.display = 'none';
-      }, 220);
-    }, duration);
-    if (typeof toastTimeout !== "undefined") toastTimeout = timer;
+// Toast Notification System extracted to features/ui/toast-notification-service.js
+function showToast(message, duration, transferData, type) {
+  if (window.ToastNotificationService) {
+    window.ToastNotificationService.showToast(message, duration, transferData, type);
   }
 }
 
 function updateToastContent(message) {
-  const toast = DOM_CACHE.toast;
-  if (!toast) return;
+  if (window.ToastNotificationService) {
+    window.ToastNotificationService.updateToastContent(message);
+  }
+}
 
-  // Only update if not persistent
-  if (!isPersistentToast) {
-    toast.innerText = message;
-    lastToastMessage = message;
-    toast.style.display = 'block';
-
-    // Reset styling for updates
-    toast.style.backgroundColor = '#333';
-    toast.style.whiteSpace = 'normal';
+function updateProgressToast(message) {
+  if (window.ToastNotificationService) {
+    window.ToastNotificationService.updateProgressToast(message);
   }
 }
 
 function hideToast() {
-  const toast = DOM_CACHE.toast;
-  if (!toast) return;
-
-  // Don't hide if persistent
-  if (isPersistentToast) return;
-
-  // Clear timeout
-  if (toastTimeout) {
-    clearTimeout(toastTimeout);
-    toastTimeout = null;
+  if (window.ToastNotificationService) {
+    window.ToastNotificationService.hideToast();
   }
-
-  //  PERFORMANCE: Batch style changes for hide animation
-  Object.assign(toast.style, {
-    opacity: '0',
-    transform: 'translateX(-50%) translateY(20px)'
-  });
-
-  setTimeout(() => {
-    if (!isPersistentToast) {
-      toast.style.display = 'none';
-      delete toast._transferData;
-    }
-  }, 300);
 }
 
 //  File Metadata Storage
