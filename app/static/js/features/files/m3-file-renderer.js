@@ -96,11 +96,13 @@
 
         var dateTooltip = isUploading ? "" : (formattedDate.tooltip || formattedDate.display);
 
+        var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window.currentFolderPath || "") : "";
         var hasVersions = false;
         var versionCount = 1;
-        if (window._fileMetadataMap && window._fileMetadataMap[name]) {
-            hasVersions = !!window._fileMetadataMap[name].hasVersions;
-            versionCount = window._fileMetadataMap[name].versionCount || 1;
+        var rMeta = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, name) : (window._fileMetadataMap ? window._fileMetadataMap[name] : null);
+        if (rMeta) {
+            hasVersions = !!rMeta.hasVersions;
+            versionCount = rMeta.versionCount || 1;
         }
         var versionBadgeHtml = hasVersions
             ? '<span class="version-pill-badge" title="Version ' + versionCount + ' (Has version history)" style="font-size:0.72rem; font-weight:700; padding:2px 8px; border-radius:12px; margin-left:8px; background:var(--primary-bg, rgba(37,99,235,0.12)); color:var(--primary, #2563eb); border:1px solid var(--primary-border, rgba(37,99,235,0.3)); vertical-align:middle; display:inline-flex; align-items:center; letter-spacing:0.02em;">v' + versionCount + '</span>'
@@ -205,11 +207,13 @@
             ? '<div class="item-subtitle" style="font-size:0.7rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + subtitle + '</div>'
             : '';
 
+        var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window.currentFolderPath || "") : "";
         var hasVersions = false;
         var versionCount = 1;
-        if (window._fileMetadataMap && window._fileMetadataMap[name]) {
-            hasVersions = !!window._fileMetadataMap[name].hasVersions;
-            versionCount = window._fileMetadataMap[name].versionCount || 1;
+        var rMetaGrid = typeof window.getFileMetadata === 'function' ? window.getFileMetadata(curFolder, name) : (window._fileMetadataMap ? window._fileMetadataMap[name] : null);
+        if (rMetaGrid) {
+            hasVersions = !!rMetaGrid.hasVersions;
+            versionCount = rMetaGrid.versionCount || 1;
         }
         var versionBadgeHtml = hasVersions
             ? '<span class="version-pill-badge" title="Version ' + versionCount + ' (Has version history)" style="font-size:0.68rem; font-weight:700; padding:1px 6px; border-radius:10px; margin-left:6px; background:var(--primary-bg, rgba(37,99,235,0.12)); color:var(--primary, #2563eb); border:1px solid var(--primary-border, rgba(37,99,235,0.3)); vertical-align:middle; display:inline-flex; align-items:center; letter-spacing:0.02em;">v' + versionCount + '</span>'

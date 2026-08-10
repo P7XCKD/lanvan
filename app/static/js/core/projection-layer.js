@@ -14,6 +14,16 @@
         return (cleaned === "Home (Root)" || cleaned === "Home" || cleaned === "Home/") ? "" : cleaned;
     }
 
+    function getCanonicalIdentity(parentPath, fileName) {
+        if (typeof window.getCanonicalIdentity === 'function') {
+            return window.getCanonicalIdentity(parentPath, fileName);
+        }
+        if (!fileName) return "";
+        var cleanParent = cleanFolderPath(parentPath);
+        var cleanName = String(fileName).trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+        return cleanParent ? (cleanParent + "/" + cleanName) : cleanName;
+    }
+
     function formatSize(bytes) {
         if (!bytes || bytes === 0) return '0 B';
         var k = 1024;
@@ -61,10 +71,13 @@
                 var fileName = typeof df === 'string' ? df : df.name;
                 if (!fileName) continue;
 
-                // Check pending delete status
+                // Check pending delete status using canonical identity
                 var isPendingDelete = Object.keys(pendingOps).some(function (opId) {
                     var op = pendingOps[opId];
-                    return op && op.type === 'DELETE' && op.fileName === fileName;
+                    if (!op || op.type !== 'DELETE') return false;
+                    var opIdentity = op.identity || getCanonicalIdentity(op.parentPath || op.folder || "", op.fileName || op.name || "");
+                    var itemIdentity = getCanonicalIdentity(taggedPath || currentFolder, fileName);
+                    return opIdentity === itemIdentity;
                 });
                 if (isPendingDelete) continue;
 
@@ -72,26 +85,29 @@
                 var dfSize = '--';
                 var dfMtime = 0;
 
+                var diskMeta = (typeof window.getFileMetadata === 'function')
+                    ? window.getFileMetadata(taggedPath || currentFolder, fileName)
+                    : (window._fileMetadataMap ? (window._fileMetadataMap[getCanonicalIdentity(taggedPath || currentFolder, fileName)] || window._fileMetadataMap[fileName]) : null);
+
                 if (typeof df === 'object' && df !== null) {
                     isFolderVal = !!(df.isFolder || df.is_dir || df.is_folder);
                     dfSize = df.size || df.fileSize || df.file_size || '--';
                     dfMtime = df.mtime || df.date || df.modified || 0;
                 } else if (typeof df === 'string') {
-                    if (window._fileMetadataMap && window._fileMetadataMap[df]) {
-                        var cachedMeta = window._fileMetadataMap[df];
-                        dfSize = cachedMeta.size || '--';
-                        dfMtime = cachedMeta.mtime || 0;
-                        isFolderVal = !!cachedMeta.isFolder;
+                    if (diskMeta) {
+                        dfSize = diskMeta.size || '--';
+                        dfMtime = diskMeta.mtime || 0;
+                        isFolderVal = !!diskMeta.isFolder;
                     }
                 }
 
-                var vCount = (typeof df === 'object' && df !== null) ? (df.versionCount || 1) : (window._fileMetadataMap && window._fileMetadataMap[df] ? (window._fileMetadataMap[df].versionCount || 1) : 1);
-                var hasV = (typeof df === 'object' && df !== null) ? !!df.hasVersions : (window._fileMetadataMap && window._fileMetadataMap[df] ? !!window._fileMetadataMap[df].hasVersions : (vCount > 1));
-                var logId = (typeof df === 'object' && df !== null) ? df.logicalFileId : (window._fileMetadataMap && window._fileMetadataMap[df] ? window._fileMetadataMap[df].logicalFileId : null);
+                var vCount = (typeof df === 'object' && df !== null) ? (df.versionCount || 1) : (diskMeta ? (diskMeta.versionCount || 1) : 1);
+                var hasV = (typeof df === 'object' && df !== null) ? !!df.hasVersions : (diskMeta ? !!diskMeta.hasVersions : (vCount > 1));
+                var logId = (typeof df === 'object' && df !== null) ? df.logicalFileId : (diskMeta ? diskMeta.logicalFileId : null);
 
                 normalizedDiskFiles.push({
                     name: fileName,
-                    identity: (taggedPath || currentFolder) ? ((taggedPath || currentFolder) + '/' + fileName) : fileName,
+                    identity: getCanonicalIdentity(taggedPath || currentFolder, fileName),
                     size: dfSize,
                     mtime: dfMtime,
                     isFolder: isFolderVal,
@@ -126,7 +142,7 @@
 
                 // Match by identity (full path), not just display name.
                 // Two files with the same name in different subfolders are distinct objects.
-                var uplIdentity = targetDir + '/' + itemName;
+                var uplIdentity = getCanonicalIdentity(targetDir, itemName);
                 var existingIdx = -1;
                 for (var ei = 0; ei < normalizedDiskFiles.length; ei++) {
                     var f = normalizedDiskFiles[ei];
@@ -165,7 +181,7 @@
                     } else {
                         uploadOverlayItems.push({
                             name: itemName,
-                            identity: (targetDir ? targetDir + '/' : '') + itemName,
+                            identity: getCanonicalIdentity(targetDir, itemName),
                             size: formatSize(fileSize),
                             mtime: null, // Unknown mtime — deterministic sentinel
                             isFolder: false,
@@ -212,10 +228,7 @@
             // Match synthetic folder to existing disk folder by identity (full path),
             // not just display name. Two folders with the same name in different
             // contexts have different identities and must never collide.
-            // Construct identity consistently: no leading slash for Home directory.
-            // The disk folder at Home has identity "FolderName" (no leading slash),
-            // so the synthetic folder must match that exactly.
-            var subFolderIdentity = currentFolder ? (currentFolder + '/' + subFolderName) : subFolderName;
+            var subFolderIdentity = getCanonicalIdentity(currentFolder, subFolderName);
             var existingIdx = -1;
             for (var fi = 0; fi < normalizedDiskFiles.length; fi++) {
                 var f = normalizedDiskFiles[fi];
@@ -266,7 +279,7 @@
             } else {
                 var newFolder = {
                     name: subFolderName,
-                    identity: currentFolder + '/' + subFolderName,
+                    identity: getCanonicalIdentity(currentFolder, subFolderName),
                     size: formatSize(sFolder.totalBytes),
                     mtime: null,
                     isFolder: true
@@ -283,11 +296,7 @@
         var seenIdentities = {};
         normalizedDiskFiles.forEach(function (f) {
             if (!f || !f.name) return;
-            var id = f.identity;
-            if (!id) {
-                if (window.DEBUG_MODE) console.warn('[PROJECTION] Identity fallback: dedup item has no identity field for "' + f.name + '"');
-                id = currentFolder + '/' + f.name;
-            }
+            var id = f.identity || getCanonicalIdentity(currentFolder, f.name);
             if (!seenIdentities[id]) {
                 seenIdentities[id] = f;
                 deduplicatedFiles.push(f);
@@ -344,7 +353,7 @@
             for (var vi = 0; vi < deduplicatedFiles.length; vi++) {
                 var vf = deduplicatedFiles[vi];
                 if (!vf || !vf.name) continue;
-                var vid = vf.identity || currentFolder + '/' + vf.name;
+                var vid = vf.identity || getCanonicalIdentity(currentFolder, vf.name);
                 if (vmIdentities[vid]) {
                     console.error('[INVARIANT FAILED] Duplicate identity in ViewModel: ' + vid, vf, vmIdentities[vid]);
                 }

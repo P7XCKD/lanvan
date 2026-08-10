@@ -1,0 +1,81 @@
+﻿================================================================================
+LANVAN IDENTITY & DELETION FORENSIC TRACE LOG
+================================================================================
+
+1. CROSS-FOLDER DELETION SCENARIO (TEST 1 & 2)
+--------------------------------------------------------------------------------
+[SCENARIO SETUP]
+  Filesystem Root (/): A, B, C
+  Filesystem Subfolder (/Inside): A, B, C
+
+[ACTION: USER DELETES /Inside/A, /Inside/B, /Inside/C]
+  currentFolder: " Inside\
+ selectedItems: [\A\, \B\, \C\]
+
+[REQUEST TRACE]
+ Request 1: POST /delete/A | Form Data: { filename: \A\, parent_path: \Inside\ }
+ Request 2: POST /delete/B | Form Data: { filename: \B\, parent_path: \Inside\ }
+ Request 3: POST /delete/C | Form Data: { filename: \C\, parent_path: \Inside\ }
+
+[BACKEND RESOLUTION]
+ Target 1: data/uploads/Inside/A -> Unlinked successfully
+ Target 2: data/uploads/Inside/B -> Unlinked successfully
+ Target 3: data/uploads/Inside/C -> Unlinked successfully
+
+[FILESYSTEM AFTER DELETION]
+ data/uploads/A: PRESENT (Intact)
+ data/uploads/B: PRESENT (Intact)
+ data/uploads/C: PRESENT (Intact)
+ data/uploads/Inside/A: ABSENT (Unlinked)
+ data/uploads/Inside/B: ABSENT (Unlinked)
+ data/uploads/Inside/C: ABSENT (Unlinked)
+
+[WEBSOCKET EVENT BROADCAST]
+ Payload: { type: \file_change\, action: \delete\, target_dir: \Inside\, path: \A\ }
+ Payload: { type: \file_change\, action: \delete\, target_dir: \Inside\, path: \B\ }
+ Payload: { type: \file_change\, action: \delete\, target_dir: \Inside\, path: \C\ }
+
+[FRONTEND LAYER STATE RECONCILIATION]
+ Repository Cache (\\): [ \A\, \B\, \C\, \Inside\ ]
+ Repository Cache (\Inside\): []
+ Projection VM (\\): [ { name: \A\, identity: \A\ }, { name: \B\, identity: \B\ }, { name: \C\, identity: \C\ }, { name: \Inside\, identity: \Inside\ } ]
+ Projection VM (\Inside\): []
+ DOM nasFileList (at /): 4 list items rendered
+ DOM nasFileList (at /Inside): Empty state rendered
+
+
+2. V2 DISAPPEARANCE TRACKING (TEST 4)
+--------------------------------------------------------------------------------
+Target file: V2_TEST_UNIQUE_123.txt
+Parent path: \\ (Root)
+
+ [STAGE 1: API Response] -> PRESENT (Included in GET /api/files files_data)
+ [STAGE 2: Repository Cache] -> PRESENT (Stored under cache[\\])
+ [STAGE 3: Projection Input] -> PRESENT (Passed to buildCurrentFolderViewModel)
+ [STAGE 4: Projection Output] -> PRESENT (Identity = \V2_TEST_UNIQUE_123.txt\)
+ [STAGE 5: M3 Renderer DOM] -> PRESENT (Rendered in #nasFileList)
+
+
+3. UPLOAD QUEUE BREAKDOWN (TEST 5)
+--------------------------------------------------------------------------------
+Total Queue Length: 32
+ Active (UPLOADING/PROCESSING): 0
+ Queued: 0
+ Completed: 28
+ Cancelled / Deleted: 4
+
+ Key Observation: Completed upload items in window.uploadQueue are retained
+ until disk scan or manual cleanup. Projection handles completed upload overlay
+ merging immutably without duplicating disk items.
+
+
+4. IDENTITY FALLBACK LOG (TEST 6)
+--------------------------------------------------------------------------------
+Total Identity Fallbacks Logged: 0
+All canonical identity evaluation paths hit cleanly using getCanonicalIdentity().
+
+
+================================================================================
+FIRST INCORRECT LAYER:
+BUG NOT REPRODUCED DURING INSTRUMENTED RUN
+================================================================================

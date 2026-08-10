@@ -178,6 +178,17 @@ function getDevicePerformanceRating() {
 }
 
 /**
+ * Calculate optimal concurrent uploads based on device performance
+ * @returns {number} Optimal concurrent upload limit
+ */
+function getOptimalConcurrency() {
+  const rating = getDevicePerformanceRating();
+  if (rating === 'low') return 1;
+  if (rating === 'medium') return 2;
+  return 3;
+}
+
+/**
  * Check if incognito/private mode is likely active
  * @returns {boolean} True if private browsing detected
  */
@@ -267,6 +278,7 @@ if (typeof window !== 'undefined') {
   window.escapeHtml = escapeHtml;
   window.sanitizeFilename = sanitizeFilename;
   window.getDevicePerformanceRating = getDevicePerformanceRating;
+  window.getOptimalConcurrency = getOptimalConcurrency;
   window.isIncognitoMode = isIncognitoMode;
   window.getBrowserInfo = getBrowserInfo;
   window.getControlButtons = getControlButtons;

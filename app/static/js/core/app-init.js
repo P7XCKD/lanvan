@@ -574,7 +574,10 @@ window.submitRename = function() { return window.DialogManager.submitRename.appl
                 var queueList = Array.isArray(restoredQueue) ? restoredQueue : ((restoredQueue && restoredQueue.queue) ? restoredQueue.queue : []);
                 if (queueList.length > 0) {
                     queueList.forEach(function (item) {
-                        if (item.status === "UPLOADING" || item.status === "QUEUED") {
+                        if (item && typeof item.status === "string") {
+                            item.status = item.status.toUpperCase();
+                        }
+                        if (item && (item.status === "UPLOADING" || item.status === "QUEUED")) {
                             item.status = "PAUSED";
                         }
                     });
