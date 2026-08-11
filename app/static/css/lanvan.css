@@ -3167,16 +3167,20 @@ html[data-view-mode="list"] #gridViewBtn {
         padding-bottom: calc(82px + env(safe-area-inset-bottom, 0px)) !important;
     }
 
-    .view-content:not([style*="display: none"]):not([style*="display:none"]) {
+    .view-content {
         flex: 1 !important;
-        display: flex !important;
         flex-direction: column !important;
         min-height: 0 !important;
         overflow: hidden !important;
     }
 
-    .view-content[style*="display: none"],
-    .view-content[style*="display:none"] {
+    html[data-active-tab="file"] #fileView,
+    html[data-active-tab="clipboard"] #clipboardView {
+        display: flex !important;
+    }
+
+    html[data-active-tab="file"] #clipboardView,
+    html[data-active-tab="clipboard"] #fileView {
         display: none !important;
     }
 
