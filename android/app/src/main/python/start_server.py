@@ -24,11 +24,10 @@ class LogWriter:
     def isatty(self):
         return False
 
-def run_fastapi_server(port="5000", use_https="false", files_dir=None, is_debug=True):
+def run_fastapi_server(port="5000", use_https="false", files_dir=None, is_debug=False, block_dangerous=None):
     """
     Launches uvicorn server in Android JVM thread.
-    - is_debug=True: Development mode (python run.py / run.py https) using app/static
-    - is_debug=False: Production mode (python run.py prod) using dist/static
+    - is_debug=False by default: APK runs in Production mode automatically.
     """
     if is_debug:
         os.environ['LANVAN_ENV'] = 'development'
@@ -36,6 +35,11 @@ def run_fastapi_server(port="5000", use_https="false", files_dir=None, is_debug=
     else:
         os.environ['LANVAN_ENV'] = 'production'
         os.environ['PRODUCTION'] = 'true'
+
+    if block_dangerous is not None:
+        os.environ['BLOCK_DANGEROUS'] = 'true' if str(block_dangerous).lower() == 'true' else 'false'
+    elif 'BLOCK_DANGEROUS' not in os.environ:
+        os.environ['BLOCK_DANGEROUS'] = 'true' if str(use_https).lower() == 'true' else 'false'
 
     if files_dir:
         log_path = os.path.join(files_dir, "lanvan_app.log")

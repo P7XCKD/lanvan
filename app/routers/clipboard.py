@@ -527,6 +527,7 @@ async def clear_clipboard():
 
 
 @router.delete("/api/clipboard/remove/{item_id}", name="clipboard_remove")
+@router.delete("/api/clipboard/delete/{item_id}", name="clipboard_delete_alias")
 async def remove_clipboard_item(item_id: int):
     """Delete a single clipboard item from history."""
     global clipboard_history
