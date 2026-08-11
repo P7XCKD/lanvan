@@ -207,62 +207,14 @@ FALLBACK_HTTPS_PORT = 5001
 HTTP_PORT = int(os.getenv("HTTP_PORT", DEFAULT_HTTP_PORT))
 HTTPS_PORT = int(os.getenv("HTTPS_PORT", DEFAULT_HTTPS_PORT))
 
-def _is_docker_container_ip(ip_str):
-    """Check if an IP is a Docker internal bridge IP when running inside Docker container"""
-    if not os.path.exists('/.dockerenv'):
-        return False
-    if not ip_str:
-        return True
-    parts = ip_str.split('.')
-    if len(parts) == 4 and parts[0] == '172':
-        try:
-            second = int(parts[1])
-            if 17 <= second <= 31:
-                return True
-        except ValueError:
-            pass
-    return False
-
 def get_ip():
-    """Get local IP address - works offline and rejects Docker internal bridge IPs"""
-    env_host = os.getenv("LANVAN_ADVERTISE_HOST") or os.getenv("ADVERTISE_HOST") or os.getenv("LAN_IP")
-    if env_host and env_host.strip():
-        return env_host.strip()
-
+    """Get local IP address - uses authoritative network_resolver"""
     try:
-        # Method 1: Try hostname resolution (works offline on most systems)
-        hostname = socket.gethostname()
-        host_ip = socket.gethostbyname(hostname)
-        if host_ip and not host_ip.startswith('127.') and not _is_docker_container_ip(host_ip):
-            return host_ip
+        from app.utils.network_resolver import resolve_advertise_host
+        res = resolve_advertise_host()
+        return res["display_ip"]
     except Exception:
-        pass
-    
-    try:
-        # Method 2: Create socket and connect to local router (offline-compatible)
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("192.168.1.1", 80))  # Local router IP - doesn't require internet
-        ip = s.getsockname()[0]
-        s.close()
-        if ip and not ip.startswith('127.') and not _is_docker_container_ip(ip):
-            return ip
-    except Exception:
-        pass
-    
-    try:
-        # Method 3: Try other common local network ranges
-        for network in ["10.0.0.1", "172.16.0.1"]:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect((network, 80))
-            ip = s.getsockname()[0]
-            s.close()
-            if ip and not ip.startswith('127.') and not _is_docker_container_ip(ip):
-                return ip
-    except Exception:
-        pass
-    
-    # Fallback to localhost if inside Docker bridge without host IP override
-    return "127.0.0.1"
+        return "127.0.0.1"
 
 def can_bind_privileged_port(port):
     """Check if we can bind to a privileged port (< 1024)"""

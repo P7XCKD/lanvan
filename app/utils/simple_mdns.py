@@ -415,102 +415,14 @@ class SimpleMDNSManager:
         return False
 
     def get_lan_ip(self) -> str:
-        """Get the LAN IP address - works offline by scanning local interfaces, optimized for Termux & Docker"""
-        env_host = os.getenv("LANVAN_ADVERTISE_HOST") or os.getenv("ADVERTISE_HOST") or os.getenv("LAN_IP")
-        if env_host and env_host.strip():
-            return env_host.strip()
-
+        """Get the LAN IP address - delegates to authoritative network_resolver"""
         try:
-            # Return cached IP if available and still valid
-            if self.lan_ip and not self._is_docker_bridge_ip(self.lan_ip):
-                # Quick test to see if IP is still valid
-                try:
-                    import socket
-                    test_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    test_socket.bind((self.lan_ip, 0))
-                    test_socket.close()
-                    return self.lan_ip
-                except Exception:
-                    # IP no longer valid, clear cache
-                    self.lan_ip = None
-            
-            # Check if we're on Android/Termux for special handling
-            is_android = is_android_environment()
-            
-            if is_android:
-                print("[MOBILE] Detecting network interface on Android/Termux...")
-                
-                # Use enhanced Android network detection
-                try:
-                    android_ip = self._get_android_network_ip()
-                    if android_ip and android_ip != '192.0.0.4':
-                        self.lan_ip = android_ip
-                        print(f"[MOBILE] Enhanced Android detection found: {android_ip}")
-                        return self.lan_ip
-                except Exception as android_error:
-                    print(f"[MOBILE] Enhanced Android detection failed: {android_error}")
-                
-            # Method 1: Try to get IP without external connection (offline-compatible)
-            import socket
-            hostname = socket.gethostname()
-            
-            try:
-                host_ip = socket.gethostbyname(hostname)
-                if host_ip and not host_ip.startswith('127.') and host_ip != '192.0.0.4' and not self._is_docker_bridge_ip(host_ip):
-                    self.lan_ip = host_ip
-                    return self.lan_ip
-                elif is_android and host_ip == '192.0.0.4':
-                    print("[MOBILE] Detected problematic IP 192.0.0.4, trying alternatives...")
-            except Exception:
-                pass
-            
-            # Method 2: Scan network interfaces manually (offline-compatible)
-            router_addresses = [
-                "192.168.1.1",   # Most common
-                "192.168.0.1",   # Common alternative
-                "10.0.0.1",      # Some networks
-                "172.16.0.1",    # Corporate networks
-                "192.168.43.1"   # Android hotspot default
-            ]
-            
-            for router_ip in router_addresses:
-                try:
-                    temp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    temp_socket.settimeout(1.0)
-                    temp_socket.connect((router_ip, 80))
-                    local_ip = temp_socket.getsockname()[0]
-                    temp_socket.close()
-                    
-                    if local_ip and not local_ip.startswith('127.') and not self._is_docker_bridge_ip(local_ip):
-                        self.lan_ip = local_ip
-                        if is_android:
-                            print(f"[MOBILE] Android IP detected: {local_ip}")
-                        return self.lan_ip
-                except Exception:
-                    continue
-            
-            # Method 4: Use psutil if available (most reliable offline method)
-            try:
-                import psutil
-                for interface, addrs in psutil.net_if_addrs().items():
-                    for addr in addrs:
-                        if addr.family == socket.AF_INET and not addr.address.startswith('127.'):
-                            # Prefer typical LAN ranges
-                            ip = addr.address
-                            if (ip.startswith('192.168.') or 
-                                ip.startswith('10.') or 
-                                ip.startswith('172.')) and not self._is_docker_bridge_ip(ip):
-                                self.lan_ip = ip
-                                return self.lan_ip
-            except ImportError:
-                pass
-            
-            # Fallback: Use loopback if no other option
-            print("[WARN] Could not detect LAN IP offline, using localhost")
-            return "127.0.0.1"
-            
+            from app.utils.network_resolver import resolve_advertise_host
+            res = resolve_advertise_host()
+            self.lan_ip = res["lan_ip"] or "127.0.0.1"
+            return self.lan_ip
         except Exception as e:
-            print(f"[ERR] Failed to get LAN IP offline: {e}")
+            print(f"[ERR] Failed to get LAN IP: {e}")
             return "127.0.0.1"
     
     def generate_service_name(self) -> str:
@@ -590,6 +502,10 @@ class SimpleMDNSManager:
                 hostname = socket.gethostname()
                 lan_ip = self.get_lan_ip()
                 
+                if lan_ip == "127.0.0.1" or self._is_docker_bridge_ip(lan_ip):
+                    print("[NET] mDNS service disabled: No physical LAN IP available (e.g. Docker bridge or localhost loopback)")
+                    return False
+
                 print(f"[NET] Detected LAN IP: {lan_ip}")
                 print(f"[TAG] Service name: {self.service_name}")
                 
