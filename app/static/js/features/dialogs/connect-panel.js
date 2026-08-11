@@ -17,9 +17,18 @@
         var connectAddress = document.getElementById("connectAddress");
         if (!qrBox) return;
 
+        var netInfo = window._currentNetworkInfo;
+        if (netInfo && netInfo.docker_needs_host_env) {
+            if (connectAddress) {
+                connectAddress.textContent = "http://localhost";
+            }
+            qrBox.innerHTML = '<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:10px 4px;line-height:1.35;">Set <strong>LANVAN_ADVERTISE_HOST</strong> in compose.yaml for mobile QR code</div>';
+            return;
+        }
+
         var url = window.location.origin;
-        if (window._currentNetworkInfo && window._currentNetworkInfo.fullUrl) {
-            url = window._currentNetworkInfo.fullUrl;
+        if (netInfo && netInfo.fullUrl) {
+            url = netInfo.fullUrl;
         }
 
         if (connectAddress) {
@@ -43,9 +52,18 @@
         var dialogAddress = document.getElementById("connectQrDialogAddress");
         if (!dialogBox) return;
 
+        var netInfo = window._currentNetworkInfo;
+        if (netInfo && netInfo.docker_needs_host_env) {
+            if (dialogAddress) {
+                dialogAddress.textContent = "http://localhost";
+            }
+            dialogBox.innerHTML = '<div style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:24px 12px;line-height:1.4;">To enable mobile phone QR scanning in Docker bridge mode,<br>set <strong>LANVAN_ADVERTISE_HOST=&lt;YOUR_PC_LAN_IP&gt;</strong> in <code>compose.yaml</code></div>';
+            return;
+        }
+
         var url = window.location.origin;
-        if (window._currentNetworkInfo && window._currentNetworkInfo.fullUrl) {
-            url = window._currentNetworkInfo.fullUrl;
+        if (netInfo && netInfo.fullUrl) {
+            url = netInfo.fullUrl;
         }
 
         if (dialogAddress) {
