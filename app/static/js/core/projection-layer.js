@@ -174,7 +174,10 @@
             var itemPct = Math.round(item.progress || 0);
             var fileSize = item.fileSize || (item.file && item.file.size) || 0;
 
-            if (targetDir === currentFolder) {
+            var isDirectViewportMatch = (targetDir === currentFolder) || 
+                (currentFolder !== "" && targetDir !== "" && targetDir.endsWith("/" + currentFolder));
+
+            if (isDirectViewportMatch) {
                 // Direct file in active viewport (skip if item itself is marked as folder)
                 if (item.isFolder || (item.file && item.file.isFolder)) continue;
 

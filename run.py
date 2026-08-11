@@ -9,6 +9,65 @@ import signal
 import time
 import json
 import shutil
+import threading
+import datetime
+
+
+# Lock shared by both tee threads so terminal lines never interleave.
+_tee_lock = threading.Lock()
+
+
+def setup_server_log():
+    """
+    Clear testing/logs/ and open a fresh server.log for this session.
+    Returns the open log file handle (caller must close it).
+    Active in development mode only — never called in production.
+    """
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing", "logs")
+
+    # Wipe every file from the previous session, then recreate the directory.
+    if os.path.exists(log_dir):
+        shutil.rmtree(log_dir, ignore_errors=True)
+    os.makedirs(log_dir, exist_ok=True)
+
+    log_path = os.path.join(log_dir, "server.log")
+    # UTF-8, line-buffered so every line flushes immediately.
+    log_file = open(log_path, "w", encoding="utf-8", buffering=1)
+    log_file.write(f"# Lanvan server log — started {datetime.datetime.now().isoformat()}\n")
+    log_file.flush()
+    print(f"[LOG] Backend output -> testing/logs/server.log")
+    return log_file
+
+
+def _tee_stream(src, dst_terminal, log_file):
+    """
+    Read raw bytes from *src* (subprocess pipe), forward each line to
+    *dst_terminal* and write a UTF-8 decoded copy to *log_file*.
+
+    Writing raw bytes to dst_terminal.buffer avoids Windows cp1252 codec
+    errors when the server prints emoji or non-ASCII characters.
+    Both threads share _tee_lock so output lines never interleave.
+    """
+    buf = getattr(dst_terminal, "buffer", None)
+    try:
+        for raw_line in src:
+            decoded = raw_line.decode("utf-8", errors="replace")
+            with _tee_lock:
+                try:
+                    if buf is not None:
+                        buf.write(raw_line)
+                        buf.flush()
+                    else:
+                        dst_terminal.write(decoded)
+                        dst_terminal.flush()
+                except Exception:
+                    pass
+                try:
+                    log_file.write(decoded)
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 # Auto-activate virtual environment if not already activated
 def ensure_venv():
@@ -520,8 +579,6 @@ if __name__ == "__main__":
 
         open_browser(ip, port, use_https)
 
-        import threading
-
         # Build the uvicorn command using the SAME python executable that is running run.py.
         # This guarantees we use the venv packages and avoids any PATH ambiguity.
         cmd = [
@@ -535,9 +592,33 @@ if __name__ == "__main__":
         if use_https:
             cmd += ["--ssl-keyfile", SSL_KEY_PATH, "--ssl-certfile", SSL_CERT_PATH]
 
-        # stdin=subprocess.DEVNULL: uvicorn doesn't need stdin;
-        # the PARENT reads stdin so the close-command monitor works correctly.
-        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL)
+        if not is_production:
+            # Dev mode only: tee stdout + stderr to testing/logs/server.log.
+            # Previous session log is cleared automatically on each startup.
+            _log_file = setup_server_log()
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            # Two daemon threads relay each stream to the terminal AND the log file.
+            threading.Thread(
+                target=_tee_stream,
+                args=(proc.stdout, sys.stdout, _log_file),
+                daemon=True,
+                name="tee-stdout",
+            ).start()
+            threading.Thread(
+                target=_tee_stream,
+                args=(proc.stderr, sys.stderr, _log_file),
+                daemon=True,
+                name="tee-stderr",
+            ).start()
+        else:
+            # Production mode: no log file, no pipe — output goes straight to terminal.
+            _log_file = None
+            proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL)
 
         def _stdin_monitor():
             """Read stdin for 'close'/'quit' commands and terminate the server."""
@@ -580,4 +661,9 @@ if __name__ == "__main__":
 
 
         print("[OK] Server stopped.")
+        if _log_file is not None:
+            try:
+                _log_file.close()
+            except Exception:
+                pass
         os._exit(0)

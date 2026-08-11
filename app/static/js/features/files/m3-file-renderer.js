@@ -496,7 +496,12 @@
         var container = document.getElementById("nasFileList");
         var filePanelMeta = document.getElementById("filePanelMeta");
         if (!container) return;
-        var activeTab = document.documentElement.dataset.activeTab || (window.activeTab || 'file');
+        var activeTab = document.documentElement.dataset.activeTab || window.activeTab;
+        if (!activeTab) {
+            activeTab = 'file';
+            document.documentElement.dataset.activeTab = 'file';
+            window.activeTab = 'file';
+        }
         if (activeTab !== 'file') {
             if (files) lastRenderedFiles = files;
             return;
