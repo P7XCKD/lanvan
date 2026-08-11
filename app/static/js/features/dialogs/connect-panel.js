@@ -22,6 +22,8 @@
             if (connectAddress) {
                 connectAddress.textContent = "http://localhost";
             }
+            if (qrBox.getAttribute("data-rendered-url") === "docker-notice") return;
+            qrBox.setAttribute("data-rendered-url", "docker-notice");
             qrBox.innerHTML = '<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:10px 4px;line-height:1.35;">Set <strong>LANVAN_ADVERTISE_HOST</strong> in compose.yaml for mobile QR code</div>';
             return;
         }
@@ -35,8 +37,13 @@
             connectAddress.textContent = url;
         }
 
+        if (qrBox.getAttribute("data-rendered-url") === url) {
+            return; // URL hasn't changed, skip re-fetching QR image
+        }
+        qrBox.setAttribute("data-rendered-url", url);
+
         qrBox.innerHTML = "";
-        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=140&_=" + Math.random().toString(36).substr(2, 9);
+        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=140";
         var img = document.createElement("img");
         img.alt = "QR Code";
         img.style.cssText = "width:102px;height:102px;object-fit:contain;display:block;margin:0 auto;";
@@ -57,6 +64,8 @@
             if (dialogAddress) {
                 dialogAddress.textContent = "http://localhost";
             }
+            if (dialogBox.getAttribute("data-rendered-url") === "docker-notice") return;
+            dialogBox.setAttribute("data-rendered-url", "docker-notice");
             dialogBox.innerHTML = '<div style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:24px 12px;line-height:1.4;">To enable mobile phone QR scanning in Docker bridge mode,<br>set <strong>LANVAN_ADVERTISE_HOST=&lt;YOUR_PC_LAN_IP&gt;</strong> in <code>compose.yaml</code></div>';
             return;
         }
@@ -70,8 +79,13 @@
             dialogAddress.textContent = url;
         }
 
+        if (dialogBox.getAttribute("data-rendered-url") === url) {
+            return; // URL hasn't changed, skip re-fetching QR image
+        }
+        dialogBox.setAttribute("data-rendered-url", url);
+
         dialogBox.innerHTML = "";
-        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=200&_=" + Math.random().toString(36).substr(2, 9);
+        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=200";
         var img = document.createElement("img");
         img.alt = "QR Code";
         img.style.cssText = "max-width:100%;max-height:100%;object-fit:contain;display:block;margin:0 auto;";
@@ -162,8 +176,6 @@
             renderSidebarQR();
             renderDialogQR();
         }
-
-        if (typeof window.updateMDNSStatus === "function") window.updateMDNSStatus();
     }
 
     function openConnectQrDialog() {
