@@ -213,39 +213,39 @@
       if (response.ok) {
         const networkInfo = await response.json();
         const qrHintText = document.getElementById('qrHintText');
+        const mdnsTab = document.getElementById('mdnsTab');
+        const qrMdnsTab = document.getElementById('connectQrMdnsTab');
 
-        if (networkInfo.mdns && networkInfo.mdns.status === 'active' && qrHintText) {
-          const domain = networkInfo.mdns.domain;
-          const conflictInfo = networkInfo.mdns.conflict_resolved
-            ? ` (resolved conflict #${networkInfo.mdns.conflict_count + 1})`
-            : '';
+        const isMdnsActive = networkInfo.mdns && networkInfo.mdns.status === 'active';
 
-          if (!qrHintText.innerHTML.includes('mDNS:')) {
-            qrHintText.innerHTML = ` <strong>mDNS:</strong> ${domain}${conflictInfo} • Click for QR`;
-            qrHintText.style.color = '#22c55e';
-            qrHintText.style.setProperty('color', '#22c55e', 'important');
-            qrHintText.title = `mDNS service active - accessible via ${domain}`;
+        if (isMdnsActive) {
+          if (mdnsTab) mdnsTab.style.display = '';
+          if (qrMdnsTab) qrMdnsTab.style.display = '';
 
-            if (typeof window.showToast === 'function') {
-              window.showToast(` mDNS service is now active! Accessible via ${domain}${conflictInfo}`, 4000);
+          if (qrHintText) {
+            const domain = networkInfo.mdns.domain;
+            const conflictInfo = networkInfo.mdns.conflict_resolved
+              ? ` (resolved conflict #${networkInfo.mdns.conflict_count + 1})`
+              : '';
+
+            if (!qrHintText.innerHTML.includes('mDNS:')) {
+              qrHintText.innerHTML = ` <strong>mDNS:</strong> ${domain}${conflictInfo} • Click for QR`;
+              qrHintText.style.color = '#22c55e';
+              qrHintText.style.setProperty('color', '#22c55e', 'important');
+              qrHintText.title = `mDNS service active - accessible via ${domain}`;
+
+              if (typeof window.showToast === 'function') {
+                window.showToast(` mDNS service is now active! Accessible via ${domain}${conflictInfo}`, 4000);
+              }
+
+              if (typeof window.setConnectMode === 'function') {
+                window.setConnectMode('mdns');
+              }
+              refreshConnectionInfo();
             }
-
-            if (typeof window.setConnectMode === 'function') {
-              window.setConnectMode('mdns');
-            }
-            const mdnsTab = document.getElementById('mdnsTab');
-            const qrMdnsTab = document.getElementById('connectQrMdnsTab');
-            if (mdnsTab) mdnsTab.style.display = '';
-            if (qrMdnsTab) qrMdnsTab.style.display = '';
-            refreshConnectionInfo();
           }
-        } else if (qrHintText && qrHintText.innerHTML.includes('mDNS:')) {
-          qrHintText.innerHTML = '• Click for QR code';
-          qrHintText.style.color = 'var(--protocol-text)';
-          qrHintText.title = '';
-
-          const mdnsTab = document.getElementById('mdnsTab');
-          const qrMdnsTab = document.getElementById('connectQrMdnsTab');
+        } else {
+          // Hide mDNS tabs completely if mDNS service is not available (e.g. Docker bridge or unsupported environment)
           if (mdnsTab) mdnsTab.style.display = 'none';
           if (qrMdnsTab) qrMdnsTab.style.display = 'none';
 
@@ -253,8 +253,10 @@
             window.setConnectMode('ip');
           }
 
-          if (typeof window.showToast === 'function') {
-            window.showToast('ℹ mDNS service is not active - using IP address', 3000);
+          if (qrHintText && qrHintText.innerHTML.includes('mDNS:')) {
+            qrHintText.innerHTML = '• Click for QR code';
+            qrHintText.style.color = 'var(--protocol-text)';
+            qrHintText.title = '';
           }
         }
       }
