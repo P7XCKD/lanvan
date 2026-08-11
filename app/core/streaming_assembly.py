@@ -90,9 +90,20 @@ class StreamingChunkAssembler:
         
         # Check global memory cap before accepting new chunk data
         chunk_len = len(chunk_data)
-        if self._current_chunks_memory + chunk_len > self._max_total_chunks_memory:
-            print(f"[STREAM] Memory cap ({self._max_total_chunks_memory // 1048576}MB) exceeded — rejecting chunk {chunk_number} for {file_id}")
-            return {"status": "error", "msg": "Server memory limit reached. Please try again later."}
+        if getattr(streaming_file, 'disabled', False) or (self._current_chunks_memory + chunk_len > self._max_total_chunks_memory):
+            print(f"[STREAM] Memory cap ({self._max_total_chunks_memory // 1048576}MB) exceeded or streaming disabled — falling back to disk chunk storage for {file_id}")
+            streaming_file.disabled = True
+            # Evict in-memory chunks to free RAM
+            freed_bytes = sum(len(d) for d in streaming_file.chunk_data.values())
+            self._current_chunks_memory = max(0, self._current_chunks_memory - freed_bytes)
+            streaming_file.chunk_data.clear()
+            # If a partial .tmp file was created by streaming, clean it up so traditional assembly gets clean slate
+            if streaming_file.temp_path and streaming_file.temp_path.exists():
+                try:
+                    streaming_file.temp_path.unlink()
+                except Exception as e:
+                    print(f"[WARN] Failed to remove partial streaming temp file: {e}")
+            return {"status": "fallback_to_disk", "msg": "Server RAM limit reached — using disk chunk storage"}
         
         # Periodic cleanup of stale sessions (check every 60 seconds, amortized)
         now = time.time()
@@ -144,6 +155,7 @@ class StreamingChunkAssembler:
                 counter += 1
             streaming_file.final_path = final_path
             streaming_file.temp_path = final_path.with_suffix(final_path.suffix + '.tmp')
+            streaming_file.temp_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Find consecutive chunks starting from last_assembled_chunk + 1
         consecutive_chunks = []
@@ -189,6 +201,7 @@ class StreamingChunkAssembler:
                     counter += 1
                 streaming_file.final_path = final_path
                 streaming_file.temp_path = final_path.with_suffix(final_path.suffix + '.tmp')
+                streaming_file.temp_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Write any remaining chunks in order to temp file
             if streaming_file.chunk_data:
@@ -205,11 +218,16 @@ class StreamingChunkAssembler:
             
             # Atomic commit via VersionManager
             import shutil
+            from pathlib import PurePosixPath
             from app.core.version_manager import VersionManager
             
+            rel_p = PurePosixPath(streaming_file.filename)
+            target_dir_str = str(rel_p.parent) if rel_p.parent != PurePosixPath(".") else ""
+            bare_filename_str = rel_p.name
+
             success, lf = VersionManager.create_version_transaction(
-                target_dir="",
-                filename=streaming_file.filename,
+                target_dir=target_dir_str,
+                filename=bare_filename_str,
                 incoming_file_path=streaming_file.temp_path,
                 uploaded_by="streaming_assembly",
                 change_type="uploaded"

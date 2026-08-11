@@ -276,6 +276,7 @@ Rules for regression tests:
 5. MUST verify pure projection contracts against actual ViewModel outputs.
 6. MUST NEVER pass by calling internal JavaScript helper functions directly without asserting DOM/Store effects.
 7. Fixture helpers may prepare initial application state, but they must never replace or reimplement production business logic. User workflows must execute through the application's real event handlers whenever a production interaction exists.
+8. MANDATORY DUAL-ENDED LOG CAPTURE: For any test involving uploads, cancellation, finalization, deletion, filesystem operations, folder creation, or server-side errors, backend stdout/stderr/application logs MUST be captured and correlated with frontend browser console/network logs. A test is not forensically complete if only frontend logs are captured. Every upload test MUST correlate: Frontend (console, network, upload ID, filename, targetDir, status, progress) + Backend (endpoint, HTTP status, validation result, finalization result, filesystem path, exceptions, cleanup/unlink ops) + Filesystem (file existence, file size, folder existence).
 
 ========================
 MANDATORY PRACTICES

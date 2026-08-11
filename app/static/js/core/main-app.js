@@ -1000,7 +1000,8 @@ function canStartUpload() {
 
 function startUpload() {
   activeUploads++;
-  window.log.upload(`Upload started (${activeUploads}/${currentMaxConcurrent} active, optimal: ${getOptimalConcurrency()})`);
+  const optConc = typeof window.getOptimalConcurrency === 'function' ? window.getOptimalConcurrency() : currentMaxConcurrent;
+  window.log.upload(`Upload started (${activeUploads}/${currentMaxConcurrent} active, optimal: ${optConc})`);
 
   // Pause auto-refresh during uploads to avoid conflicts
   if (activeUploads === 1) {
@@ -1013,6 +1014,11 @@ function endUpload() {
     activeUploads--;
   }
   window.log.upload(`Upload finished (${activeUploads}/${currentMaxConcurrent} active)`);
+
+  // Centralized queue continuation: pick up remaining queued items
+  if (typeof startNextUpload === 'function') {
+    startNextUpload();
+  }
 
   // Resume auto-refresh when all uploads complete
   if (activeUploads === 0) {

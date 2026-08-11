@@ -2461,6 +2461,9 @@ async def finalize_upload(
                         content={"status": "error", "msg": "No chunks found for this file"}
                     )
                 
+                # Ensure target directory exists BEFORE attempting to open temporary assembly file
+                resolved.target_directory.mkdir(parents=True, exist_ok=True)
+
                 # Determine final filename
                 final_filename = safe_filename + ".enc" if encrypt else safe_filename
                 final_path = resolved.target_directory / f"{final_filename}.chunk.tmp"
@@ -2512,6 +2515,40 @@ async def finalize_upload(
                 for _, chunk_path in chunk_files:
                     if chunk_path.exists():
                         chunk_path.unlink()
+                
+                # Atomically move .chunk.tmp to the actual final destination
+                actual_final_path = resolved.target_directory / final_filename
+                if final_path != actual_final_path and final_path.exists():
+                    import shutil
+                    if actual_final_path.exists():
+                        try:
+                            actual_final_path.unlink()
+                        except Exception:
+                            pass
+                    try:
+                        final_path.replace(actual_final_path)
+                    except Exception:
+                        shutil.move(str(final_path), str(actual_final_path))
+                
+                final_path = actual_final_path
+                
+                if not final_path.exists():
+                    return JSONResponse(
+                        status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+                        content={"status": "error", "msg": "Final file assembly failed: Destination file missing after assembly"}
+                    )
+                
+                # Register completed file with VersionManager
+                from pathlib import PurePosixPath
+                from app.core.version_manager import VersionManager
+                clean_target_dir = str(resolved.relative_path.parent) if resolved.relative_path.parent != PurePosixPath(".") else ""
+                VersionManager.create_version_transaction(
+                    target_dir=clean_target_dir,
+                    filename=final_filename,
+                    incoming_file_path=final_path,
+                    uploaded_by="chunk_assembly",
+                    change_type="uploaded"
+                )
         
         else:
             # Streaming assembly completed - just verify the file exists
@@ -2933,15 +2970,15 @@ async def list_folder_contents(folder_path: str):
     
     folder_path_obj = UPLOAD_FOLDER
     for part in parts:
-        safe_part = secure_filename(part)
-        if (folder_path_obj / part).is_dir():
-            folder_path_obj = folder_path_obj / part
-        elif safe_part and (folder_path_obj / safe_part).is_dir():
-            folder_path_obj = folder_path_obj / safe_part
-        elif safe_part:
-            folder_path_obj = folder_path_obj / safe_part
+        target_sub = folder_path_obj / part
+        if target_sub.exists() or target_sub.is_dir():
+            folder_path_obj = target_sub
         else:
-            folder_path_obj = folder_path_obj / part
+            safe_part = secure_filename(part)
+            if safe_part and (folder_path_obj / safe_part).is_dir():
+                folder_path_obj = folder_path_obj / safe_part
+            else:
+                folder_path_obj = target_sub
     
     # Path traversal check
     try:
@@ -2961,7 +2998,7 @@ async def list_folder_contents(folder_path: str):
     try:
         # [TRACE DIAGNOSTIC] Log raw directory listing before filtering
         raw_items = list(folder_path_obj.iterdir())
-        print(f"[TRACE] list_folder_contents: '{folder_path}' → Raw items on disk: {[f.name for f in raw_items]}")
+        print(f"[TRACE] list_folder_contents: '{folder_path}' -> Raw items on disk: {[f.name for f in raw_items]}")
 
         files = []
         from app.core.version_manager import VersionManager
@@ -2990,7 +3027,7 @@ async def list_folder_contents(folder_path: str):
                     "isFolder": True
                 })
         # [TRACE DIAGNOSTIC] Log what the API is returning
-        print(f"[TRACE] list_folder_contents: '{folder_path}' → Filtered response: {[(f['name'], f.get('isFolder', False)) for f in files]}")
+        print(f"[TRACE] list_folder_contents: '{folder_path}' -> Filtered response: {[(f['name'], f.get('isFolder', False)) for f in files]}")
         # Folders first, then by mtime descending
         folders_list = sorted([f for f in files if f.get("isFolder")], key=lambda x: x["mtime"], reverse=True)
         regulars_list = sorted([f for f in files if not f.get("isFolder")], key=lambda x: x["mtime"], reverse=True)
