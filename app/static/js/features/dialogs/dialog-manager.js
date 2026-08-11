@@ -14,6 +14,18 @@
     var moveSourceFolder = "";
     var itemsToMove = [];
     var isCreatingFolderInMove = false;
+    var isSubmittingMove = false;
+
+    function setMoveButtonPending(isPending) {
+        var moveBtn = document.getElementById("moveSubmitBtn") || document.querySelector("#moveFileDialog .dialog-btn-primary");
+        if (moveBtn) {
+            moveBtn.disabled = !!isPending;
+            moveBtn.style.opacity = isPending ? "0.6" : "1";
+            moveBtn.style.cursor = isPending ? "not-allowed" : "pointer";
+            moveBtn.style.pointerEvents = isPending ? "none" : "auto";
+            moveBtn.textContent = isPending ? "Moving..." : "Move";
+        }
+    }
 
     function openNewFolderDialog() {
         var contextMenu = document.getElementById("contextMenu");
@@ -140,6 +152,9 @@
         }
         if (targets.length === 0) return;
 
+        isSubmittingMove = false;
+        setMoveButtonPending(false);
+
         itemsToMove = targets.slice();
         isCreatingFolderInMove = false;
         moveSourceFolder = typeof window.cleanFolderPath === "function"
@@ -164,6 +179,8 @@
     }
 
     function closeMoveDialog() {
+        isSubmittingMove = false;
+        setMoveButtonPending(false);
         itemsToMove = [];
         isCreatingFolderInMove = false;
         moveSourceFolder = "";
@@ -502,11 +519,16 @@
     }
 
     function submitMove() {
+        if (isSubmittingMove) return;
+
         var filesToMove = (itemsToMove.length > 0 ? itemsToMove : (window.selectedItems || [])).slice();
         if (filesToMove.length === 0) {
             closeMoveDialog();
             return;
         }
+
+        isSubmittingMove = true;
+        setMoveButtonPending(true);
 
         var destination = moveCurrentPath.length > 1 ? moveCurrentPath.slice(1).join("/") : "";
         var sourceFolder = moveSourceFolder || (typeof window.cleanFolderPath === "function"
@@ -553,11 +575,12 @@
                 }
                 if (typeof window.clearSelection === "function") window.clearSelection();
                 itemsToMove = [];
-                if (typeof refreshFileList === "function") refreshFileList();
                 if (typeof window.requestSafeVisibleFilesRefresh === "function") {
                     window.requestSafeVisibleFilesRefresh(120);
-                } else if (typeof fetchFilesData === "function") {
-                    fetchFilesData().then(function (fd) { if (typeof renderFileList === "function") renderFileList(fd); });
+                } else if (typeof window.requestFileListRefresh === "function") {
+                    window.requestFileListRefresh(120);
+                } else if (typeof refreshFileList === "function") {
+                    refreshFileList();
                 }
                 closeMoveDialog();
             })
