@@ -379,6 +379,24 @@
     </div>
   </div>
   <div id="itemMenuOptions" style="display:none;">
+    <div class="context-item" id="pauseMenuItem" onclick="handlePauseFromMenu()" style="display:none;">
+      <div class="context-item-left">
+        <i data-lucide="pause"></i>
+        <span>Pause</span>
+      </div>
+    </div>
+    <div class="context-item" id="resumeMenuItem" onclick="handleResumeFromMenu()" style="display:none;">
+      <div class="context-item-left">
+        <i data-lucide="play"></i>
+        <span>Resume</span>
+      </div>
+    </div>
+    <div class="context-item" id="cancelMenuItem" onclick="handleCancelFromMenu()" style="display:none; color:var(--danger);">
+      <div class="context-item-left">
+        <i data-lucide="x" style="color:var(--danger);"></i>
+        <span>Cancel</span>
+      </div>
+    </div>
     <div class="context-item" id="renameMenuItem" onclick="openRenameModal()">
       <div class="context-item-left">
         <i data-lucide="pencil"></i>
@@ -416,13 +434,13 @@
         <span>Download as ZIP</span>
       </div>
     </div>
-    <div class="context-item" onclick="openMoveModal()">
+    <div class="context-item" id="moveMenuItem" onclick="openMoveModal()">
       <div class="context-item-left">
         <i data-lucide="folder-input"></i>
         <span>Move to</span>
       </div>
     </div>
-    <div class="context-item" onclick="deleteSelected()" style="color:var(--danger);">
+    <div class="context-item" id="deleteMenuItem" onclick="deleteSelected()" style="color:var(--danger);">
       <div class="context-item-left">
         <i data-lucide="trash-2" style="color:var(--danger);"></i>
         <span>Delete</span>
