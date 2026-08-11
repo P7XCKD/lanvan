@@ -398,7 +398,11 @@ class SimpleMDNSManager:
             return None
         
     def get_lan_ip(self) -> str:
-        """Get the LAN IP address - works offline by scanning local interfaces, optimized for Termux"""
+        """Get the LAN IP address - works offline by scanning local interfaces, optimized for Termux & Docker"""
+        env_host = os.getenv("LANVAN_ADVERTISE_HOST") or os.getenv("ADVERTISE_HOST") or os.getenv("LAN_IP")
+        if env_host and env_host.strip():
+            return env_host.strip()
+
         try:
             # Return cached IP if available and still valid
             if self.lan_ip:
@@ -789,15 +793,15 @@ class SimpleMDNSManager:
             return f"{protocol}://{host}:{self.port}"
     
     def get_hybrid_url(self) -> str:
-        """Get the best URL for QR code generation - prioritize IP on Android/Termux"""
-        # Check if we're on Android/Termux
+        """Get the best URL for QR code generation - prioritize IP on Android/Termux or Docker container mode"""
         is_android = is_android_environment()
+        is_docker = os.path.exists('/.dockerenv') or bool(os.getenv("LANVAN_ADVERTISE_HOST"))
         
-        if is_android:
-            # On Android/Termux, always prefer IP-based URLs since .local often fails
+        if is_android or is_docker:
+            # On Android/Termux or Docker container mode, prefer IP-based URLs since mDNS multicast is bridge-isolated
             return self._format_url(self.get_lan_ip())
         else:
-            # On other platforms, prefer mDNS with IP fallback
+            # On native host platforms, prefer mDNS with IP fallback
             if self.is_running and self.domain:
                 return self._format_url(self.domain)
             else:

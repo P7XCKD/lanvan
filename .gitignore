@@ -56,6 +56,9 @@ app/uploads/temp_downloads/
 app/clipboard_data/
 temp/
 tmp/
+scratch/
+temp_gradle/
+test downlaods/
 app/.locks/
 
 # Unused static directory (root level only - app/static contains needed files)

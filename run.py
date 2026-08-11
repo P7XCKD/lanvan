@@ -210,6 +210,10 @@ HTTPS_PORT = int(os.getenv("HTTPS_PORT", DEFAULT_HTTPS_PORT))
 # === UTILITY FUNCTIONS ===
 def get_ip():
     """Get local IP address - works offline"""
+    env_host = os.getenv("LANVAN_ADVERTISE_HOST") or os.getenv("ADVERTISE_HOST") or os.getenv("LAN_IP")
+    if env_host and env_host.strip():
+        return env_host.strip()
+
     try:
         # Method 1: Try hostname resolution (works offline on most systems)
         hostname = socket.gethostname()

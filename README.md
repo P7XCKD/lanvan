@@ -247,6 +247,7 @@ To achieve the absolute maximum file transfer rates over your local network:
 
 ```
 lanvan/
+  ├── android/              # Native Android App & Chaquopy bridge source
   ├── app/                  # Main FastAPI Application Core (Development Source of Truth)
   │   ├── core/             # Cryptography, validation, streaming merge, and atomic locks
   │   ├── routers/          # API route controllers (files, pages, clipboard, etc.)
@@ -259,11 +260,17 @@ lanvan/
   ├── dist/                 # Generated production output (minified JS/CSS, isolated)
   ├── docs/                 # Platform setups and requirements manifests
   │   └── termux/           # Automated setup assets for Android Termux
-  ├── testing/              # Test workspace and unit diagnostic suites
-  │   └── tools/            # Automated scanners (arch_scan, quality_scan, release_gate, etc.)
+  ├── scratch/              # Sandboxed scratch scripts and temporary analysis notes
+  ├── testing/              # Standard automated test workspace
+  │   ├── regression/       # End-to-end regression test scripts
+  │   ├── tools/            # Security matrices, route alias audits, and platform scanners
+  │   └── test_workspace/   # Isolated test data directories
   ├── build.py             # Industry-standard production build system
-  ├── run.py                # Platform-aware server launcher entry point (dev & prod)
-  └── qt.py                 # Core component reliability test runner
+  ├── docker-entrypoint.sh  # Docker production entrypoint runner
+  ├── Dockerfile            # Container build definition
+  ├── fix_guest_connectivity.bat # Windows host network firewall helper
+  ├── qt.py                 # Core component reliability test runner
+  └── run.py                # Platform-aware server launcher entry point (dev & prod)
 ```
 
 For detailed architecture descriptions, refer to the documentation in each folder:
