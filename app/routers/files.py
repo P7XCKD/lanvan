@@ -86,6 +86,10 @@ def _clean_parent_path(parent_path: Optional[str]) -> str:
     if not parent_path:
         return ""
     clean_parent = urllib.parse.unquote(parent_path).replace('\\', '/').strip('/')
+    if clean_parent.startswith("Home (Root)/"):
+        clean_parent = clean_parent[12:].lstrip('/')
+    elif clean_parent.startswith("Home/"):
+        clean_parent = clean_parent[5:].lstrip('/')
     if clean_parent in ("Home", "Home (Root)", "Home/"):
         return ""
     return clean_parent
@@ -397,6 +401,7 @@ def get_file_list():
             latest_v_id = lf.get("latestVersionId") if lf else None
             items.append({
                 "name": f.name,
+                "identity": f.name,
                 "size": format_size(f.stat().st_size),
                 "mtime": f.stat().st_mtime,
                 "isFolder": False,
@@ -2168,7 +2173,7 @@ async def upload_chunk(
         
         # [SHIELD] PRELIMINARY SECURITY: Basic extension check (full validation at finalization)
         extension = os.path.splitext(filename)[1].lower()
-        if extension in AdvancedFileValidator.BLOCKED_EXTENSIONS:
+        if FileValidator.is_dangerous_blocking_enabled(is_https) and extension in AdvancedFileValidator.BLOCKED_EXTENSIONS:
             return JSONResponse(
                 status_code=HTTP_403_FORBIDDEN,
                 content={
@@ -2623,7 +2628,7 @@ async def finalize_upload(
             elif final_path:
                 #  Traditional validation (slower)
                 print(f"[RETRY] Performing security validation (no background processing available)")
-                security_check = FileValidator.validate_uploaded_file(final_path, filename)
+                security_check = FileValidator.validate_uploaded_file(final_path, filename, is_https=is_https)
             else:
                 # No final_path available
                 security_check = {'valid': False, 'errors': ['File path not available']}
@@ -3011,6 +3016,7 @@ async def list_folder_contents(folder_path: str):
                 latest_v_id = lf.get("latestVersionId") if lf else None
                 files.append({
                     "name": f.name,
+                    "identity": f"{clean_rel_folder}/{f.name}" if clean_rel_folder else f.name,
                     "size": format_size(f.stat().st_size),
                     "mtime": f.stat().st_mtime,
                     "isFolder": False,
@@ -3022,6 +3028,7 @@ async def list_folder_contents(folder_path: str):
             elif f.is_dir() and not f.name.startswith('.'):
                 files.append({
                     "name": f.name,
+                    "identity": f"{clean_rel_folder}/{f.name}" if clean_rel_folder else f.name,
                     "size": format_size(sum(f2.stat().st_size for f2 in f.rglob('*') if f2.is_file())),
                     "mtime": f.stat().st_mtime,
                     "isFolder": True
@@ -3046,6 +3053,8 @@ async def list_folder_contents(folder_path: str):
 
 
 @router.post("/api/files/rename", name="rename_file")
+@router.post("/rename", name="rename_file_alias")
+@router.post("/files/rename", name="rename_file_alias2")
 async def rename_file(filename: str = Form(...), new_name: str = Form(...), parent_path: Optional[str] = Form(None)):
     """Rename a file or folder with validation and path traversal prevention"""
     # Validate source name
@@ -3130,36 +3139,43 @@ async def rename_file(filename: str = Form(...), new_name: str = Form(...), pare
 
 
 @router.post("/api/files/move", name="move_file")
+@router.post("/move", name="move_file_alias")
+@router.post("/files/move", name="move_file_alias2")
 async def move_file(filename: str = Form(...), destination: str = Form(...), source_path: Optional[str] = Form(None), parent_path: Optional[str] = Form(None)):
-    """Move a file to a different directory"""
+    """Move a file or folder to a different directory"""
     safe_filename = secure_filename(filename)
     if not safe_filename:
         return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid source filename"})
     
-    source_dir = _resolve_target_dir(source_path or parent_path)
+    source_parent = _clean_parent_path(source_path or parent_path)
+    source_dir = _resolve_target_dir(source_parent)
     src_path = source_dir / safe_filename
-    if not src_path.exists() or not src_path.is_file():
-        # The resolved source folder is the sole authority. Never fall back to a
-        # filesystem-wide search: ROOT/A and Inside/A are independent objects.
-        return JSONResponse(status_code=404, content={"status": "error", "msg": "Source file not found"})
+    if not src_path.exists():
+        # The resolved source path is the sole authority.
+        return JSONResponse(status_code=404, content={"status": "error", "msg": "Source file or directory not found"})
     
-    # Validate destination directory
-    safe_dest = secure_filename(destination)
-    if not safe_dest:
-        return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid destination"})
+    # Validate and clean destination directory path
+    clean_dest = _clean_parent_path(destination)
     
     # Prevent path traversal
     if '..' in destination or '//' in destination:
         return JSONResponse(status_code=400, content={"status": "error", "msg": "Invalid path"})
     
     # Ensure destination directory exists
-    dest_dir = UPLOAD_FOLDER
-    if destination:
-        dest_dir = UPLOAD_FOLDER / destination.strip('/')
-        dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_dir = _resolve_target_dir(clean_dest)
+    dest_dir.mkdir(parents=True, exist_ok=True)
     
-    # Prevent overwrites
     dst_path = dest_dir / safe_filename
+
+    # Prevent moving a folder into itself or its own subfolder
+    if src_path.is_dir():
+        try:
+            dst_path.resolve().relative_to(src_path.resolve())
+            return JSONResponse(status_code=400, content={"status": "error", "msg": "Cannot move a folder into itself or its subfolder"})
+        except ValueError:
+            pass
+
+    # Prevent overwrites
     if dst_path.exists():
         return JSONResponse(status_code=409, content={"status": "error", "msg": f"'{safe_filename}' already exists in destination"})
     
@@ -3167,20 +3183,21 @@ async def move_file(filename: str = Form(...), destination: str = Form(...), sou
 
     try:
         shutil.move(str(src_path), str(dst_path))
-        # Update VersionManager metadata for moved file
+        # Update VersionManager metadata for moved item
         try:
             from app.core.version_manager import VersionManager
-            old_parent = str(src_path.parent.relative_to(UPLOAD_FOLDER)).replace("\\", "/") if src_path.parent != UPLOAD_FOLDER else ""
-            VersionManager.move_logical_file(old_parent, destination, safe_filename)
+            VersionManager.move_logical_file(source_parent, clean_dest, safe_filename)
         except Exception as ve:
             print(f"[VERSION_MANAGER] Move sync warning: {ve}")
-        print(f"[MOVE] Moved '{safe_filename}' to '{destination}'")
-        broadcast_file_event_sync("move", destination or "", safe_filename)
+        print(f"[MOVE] Moved '{safe_filename}' from '{source_parent}' to '{clean_dest}'")
+        broadcast_file_event_sync("move", clean_dest, safe_filename)
+        if source_parent != clean_dest:
+            broadcast_file_event_sync("delete", source_parent, safe_filename)
         return JSONResponse(content={
             "status": "success",
-            "msg": f"File moved to '{destination}'",
+            "msg": f"Item moved to '{clean_dest}'",
             "filename": safe_filename,
-            "destination": destination
+            "destination": clean_dest
         })
     except (PermissionError, OSError) as e:
         # WinError 32: file locked by another process (e.g. currently being streamed/previewed)
@@ -3220,6 +3237,8 @@ async def move_file(filename: str = Form(...), destination: str = Form(...), sou
 
 
 @router.post("/api/files/mkdir", name="create_folder")
+@router.post("/mkdir", name="create_folder_alias")
+@router.post("/files/mkdir", name="create_folder_alias2")
 async def create_folder(folder_name: str = Form(...), parent_path: Optional[str] = Form(None)):
     """Create a new folder"""
     safe_name = secure_filename(folder_name)

@@ -617,7 +617,7 @@
         if (isClipboardDelete) {
             var completedCb = 0;
             Promise.all(itemsToDelete.map(function (cbId) {
-                return fetch('/api/clipboard/delete/' + cbId, { method: 'DELETE' })
+                return fetch('/api/clipboard/remove/' + cbId, { method: 'DELETE' })
                     .then(function (res) { if (res.ok) completedCb++; });
             })).then(function () {
                 if (typeof showToast === "function") showToast("Deleted " + completedCb + " clipboard item(s).", 3000);

@@ -473,6 +473,12 @@ if __name__ == "__main__":
     ios_mode = any(flag in cli_flags for flag in ["ios", "--ios", "--safari"])
     force_rebuild = any(flag in cli_flags for flag in ["force", "--force", "rebuild"])
     clean_build = "clean" in cli_flags
+    block_dangerous_flag = any(flag in cli_flags for flag in ["block-dangerous", "--block-dangerous", "block_dangerous", "--block_dangerous"])
+
+    if block_dangerous_flag:
+        os.environ["BLOCK_DANGEROUS"] = "true"
+    elif "BLOCK_DANGEROUS" not in os.environ:
+        os.environ["BLOCK_DANGEROUS"] = "true" if use_https else "false"
 
     if is_production:
         os.environ["LANVAN_ENV"] = "production"

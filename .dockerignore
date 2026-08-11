@@ -1,0 +1,15 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+testing/logs/
+android/
+.gradle/
+data/uploads/*
+data/temp_chunks/*
+!data/uploads/.gitkeep
+!data/temp_chunks/.gitkeep

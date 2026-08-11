@@ -199,9 +199,12 @@ class ServerService : Service() {
                 sendServerStatus(STATUS_RUNNING)
                 
                 // Call uvicorn bootstrapper blocking method
-                // Pass filesDir absolute path and isDebug flag to Python environment
-                val isDebug = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
-                module.callAttr("run_fastapi_server", instancePort, instanceUseHttps, filesDir.absolutePath, isDebug)
+                val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
+                val blockDangerousHttp = sharedPrefs.getBoolean("block_dangerous_http", false)
+                val isHttps = instanceUseHttps.lowercase() == "true"
+                val blockDangerous = if (isHttps) true else blockDangerousHttp
+                // Pass isDebug = false so APK runs in production mode automatically
+                module.callAttr("run_fastapi_server", instancePort, instanceUseHttps, filesDir.absolutePath, false, blockDangerous)
 
 
             } catch (e: Exception) {
