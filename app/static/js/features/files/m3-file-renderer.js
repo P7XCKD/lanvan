@@ -388,11 +388,6 @@
 
                 item.addEventListener("contextmenu", function (e) {
                     if (e.target.closest("button")) return;
-                    if (!folderFlag && (itemData.uploading || (typeof isItemUploading === "function" && isItemUploading(name)))) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        return;
-                    }
                     e.preventDefault();
                     if (typeof openRowMenu === "function") openRowMenu(e, name);
                 });
@@ -868,6 +863,11 @@
             var subtitle = isFolderItem
                 ? (locationText ? "Folder • " + locationText : (fileData.formattedSubtitle || "Folder"))
                 : (locationText ? locationText : "File");
+            var isItemUp = !!(
+                fileData.uploading || 
+                (fileData.uploadStatus && fileData.uploadStatus !== 'COMPLETED' && fileData.uploadStatus !== 'DELETED' && fileData.uploadStatus !== 'CANCELLED') || 
+                (typeof isItemUploading === "function" && isItemUploading(name))
+            );
             if (isGrid) {
                 html += buildGridItem(
                     name,
@@ -876,7 +876,7 @@
                     dateStr,
                     subtitle,
                     isFolderItem,
-                    !!fileData.uploading,
+                    isItemUp,
                     fileData.uploadProgress || 0,
                     fileData.uploadId,
                     fileData.uploadStatus
@@ -889,7 +889,7 @@
                     dateStr,
                     subtitle,
                     isFolderItem,
-                    !!fileData.uploading,
+                    isItemUp,
                     fileData.uploadProgress || 0,
                     fileData.uploadId,
                     fileData.uploadStatus
