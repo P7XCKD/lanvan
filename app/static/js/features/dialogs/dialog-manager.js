@@ -523,6 +523,7 @@
 
         var filesToMove = (itemsToMove.length > 0 ? itemsToMove : (window.selectedItems || [])).slice();
         if (filesToMove.length === 0) {
+            if (typeof showToast === "function") showToast("No items selected to move.", 3000);
             closeMoveDialog();
             return;
         }
