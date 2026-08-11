@@ -998,6 +998,9 @@ function canStartUpload() {
   return activeUploads < currentMaxConcurrent;
 }
 
+/**
+ * Registers the start of an upload and pauses automatic file-list refresh when the first upload begins.
+ */
 function startUpload() {
   activeUploads++;
   const optConc = typeof window.getOptimalConcurrency === 'function' ? window.getOptimalConcurrency() : currentMaxConcurrent;
@@ -1009,6 +1012,9 @@ function startUpload() {
   }
 }
 
+/**
+ * Completes an upload slot and continues queued uploads.
+ */
 function endUpload() {
   if (activeUploads > 0) {
     activeUploads--;
@@ -1297,13 +1303,17 @@ function toggleSettingsMenu() {
   }
 }
 
-// Removed closeSettingsOnOutsideClick function; moved to file-utils.js
+/**
+ * Displays a notification that access control settings are not yet available.
+ */
 
 function showAccessControlSettings() {
   showToast(' Access Control features coming soon! Stay tuned for host-guest permissions, device whitelisting, and access tokens.', 5000);
 }
 
-// Device Logs Modal Adapter extracted to features/device/device-logs-modal-adapter.js
+/**
+ * Updates the upload manager's counts, visibility, and queue display.
+ */
 
 function updateUploadManager() {
   const uploadQueue = getUploadQueue();
@@ -2993,6 +3003,10 @@ async function refreshFileCountOnly() {
   }
 }
 
+/**
+ * Updates the file grid, file count, and empty-state message for the available files.
+ * @param {string[]} files - The files to display.
+ */
 function updateFileDisplay(files) {
   const fileGrid = document.querySelector('.file-grid');
   const noFilesMsg = document.querySelector('.no-files-message');
@@ -3654,6 +3668,10 @@ function displaySelectedFiles(files) {
   autoUpload(files);
 }
 
+/**
+ * Queues selected files for upload and starts processing when possible.
+ * @param {FileList|File[]} files - The files selected for upload.
+ */
 function autoUpload(files) {
   console.log(' autoUpload called with files:', files ? files.length : 'no files', files);
 
@@ -3716,7 +3734,10 @@ function autoUpload(files) {
   }
 }
 
-// HTTP-Safe AES crypto helpers extracted to features/security/http-safe-crypto.js
+/**
+ * Determines whether HTTP-safe mode is enabled.
+ * @returns {boolean} `true` if HTTP-safe mode is enabled, `false` otherwise.
+ */
 function isHttpSafeEnabled() {
   return window.HttpSafeCrypto ? window.HttpSafeCrypto.isHttpSafeEnabled() : false;
 }
@@ -3833,7 +3854,11 @@ async function uploadFilesHttpSafe(files) {
   }
 }
 
-//  Regular upload function (original logic) - supports HTTP & HTTPS
+/**
+ * Uploads files directly to the server, optionally encrypting them with AES.
+ * @param {FileList|File[]} files - The files to upload.
+ * @param {boolean} isAESEnabled - Whether to encrypt the files before uploading.
+ */
 function uploadFilesRegular(files, isAESEnabled) {
   // Block QR generation during uploads to prevent UI blocking
   window._qrBlocked = true;
@@ -3987,18 +4012,29 @@ function showToast(message, duration, transferData, type) {
   }
 }
 
+/**
+ * Updates the content of the active toast notification.
+ * @param {string} message - The content to display.
+ */
 function updateToastContent(message) {
   if (window.ToastNotificationService) {
     window.ToastNotificationService.updateToastContent(message);
   }
 }
 
+/**
+ * Updates the current progress notification with a message.
+ * @param {string} message - The message to display.
+ */
 function updateProgressToast(message) {
   if (window.ToastNotificationService) {
     window.ToastNotificationService.updateProgressToast(message);
   }
 }
 
+/**
+ * Hides the currently displayed toast notification.
+ */
 function hideToast() {
   if (window.ToastNotificationService) {
     window.ToastNotificationService.hideToast();
@@ -4454,7 +4490,9 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 //  Enhanced offline QR code generator (backup method)
-//  Enhanced LAN IP and show connection info modal with mDNS support
+/**
+ * Display connection details, including LAN or mDNS URLs and QR codes, in a modal.
+ */
 async function showConnectionInfo() {
   // Get current URL info but FORCE LAN IP or mDNS instead of localhost
   const protocol = location.protocol;
@@ -4949,7 +4987,10 @@ document.addEventListener('paste', function (event) {
   }
 }, true);
 
-// Handle image paste from clipboard
+/**
+ * Adds a pasted image to the clipboard history.
+ * @param {Blob} blob - The image data to add.
+ */
 function handleImagePaste(blob) {
   console.log(' Image pasted from clipboard, size:', blob.size);
   showToast(' Processing pasted image...', 2000);

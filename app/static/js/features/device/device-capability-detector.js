@@ -9,8 +9,8 @@
   'use strict';
 
   /**
-   * Detect low-memory, low-concurrency, or slow guest devices.
-   * @returns {boolean} True if device is considered constrained or guest mode.
+   * Determines whether the device should be treated as constrained or operating in guest mode.
+   * @returns {boolean} `true` if the device meets any constrained-device criterion or detection fails, `false` otherwise.
    */
   function detectGuestDevice() {
     try {
@@ -29,8 +29,8 @@
   }
 
   /**
-   * Check if available storage quota is limited (<1GB).
-   * @returns {boolean} True if storage quota is limited.
+   * Checks storage availability without waiting for the quota estimate.
+   * @return {boolean} `true` if an error occurs while accessing storage, `false` otherwise.
    */
   function checkStorageQuota() {
     try {
@@ -47,8 +47,8 @@
   }
 
   /**
-   * Benchmark CPU execution time for a quick 100k random loop.
-   * @returns {boolean} True if execution took > 50ms.
+   * Determines whether CPU performance indicates a constrained device.
+   * @returns {boolean} `true` if the benchmark exceeds 50 milliseconds or an error occurs, `false` otherwise.
    */
   function checkDevicePerformance() {
     try {

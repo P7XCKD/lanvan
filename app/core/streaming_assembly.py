@@ -82,7 +82,16 @@ class StreamingChunkAssembler:
             print(f"[STREAM] Evicted {len(stale_ids)} stale streaming sessions (idle > {self._max_session_age_seconds}s)")
 
     def add_chunk(self, file_id: str, chunk_number: int, chunk_data: bytes):
-        """Add a chunk to the streaming file and attempt real-time assembly"""
+        """
+        Add a chunk to a registered upload and assemble the file when all chunks arrive.
+        
+        Parameters:
+            chunk_data (bytes): The raw data for the chunk.
+        
+        Returns:
+            dict: A status response indicating an error, disk fallback, chunk progress,
+                or file completion.
+        """
         if file_id not in self.streaming_files:
             return {"status": "error", "msg": "File not registered"}
         
@@ -141,7 +150,12 @@ class StreamingChunkAssembler:
             self._assemble_available_chunks(file_id)
 
     def _assemble_available_chunks(self, file_id: str):
-        """Assemble consecutive chunks and write to disk to free memory"""
+        """
+        Write available consecutive chunks to the upload's temporary file and release their buffered memory.
+        
+        Parameters:
+        	file_id (str): Identifier of the upload session whose chunks should be assembled.
+        """
         streaming_file = self.streaming_files[file_id]
         
         if not streaming_file.final_path:
@@ -187,7 +201,15 @@ class StreamingChunkAssembler:
                 print(f"[ERR] Real-time assembly failed for {streaming_file.filename}: {e}")
 
     def _finalize_assembly(self, file_id: str):
-        """Finalize the assembly of a complete file"""
+        """
+        Finalize a completed streaming upload and commit its assembled file.
+        
+        Parameters:
+            file_id (str): Identifier of the streaming upload to finalize.
+        
+        Returns:
+            dict: A completion result containing the final path, filename, and size, or an error result with a message.
+        """
         streaming_file = self.streaming_files[file_id]
         try:
             if not streaming_file.final_path:

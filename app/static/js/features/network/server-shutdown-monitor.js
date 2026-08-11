@@ -55,7 +55,7 @@
   }
 
   /**
-   * Seamlessly restores workspace when server connection comes back online.
+   * Restores the workspace after the server becomes available again.
    */
   function handleServerRecovery() {
     console.log(' Server connection restored - auto-recovering workspace...');
@@ -91,7 +91,9 @@
   }
 
   /**
-   * Displays temporary countdown warnings for scheduled shutdowns.
+   * Displays a scheduled shutdown warning and updates it until the countdown completes.
+   * @param {string} message - The warning message to display.
+   * @param {number} countdown - The remaining time in seconds.
    */
   function showShutdownWarning(message, countdown) {
     const warningToast = ` ${message} (${countdown}s)`;
@@ -122,7 +124,9 @@
   }
 
   /**
-   * Renders the theme-aware centered click-blocking shutdown overlay.
+   * Marks the server as offline, cancels active uploads, pauses auto-refresh, and displays a theme-aware blocking overlay.
+   * @param {string} reason - The reason the server was detected as offline.
+   * @param {number} gracefulTime - The graceful shutdown duration in milliseconds.
    */
   function handleServerShutdown(reason = 'Server has been shut down', gracefulTime = 0) {
     if (serverShutdown) return;

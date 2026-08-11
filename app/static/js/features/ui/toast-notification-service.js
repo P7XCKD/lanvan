@@ -13,11 +13,10 @@
   let isPersistentToast = false;
 
   /**
-   * Display a floating toast notification.
-   * @param {string} message - Notification text
-   * @param {number} [duration=3000] - Duration in ms (0 for persistent)
-   * @param {Object} [transferData=null] - Optional detail transfer log payload
-   * @param {string} [type='default'] - Toast type styling
+   * Displays a floating toast notification.
+   * @param {string} message - The notification text.
+   * @param {number} [duration=3000] - Display duration in milliseconds; use `0` for a persistent notification.
+   * @param {Object|null} [transferData=null] - Optional data associated with the notification.
    */
   function showToast(message, duration = 3000, transferData = null, type = 'default') {
     const isMobile = window.innerWidth <= 768;
@@ -90,7 +89,7 @@
   }
 
   /**
-   * Hide and reset the current active toast notification.
+   * Hides the active toast notification when it is dismissible and clears its associated transfer data.
    */
   function hideToast() {
     const toast = (window.DOM_CACHE && window.DOM_CACHE.toast) || document.getElementById('toast');

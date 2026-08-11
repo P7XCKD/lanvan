@@ -12,6 +12,9 @@ ARTIFACTS_DIR = os.path.join(ROOT_DIR, "testing", "artifacts")
 os.makedirs(ARTIFACTS_DIR, exist_ok=True)
 
 def run_architecture_scan():
+    """
+    Scan JavaScript and template files for architecture-related symbols, dependencies, and usage patterns, then write JSON and text reports to the artifacts directory.
+    """
     js_files = glob.glob(os.path.join(STATIC_JS_DIR, "**", "*.js"), recursive=True)
     template_files = glob.glob(os.path.join(TEMPLATES_DIR, "**", "*.html"), recursive=True)
 

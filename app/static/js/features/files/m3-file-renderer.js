@@ -303,6 +303,12 @@
         return { avatarClass: "avatar-doc", iconName: "file" };
     }
 
+    /**
+     * Attaches interaction handlers for selecting, opening, navigating, and managing rendered file-list items.
+     * @param {Element} container - Container holding the rendered file-list items.
+     * @param {string[]} files - Names of the files and folders represented by the items.
+     * @param {Object[]} [filesData] - Metadata corresponding to each file or folder.
+     */
     function attachListItemHandlers(container, files, filesData) {
         var items = container.querySelectorAll(".m3-list-item");
         for (var i = 0; i < items.length; i++) {
@@ -473,6 +479,11 @@
         }
     }
 
+    /**
+     * Renders the active folder's files in list or grid view.
+     * @param {Array<Object|string>} files - File and folder records to display.
+     * @param {string} renderReason - Reason for triggering the render.
+     */
     function renderFileList(files, renderReason) {
         if (window.__lanvanTimelineTracker) {
             var fCount = Array.isArray(files) ? files.length : (files ? 1 : 0);

@@ -56,7 +56,7 @@
   }
 
   /**
-   * Add text payload from input elements to clipboard API.
+   * Adds the entered text to clipboard history.
    */
   async function addTextToClipboard() {
     const textInput = document.getElementById('clipboardInput') || document.getElementById('clipboardTextInput');
@@ -114,7 +114,7 @@
   }
 
   /**
-   * Clear text input fields.
+   * Clears the clipboard text input fields and displays a confirmation message.
    */
   function clearClipboardInput() {
     const textInput = document.getElementById('clipboardInput') || document.getElementById('clipboardTextInput');
@@ -128,7 +128,7 @@
   }
 
   /**
-   * Fetch current clipboard history list from API.
+   * Refreshes the stored clipboard history and updates its rendered views.
    */
   async function refreshClipboardHistory() {
     try {
@@ -161,8 +161,8 @@
   }
 
   /**
-   * Render clipboard items into active view adapters.
-   * @param {Array} items - List of clipboard item objects
+   * Renders clipboard history items in the available clipboard views.
+   * @param {Array} items - Clipboard items to display.
    */
   function renderClipboardHistory(items) {
     window.clipboardHistoryData = items;
@@ -281,9 +281,9 @@
   }
 
   /**
-   * Display full size image preview modal.
-   * @param {string} imageSrc - Image API URL
-   * @param {string} filename - Display filename
+   * Displays an image in the preview modal.
+   * @param {string} imageSrc - Source URL of the image.
+   * @param {string} filename - Filename shown in the modal and download control.
    */
   function showImagePreview(imageSrc, filename) {
     const modal = document.getElementById('previewModal');
@@ -352,8 +352,8 @@
   }
 
   /**
-   * Download single clipboard item as blob.
-   * @param {number|string} itemId - Clipboard item ID
+   * Downloads a clipboard item to the user's device.
+   * @param {number|string} itemId - Clipboard item ID.
    */
   async function downloadClipboardItem(itemId) {
     try {
@@ -465,8 +465,8 @@
   }
 
   /**
-   * Remove single clipboard item.
-   * @param {number|string} itemId - Clipboard item ID
+   * Removes a clipboard item from history.
+   * @param {number|string} itemId - Identifier of the clipboard item to remove.
    */
   function removeClipboardItem(itemId) {
     fetch(`/api/clipboard/remove/${itemId}`, {
@@ -494,7 +494,7 @@
   }
 
   /**
-   * Download entire clipboard history as ZIP archive.
+   * Downloads the available clipboard history as a ZIP archive.
    */
   async function downloadClipboardHistory() {
     try {

@@ -40,7 +40,7 @@
   }
 
   /**
-   * Copy alternative LAN IP URL to system clipboard.
+   * Copies the alternative LAN IP URL to the system clipboard.
    */
   async function copyAlternativeUrl() {
     const urlElement = document.getElementById('alternative-url');
@@ -96,7 +96,7 @@
   }
 
   /**
-   * Display IP Access QR Code popup modal.
+   * Displays a modal containing a QR code for the current LAN access URL.
    */
   function showIPQRCode() {
     const networkInfo = window._currentNetworkInfo;
@@ -205,7 +205,7 @@
   }
 
   /**
-   * Monitor real-time mDNS service status and update UI hint pills.
+   * Updates connection controls to reflect the current mDNS service status.
    */
   async function updateMDNSStatus() {
     try {
@@ -263,6 +263,11 @@
     }
   }
 
+  /**
+   * Reveals a successfully loaded QR code image.
+   * @param {HTMLElement} imgElement - The QR code image element to display.
+   * @param {string} type - The QR code type used for the success message.
+   */
   function showQRSuccess(imgElement, type) {
     const loadingDiv = document.getElementById('qr-loading');
     if (loadingDiv) loadingDiv.style.display = 'none';
@@ -271,6 +276,9 @@
     console.log(` QR Code loaded successfully (${type})`);
   }
 
+  /**
+   * Loads a fallback QR code using the displayed connection URL.
+   */
   function tryFallbackQR() {
     console.log(' Primary QR failed, trying fallback...');
     const fallbackQR = document.getElementById('qr-fallback');
@@ -281,6 +289,12 @@
     }
   }
 
+  /**
+   * Displays an offline QR code for the current connection URL.
+   *
+   * Retries after a delay when QR generation is temporarily blocked and displays
+   * an error message on the canvas if QR generation fails.
+   */
   function showOfflineQR() {
     if (window._qrBlocked) {
       console.log('⏸ QR generation blocked during upload - will retry later');
@@ -335,6 +349,10 @@
     if (text) text.style.display = 'block';
   }
 
+  /**
+   * Displays a generated QR code image in the QR-code interface.
+   * @param {HTMLImageElement} imgElement - The QR code image element to reveal.
+   */
   function showQRCode(imgElement) {
     const loadingDiv = document.getElementById('qr-loading');
     if (loadingDiv) loadingDiv.style.display = 'none';
@@ -344,6 +362,9 @@
     console.log(' QR Code loaded successfully');
   }
 
+  /**
+   * Activates the offline QR-code fallback using the displayed connection URL.
+   */
   function showQRFallback() {
     const loadingDiv = document.getElementById('qr-loading');
     const qrImage = document.getElementById('qr-image');

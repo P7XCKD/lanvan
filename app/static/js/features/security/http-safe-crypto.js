@@ -9,8 +9,8 @@
   'use strict';
 
   /**
-   * Determine whether HTTP-Safe AES encryption is active for current connection.
-   * @returns {boolean} True if on HTTP and encryption toggle is checked.
+   * Determines whether HTTP-safe encryption is enabled for the current HTTP page.
+   * @returns {boolean} `true` if the page uses HTTP and the encryption toggle is checked, `false` otherwise.
    */
   function isHttpSafeEnabled() {
     const aesToggle = document.getElementById('enableEncryption');
@@ -33,9 +33,10 @@
   }
 
   /**
-   * Send file to backend /encrypt_http_safe endpoint for AES metadata-obfuscated encryption.
-   * @param {File} file - Original file object
-   * @returns {Promise<Object>} Server response payload with obfuscated metadata
+   * Encrypts a file for HTTP-safe upload and retrieves its obfuscated metadata.
+   * @param {File} file - The file to encrypt.
+   * @returns {Object} The server response containing encrypted file metadata.
+   * @throws {Error} If the encryption request fails.
    */
   async function encryptFileHttpSafe(file) {
     const formData = new FormData();
@@ -50,10 +51,10 @@
   }
 
   /**
-   * Create obfuscated upload structure wrapping encrypted metadata.
-   * @param {Object} encryptedData - Response payload from /encrypt_http_safe
-   * @param {File} file - Original file reference
-   * @returns {Object} Obfuscated upload descriptor
+   * Creates an obfuscated upload descriptor for encrypted file data.
+   * @param {Object} encryptedData - Encryption response containing optional obfuscated filename, encrypted size, and metadata.
+   * @param {File} file - The original file.
+   * @return {Object} A descriptor containing the obfuscated file, original file details, encrypted size, and metadata.
    */
   function createObfuscatedUpload(encryptedData, file) {
     const dummyBlob = new Blob([], { type: 'application/octet-stream' });

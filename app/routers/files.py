@@ -2352,7 +2352,20 @@ async def finalize_upload(
     encrypt: bool = Form(False),
     parent_path: Optional[str] = Form(None)
 ):
-    """Combine all chunks into final file - supports streaming assembly with failsafe fallback"""
+    """
+    Finalize a chunked upload by assembling its parts, validating the resulting file, and scheduling post-upload processing.
+    
+    Parameters:
+    	request (Request): The request used to enforce HTTPS requirements for encryption.
+    	background_tasks (BackgroundTasks): Tasks used to schedule file scanning.
+    	filename (str): Original filename of the uploaded file.
+    	total_parts (int): Expected number of upload parts.
+    	encrypt (bool): Whether to encrypt the assembled file.
+    	parent_path (Optional[str]): Relative destination folder for the upload.
+    
+    Returns:
+    	JSONResponse: A success response with assembly and security details, or an error response when assembly, encryption, validation, or file handling fails.
+    """
     # Initialise identity variables before the try block so that every exception
     # handler — including the outermost one — can use the scoped values rather
     # than re-deriving a basename-only fallback.
@@ -2960,7 +2973,15 @@ async def list_folders():
 
 @router.get("/api/folders/{folder_path:path}/files", name="list_folder_contents")
 async def list_folder_contents(folder_path: str):
-    """Get files inside a specific folder (supports nested paths like FolderA/SubFolder)"""
+    """
+    List the files and subfolders within a requested folder path.
+    
+    Parameters:
+    	folder_path (str): URL-encoded folder path, including nested relative components.
+    
+    Returns:
+    	JSONResponse: A response containing folder contents and metadata, an empty listing for a missing folder, or an error response for inaccessible paths or listing failures.
+    """
     # Unquote URL-encoded path components (%20 -> space)
     clean_path = urllib.parse.unquote(folder_path)
     parts = [p for p in clean_path.split("/") if p and p != ".." and p != "Home"]

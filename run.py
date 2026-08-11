@@ -19,9 +19,10 @@ _tee_lock = threading.Lock()
 
 def setup_server_log():
     """
-    Clear testing/logs/ and open a fresh server.log for this session.
-    Returns the open log file handle (caller must close it).
-    Active in development mode only — never called in production.
+    Clear the previous server logs and create a fresh log file for the current session.
+    
+    Returns:
+        TextIO: An open, line-buffered log file handle.
     """
     log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testing", "logs")
 
@@ -41,12 +42,12 @@ def setup_server_log():
 
 def _tee_stream(src, dst_terminal, log_file):
     """
-    Read raw bytes from *src* (subprocess pipe), forward each line to
-    *dst_terminal* and write a UTF-8 decoded copy to *log_file*.
-
-    Writing raw bytes to dst_terminal.buffer avoids Windows cp1252 codec
-    errors when the server prints emoji or non-ASCII characters.
-    Both threads share _tee_lock so output lines never interleave.
+    Forward subprocess output to the terminal and a log file.
+    
+    Parameters:
+        src: A readable stream of raw subprocess output.
+        dst_terminal: The terminal stream that receives the output.
+        log_file: The text stream that receives a UTF-8 decoded copy.
     """
     buf = getattr(dst_terminal, "buffer", None)
     try:
@@ -71,7 +72,12 @@ def _tee_stream(src, dst_terminal, log_file):
 
 # Auto-activate virtual environment if not already activated
 def ensure_venv():
-    """Ensure we're running in the virtual environment"""
+    """
+    Ensure the script runs with the configured virtual environment when available.
+    
+    If the environment is unavailable or cannot be activated, execution continues
+    with the current Python interpreter.
+    """
     venv_python = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".venv", "Scripts", "python.exe")
     
     # Check if we're already in venv or if current python is the venv python
@@ -621,7 +627,7 @@ if __name__ == "__main__":
             proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL)
 
         def _stdin_monitor():
-            """Read stdin for 'close'/'quit' commands and terminate the server."""
+            """Monitor standard input for commands that stop the server process."""
             print("[INFO] Type 'close'  |  quit  |  shut  to stop. Or press Ctrl+C.")
             try:
                 while proc.poll() is None:

@@ -8,6 +8,10 @@
 (function (window) {
   'use strict';
 
+  /**
+   * Retrieves the current device's session identifier, creating and storing one when needed.
+   * @return {string} The device session identifier.
+   */
   function getCurrentDeviceId() {
     let deviceId = sessionStorage.getItem('Lanvan_device_id');
     if (!deviceId) {
@@ -21,6 +25,10 @@
     return deviceId;
   }
 
+  /**
+   * Identifies the current device platform and browser for display and session tracking.
+   * @returns {{name: string, displayName: string}} Device identifiers containing an internal name and a user-facing display name.
+   */
   function getDeviceInfo() {
     let deviceName = 'Unknown_Device';
     let displayName = 'Unknown Device';
@@ -73,6 +81,10 @@
     };
   }
 
+  /**
+   * Retrieves the current device's upload history in reverse chronological order.
+   * @returns {Array} The sorted upload history, or an empty array if the history cannot be loaded.
+   */
   function getDeviceUploadHistory() {
     try {
       const deviceId = getCurrentDeviceId();
@@ -85,6 +97,10 @@
     }
   }
 
+  /**
+   * Saves upload statistics to the current device's session history.
+   * @param {Object} stats - Upload statistics to store.
+   */
   function saveToDeviceUploadHistory(stats) {
     try {
       const deviceId = getCurrentDeviceId();
@@ -105,6 +121,9 @@
     }
   }
 
+  /**
+   * Opens the device upload logs modal and populates its contents.
+   */
   function toggleDeviceLogs() {
     const modal = document.getElementById('deviceLogsModal');
     if (!modal) return;
@@ -126,11 +145,17 @@
     });
   }
 
+  /**
+   * Hides the device upload logs modal when it is present.
+   */
   function closeDeviceLogsModal() {
     const modal = document.getElementById('deviceLogsModal');
     if (modal) modal.style.display = 'none';
   }
 
+  /**
+   * Populates the device logs modal with session statistics and paginated upload records.
+   */
   function populateDeviceLogsModal() {
     const logsContent = document.getElementById('deviceLogsContent');
     const logsStats = document.getElementById('deviceLogsStats');
@@ -189,6 +214,12 @@
     }
   }
 
+  /**
+   * Renders upload history in sorted, paginated form.
+   * @param {Array<Object>} logs - Upload records to display.
+   * @param {HTMLElement} contentElement - Element receiving the current page's upload entries.
+   * @param {HTMLElement} paginationElement - Element receiving pagination controls.
+   */
   function displayDeviceLogsWithPagination(logs, contentElement, paginationElement) {
     const itemsPerPage = 10;
     const sortedLogs = logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -253,6 +284,12 @@
     renderPagination();
   }
 
+  /**
+   * Renders an upload record as an HTML summary.
+   * @param {Object} log - Upload metadata to display.
+   * @param {boolean} isEven - Whether to use the even-row background style.
+   * @return {string} The formatted upload summary HTML.
+   */
   function renderSingleUpload(log, isEven) {
     const chunkInfo = log.chunksUsed ? `<span style="color: #0056b3 !important;"> ${log.chunkCount || log.chunks || 'Unknown'} chunks</span>` : '<span style="color: var(--text-color) !important; opacity: 0.7;"> Direct</span>';
 
@@ -279,6 +316,9 @@
     `;
   }
 
+  /**
+   * Downloads the current device's upload history as a plain-text report.
+   */
   function downloadDeviceLogs() {
     try {
       const deviceUploadLogs = getDeviceUploadHistory();
@@ -384,6 +424,9 @@ Device Session will reset when browser is closed
     }
   }
 
+  /**
+   * Clears the current device's upload history and refreshes the visible logs view.
+   */
   function clearDeviceLogs() {
     try {
       const deviceId = getCurrentDeviceId();

@@ -14,6 +14,9 @@
         return;
     }
 
+    /**
+     * Hides the context menu when it is present.
+     */
     function closeContextMenu() {
         var menu = document.getElementById("contextMenu");
         if (menu) {
@@ -21,6 +24,11 @@
         }
     }
 
+    /**
+     * Finds an upload queue item matching a filename or path.
+     * @param {string} filename - The filename, path, or queue identifier to match.
+     * @return {Object|null} The matching upload queue item, or `null` when no match is found.
+     */
     function getUploadQueueItem(filename) {
         if (!filename) return null;
         var state = window.LanvanStore ? window.LanvanStore.getState() : null;
@@ -51,6 +59,9 @@
         return null;
     }
 
+    /**
+     * Pauses the upload associated with the selected context-menu item.
+     */
     function handlePauseFromMenu() {
         closeContextMenu();
         var fn = window._contextMenuTarget;
@@ -63,6 +74,9 @@
         }
     }
 
+    /**
+     * Resumes the upload associated with the selected context-menu target.
+     */
     function handleResumeFromMenu() {
         closeContextMenu();
         var fn = window._contextMenuTarget;
@@ -75,6 +89,9 @@
         }
     }
 
+    /**
+     * Cancels the upload associated with the selected context-menu item.
+     */
     function handleCancelFromMenu() {
         closeContextMenu();
         var fn = window._contextMenuTarget;
@@ -87,6 +104,11 @@
         }
     }
 
+    /**
+     * Opens the context menu for a file-list item and configures actions based on its state, type, and selection.
+     * @param {MouseEvent} event - The event that triggered the context menu.
+     * @param {string} filename - The target item's filename or path.
+     */
     function openRowMenu(event, filename) {
         if (!event) return;
         event.stopPropagation();
