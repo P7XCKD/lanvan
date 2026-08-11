@@ -156,12 +156,14 @@ class ServerService : Service() {
         // Skip extraction if a version marker exists matching the current versionCode,
         // avoiding 1-5 seconds of redundant I/O on every service start.
         val markerFile = java.io.File(filesDir, ".asset_version")
-        val currentVersion = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            packageManager.getPackageInfo(packageName, 0).longVersionCode.toString()
+        val packageInfo = packageManager.getPackageInfo(packageName, 0)
+        val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageInfo.longVersionCode.toString()
         } else {
             @Suppress("DEPRECATION")
-            packageManager.getPackageInfo(packageName, 0).versionCode.toString()
+            packageInfo.versionCode.toString()
         }
+        val currentVersion = "${versionCode}_${packageInfo.lastUpdateTime}"
         val cachedVersion = if (markerFile.exists()) {
             try { markerFile.readText().trim() } catch (_: Exception) { "" }
         } else { "" }
