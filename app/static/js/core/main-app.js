@@ -2948,50 +2948,7 @@ window.addEventListener('beforeunload', function (e) {
   }
 });
 
-//  Dedicated function to update file count display
-function updateFileCount(fileCount) {
-  const fileCountEl = document.getElementById('fileCount');
-  if (fileCountEl) {
-    if (fileCount > 0) {
-      fileCountEl.textContent = `(${fileCount} file${fileCount === 1 ? '' : 's'})`;
-    } else {
-      fileCountEl.textContent = '';
-    }
-  }
-  console.log(` File count updated: ${fileCount} files`);
-}
-
-// Helper to build the correct listing endpoint for the current folder
-function getCurrentFileListEndpoint() {
-  const rawFolder = (typeof window.getCurrentFolderPath === 'function')
-    ? window.getCurrentFolderPath()
-    : (window.currentFolderPath || '');
-  const folder = (rawFolder === 'Home' || rawFolder === 'Home/') ? '' : rawFolder;
-  if (folder) {
-    return '/api/folders/' + encodeURIComponent(folder) + '/files';
-  }
-  return '/api/files';
-}
-
-//  Refresh only the file count from server without updating display
-async function refreshFileCountOnly() {
-  try {
-    const response = await fetch(getCurrentFileListEndpoint());
-    if (!response.ok) {
-      console.warn(` Failed to refresh file count: HTTP ${response.status}`);
-      return;
-    }
-
-    const data = await response.json();
-    const count = data.files ? data.files.length : (data.files ? data.files.length : 0);
-    updateFileCount(count);
-    lastFileCount = count; // Keep auto-refresh tracking in sync
-
-    console.log(` File count refreshed: ${count} files`);
-  } catch (error) {
-    console.error(' Failed to refresh file count:', error);
-  }
-}
+// File Summary Counter & Endpoint Resolver extracted to features/files/file-summary-counter.js
 
 function updateFileDisplay(files) {
   const fileGrid = document.querySelector('.file-grid');
