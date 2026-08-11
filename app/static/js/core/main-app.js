@@ -4005,51 +4005,7 @@ function hideToast() {
   }
 }
 
-//  File Metadata Storage
-function storeFileMetadata(files, totalSize) {
-  try {
-    const metadata = JSON.parse(localStorage.getItem('fileMetadata') || '{}');
-    const timestamp = Date.now();
-
-    //  PERFORMANCE: Efficient iteration without Array.from
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      metadata[file.name] = {
-        size: file.size,
-        timestamp: timestamp,
-        lastModified: file.lastModified,
-        type: file.type || 'unknown'
-      };
-    }
-
-    localStorage.setItem('fileMetadata', JSON.stringify(metadata));
-    console.log(` Stored metadata for ${files.length} files`);
-  } catch (e) {
-    console.log(' Failed to store file metadata:', e);
-  }
-}
-
-//  Transfer Statistics Logging - Device-Specific Session Storage
-function saveStatsToLog(stats) {
-  try {
-    // Save to device-specific session storage (clears when session ends)
-    saveToDeviceUploadHistory(stats);
-
-    // Also maintain backward compatibility with localStorage for global stats (optional)
-    const logs = JSON.parse(localStorage.getItem('transferLogs') || '[]');
-    logs.unshift(stats); // Add to beginning
-
-    // Keep only last 50 logs in global storage
-    if (logs.length > 50) {
-      logs.splice(50);
-    }
-
-    localStorage.setItem('transferLogs', JSON.stringify(logs));
-    console.log(` Saved transfer stats to device session:`, stats.type, stats.size, stats.time);
-  } catch (e) {
-    console.log(' Failed to save transfer stats:', e);
-  }
-}
+// File Metadata & Transfer Statistics Logger extracted to services/transfer-stats-logger.js
 
 // Download Options Modal Dialog Controller extracted to features/transfers/download-modal-adapter.js
 
