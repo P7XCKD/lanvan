@@ -397,6 +397,23 @@ class SimpleMDNSManager:
             print(f"[Android] All network detection methods failed: {e}")
             return None
         
+    def _is_docker_bridge_ip(self, ip_str: str) -> bool:
+        """Check if IP belongs to Docker container internal bridge network (172.17.x.x - 172.31.x.x)"""
+        import os
+        if not os.path.exists('/.dockerenv'):
+            return False
+        if not ip_str:
+            return True
+        parts = ip_str.split('.')
+        if len(parts) == 4 and parts[0] == '172':
+            try:
+                second = int(parts[1])
+                if 17 <= second <= 31:
+                    return True
+            except ValueError:
+                pass
+        return False
+
     def get_lan_ip(self) -> str:
         """Get the LAN IP address - works offline by scanning local interfaces, optimized for Termux & Docker"""
         env_host = os.getenv("LANVAN_ADVERTISE_HOST") or os.getenv("ADVERTISE_HOST") or os.getenv("LAN_IP")
@@ -405,7 +422,7 @@ class SimpleMDNSManager:
 
         try:
             # Return cached IP if available and still valid
-            if self.lan_ip:
+            if self.lan_ip and not self._is_docker_bridge_ip(self.lan_ip):
                 # Quick test to see if IP is still valid
                 try:
                     import socket
@@ -434,15 +451,12 @@ class SimpleMDNSManager:
                     print(f"[MOBILE] Enhanced Android detection failed: {android_error}")
                 
             # Method 1: Try to get IP without external connection (offline-compatible)
-            # Get all network interfaces
             import socket
             hostname = socket.gethostname()
             
-            # Try getting IP from hostname resolution (works offline on most systems)
             try:
                 host_ip = socket.gethostbyname(hostname)
-                # Check if it's a valid local IP (not loopback) and not the problematic 192.0.0.4
-                if host_ip and not host_ip.startswith('127.') and host_ip != '192.0.0.4':
+                if host_ip and not host_ip.startswith('127.') and host_ip != '192.0.0.4' and not self._is_docker_bridge_ip(host_ip):
                     self.lan_ip = host_ip
                     return self.lan_ip
                 elif is_android and host_ip == '192.0.0.4':
@@ -451,7 +465,6 @@ class SimpleMDNSManager:
                 pass
             
             # Method 2: Scan network interfaces manually (offline-compatible)
-            # Try multiple router addresses for better Termux compatibility
             router_addresses = [
                 "192.168.1.1",   # Most common
                 "192.168.0.1",   # Common alternative
@@ -463,12 +476,12 @@ class SimpleMDNSManager:
             for router_ip in router_addresses:
                 try:
                     temp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    temp_socket.settimeout(1.0)  # Quick timeout for faster detection
+                    temp_socket.settimeout(1.0)
                     temp_socket.connect((router_ip, 80))
                     local_ip = temp_socket.getsockname()[0]
                     temp_socket.close()
                     
-                    if local_ip and not local_ip.startswith('127.'):
+                    if local_ip and not local_ip.startswith('127.') and not self._is_docker_bridge_ip(local_ip):
                         self.lan_ip = local_ip
                         if is_android:
                             print(f"[MOBILE] Android IP detected: {local_ip}")
