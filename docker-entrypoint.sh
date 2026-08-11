@@ -2,6 +2,10 @@
 set -e
 
 # Default to production execution unless --dev is explicitly passed
+if [ "$1" = "python" ] || [ "$1" = "sh" ] || [ "$1" = "bash" ]; then
+    exec "$@"
+fi
+
 IS_DEV=false
 USE_HTTPS=false
 BLOCK_DANGEROUS=false
