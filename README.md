@@ -114,18 +114,38 @@ Open the LAN address in any browser on the same network to start transferring fi
 
 ## 🐳 Docker Support & Deployment
 
-Lanvan includes first-class Docker support. By default, running a Docker container boots in **Production Mode** using minified assets and persistent volume storage.
+Lanvan includes first-class Docker and Docker Compose support. Running via Docker Desktop or Compose boots in **Production Mode** using minified assets, persistent volume storage (`./data:/app/data`), and port `80:80` pre-configured.
 
-### 1. Build the Docker Image
+### 1. Recommended Launch (Docker Compose — 1 Command)
 
 ```bash
-docker build -t lanvan .
+# Start Lanvan Production Container (HTTP, Port 80, Persistent Storage)
+docker compose up -d
 ```
 
-### 2. Run Production Containers
+> **Note on Docker Desktop GUI:**
+> Using Docker Desktop's `Images → Run` button opens a generic dialog that requires manually typing host port `80` into the port field. Standard OCI `EXPOSE 80` metadata documents port usage but does not auto-bind host ports without user input. **`docker compose up -d`** is the recommended one-click / one-command launcher because it pre-configures `80:80` and `./data:/app/data` automatically.
+
+### 2. Common Docker Compose Commands
 
 ```bash
-# Standard Production Container (HTTP, Persistent Volume)
+# View Container Status & Published Ports
+docker compose ps
+
+# View Real-Time Server Logs
+docker compose logs -f
+
+# Stop Container
+docker compose down
+
+# Optional: Run Production with HTTPS Profile (Port 443)
+docker compose --profile https up -d lanvan-https
+```
+
+### 3. Alternative CLI Commands (`docker run`)
+
+```bash
+# Standard Production Container (HTTP)
 docker run -d --name lanvan-app -p 80:80 -v "${PWD}\data:/app/data" lanvan
 
 # Production Container with HTTPS / SSL
@@ -134,25 +154,16 @@ docker run -d --name lanvan-app -p 443:443 -v "${PWD}\data:/app/data" lanvan --h
 # Production Container with Dangerous File Blocking
 docker run -d --name lanvan-app -p 80:80 -v "${PWD}\data:/app/data" lanvan --block-dangerous
 
-# Production Container with HTTPS + Dangerous File Blocking
-docker run -d --name lanvan-app -p 443:443 -v "${PWD}\data:/app/data" lanvan --https --block-dangerous
-```
-
-### 3. Opt-In Development Container
-
-```bash
-# Development Mode (Explicit opt-in with unminified assets)
+# Opt-In Development Container (Unminified Assets)
 docker run -it --rm -p 80:80 -v "${PWD}\data:/app/data" lanvan --dev
-
-# Development Mode with HTTPS
-docker run -it --rm -p 443:443 -v "${PWD}\data:/app/data" lanvan --dev --https
 ```
 
-### Docker Features & Security Matrix
+### Docker Security Matrix & Specifications
 
-- **Default Production Runtime**: Docker runs `python run.py prod` automatically unless `--dev` is explicitly specified.
-- **Persistent Volume**: Map host storage to container `/app/data` to persist uploads and clipboards.
+- **Default Production Runtime**: Docker runs `python run.py prod` automatically unless `--dev` is explicitly passed.
+- **Persistent Storage**: `./data:/app/data` ensures uploads, clipboards, and version history survive container recreation.
 - **Security Policy**: Use `--block-dangerous` or set `BLOCK_DANGEROUS=true` environment variable to block `.exe`, `.bat`, `.dll`, `.sys`, and executable scripts. HTTPS mode blocks dangerous file extensions by default.
+- **Healthcheck**: Container health is monitored automatically via `GET /api/server-status`.
 
 ---
 
