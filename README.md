@@ -112,6 +112,50 @@ Open the LAN address in any browser on the same network to start transferring fi
 
 ---
 
+## 🐳 Docker Support & Deployment
+
+Lanvan includes first-class Docker support. By default, running a Docker container boots in **Production Mode** using minified assets and persistent volume storage.
+
+### 1. Build the Docker Image
+
+```bash
+docker build -t lanvan .
+```
+
+### 2. Run Production Containers
+
+```bash
+# Standard Production Container (HTTP, Persistent Volume)
+docker run -d --name lanvan-app -p 80:80 -v "${PWD}\data:/app/data" lanvan
+
+# Production Container with HTTPS / SSL
+docker run -d --name lanvan-app -p 443:443 -v "${PWD}\data:/app/data" lanvan --https
+
+# Production Container with Dangerous File Blocking
+docker run -d --name lanvan-app -p 80:80 -v "${PWD}\data:/app/data" lanvan --block-dangerous
+
+# Production Container with HTTPS + Dangerous File Blocking
+docker run -d --name lanvan-app -p 443:443 -v "${PWD}\data:/app/data" lanvan --https --block-dangerous
+```
+
+### 3. Opt-In Development Container
+
+```bash
+# Development Mode (Explicit opt-in with unminified assets)
+docker run -it --rm -p 80:80 -v "${PWD}\data:/app/data" lanvan --dev
+
+# Development Mode with HTTPS
+docker run -it --rm -p 443:443 -v "${PWD}\data:/app/data" lanvan --dev --https
+```
+
+### Docker Features & Security Matrix
+
+- **Default Production Runtime**: Docker runs `python run.py prod` automatically unless `--dev` is explicitly specified.
+- **Persistent Volume**: Map host storage to container `/app/data` to persist uploads and clipboards.
+- **Security Policy**: Use `--block-dangerous` or set `BLOCK_DANGEROUS=true` environment variable to block `.exe`, `.bat`, `.dll`, `.sys`, and executable scripts. HTTPS mode blocks dangerous file extensions by default.
+
+---
+
 ## Production Build Pipeline
 
 Lanvan includes a zero-dependency production build pipeline (`build.py`) that minifies frontend assets while leaving the development source tree (`app/`) 100% untouched as the single source of truth.

@@ -11,6 +11,7 @@
 
   var autoRefreshInterval = null;
   var lastFileCount = 0;
+  var lastFolderFileCounts = {};
   var autoRefreshActive = true;
 
   /**
@@ -66,18 +67,32 @@
         var files = data.files || [];
         var currentFileCount = files.length;
 
+        // Establish initial baseline count for a newly visited folder without triggering false notifications
+        if (typeof lastFolderFileCounts[endpoint] === 'undefined') {
+          lastFolderFileCounts[endpoint] = currentFileCount;
+          lastFileCount = currentFileCount;
+          if (typeof window.updateFileCount === 'function') {
+            window.updateFileCount(currentFileCount);
+          }
+          return;
+        }
+
+        var prevCount = lastFolderFileCounts[endpoint];
+
         // Only update if file count changed (indicating new uploads/deletions)
-        if (currentFileCount !== lastFileCount) {
-          if (window.DEBUG_MODE) console.log('File count changed: ' + lastFileCount + ' → ' + currentFileCount + ', auto-loading...');
+        if (currentFileCount !== prevCount) {
+          lastFolderFileCounts[endpoint] = currentFileCount;
+          lastFileCount = currentFileCount;
+          if (window.DEBUG_MODE) console.log('File count changed for ' + endpoint + ': ' + prevCount + ' → ' + currentFileCount + ', auto-loading...');
           // Route through canonical pipeline: API → Repository → Scheduler → Projection → Renderer
           if (typeof window.refreshFileList === 'function') {
             window.refreshFileList('auto_refresh');
           }
 
-          if (currentFileCount > lastFileCount) {
-            if (window.DEBUG_MODE) console.log((currentFileCount - lastFileCount) + ' new file(s) auto-loaded from other device(s)');
-          } else if (currentFileCount < lastFileCount) {
-            if (window.DEBUG_MODE) console.log((lastFileCount - currentFileCount) + ' file(s) removed from other device(s)');
+          if (currentFileCount > prevCount) {
+            if (window.DEBUG_MODE) console.log((currentFileCount - prevCount) + ' new file(s) auto-loaded from other device(s)');
+          } else if (currentFileCount < prevCount) {
+            if (window.DEBUG_MODE) console.log((prevCount - currentFileCount) + ' file(s) removed from other device(s)');
           }
         } else {
           // Even if file count is same, ensure display is current
