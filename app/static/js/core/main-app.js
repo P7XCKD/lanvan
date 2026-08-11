@@ -653,6 +653,25 @@ let pond;
 let uploadType = 'regular';
 let encryptionKey = null;
 let isEncryptionEnabled = false;
+
+function syncAESSettingsState(enabled) {
+  const isChecked = !!enabled;
+  isEncryptionEnabled = isChecked;
+  try {
+    localStorage.setItem('aes_enabled', isChecked ? '1' : '0');
+  } catch (e) {}
+
+  const toggleTop = (typeof DOM_CACHE !== 'undefined' && DOM_CACHE.aesToggle) || document.getElementById('enableEncryption');
+  if (toggleTop && toggleTop.checked !== isChecked) {
+    toggleTop.checked = isChecked;
+  }
+
+  const toggleModal = document.getElementById('aesSettingToggle');
+  if (toggleModal && toggleModal.checked !== isChecked) {
+    toggleModal.checked = isChecked;
+  }
+}
+window.syncAESSettingsState = syncAESSettingsState;
 let fetchInterceptorActive = false;
 
 let _rawUploadQueue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
@@ -1282,26 +1301,7 @@ function showUploadManager() {
   }
 }
 
-//  Settings Menu Functions
-function toggleSettingsMenu() {
-  const settingsMenu = document.getElementById('settingsMenu');
-  if (settingsMenu.style.display === 'none' || settingsMenu.style.display === '') {
-    settingsMenu.style.display = 'block';
-    // Close menu when clicking outside
-    setTimeout(() => {
-      document.addEventListener('click', closeSettingsOnOutsideClick);
-    }, 100);
-  } else {
-    settingsMenu.style.display = 'none';
-    document.removeEventListener('click', closeSettingsOnOutsideClick);
-  }
-}
-
-// Removed closeSettingsOnOutsideClick function; moved to file-utils.js
-
-function showAccessControlSettings() {
-  showToast(' Access Control features coming soon! Stay tuned for host-guest permissions, device whitelisting, and access tokens.', 5000);
-}
+// Settings Menu Dropdown Controller extracted to features/ui/settings-menu.js
 
 // Device Logs Modal Adapter extracted to features/device/device-logs-modal-adapter.js
 
@@ -3218,38 +3218,42 @@ document.addEventListener('DOMContentLoaded', () => {
     //  Check for mDNS service and update status
     updateMDNSStatus();
 
-    //  Handle AES toggle restrictions - DISABLED FOR HTTP
-    if (location.protocol === 'http:') {
-      //  NEW LOGIC: Allow AES over HTTP with HTTP-Safe mode
-      const toggle = DOM_CACHE.aesToggle;
-      if (toggle) {
-        // Enable AES toggle for HTTP (HTTP-Safe mode will provide security)
-        toggle.disabled = false;
-        const toggleWrapper = toggle.closest('div');
+    // Restore AES Encryption preference from localStorage and sync UI
+    var savedAES = null;
+    try {
+      savedAES = localStorage.getItem('aes_enabled');
+    } catch (e) {}
+    var initialAES = (savedAES !== null) ? (savedAES === '1') : false;
+    syncAESSettingsState(initialAES);
+
+    // Handle AES toggle restrictions & change listeners
+    const toggle = DOM_CACHE.aesToggle || document.getElementById('enableEncryption');
+    if (toggle) {
+      toggle.disabled = false;
+      const toggleWrapper = toggle.closest('div');
+      if (toggleWrapper) {
         toggleWrapper.style.opacity = '1';
-        toggleWrapper.title = " AES over HTTP requires HTTP-Safe Mode for complete security protection.";
+        toggleWrapper.title = "AES encryption protects transfer payloads with AES-256.";
+      }
 
-        // Add change listener
-        toggle.addEventListener('change', function () {
-          isEncryptionEnabled = this.checked;
-          console.log(' Encryption toggled:', isEncryptionEnabled);
+      toggle.addEventListener('change', function () {
+        syncAESSettingsState(this.checked);
+        console.log(' Encryption toggled:', isEncryptionEnabled);
 
-          //  HTTP-Safe mode is now automatic for HTTP connections
-          if (location.protocol === 'http:' && this.checked) {
-            console.log(' HTTP-Safe mode automatically enabled for HTTP connection');
+        if (location.protocol === 'http:' && this.checked) {
+          console.log(' HTTP-Safe mode automatically enabled for HTTP connection');
+          if (typeof showToast === 'function') {
             showToast(' HTTP-Safe mode automatically enabled for secure encryption!', 4000);
           }
-        });
-      }
-    } else {
-      // HTTPS - encryption available (same as HTTP now with HTTP-Safe mode)
-      const toggle = DOM_CACHE.aesToggle;
-      if (toggle) {
-        toggle.addEventListener('change', function () {
-          isEncryptionEnabled = this.checked;
-          console.log(' Encryption toggled:', isEncryptionEnabled);
-        });
-      }
+        }
+      });
+    }
+
+    const modalToggle = document.getElementById('aesSettingToggle');
+    if (modalToggle) {
+      modalToggle.addEventListener('change', function () {
+        syncAESSettingsState(this.checked);
+      });
     }
   }
 });
@@ -4014,11 +4018,9 @@ function hideToast() {
 // Make functions globally available
 window.refreshFileListManually = refreshFileListManually;
 window.refreshFileList = refreshFileList;
-window.toggleSettingsMenu = toggleSettingsMenu;
 window.cancelAllUploads = cancelAllUploads;
 window.showToast = showToast;
 window.toggleDeviceLogs = toggleDeviceLogs;
-window.showAccessControlSettings = showAccessControlSettings;
 window.cancelUpload = cancelUpload;
 window.pauseUpload = pauseUpload;
 window.resumeUpload = resumeUpload;
