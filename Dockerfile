@@ -9,15 +9,15 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Install system dependencies required for cryptography / networking
+# Copy dependency definition & install Python packages
+COPY requirements.txt .
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    && pip install --no-cache-dir -r requirements.txt \
+    && apt-get purge -y build-essential \
+    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
-
-# Copy dependency definition & install Python packages
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY app/ ./app/
@@ -30,6 +30,10 @@ RUN chmod +x docker-entrypoint.sh && python build.py
 
 # Expose standard HTTP and HTTPS ports
 EXPOSE 80 443
+
+# Define lightweight healthcheck targeting FastAPI server status endpoint
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:80/api/server-status || exit 1
 
 # Establish persistent volume target
 VOLUME ["/app/data"]
