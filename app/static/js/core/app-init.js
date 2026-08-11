@@ -24,7 +24,6 @@
  * - All state flows through LanvanStore (single source of truth)
  * - DOM renders are scheduled through RenderScheduler (rAF coalescing)
  * - File cache reads route through FileRepository (AbortController aware)
- * - Upload state transitions are validated by UploadStatus FSM
  */
 
 (function () {
