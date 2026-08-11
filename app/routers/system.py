@@ -365,22 +365,34 @@ async def get_network_info():
         protocol = "https" if mdns_manager.use_https else "http"
         port = mdns_manager.port
         
+        is_docker = os.path.exists('/.dockerenv')
+        env_host = os.getenv("LANVAN_ADVERTISE_HOST") or os.getenv("ADVERTISE_HOST") or os.getenv("LAN_IP")
+        docker_needs_host_env = is_docker and not bool(env_host and env_host.strip())
+
         # Format LAN IP URL using the same logic as mDNS URLs
-        if (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
+        if docker_needs_host_env:
+            lan_ip_val = None
+            lan_ip_url = None
+            hybrid_url = f"{protocol}://localhost"
+        elif (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
+            lan_ip_val = lan_ip
             lan_ip_url = f"{protocol}://{lan_ip}"
         else:
+            lan_ip_val = lan_ip
             lan_ip_url = f"{protocol}://{lan_ip}:{port}"
         
         response_data = {
             "status": "success",
-            "lan_ip": lan_ip,
+            "lan_ip": lan_ip_val,
             "lan_ip_url": lan_ip_url,
+            "is_docker": is_docker,
+            "docker_needs_host_env": docker_needs_host_env,
             "hostname": socket.gethostname(),
             "mdns": mdns_info,
             "hybrid_url": hybrid_url,
             "protocol": protocol,
             "port": port,
-            "platform": "android" if is_android else "desktop"
+            "platform": "android" if is_android else ("docker" if is_docker else "desktop")
         }
         
         # Add Android/Termux specific recommendations

@@ -253,10 +253,16 @@
             window.setConnectMode('ip');
           }
 
-          if (qrHintText && qrHintText.innerHTML.includes('mDNS:')) {
-            qrHintText.innerHTML = '• Click for QR code';
-            qrHintText.style.color = 'var(--protocol-text)';
-            qrHintText.title = '';
+          if (qrHintText) {
+            if (networkInfo.docker_needs_host_env) {
+              qrHintText.innerHTML = '<strong>Docker:</strong> Set LANVAN_ADVERTISE_HOST in compose.yaml for mobile QR';
+              qrHintText.style.color = '#eab308';
+              qrHintText.title = 'Running in Docker bridge network. Specify LANVAN_ADVERTISE_HOST in compose.yaml to enable QR code for mobile devices.';
+            } else if (qrHintText.innerHTML.includes('mDNS:')) {
+              qrHintText.innerHTML = '• Click for QR code';
+              qrHintText.style.color = 'var(--protocol-text)';
+              qrHintText.title = '';
+            }
           }
         }
       }

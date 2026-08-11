@@ -499,7 +499,7 @@ class SimpleMDNSManager:
                             ip = addr.address
                             if (ip.startswith('192.168.') or 
                                 ip.startswith('10.') or 
-                                ip.startswith('172.')):
+                                ip.startswith('172.')) and not self._is_docker_bridge_ip(ip):
                                 self.lan_ip = ip
                                 return self.lan_ip
             except ImportError:
