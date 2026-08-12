@@ -18,19 +18,28 @@
         if (!qrBox) return;
 
         var netInfo = window._currentNetworkInfo;
+
+        // Docker bridge mode without LANVAN_ADVERTISE_HOST — LAN address is unavailable.
+        // Never advertise localhost as a LAN address for mobile devices.
         if (netInfo && netInfo.docker_needs_host_env) {
             if (connectAddress) {
-                connectAddress.textContent = "http://localhost";
+                connectAddress.textContent = "LAN address unavailable";
             }
             if (qrBox.getAttribute("data-rendered-url") === "docker-notice") return;
             qrBox.setAttribute("data-rendered-url", "docker-notice");
-            qrBox.innerHTML = '<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:10px 4px;line-height:1.35;">Set <strong>LANVAN_ADVERTISE_HOST</strong> in compose.yaml for mobile QR code</div>';
+            qrBox.innerHTML = '<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:10px 4px;line-height:1.35;">Run <code>start-lanvan.ps1</code> or set <strong>LANVAN_ADVERTISE_HOST</strong> in compose.yaml for mobile QR</div>';
             return;
         }
 
-        var url = window.location.origin;
-        if (netInfo && netInfo.fullUrl) {
-            url = netInfo.fullUrl;
+        // lan_ip_url is null when Docker bridge is running without env var — already handled above.
+        // For native runtimes, fullUrl will always be populated by /api/network-info.
+        var url = netInfo && netInfo.fullUrl ? netInfo.fullUrl : null;
+
+        if (!url) {
+            // No LAN URL available — do not display a misleading localhost QR.
+            if (connectAddress) connectAddress.textContent = "";
+            qrBox.innerHTML = '<div style="font-size:0.6rem;color:var(--text-muted);text-align:center;padding:8px;">Connecting...</div>';
+            return;
         }
 
         if (connectAddress) {
@@ -38,7 +47,7 @@
         }
 
         if (qrBox.getAttribute("data-rendered-url") === url) {
-            return; // URL hasn't changed, skip re-fetching QR image
+            return; // URL unchanged — no new QR request needed
         }
         qrBox.setAttribute("data-rendered-url", url);
 
@@ -60,19 +69,24 @@
         if (!dialogBox) return;
 
         var netInfo = window._currentNetworkInfo;
+
+        // Docker bridge mode without LANVAN_ADVERTISE_HOST — LAN address is unavailable.
         if (netInfo && netInfo.docker_needs_host_env) {
             if (dialogAddress) {
-                dialogAddress.textContent = "http://localhost";
+                dialogAddress.textContent = "LAN address unavailable";
             }
             if (dialogBox.getAttribute("data-rendered-url") === "docker-notice") return;
             dialogBox.setAttribute("data-rendered-url", "docker-notice");
-            dialogBox.innerHTML = '<div style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:24px 12px;line-height:1.4;">To enable mobile phone QR scanning in Docker bridge mode,<br>set <strong>LANVAN_ADVERTISE_HOST=&lt;YOUR_PC_LAN_IP&gt;</strong> in <code>compose.yaml</code></div>';
+            dialogBox.innerHTML = '<div style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:24px 12px;line-height:1.4;">Run <code>start-lanvan.ps1</code> to launch Docker with your real LAN IP,<br>or set <strong>LANVAN_ADVERTISE_HOST=&lt;YOUR_PC_LAN_IP&gt;</strong> in <code>compose.yaml</code></div>';
             return;
         }
 
-        var url = window.location.origin;
-        if (netInfo && netInfo.fullUrl) {
-            url = netInfo.fullUrl;
+        var url = netInfo && netInfo.fullUrl ? netInfo.fullUrl : null;
+
+        if (!url) {
+            if (dialogAddress) dialogAddress.textContent = "";
+            dialogBox.innerHTML = '<div style="font-size:0.8rem;color:var(--text-muted);text-align:center;padding:12px;">Connecting...</div>';
+            return;
         }
 
         if (dialogAddress) {
@@ -80,7 +94,7 @@
         }
 
         if (dialogBox.getAttribute("data-rendered-url") === url) {
-            return; // URL hasn't changed, skip re-fetching QR image
+            return; // URL unchanged — no new QR request needed
         }
         dialogBox.setAttribute("data-rendered-url", url);
 

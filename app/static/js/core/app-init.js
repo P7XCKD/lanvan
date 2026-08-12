@@ -787,28 +787,33 @@ window.submitRename = function() { return window.DialogManager.submitRename.appl
             }
         }
 
-        // Fetch network info to populate window._currentNetworkInfo and render QR code
+        // Fetch network info to populate window._currentNetworkInfo and render QR code.
+        // lan_ip_url from /api/network-info is the AUTHORITATIVE source of the LAN URL.
+        // We never fall back to window.location.hostname as a LAN address; that would
+        // produce "localhost" in Docker which is NOT a mobile-reachable LAN address.
         fetch('/api/network-info')
             .then(function (res) { return res.json(); })
             .then(function (data) {
-                var protocol = window.location.protocol;
-                var port = window.location.port;
-                var lanIp = data.lan_ip || window.location.hostname;
-                var lanIpUrl = protocol + '//' + lanIp;
-                if (port && port !== '80' && port !== '443') {
-                    lanIpUrl += ':' + port;
-                }
-                var fullUrl = lanIpUrl;
+                // Use the backend-authoritative LAN URL if available.
+                // In Docker without LANVAN_ADVERTISE_HOST, lan_ip_url is null (correct).
+                var lanIpUrl = data.lan_ip_url || null;
+
                 var useMDNS = data.mdns && data.mdns.status === 'active';
+                var fullUrl;
                 if (useMDNS && data.mdns.url) {
                     fullUrl = data.mdns.url;
+                } else {
+                    // Use LAN URL from backend; if unavailable (Docker bridge, no env var), leave null.
+                    fullUrl = lanIpUrl;
                 }
+
                 window._currentNetworkInfo = {
                     networkInfo: data,
                     lanIpUrl: lanIpUrl,
                     useMDNS: useMDNS,
                     fullUrl: fullUrl,
-                    currentMode: useMDNS ? "mdns" : "ip"
+                    currentMode: useMDNS ? "mdns" : "ip",
+                    docker_needs_host_env: !!(data.docker_needs_host_env)
                 };
 
                 // Sync tab UI highlights & visibility with initial default URL
