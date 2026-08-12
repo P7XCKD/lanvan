@@ -249,13 +249,16 @@
           if (mdnsTab) mdnsTab.style.display = 'none';
           if (qrMdnsTab) qrMdnsTab.style.display = 'none';
 
-          if (typeof window.setConnectMode === 'function') {
+          // Only switch to 'ip' mode when we were previously in 'mdns' mode — avoid
+          // redundant re-renders that would cause repeated QR image requests.
+          var currentMode = window._currentNetworkInfo && window._currentNetworkInfo.currentMode;
+          if (currentMode === 'mdns' && typeof window.setConnectMode === 'function') {
             window.setConnectMode('ip');
           }
 
           if (qrHintText) {
             if (networkInfo.docker_needs_host_env) {
-              qrHintText.innerHTML = '<strong>Docker:</strong> Set LANVAN_ADVERTISE_HOST in compose.yaml for mobile QR';
+              qrHintText.innerHTML = '<strong>Docker:</strong> Run <code>start-lanvan.ps1</code> or set LANVAN_ADVERTISE_HOST for mobile QR';
               qrHintText.style.color = '#eab308';
               qrHintText.title = 'Running in Docker bridge network. Specify LANVAN_ADVERTISE_HOST in compose.yaml to enable QR code for mobile devices.';
             } else if (qrHintText.innerHTML.includes('mDNS:')) {

@@ -333,27 +333,31 @@
     var protocol = location.protocol;
     var hostname = location.hostname;
     var port = location.port;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      fetch('/api/network-info').then(function (response) { return response.json(); }).then(function (networkInfo) {
-        var useHostname = hostname;
-        if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.mdns.url) {
-          preloadQRFromUrl(networkInfo.mdns.url);
-        } else if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
-          useHostname = networkInfo.lan_ip;
-          preloadQR(protocol, useHostname, port);
-        } else {
-          preloadQR(protocol, hostname, port);
-        }
-      }).catch(function () {
+
+    // Always fetch network-info to get the authoritative LAN URL.
+    // lan_ip_url from the backend is the single source of truth.
+    fetch('/api/network-info').then(function (response) { return response.json(); }).then(function (networkInfo) {
+      if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.mdns.url) {
+        // mDNS is active — preload the mDNS URL
+        preloadQRFromUrl(networkInfo.mdns.url);
+      } else if (networkInfo.lan_ip_url) {
+        // Backend has a valid LAN URL (native runtime or Docker with LANVAN_ADVERTISE_HOST)
+        preloadQRFromUrl(networkInfo.lan_ip_url);
+      }
+      // If lan_ip_url is null (Docker bridge without env var), do NOT preload localhost.
+      // The connect-panel will show the "LAN address unavailable" notice instead.
+    }).catch(function () {
+      // Only fall back to current hostname if it is not localhost/127.0.0.1.
+      // This preserves behavior for native runtimes that don't have the API yet.
+      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
         preloadQR(protocol, hostname, port);
-      });
-    } else {
-      preloadQR(protocol, hostname, port);
-    }
+      }
+    });
 
     if (typeof window.updateMDNSStatus === 'function') {
+      // Single startup check — no polling timer.
+      // Further mDNS status changes are driven by WebSocket server events, not polling.
       window.updateMDNSStatus();
-      setInterval(window.updateMDNSStatus, 2000);
     }
   }
 
