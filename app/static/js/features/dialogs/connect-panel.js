@@ -182,6 +182,10 @@
             var isMdnsActive = window._currentNetworkInfo.networkInfo && 
                                window._currentNetworkInfo.networkInfo.mdns && 
                                window._currentNetworkInfo.networkInfo.mdns.status === 'active';
+            
+            if (mdnsTab) mdnsTab.style.display = isMdnsActive ? "" : "none";
+            if (qrMdnsTab) qrMdnsTab.style.display = isMdnsActive ? "" : "none";
+
             if (isMdns && isMdnsActive) {
                 url = window._currentNetworkInfo.networkInfo.mdns.url || url;
             }
