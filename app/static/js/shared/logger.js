@@ -19,6 +19,7 @@
         info: (console.info || console.log).bind(console),
         debug: (console.debug || console.log).bind(console),
         trace: (console.trace || console.log).bind(console),
+        count: (console.count || console.log).bind(console),
         table: (console.table || console.log).bind(console),
         group: (console.group || console.log).bind(console),
         groupCollapsed: (console.groupCollapsed || console.log).bind(console),
@@ -36,6 +37,7 @@
         console.info = OriginalConsole.info;
         console.debug = OriginalConsole.debug;
         console.trace = OriginalConsole.trace;
+        console.count = OriginalConsole.count;
         console.table = OriginalConsole.table;
         console.group = OriginalConsole.group;
         console.groupCollapsed = OriginalConsole.groupCollapsed;
@@ -49,6 +51,7 @@
         console.info = noop;
         console.debug = noop;
         console.trace = noop;
+        if (typeof console.count === 'function') console.count = noop;
         if (typeof console.table === 'function') console.table = noop;
         if (typeof console.group === 'function') console.group = noop;
         if (typeof console.groupCollapsed === 'function') console.groupCollapsed = noop;
