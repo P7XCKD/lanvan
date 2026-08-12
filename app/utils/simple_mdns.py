@@ -446,6 +446,12 @@ class SimpleMDNSManager:
                     print(f"[INFO] mDNS service already running (ref_count={self.ref_count})")
                     return True
                 
+                # Check if running in Docker container environment (Docker bridge network isolates mDNS multicast)
+                from app.utils.network_resolver import is_docker_environment
+                if is_docker_environment():
+                    print("[NET] mDNS service disabled in Docker container mode (multicast isolated by Docker bridge network). Using direct LAN IP access.")
+                    return False
+
                 # Check if mDNS is available
                 if not self.mdns_available or not ZEROCONF_AVAILABLE:
                     print("[ERR] mDNS/Zeroconf is unavailable (library not loaded or blocked)")
@@ -692,7 +698,8 @@ class SimpleMDNSManager:
     
     def get_mdns_info(self) -> Dict[str, Any]:
         """Get mDNS service information"""
-        if not self.is_running:
+        from app.utils.network_resolver import is_docker_environment
+        if is_docker_environment() or not self.is_running:
             return {
                 "status": "disabled",
                 "domain": None,
