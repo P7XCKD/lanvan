@@ -38,6 +38,9 @@ def is_android_environment() -> bool:
     """
     [BOT] Detect Android environment (broader than just Termux)
     """
+    if os.path.exists('/.dockerenv'):
+        return False
+
     return any([
         is_termux_environment(),
         "ANDROID_STORAGE" in os.environ,
