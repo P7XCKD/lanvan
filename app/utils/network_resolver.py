@@ -26,13 +26,84 @@ def is_docker_bridge_ip(ip_str: Optional[str]) -> bool:
             pass
     return False
 
+_cached_discovered_host_ip = None
+
+def auto_discover_host_lan_ip() -> Optional[str]:
+    """
+    Auto-discover the host machine's physical LAN IPv4 address from inside a Docker container.
+    Scans local router subnets (e.g. 192.168.1.x, 192.168.0.x, 10.0.0.x) for the active Lanvan server port 80.
+    """
+    global _cached_discovered_host_ip
+    if _cached_discovered_host_ip:
+        return _cached_discovered_host_ip
+
+    try:
+        import urllib.request
+        import json
+        import concurrent.futures
+
+        # 1. Discover active router IP
+        common_subnets = ["192.168.1", "192.168.0", "192.168.2", "192.168.178", "10.0.0", "10.0.1", "172.16.0"]
+        active_router_subnet = None
+
+        for sub in common_subnets:
+            router_ip = f"{sub}.1"
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(0.12)
+                res = s.connect_ex((router_ip, 80))
+                s.close()
+                if res == 0:
+                    active_router_subnet = sub
+                    break
+            except Exception:
+                pass
+
+        if not active_router_subnet:
+            return None
+
+        # 2. Fast scan active subnet (1-254) for host machine running Lanvan on port 80
+        discovered_host_ip = None
+
+        def check_host_ip(ip_str):
+            try:
+                url = f"http://{ip_str}/api/server-status"
+                req = urllib.request.Request(url, headers={"User-Agent": "Lanvan-Host-Discovery"})
+                with urllib.request.urlopen(req, timeout=0.25) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode())
+                        if data.get("status") in ("online", "success", "running") or "status" in data:
+                            return ip_str
+            except Exception:
+                pass
+            return None
+
+        ips = [f"{active_router_subnet}.{i}" for i in range(1, 255)]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+            futures = {executor.submit(check_host_ip, ip): ip for ip in ips}
+            for future in concurrent.futures.as_completed(futures):
+                res = future.result()
+                if res:
+                    discovered_host_ip = res
+                    break
+
+        if discovered_host_ip:
+            _cached_discovered_host_ip = discovered_host_ip
+            print(f"[NET] Docker host LAN IP auto-discovered: {discovered_host_ip}")
+            return discovered_host_ip
+
+    except Exception as e:
+        print(f"[NET] Docker host IP auto-discovery warning: {e}")
+
+    return None
+
 def resolve_advertise_host() -> Dict[str, Any]:
     """
     Single authoritative address resolution for Lanvan.
     Returns dictionary with:
-      - 'lan_ip': valid physical LAN IP string, or None if unavailable/Docker bridge
+      - 'lan_ip': valid physical LAN IP string, or None if unavailable
       - 'is_docker': bool
-      - 'is_override': bool (whether LANVAN_ADVERTISE_HOST was provided)
+      - 'is_override': bool (whether LANVAN_HOST / LANVAN_ADVERTISE_HOST was provided)
       - 'display_ip': display string (lan_ip or '127.0.0.1')
     """
     is_docker = is_docker_environment()
@@ -49,8 +120,17 @@ def resolve_advertise_host() -> Dict[str, Any]:
             }
 
     if is_docker:
-        # Inside Docker Desktop bridge mode without explicit LANVAN_ADVERTISE_HOST,
-        # container bridge IPs (172.17.x.x - 172.31.x.x) are REJECTED.
+        # Inside Docker Desktop bridge mode without explicit LANVAN_HOST,
+        # attempt lightweight auto-discovery of the host's LAN IP across the local subnet.
+        discovered_ip = auto_discover_host_lan_ip()
+        if discovered_ip:
+            return {
+                "lan_ip": discovered_ip,
+                "is_docker": True,
+                "is_override": False,
+                "display_ip": discovered_ip
+            }
+        
         return {
             "lan_ip": None,
             "is_docker": True,
