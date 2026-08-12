@@ -366,7 +366,7 @@ async def get_network_info():
         port = mdns_manager.port
         
         is_docker = os.path.exists('/.dockerenv')
-        env_host = os.getenv("LANVAN_ADVERTISE_HOST") or os.getenv("ADVERTISE_HOST") or os.getenv("LAN_IP")
+        env_host = os.getenv("LANVAN_HOST") or os.getenv("LANVAN_ADVERTISE_HOST") or os.getenv("ADVERTISE_HOST") or os.getenv("LAN_IP")
         docker_needs_host_env = is_docker and not bool(env_host and env_host.strip())
 
         # Format LAN IP URL using the same logic as mDNS URLs

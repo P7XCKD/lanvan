@@ -11,9 +11,9 @@ services:
       - ./data:/app/data
     environment:
       # Inject the real Windows/host LAN IP so Lanvan can advertise it for mobile QR codes.
-      # Set via start-lanvan.ps1 or manually: $env:LANVAN_ADVERTISE_HOST="192.168.x.x"
-      # Leave empty (default) for localhost-only mode (no mobile QR).
-      LANVAN_ADVERTISE_HOST: ${LANVAN_ADVERTISE_HOST:-}
+      # Set via start-lanvan.ps1 or manually: $env:LANVAN_HOST="192.168.x.x"
+      LANVAN_HOST: ${LANVAN_HOST:-${LANVAN_ADVERTISE_HOST:-}}
+      LANVAN_ADVERTISE_HOST: ${LANVAN_ADVERTISE_HOST:-${LANVAN_HOST:-}}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/api/server-status"]
       interval: 30s
@@ -33,7 +33,8 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      LANVAN_ADVERTISE_HOST: ${LANVAN_ADVERTISE_HOST:-}
+      LANVAN_HOST: ${LANVAN_HOST:-${LANVAN_ADVERTISE_HOST:-}}
+      LANVAN_ADVERTISE_HOST: ${LANVAN_ADVERTISE_HOST:-${LANVAN_HOST:-}}
     healthcheck:
       test: ["CMD", "curl", "-f", "https://localhost:443/api/server-status", "-k"]
       interval: 30s

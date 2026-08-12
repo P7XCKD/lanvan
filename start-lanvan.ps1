@@ -2,21 +2,21 @@
 <#
 .SYNOPSIS
     Lanvan Docker launcher for Windows.
-    Detects the active physical LAN IPv4 and injects it as LANVAN_ADVERTISE_HOST
+    Detects the active physical LAN IPv4 and injects it as LANVAN_HOST
     before starting the Docker container, enabling mobile QR code scanning.
 
 .DESCRIPTION
     A Linux container running under Docker Desktop cannot discover the Windows host's
     physical Wi-Fi/Ethernet IP from inside the bridge network. This script detects
     the correct IP on the Windows host and passes it into Docker Compose via the
-    LANVAN_ADVERTISE_HOST environment variable.
+    LANVAN_HOST and LANVAN_ADVERTISE_HOST environment variables.
 
 .EXAMPLE
     .\start-lanvan.ps1
 
 .EXAMPLE
     # Manual override (skips auto-detection):
-    $env:LANVAN_ADVERTISE_HOST = "192.168.1.34"
+    $env:LANVAN_HOST = "192.168.1.34"
     .\start-lanvan.ps1
 #>
 
@@ -29,9 +29,14 @@ Write-Host "  ======================" -ForegroundColor Cyan
 Write-Host ""
 
 # ----- 1. Respect a pre-set manual override -----
-if ($env:LANVAN_ADVERTISE_HOST -and $env:LANVAN_ADVERTISE_HOST.Trim() -ne "") {
-    $detectedIP = $env:LANVAN_ADVERTISE_HOST.Trim()
-    Write-Host "  [OVERRIDE] Using manually configured LANVAN_ADVERTISE_HOST: $detectedIP" -ForegroundColor Yellow
+$overrideVal = $env:LANVAN_HOST
+if (-not $overrideVal -or $overrideVal.Trim() -eq "") {
+    $overrideVal = $env:LANVAN_ADVERTISE_HOST
+}
+
+if ($overrideVal -and $overrideVal.Trim() -ne "") {
+    $detectedIP = $overrideVal.Trim()
+    Write-Host "  [OVERRIDE] Using manually configured LANVAN_HOST: $detectedIP" -ForegroundColor Yellow
 }
 else {
     # ----- 2. Auto-detect the real physical LAN IPv4 on the Windows host -----
@@ -167,7 +172,7 @@ else {
         Write-Host "  [ERROR] Could not automatically detect a physical LAN IPv4 address." -ForegroundColor Red
         Write-Host "  Please set it manually and retry:" -ForegroundColor Red
         Write-Host ""
-        Write-Host '    $env:LANVAN_ADVERTISE_HOST = "192.168.x.x"' -ForegroundColor White
+        Write-Host '    $env:LANVAN_HOST = "192.168.x.x"' -ForegroundColor White
         Write-Host "    .\start-lanvan.ps1" -ForegroundColor White
         Write-Host ""
         exit 1
@@ -182,28 +187,29 @@ if ($detectedIP -notmatch "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$") {
     exit 1
 }
 
-# ----- 4. Inject into environment and launch Docker Compose -----
+# ----- 4. Inject into environment and launch Docker -----
+$env:LANVAN_HOST = $detectedIP
 $env:LANVAN_ADVERTISE_HOST = $detectedIP
 
-Write-Host ""
-Write-Host "  Starting Lanvan..." -ForegroundColor Cyan
-Write-Host "  LANVAN_ADVERTISE_HOST = $detectedIP"
-Write-Host ""
+# Remove pre-existing container if present to ensure fresh container env binding
+docker rm -f lanvan-app 2>$null | Out-Null
 
 docker compose up -d
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
-    Write-Host "  Lanvan is running!" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "  Local access  : http://localhost" -ForegroundColor Cyan
-    Write-Host "  LAN access    : http://$detectedIP" -ForegroundColor Cyan
-    Write-Host "  (Scan the QR code in the Lanvan Connect panel from your phone)" -ForegroundColor Gray
+    Write-Host "  ========================================" -ForegroundColor Cyan
+    Write-Host "  LAN IP     : $detectedIP" -ForegroundColor Green
+    Write-Host "  LAN URL    : http://$detectedIP" -ForegroundColor Green
+    Write-Host "  Local URL  : http://localhost" -ForegroundColor Cyan
+    Write-Host "  Docker     : Running" -ForegroundColor Green
+    Write-Host "  QR         : Ready" -ForegroundColor Green
+    Write-Host "  ========================================" -ForegroundColor Cyan
     Write-Host ""
 }
 else {
     Write-Host ""
-    Write-Host "  [ERROR] Docker Compose failed to start. Check the output above." -ForegroundColor Red
+    Write-Host "  [ERROR] Docker Compose failed to start." -ForegroundColor Red
     Write-Host ""
     exit $LASTEXITCODE
 }

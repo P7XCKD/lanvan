@@ -36,7 +36,7 @@ def resolve_advertise_host() -> Dict[str, Any]:
       - 'display_ip': display string (lan_ip or '127.0.0.1')
     """
     is_docker = is_docker_environment()
-    env_host = os.getenv("LANVAN_ADVERTISE_HOST") or os.getenv("ADVERTISE_HOST") or os.getenv("LAN_IP")
+    env_host = os.getenv("LANVAN_HOST") or os.getenv("LANVAN_ADVERTISE_HOST") or os.getenv("ADVERTISE_HOST") or os.getenv("LAN_IP")
     
     if env_host and env_host.strip():
         val = env_host.strip()
