@@ -187,6 +187,7 @@
             window.LanvanStore.state.typeFilter = type;
         }
         var wrapper = document.getElementById("typeBtnWrapper");
+        var searchWrapper = document.getElementById("toolbarSearchWrapper");
         if (wrapper) {
             if (type === "all") {
                 wrapper.innerHTML =
@@ -194,6 +195,9 @@
                     '<span>Type</span>' +
                     '<i data-lucide="chevron-down" style="width: 12px; height: 12px;"></i>' +
                     '</button>';
+                if (searchWrapper) {
+                    searchWrapper.classList.remove("compact-search");
+                }
             } else {
                 var labelMap = {
                     folder: "Folder",
@@ -215,14 +219,17 @@
                     '<i data-lucide="x" style="width: 13px; height: 13px;"></i>' +
                     '</button>' +
                     '</div>';
+                if (searchWrapper) {
+                    searchWrapper.classList.add("compact-search");
+                }
             }
         }
 
         var menu = document.getElementById("typeDropdownMenu");
         if (menu) {
             menu.style.display = "none";
-            var checkmarks = {
-                all: "check",
+            var typeMap = {
+                all: "layers-3",
                 image: "image",
                 video: "video",
                 audio: "music",
@@ -232,24 +239,27 @@
             };
 
             var items = menu.querySelectorAll(".context-item");
-            var keys = Object.keys(checkmarks);
+            var keys = Object.keys(typeMap);
             for (var idx = 0; idx < items.length; idx++) {
                 var item = items[idx];
-                var icon = item.querySelector("i");
-                if (icon) {
-                    var itemType = keys[idx];
-                    if (itemType === type) {
-                        icon.setAttribute("data-lucide", "check");
-                        icon.style.color = "var(--primary)";
-                    } else {
-                        icon.setAttribute("data-lucide", checkmarks[itemType]);
-                        icon.style.color = "";
-                    }
+                var leftContainer = item.querySelector(".context-item-left");
+                var itemType = keys[idx];
+                if (leftContainer && itemType) {
+                    var isSelected = itemType === type;
+                    var iconName = isSelected ? "check" : typeMap[itemType];
+                    var iconColor = isSelected ? "color: var(--primary);" : "";
+                    var labelSpan = item.querySelector("span");
+                    var labelText = labelSpan ? labelSpan.textContent : itemType;
+                    leftContainer.innerHTML =
+                        '<i data-lucide="' + iconName + '" style="width: 14px; height: 14px; ' + iconColor + '"></i>' +
+                        '<span>' + labelText + '</span>';
                 }
             }
         }
 
-        if (window.lucide) lucide.createIcons();
+        if (window.lucide && typeof window.lucide.createIcons === "function") {
+            window.lucide.createIcons();
+        }
         if (typeof window.clearSelection === "function") window.clearSelection();
 
         if (typeof window.refreshFileList === "function") {

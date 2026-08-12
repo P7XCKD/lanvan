@@ -3135,6 +3135,39 @@ html[data-view-mode="list"] #gridViewBtn {
         gap: 0.65rem;
     }
 
+    /* Mobile-only compact search pill when type filter is active */
+    .search-pill-wrapper.compact-search:not(:focus-within) {
+        width: 32px;
+        min-width: 32px;
+        max-width: 32px;
+        padding: 0;
+        justify-content: center;
+        border-radius: 999px;
+        cursor: pointer;
+    }
+
+    .search-pill-wrapper.compact-search:not(:focus-within) input {
+        width: 0;
+        min-width: 0;
+        padding: 0;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .search-pill-wrapper.compact-search:focus-within {
+        min-width: 110px;
+        max-width: 170px;
+        width: auto;
+        padding: 0 0.75rem;
+    }
+
+    .search-pill-wrapper.compact-search:focus-within input {
+        width: 100%;
+        min-width: 25px;
+        opacity: 1;
+        pointer-events: auto;
+    }
+
     .file-toolbar>div:last-child {
         width: 100%;
         justify-content: space-between;
