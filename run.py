@@ -438,8 +438,8 @@ if __name__ == "__main__":
     ip = get_ip()
     args = sys.argv
     cli_flags = {a.lower() for a in args[1:]}
-    
-    is_production = any(flag in cli_flags for flag in ["prod", "production", "--prod", "--production"])
+    is_dev = any(flag in cli_flags for flag in ["dev", "development", "--dev", "--development", "debug", "--debug"])
+    is_production = not is_dev
     use_https = any(flag in cli_flags for flag in ["https", "--https"])
     ios_mode = any(flag in cli_flags for flag in ["ios", "--ios", "--safari"])
     force_rebuild = any(flag in cli_flags for flag in ["force", "--force", "rebuild"])

@@ -1254,7 +1254,7 @@ function createUploadItem(file, uploadId, explicitBaseFolder) {
 }
 
 function addToUploadQueue(files) {
-  console.count("addToUploadQueue");
+  if (window.DEBUG_MODE) console.count("addToUploadQueue");
   const baseActiveFolder = (typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "")).replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
   console.log("%c[LANVAN UPLOAD] 📥 Queued %d file(s) | Active Folder: '%s'", "color:#8b5cf6; font-weight:bold; font-size:12px;", files.length, baseActiveFolder || "Home (Root)");
 
@@ -1932,7 +1932,7 @@ function removeCompletedUpload(itemId) {
 
 function startNextUpload() {
   if (typeof window.logQueueIdentities === "function") window.logQueueIdentities("startNextUpload");
-  console.count("startNextUpload");
+  if (window.DEBUG_MODE) console.count("startNextUpload");
   const uploadQueue = getUploadQueue();
   // Resolve ghost items restored from JSON storage without binary File handles
   // BUT only when this is NOT a test scenario (items without a .file AND without specific test IDs)
@@ -3109,7 +3109,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
-  console.count("setupEventListeners");
+  if (window.DEBUG_MODE) console.count("setupEventListeners");
   // Set up clipboard "Add Text" button with high-priority event listener
   const addTextBtn = document.getElementById('addTextToClipboardBtn');
   if (addTextBtn) {
