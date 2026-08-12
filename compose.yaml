@@ -1,0 +1,44 @@
+name: lanvan
+
+services:
+  lanvan:
+    build: .
+    image: devprobs/lanvan:latest
+    container_name: lanvan-app
+    ports:
+      - "80:80"
+    volumes:
+      - ./data:/app/data
+    environment:
+      # Inject host LAN IP so Lanvan can advertise it for mobile QR code scanning.
+      # Automatically set via start-lanvan.ps1 (Windows) or start-lanvan.sh (Linux/macOS)
+      LANVAN_HOST: ${LANVAN_HOST:-${LANVAN_ADVERTISE_HOST:-}}
+      LANVAN_ADVERTISE_HOST: ${LANVAN_ADVERTISE_HOST:-${LANVAN_HOST:-}}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/api/server-status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  lanvan-https:
+    profiles: ["https"]
+    build: .
+    image: devprobs/lanvan:latest
+    container_name: lanvan-https-app
+    command: ["--https"]
+    ports:
+      - "443:443"
+    volumes:
+      - ./data:/app/data
+    environment:
+      LANVAN_HOST: ${LANVAN_HOST:-${LANVAN_ADVERTISE_HOST:-}}
+      LANVAN_ADVERTISE_HOST: ${LANVAN_ADVERTISE_HOST:-${LANVAN_HOST:-}}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "https://localhost:443/api/server-status", "-k"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped

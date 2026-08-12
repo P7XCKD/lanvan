@@ -46,7 +46,9 @@
     function getCanonicalIdentity(parentPath, fileName) {
         if (!fileName) return "";
         var cleanParent = cleanFolderPath(parentPath);
-        var cleanName = String(fileName).trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+        var rawName = String(fileName).trim();
+        try { rawName = decodeURIComponent(rawName); } catch (e) {}
+        var cleanName = rawName.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
         return cleanParent ? (cleanParent + "/" + cleanName) : cleanName;
     }
 

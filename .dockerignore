@@ -1,0 +1,16 @@
+.git
+.gitignore
+.venv
+.agents
+.vscode
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+testing/
+scratch/
+docs/
+android/
+.gradle/
+data/

@@ -204,6 +204,22 @@ class AdvancedFileValidator:
             return None
 
     @classmethod
+    def is_dangerous_blocking_enabled(cls, is_https: bool = False) -> bool:
+        """
+        Determines if dangerous-file blocking is enforced.
+        Precedence:
+          BLOCK_DANGEROUS environment variable (set via --block-dangerous CLI argument or container env)
+            >
+          Protocol default (HTTPS defaults to True, HTTP defaults to False)
+        """
+        env_val = os.getenv("BLOCK_DANGEROUS", "").strip().lower()
+        if env_val in ("true", "1", "yes"):
+            return True
+        if env_val in ("false", "0", "no"):
+            return False
+        return is_https
+
+    @classmethod
     def is_dangerous_content(cls, file_path: Path) -> bool:
         """
         Check if file contains dangerous content based on magic bytes.
@@ -381,10 +397,8 @@ class FileValidator(AdvancedFileValidator):
         # Extension check
         file_ext = Path(filename).suffix.lower()
         
-        # [!] SECURITY: Always block known-dangerous executable extensions regardless of protocol.
-        # Executables (.exe, .bat, .dll, .vbs, .jar, .class, .bin, .sh, etc.) have no
-        # legitimate use case in a LAN file-sharing application.
-        if file_ext in cls.BLOCKED_EXTENSIONS:
+        # Security check: Block dangerous executable extensions based on blocking policy
+        if cls.is_dangerous_blocking_enabled(is_https) and file_ext in cls.BLOCKED_EXTENSIONS:
             errors.append(f"File type '{file_ext}' is blocked for security reasons (potentially dangerous executable)")
             return {'valid': False, 'errors': errors, 'security_risk': 'HIGH'}
         
@@ -467,33 +481,37 @@ class FileValidator(AdvancedFileValidator):
                 'stage': 'filename_validation'
             }
         
-        # Step 2: [!] ADVANCED: Extension manipulation detection
-        try:
-            extension_check = cls.validate_file_extension_integrity(file_path, original_filename)
-            
-            if not extension_check['valid']:
+        # Default initialization for analysis metadata
+        content_warnings = []
+        extension_check = None
+        
+        # Step 2: Extension manipulation detection (only when dangerous file blocking is active)
+        if cls.is_dangerous_blocking_enabled(is_https):
+            try:
+                extension_check = cls.validate_file_extension_integrity(file_path, original_filename)
+                
+                if not extension_check['valid']:
+                    return {
+                        'valid': False,
+                        'security_risk': extension_check['security_risk'],
+                        'errors': [extension_check['reason']],
+                        'extension_manipulation_detected': True,
+                        'claimed_extension': extension_check['claimed_extension'],
+                        'actual_type': extension_check['detected_type'],
+                        'stage': 'content_analysis'
+                    }
+                
+                # If there's a warning-level mismatch, proceed but flag it
+                if extension_check.get('mismatch', False) and extension_check['security_risk'] == 'MEDIUM':
+                    content_warnings.append(extension_check['reason'])
+                
+            except Exception as e:
                 return {
                     'valid': False,
-                    'security_risk': extension_check['security_risk'],
-                    'errors': [extension_check['reason']],
-                    'extension_manipulation_detected': True,
-                    'claimed_extension': extension_check['claimed_extension'],
-                    'actual_type': extension_check['detected_type'],
-                    'stage': 'content_analysis'
+                    'security_risk': 'HIGH',
+                    'errors': [f"File content analysis failed: {str(e)}"],
+                    'stage': 'content_analysis_error'
                 }
-            
-            # If there's a warning-level mismatch, proceed but flag it
-            content_warnings = []
-            if extension_check.get('mismatch', False) and extension_check['security_risk'] == 'MEDIUM':
-                content_warnings.append(extension_check['reason'])
-            
-        except Exception as e:
-            return {
-                'valid': False,
-                'security_risk': 'HIGH',
-                'errors': [f"File content analysis failed: {str(e)}"],
-                'stage': 'content_analysis_error'
-            }
         
         # Step 3: File size and basic properties
         try:

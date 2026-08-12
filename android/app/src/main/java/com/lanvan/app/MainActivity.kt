@@ -233,6 +233,66 @@ class MainActivity : AppCompatActivity() {
             }
             layout.addView(divider2)
 
+            // Security Section: Block Dangerous Files
+            val securityTitle = TextView(this).apply {
+                text = "Security (Block Dangerous Files)"
+                textSize = 16f
+                setTypeface(null, android.graphics.Typeface.BOLD)
+                setTextColor(0xFFFFFFFF.toInt())
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = 10 }
+            }
+            layout.addView(securityTitle)
+
+            val isHttpsActive = sharedPrefs.getBoolean("use_https", false)
+            val securityDesc = TextView(this).apply {
+                text = if (isHttpsActive)
+                    "HTTPS Protocol: Dangerous executable blocking is enforced by default."
+                else
+                    "HTTP Protocol: Block known dangerous executable files (.exe, .bat, .dll, etc.)."
+                setTextColor(0xFF888888.toInt())
+                textSize = 12f
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = 10 }
+            }
+            layout.addView(securityDesc)
+
+            val switchBlockDangerous = android.widget.Switch(this).apply {
+                text = "Block Dangerous Files (HTTP)"
+                setTextColor(0xFFBBBBBB.toInt())
+                if (isHttpsActive) {
+                    isChecked = true
+                    isEnabled = false
+                } else {
+                    isChecked = sharedPrefs.getBoolean("block_dangerous_http", false)
+                    isEnabled = true
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = 20 }
+                setOnCheckedChangeListener { _, isChecked ->
+                    if (!isHttpsActive) {
+                        sharedPrefs.edit().putBoolean("block_dangerous_http", isChecked).apply()
+                    }
+                }
+            }
+            layout.addView(switchBlockDangerous)
+
+            // Divider Sec
+            val dividerSec = View(this).apply {
+                setBackgroundColor(0xFF444444.toInt())
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    2
+                ).apply { bottomMargin = 40 }
+            }
+            layout.addView(dividerSec)
+
             // 3. Storage Management Section
             val storageTitle = TextView(this).apply {
                 text = "Storage Management"
@@ -310,15 +370,15 @@ class MainActivity : AppCompatActivity() {
             }
             layout.addView(btnClearStorage)
 
-            // Divider 3
-            val divider3 = View(this).apply {
+            // Divider Storage
+            val dividerStorage = View(this).apply {
                 setBackgroundColor(0xFF444444.toInt())
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     2
                 ).apply { bottomMargin = 40 }
             }
-            layout.addView(divider3)
+            layout.addView(dividerStorage)
 
             // 3. Copy Logs Button inside settings
             val btnCopyLogsDialog = Button(this).apply {
@@ -613,6 +673,28 @@ class MainActivity : AppCompatActivity() {
 
     private fun clearStorageData() {
         try {
+            // Notify active Python backend server to clear in-memory clipboard & file metadata
+            Thread {
+                try {
+                    val url = java.net.URL("http://127.0.0.1:5000/clear")
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.connectTimeout = 1000
+                    conn.readTimeout = 1000
+                    conn.responseCode
+                    conn.disconnect()
+                } catch (_: Exception) {}
+                try {
+                    val url = java.net.URL("http://127.0.0.1:5000/api/clipboard/clear")
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.requestMethod = "DELETE"
+                    conn.connectTimeout = 1000
+                    conn.readTimeout = 1000
+                    conn.responseCode
+                    conn.disconnect()
+                } catch (_: Exception) {}
+            }.start()
+
             val uploadsDir = java.io.File(filesDir, "data/uploads")
             if (uploadsDir.exists()) deleteContents(uploadsDir)
 

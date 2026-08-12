@@ -207,43 +207,14 @@ FALLBACK_HTTPS_PORT = 5001
 HTTP_PORT = int(os.getenv("HTTP_PORT", DEFAULT_HTTP_PORT))
 HTTPS_PORT = int(os.getenv("HTTPS_PORT", DEFAULT_HTTPS_PORT))
 
-# === UTILITY FUNCTIONS ===
 def get_ip():
-    """Get local IP address - works offline"""
+    """Get local IP address - uses authoritative network_resolver"""
     try:
-        # Method 1: Try hostname resolution (works offline on most systems)
-        hostname = socket.gethostname()
-        host_ip = socket.gethostbyname(hostname)
-        if host_ip and not host_ip.startswith('127.'):
-            return host_ip
+        from app.utils.network_resolver import resolve_advertise_host
+        res = resolve_advertise_host()
+        return res["display_ip"]
     except Exception:
-        pass
-    
-    try:
-        # Method 2: Create socket and connect to local router (offline-compatible)
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("192.168.1.1", 80))  # Local router IP - doesn't require internet
-        ip = s.getsockname()[0]
-        s.close()
-        if ip and not ip.startswith('127.'):
-            return ip
-    except Exception:
-        pass
-    
-    try:
-        # Method 3: Try other common local network ranges
-        for network in ["10.0.0.1", "172.16.0.1"]:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect((network, 80))
-            ip = s.getsockname()[0]
-            s.close()
-            if ip and not ip.startswith('127.'):
-                return ip
-    except Exception:
-        pass
-    
-    # Fallback to localhost
-    return "127.0.0.1"
+        return "127.0.0.1"
 
 def can_bind_privileged_port(port):
     """Check if we can bind to a privileged port (< 1024)"""
@@ -467,12 +438,18 @@ if __name__ == "__main__":
     ip = get_ip()
     args = sys.argv
     cli_flags = {a.lower() for a in args[1:]}
-    
-    is_production = any(flag in cli_flags for flag in ["prod", "production", "--prod", "--production"])
+    is_dev = any(flag in cli_flags for flag in ["dev", "development", "--dev", "--development", "debug", "--debug"])
+    is_production = not is_dev
     use_https = any(flag in cli_flags for flag in ["https", "--https"])
     ios_mode = any(flag in cli_flags for flag in ["ios", "--ios", "--safari"])
     force_rebuild = any(flag in cli_flags for flag in ["force", "--force", "rebuild"])
     clean_build = "clean" in cli_flags
+    block_dangerous_flag = any(flag in cli_flags for flag in ["block-dangerous", "--block-dangerous", "block_dangerous", "--block_dangerous"])
+
+    if block_dangerous_flag:
+        os.environ["BLOCK_DANGEROUS"] = "true"
+    elif "BLOCK_DANGEROUS" not in os.environ:
+        os.environ["BLOCK_DANGEROUS"] = "true" if use_https else "false"
 
     if is_production:
         os.environ["LANVAN_ENV"] = "production"
@@ -638,6 +615,25 @@ if __name__ == "__main__":
 
         stdin_thread = threading.Thread(target=_stdin_monitor, daemon=True)
         stdin_thread.start()
+
+        def _handle_sigterm(signum, frame):
+            print("\n[INFO] Shutdown signal received - stopping server...")
+            if proc and proc.poll() is None:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=3)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+            sys.exit(0)
+
+        try:
+            signal.signal(signal.SIGTERM, _handle_sigterm)
+            signal.signal(signal.SIGINT, _handle_sigterm)
+        except Exception:
+            pass
 
         print("[INFO] Server starting (Ctrl+C or type 'close' to stop)...")
         try:

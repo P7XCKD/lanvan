@@ -653,6 +653,25 @@ let pond;
 let uploadType = 'regular';
 let encryptionKey = null;
 let isEncryptionEnabled = false;
+
+function syncAESSettingsState(enabled) {
+  const isChecked = !!enabled;
+  isEncryptionEnabled = isChecked;
+  try {
+    localStorage.setItem('aes_enabled', isChecked ? '1' : '0');
+  } catch (e) {}
+
+  const toggleTop = (typeof DOM_CACHE !== 'undefined' && DOM_CACHE.aesToggle) || document.getElementById('enableEncryption');
+  if (toggleTop && toggleTop.checked !== isChecked) {
+    toggleTop.checked = isChecked;
+  }
+
+  const toggleModal = document.getElementById('aesSettingToggle');
+  if (toggleModal && toggleModal.checked !== isChecked) {
+    toggleModal.checked = isChecked;
+  }
+}
+window.syncAESSettingsState = syncAESSettingsState;
 let fetchInterceptorActive = false;
 
 let _rawUploadQueue = Array.isArray(window.uploadQueue) ? window.uploadQueue : [];
@@ -1235,7 +1254,7 @@ function createUploadItem(file, uploadId, explicitBaseFolder) {
 }
 
 function addToUploadQueue(files) {
-  console.count("addToUploadQueue");
+  if (window.DEBUG_MODE) console.count("addToUploadQueue");
   const baseActiveFolder = (typeof window.getCurrentFolderPath === "function" ? window.getCurrentFolderPath() : (window.currentFolderPath || "")).replace(/^Home\/?/, "").replace(/^Home$/, "").replace(/^\/+|\/+$/g, "");
   console.log("%c[LANVAN UPLOAD] 📥 Queued %d file(s) | Active Folder: '%s'", "color:#8b5cf6; font-weight:bold; font-size:12px;", files.length, baseActiveFolder || "Home (Root)");
 
@@ -1282,26 +1301,7 @@ function showUploadManager() {
   }
 }
 
-//  Settings Menu Functions
-function toggleSettingsMenu() {
-  const settingsMenu = document.getElementById('settingsMenu');
-  if (settingsMenu.style.display === 'none' || settingsMenu.style.display === '') {
-    settingsMenu.style.display = 'block';
-    // Close menu when clicking outside
-    setTimeout(() => {
-      document.addEventListener('click', closeSettingsOnOutsideClick);
-    }, 100);
-  } else {
-    settingsMenu.style.display = 'none';
-    document.removeEventListener('click', closeSettingsOnOutsideClick);
-  }
-}
-
-// Removed closeSettingsOnOutsideClick function; moved to file-utils.js
-
-function showAccessControlSettings() {
-  showToast(' Access Control features coming soon! Stay tuned for host-guest permissions, device whitelisting, and access tokens.', 5000);
-}
+// Settings Menu Dropdown Controller extracted to features/ui/settings-menu.js
 
 // Device Logs Modal Adapter extracted to features/device/device-logs-modal-adapter.js
 
@@ -1932,7 +1932,7 @@ function removeCompletedUpload(itemId) {
 
 function startNextUpload() {
   if (typeof window.logQueueIdentities === "function") window.logQueueIdentities("startNextUpload");
-  console.count("startNextUpload");
+  if (window.DEBUG_MODE) console.count("startNextUpload");
   const uploadQueue = getUploadQueue();
   // Resolve ghost items restored from JSON storage without binary File handles
   // BUT only when this is NOT a test scenario (items without a .file AND without specific test IDs)
@@ -2825,114 +2825,7 @@ async function refreshFileListManually() {
   }
 }
 
-//  Auto-refresh functionality for cross-device sync
-let autoRefreshInterval;
-let lastFileCount = 0;
-let autoRefreshActive = true;
-let currentActiveSection = 'file'; // Track which section is currently active
-
-function startAutoRefresh() {
-  console.log(' Starting auto-refresh for cross-device file sync...');
-
-  // Initial file count setup
-  const fileGrid = document.querySelector('.file-grid');
-  if (fileGrid) {
-    lastFileCount = fileGrid.querySelectorAll('.file-card').length;
-  }
-
-  // Immediate file count refresh to ensure accuracy
-  refreshFileCountOnly();
-
-  // Set up polling every 5 seconds to check for file changes
-  autoRefreshInterval = setInterval(async () => {
-    if (!autoRefreshActive || document.hidden) return;
-
-    // Only refresh files when file section is active, not when in clipboard mode
-    if (currentActiveSection !== 'file') {
-      console.log(' Skipping file refresh - clipboard section is active');
-      return;
-    }
-
-    // Skip auto-refresh file count comparison while active uploads are transferring
-    const hasActiveUploads = Array.isArray(window.uploadQueue) && window.uploadQueue.some(i => i && (i.status === 'UPLOADING' || i.status === 'QUEUED' || i.status === 'PROCESSING'));
-    if (hasActiveUploads) {
-      return;
-    }
-
-    try {
-      const endpoint = getCurrentFileListEndpoint();
-      const response = await fetch(endpoint);
-      if (!response.ok) return;
-
-      const data = await response.json();
-      const files = data.files || [];
-      const currentFileCount = files.length;
-
-      // Only update if file count changed (indicating new uploads/deletions)
-      if (currentFileCount !== lastFileCount) {
-        console.log(` File count changed: ${lastFileCount} → ${currentFileCount}, auto-loading...`);
-        // Route through canonical pipeline: API → Repository → Scheduler → Projection → Renderer
-        refreshFileList('auto_refresh');
-
-        // Silently auto-load new files without showing toast notifications
-        if (currentFileCount > lastFileCount) {
-          console.log(` ${currentFileCount - lastFileCount} new file(s) auto-loaded from other device(s)`);
-        } else if (currentFileCount < lastFileCount) {
-          console.log(` ${lastFileCount - currentFileCount} file(s) removed from other device(s)`);
-        }
-      } else {
-        // Even if file count is same, ensure display is current (files might have changed)
-        updateFileCount(currentFileCount);
-      }
-    } catch (error) {
-      console.error(' Auto-refresh failed:', error);
-    }
-  }, 5000); // Check every 5 seconds
-}
-
-function stopAutoRefresh() {
-  autoRefreshActive = false;
-  if (autoRefreshInterval) {
-    clearInterval(autoRefreshInterval);
-    autoRefreshInterval = null;
-    console.log(' Auto-refresh stopped');
-  }
-}
-
-function pauseAutoRefresh() {
-  autoRefreshActive = false;
-  console.log('⏸ Auto-refresh paused');
-}
-
-function resumeAutoRefresh() {
-  autoRefreshActive = true;
-  console.log('▶ Auto-refresh resumed');
-}
-
-// Pause auto-refresh when user is actively uploading to avoid conflicts
-function handleUploadStart() {
-  pauseAutoRefresh();
-}
-
-function handleUploadEnd() {
-  // Only resume auto-refresh if there are no active, queued, or paused uploads
-  const hasUploadsInProgress = uploadQueue.some(item =>
-    ['UPLOADING', 'QUEUED', 'PAUSED'].includes(item.status)
-  );
-  if (hasUploadsInProgress) {
-    console.log('Skipping auto-refresh resume: paused or active uploads exist in queue');
-    return;
-  }
-  // Resume auto-refresh after a short delay to allow current upload to complete
-  setTimeout(() => {
-    const hasUploadsInProgress2 = uploadQueue.some(item =>
-      ['UPLOADING', 'QUEUED', 'PAUSED'].includes(item.status)
-    );
-    if (!hasUploadsInProgress2) {
-      resumeAutoRefresh();
-    }
-  }, 2000);
-}
+// Auto-Refresh Polling Controller extracted to features/network/auto-refresh-controller.js
 
 // Prompt user with browser confirmation dialog ("Changes you made may not be saved") on reload/leave if uploads are in progress
 window.addEventListener('beforeunload', function (e) {
@@ -2948,50 +2841,7 @@ window.addEventListener('beforeunload', function (e) {
   }
 });
 
-//  Dedicated function to update file count display
-function updateFileCount(fileCount) {
-  const fileCountEl = document.getElementById('fileCount');
-  if (fileCountEl) {
-    if (fileCount > 0) {
-      fileCountEl.textContent = `(${fileCount} file${fileCount === 1 ? '' : 's'})`;
-    } else {
-      fileCountEl.textContent = '';
-    }
-  }
-  console.log(` File count updated: ${fileCount} files`);
-}
-
-// Helper to build the correct listing endpoint for the current folder
-function getCurrentFileListEndpoint() {
-  const rawFolder = (typeof window.getCurrentFolderPath === 'function')
-    ? window.getCurrentFolderPath()
-    : (window.currentFolderPath || '');
-  const folder = (rawFolder === 'Home' || rawFolder === 'Home/') ? '' : rawFolder;
-  if (folder) {
-    return '/api/folders/' + encodeURIComponent(folder) + '/files';
-  }
-  return '/api/files';
-}
-
-//  Refresh only the file count from server without updating display
-async function refreshFileCountOnly() {
-  try {
-    const response = await fetch(getCurrentFileListEndpoint());
-    if (!response.ok) {
-      console.warn(` Failed to refresh file count: HTTP ${response.status}`);
-      return;
-    }
-
-    const data = await response.json();
-    const count = data.files ? data.files.length : (data.files ? data.files.length : 0);
-    updateFileCount(count);
-    lastFileCount = count; // Keep auto-refresh tracking in sync
-
-    console.log(` File count refreshed: ${count} files`);
-  } catch (error) {
-    console.error(' Failed to refresh file count:', error);
-  }
-}
+// File Summary Counter & Endpoint Resolver extracted to features/files/file-summary-counter.js
 
 function updateFileDisplay(files) {
   const fileGrid = document.querySelector('.file-grid');
@@ -3218,44 +3068,48 @@ document.addEventListener('DOMContentLoaded', () => {
     //  Check for mDNS service and update status
     updateMDNSStatus();
 
-    //  Handle AES toggle restrictions - DISABLED FOR HTTP
-    if (location.protocol === 'http:') {
-      //  NEW LOGIC: Allow AES over HTTP with HTTP-Safe mode
-      const toggle = DOM_CACHE.aesToggle;
-      if (toggle) {
-        // Enable AES toggle for HTTP (HTTP-Safe mode will provide security)
-        toggle.disabled = false;
-        const toggleWrapper = toggle.closest('div');
+    // Restore AES Encryption preference from localStorage and sync UI
+    var savedAES = null;
+    try {
+      savedAES = localStorage.getItem('aes_enabled');
+    } catch (e) {}
+    var initialAES = (savedAES !== null) ? (savedAES === '1') : false;
+    syncAESSettingsState(initialAES);
+
+    // Handle AES toggle restrictions & change listeners
+    const toggle = DOM_CACHE.aesToggle || document.getElementById('enableEncryption');
+    if (toggle) {
+      toggle.disabled = false;
+      const toggleWrapper = toggle.closest('div');
+      if (toggleWrapper) {
         toggleWrapper.style.opacity = '1';
-        toggleWrapper.title = " AES over HTTP requires HTTP-Safe Mode for complete security protection.";
+        toggleWrapper.title = "AES encryption protects transfer payloads with AES-256.";
+      }
 
-        // Add change listener
-        toggle.addEventListener('change', function () {
-          isEncryptionEnabled = this.checked;
-          console.log(' Encryption toggled:', isEncryptionEnabled);
+      toggle.addEventListener('change', function () {
+        syncAESSettingsState(this.checked);
+        console.log(' Encryption toggled:', isEncryptionEnabled);
 
-          //  HTTP-Safe mode is now automatic for HTTP connections
-          if (location.protocol === 'http:' && this.checked) {
-            console.log(' HTTP-Safe mode automatically enabled for HTTP connection');
+        if (location.protocol === 'http:' && this.checked) {
+          console.log(' HTTP-Safe mode automatically enabled for HTTP connection');
+          if (typeof showToast === 'function') {
             showToast(' HTTP-Safe mode automatically enabled for secure encryption!', 4000);
           }
-        });
-      }
-    } else {
-      // HTTPS - encryption available (same as HTTP now with HTTP-Safe mode)
-      const toggle = DOM_CACHE.aesToggle;
-      if (toggle) {
-        toggle.addEventListener('change', function () {
-          isEncryptionEnabled = this.checked;
-          console.log(' Encryption toggled:', isEncryptionEnabled);
-        });
-      }
+        }
+      });
+    }
+
+    const modalToggle = document.getElementById('aesSettingToggle');
+    if (modalToggle) {
+      modalToggle.addEventListener('change', function () {
+        syncAESSettingsState(this.checked);
+      });
     }
   }
 });
 
 function setupEventListeners() {
-  console.count("setupEventListeners");
+  if (window.DEBUG_MODE) console.count("setupEventListeners");
   // Set up clipboard "Add Text" button with high-priority event listener
   const addTextBtn = document.getElementById('addTextToClipboardBtn');
   if (addTextBtn) {
@@ -3624,97 +3478,7 @@ function setupEventListeners() {
   });
 }
 
-function clearFileSelection() {
-  // Clear the file input (safe - doesn't affect active uploads)
-  if (DOM_CACHE.fileInput) {
-    DOM_CACHE.fileInput.value = '';
-  }
-
-  // Clear the preview area (safe - only affects UI)
-  if (DOM_CACHE.preview) {
-    DOM_CACHE.preview.innerHTML = '';
-  }
-
-  // Note: We do NOT clear uploadQueue or any active upload state here
-  // This function only clears the file selection UI, not the upload manager
-
-  console.log(' File selection UI cleared (upload queue preserved)');
-}
-
-function displaySelectedFiles(files) {
-  // For multiple files, show preview and let user manually upload if needed
-  updatePreview(files);
-
-  // Show helpful message for multiple files
-  const totalSize = Array.from(files).reduce((sum, file) => sum + file.size, 0);
-  const totalSizeMB = (totalSize / 1024 / 1024).toFixed(1);
-  showToast(` ${files.length} files selected (${totalSizeMB} MB total) - Auto-upload triggered`, 3000);
-
-  // Actually trigger auto-upload for multiple files too
-  autoUpload(files);
-}
-
-function autoUpload(files) {
-  console.log(' autoUpload called with files:', files ? files.length : 'no files', files);
-
-  if (!files.length) {
-    console.log(' No files to upload');
-    return;
-  }
-
-  //  Deduplication: Check for rapid duplicate selections
-  if (!shouldProcessFileSelection(files)) {
-    return;
-  }
-
-  //  Perform periodic memory cleanup
-  performMemoryCleanup();
-
-  const isAESEnabled = DOM_CACHE.aesToggle && DOM_CACHE.aesToggle.checked;
-  const isHTTPS = location.protocol === 'https:';
-
-  console.log(' Upload settings:', { isAESEnabled, isHTTPS });
-
-  //  NO SIZE LIMITS - Streaming encryption handles files of any size
-  // Size limit check removed - AES now supports multi-gigabyte files
-  console.log(' AES enabled - streaming encryption supports any file size');
-
-  //  HTTP-Safe AES: Allow AES over HTTP with metadata protection
-  if (isAESEnabled && !isHTTPS) {
-    console.log(' AES over HTTP - HTTP-Safe mode provides security');
-    // No longer block AES over HTTP - HTTP-Safe mode handles security
-  }
-
-  //  Log current upload queue state before adding new files
-  const currentActiveUploads = uploadQueue.filter(item =>
-    ['UPLOADING'].includes(item.status)
-  ).length;
-
-  console.log(` Current upload state: ${currentActiveUploads} active uploads, adding ${files.length} new files`);
-
-  //  NEW: Add files to upload manager without interfering with active uploads
-  addToUploadQueue(Array.from(files));
-
-  //  Clear the file input and preview after adding to queue (safe operation)
-  clearFileSelection();
-
-  // Start uploading new files if possible (won't affect active uploads)
-  startNextUpload();
-
-  //  Show feedback to user about adding files to active queue
-  if (currentActiveUploads > 0) {
-    showToast(` Added ${files.length} file(s) to upload queue. ${currentActiveUploads} uploads currently active.`, 3000);
-  } else {
-    const optimalConcurrency = getOptimalConcurrency();
-    const filesToStart = Math.min(optimalConcurrency, files.length);
-
-    if (filesToStart > 1) {
-      showToast(` Starting smart concurrent upload of ${files.length} file(s) (${filesToStart} concurrent)...`, 3000);
-    } else {
-      showToast(` Starting upload of ${files.length} file(s)...`, 3000);
-    }
-  }
-}
+// Input File Staging Buffer & Auto-Upload Dispatcher extracted to features/transfers/file-staging-buffer.js
 
 // HTTP-Safe AES crypto helpers extracted to features/security/http-safe-crypto.js
 function isHttpSafeEnabled() {
@@ -4005,784 +3769,18 @@ function hideToast() {
   }
 }
 
-//  File Metadata Storage
-function storeFileMetadata(files, totalSize) {
-  try {
-    const metadata = JSON.parse(localStorage.getItem('fileMetadata') || '{}');
-    const timestamp = Date.now();
+// File Metadata & Transfer Statistics Logger extracted to services/transfer-stats-logger.js
 
-    //  PERFORMANCE: Efficient iteration without Array.from
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      metadata[file.name] = {
-        size: file.size,
-        timestamp: timestamp,
-        lastModified: file.lastModified,
-        type: file.type || 'unknown'
-      };
-    }
+// Download Options Modal Dialog Controller extracted to features/transfers/download-modal-adapter.js
 
-    localStorage.setItem('fileMetadata', JSON.stringify(metadata));
-    console.log(` Stored metadata for ${files.length} files`);
-  } catch (e) {
-    console.log(' Failed to store file metadata:', e);
-  }
-}
-
-//  Transfer Statistics Logging - Device-Specific Session Storage
-function saveStatsToLog(stats) {
-  try {
-    // Save to device-specific session storage (clears when session ends)
-    saveToDeviceUploadHistory(stats);
-
-    // Also maintain backward compatibility with localStorage for global stats (optional)
-    const logs = JSON.parse(localStorage.getItem('transferLogs') || '[]');
-    logs.unshift(stats); // Add to beginning
-
-    // Keep only last 50 logs in global storage
-    if (logs.length > 50) {
-      logs.splice(50);
-    }
-
-    localStorage.setItem('transferLogs', JSON.stringify(logs));
-    console.log(` Saved transfer stats to device session:`, stats.type, stats.size, stats.time);
-  } catch (e) {
-    console.log(' Failed to save transfer stats:', e);
-  }
-}
-
-//  Download Options Management
-function showDownloadOptions(event) {
-  event.preventDefault();
-
-  const modal = document.createElement('div');
-  modal.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 10000;
-  `;
-
-  const dialog = document.createElement('div');
-  dialog.style.cssText = `
-    background: var(--section-bg);
-    color: var(--text-color);
-    border: 1px solid var(--border-color);
-    border-radius: 15px;
-    padding: 2rem;
-    max-width: 500px;
-    margin: 1rem;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    text-align: center;
-  `;
-
-  dialog.innerHTML = `
-    <h3 style="margin-top: 0; color: var(--text-color);">Choose Download Method</h3>
-    <p style="color: var(--text-color); opacity: 0.7; margin-bottom: 2rem;">How would you like to download all files?</p>
-    
-    <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
-      <button onclick="downloadAsZip()" style="
-        background: #4a90e2;
-        color: white;
-        border: none;
-        padding: 1rem 1.5rem;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 1rem;
-        min-width: 180px;
-      ">
-         Download as ZIP
-        <br><small style="opacity: 0.8;">Single compressed file</small>
-      </button>
-      
-      <button onclick="downloadIndividually()" style="
-        background: #27ae60;
-        color: white;
-        border: none;
-        padding: 1rem 1.5rem;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 1rem;
-        min-width: 180px;
-      ">
-         Download Separately
-        <br><small style="opacity: 0.8;">Individual files</small>
-      </button>
-    </div>
-    
-    <button onclick="closeDownloadModal()" style="
-      background: #e74c3c;
-      color: white;
-      border: none;
-      padding: 0.5rem 1rem;
-      border-radius: 5px;
-      cursor: pointer;
-      margin-top: 1.5rem;
-      font-size: 0.9rem;
-    ">
-      Cancel
-    </button>
-  `;
-
-  modal.appendChild(dialog);
-  document.body.appendChild(modal);
-
-  // Store modal reference for cleanup
-  window.currentDownloadModal = modal;
-
-  // Close on background click
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      closeDownloadModal();
-    }
-  });
-
-  // Close on Escape key
-  document.addEventListener('keydown', function escapeHandler(e) {
-    if (e.key === 'Escape') {
-      closeDownloadModal();
-      document.removeEventListener('keydown', escapeHandler);
-    }
-  });
-}
-
-function downloadAsZip() {
-  closeDownloadModal();
-  showToast(' Preparing ZIP download...', 3000);
-
-  // Navigate to the ZIP download
-  window.location.href = '/download-all';
-}
-
-async function downloadIndividually() {
-  closeDownloadModal();
-
-  try {
-    // Get list of files from the current page
-    const fileCards = document.querySelectorAll('.file-card .file-name');
-    const fileNames = Array.from(fileCards).map(card => card.textContent.trim());
-
-    if (fileNames.length === 0) {
-      showToast(' No files found to download', 3000);
-      return;
-    }
-
-    showToast(` Starting intelligent sequential download of ${fileNames.length} files (waits for each download to complete)...`, 0);
-
-    let downloadCount = 0;
-    let failedDownloads = [];
-
-    // Smart download completion detection function
-    async function waitForDownloadCompletion(fileName, timeoutMs = 15000) {
-      return new Promise((resolve) => {
-        const startTime = Date.now();
-        let resolved = false;
-        let visibilityHandler, blurHandler, focusHandler;
-
-        const cleanup = () => {
-          if (visibilityHandler) document.removeEventListener('visibilitychange', visibilityHandler);
-          if (blurHandler) window.removeEventListener('blur', blurHandler);
-          if (focusHandler) window.removeEventListener('focus', focusHandler);
-        };
-
-        const resolveOnce = (method) => {
-          if (!resolved) {
-            resolved = true;
-            cleanup();
-            resolve(method);
-          }
-        };
-
-        // Method 1: Immediate visibility change detection (Chrome/Edge)
-        if (navigator.userAgent.includes('Chrome') || navigator.userAgent.includes('Edge')) {
-          visibilityHandler = () => {
-            if (!resolved && Date.now() - startTime > 300) { // Reduced from 1000ms to 300ms
-              resolveOnce('visibility-change');
-            }
-          };
-          document.addEventListener('visibilitychange', visibilityHandler);
-        }
-
-        // Method 2: Fast focus/blur detection (works on most browsers)
-        let focusLost = false;
-        blurHandler = () => {
-          focusLost = true;
-        };
-        focusHandler = () => {
-          if (focusLost && !resolved && Date.now() - startTime > 200) { // Reduced from 1000ms to 200ms
-            resolveOnce('focus-detection');
-          }
-        };
-        window.addEventListener('blur', blurHandler);
-        window.addEventListener('focus', focusHandler);
-
-        // Method 3: Ultra-fast adaptive timeout based on actual download behavior
-        const adaptiveTimeout = Math.max(800, Math.min(3000, fileNames.length * 400)); // 0.8-3 seconds (was 2-10 seconds)
-
-        setTimeout(() => {
-          resolveOnce('adaptive-timeout');
-        }, adaptiveTimeout);
-
-        // Method 4: Quick fallback timeout (reduced from 30s to 15s)
-        setTimeout(() => {
-          resolveOnce('fallback-timeout');
-        }, timeoutMs);
-
-        // Method 5: NEW - Network idle detection for very fast completion
-        let networkRequests = 0;
-        let originalFetch = null;
-
-        if (!window._fetchIntercepted) {
-          originalFetch = window.fetch;
-          window.fetch = function (...args) {
-            networkRequests++;
-            return originalFetch.apply(this, args).finally(() => {
-              networkRequests--;
-              if (networkRequests === 0 && Date.now() - startTime > 100) {
-                setTimeout(() => {
-                  if (networkRequests === 0 && !resolved && Date.now() - startTime > 500) {
-                    resolveOnce('network-idle');
-                  }
-                }, 200);
-              }
-            });
-          };
-          window._fetchIntercepted = true;
-        }
-
-        // Restore original fetch when done
-        setTimeout(() => {
-          if (originalFetch && window._fetchIntercepted) {
-            window.fetch = originalFetch;
-            window._fetchIntercepted = false;
-          }
-        }, timeoutMs + 1000);
-      });
-    }
-
-    // Download each file and wait for completion
-    for (let i = 0; i < fileNames.length; i++) {
-      try {
-        const fileName = fileNames[i];
-        updateToastContent(` Downloading ${fileName}... (${downloadCount + 1}/${fileNames.length})`);
-
-        // Create and trigger download
-        const link = document.createElement('a');
-        link.href = `/download/${encodeURIComponent(fileName)}`;
-        link.download = fileName;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-
-        const downloadStartTime = Date.now();
-        link.click();
-        document.body.removeChild(link);
-
-        // Wait for download completion with intelligent detection
-        updateToastContent(` ${fileName} downloading... waiting for completion (${downloadCount + 1}/${fileNames.length})`);
-
-        const completionMethod = await waitForDownloadCompletion(fileName);
-        const downloadTime = ((Date.now() - downloadStartTime) / 1000).toFixed(1);
-
-        downloadCount++;
-
-        console.log(` Download ${downloadCount}: ${fileName} completed via ${completionMethod} in ${downloadTime}s`);
-        updateToastContent(` ${fileName} completed (${downloadCount}/${fileNames.length}) • ${downloadTime}s`);
-
-        // Minimal pause between downloads for browser stability (reduced from 500ms to 200ms)
-        if (i < fileNames.length - 1) { // Don't wait after the last file
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-
-      } catch (error) {
-        console.error(`Failed to download ${fileNames[i]}:`, error);
-        failedDownloads.push(fileNames[i]);
-      }
-    }
-
-    // Final status with timing information
-    if (failedDownloads.length === 0) {
-      showToast(` Successfully downloaded all ${downloadCount} files with intelligent completion detection!`, 5000);
-    } else {
-      showToast(` Downloaded ${downloadCount} files. Failed: ${failedDownloads.length} (${failedDownloads.join(', ')})`, 8000);
-    }
-
-  } catch (error) {
-    console.error('Individual download error:', error);
-    showToast(' Error during individual downloads', 5000);
-  }
-}
-
-function closeDownloadModal() {
-  const modal = window.currentDownloadModal;
-  if (modal) {
-    modal.remove();
-    window.currentDownloadModal = null;
-  }
-}
-
-// Make functions globally available
-window.downloadAsZip = downloadAsZip;
-window.downloadIndividually = downloadIndividually;
-window.closeDownloadModal = closeDownloadModal;
-window.generateQRCode = generateQRCode;
-
-//  Enhanced QR Code Generation for Connection Info - Offline-First
-function generateQRCode(text, size = 200) {
-  // Use larger QR for better visibility, but still optimized for guests
-  const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
-  const qrSize = isGuest ? 180 : size;
-
-  // Primary: Use our offline QR generator (works without internet)
-  const offlineQR = `/api/qr-code?text=${encodeURIComponent(text)}&size=${qrSize}`;
-
-  // Fallback services (strictly local offline endpoints)
-  const fallbackServices = [
-    `/api/qr-code?text=${encodeURIComponent(text)}&size=${qrSize}`,
-  ];
-
-  return {
-    primary: offlineQR,
-    fallbacks: fallbackServices,
-    // For backward compatibility, return the offline URL directly
-    toString: () => offlineQR
-  };
-}
-
-//  Preload QR code image as soon as the page loads for instant display
-document.addEventListener('DOMContentLoaded', function () {
-  // Get the URL to encode (same as used in showConnectionInfo)
-  let protocol = location.protocol;
-  let hostname = location.hostname;
-  let port = location.port;
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    // Try to get network info including mDNS from server (async, fallback to hostname)
-    fetch('/api/network-info').then(response => response.json()).then(networkInfo => {
-      let useHostname = hostname;
-
-      // Prefer mDNS if available, otherwise use LAN IP
-      if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.mdns.url) {
-        // Use the actual mDNS URL for mDNS QR preloading
-        preloadQRFromUrl(networkInfo.mdns.url);
-      } else if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
-        useHostname = networkInfo.lan_ip;
-        preloadQR(protocol, useHostname, port);
-      } else {
-        preloadQR(protocol, hostname, port);
-      }
-    }).catch(() => {
-      preloadQR(protocol, hostname, port);
-    });
-  } else {
-    preloadQR(protocol, hostname, port);
-  }
-
-  // Start real-time mDNS monitoring for instant updates and toast notifications
-  updateMDNSStatus();
-  setInterval(updateMDNSStatus, 2000);
-
-  function preloadQRFromUrl(fullUrl) {
-    const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
-    const qrSize = isGuest ? 180 : 200;
-    const qrUrl = `/api/qr-code?text=${encodeURIComponent(fullUrl)}&size=${qrSize}`;
-
-    // Test if QR API is available with a timeout
-    const testImg = new window.Image();
-    const timeout = setTimeout(() => {
-      console.log('QR API is slow/unavailable, will use offline generation');
-      window._qrApiUnavailable = true;
-    }, 5000); // 5 second timeout
-
-    testImg.onload = () => {
-      clearTimeout(timeout);
-      window._preloadedQR = {
-        url: qrUrl,
-        img: testImg,
-        timestamp: Date.now()
-      };
-      console.log('QR API is working, QR preloaded successfully');
-    };
-
-    testImg.onerror = () => {
-      clearTimeout(timeout);
-      console.log('QR API failed, will use offline generation');
-      window._qrApiUnavailable = true;
-    };
-
-    testImg.src = qrUrl;
-  }
-
-  function preloadQR(protocol, hostname, port) {
-    let fullUrl = `${protocol}//${hostname}`;
-    if (port && port !== '80' && port !== '443') {
-      fullUrl += `:${port}`;
-    }
-    const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
-    const qrSize = isGuest ? 180 : 200;
-    const qrUrl = `/api/qr-code?text=${encodeURIComponent(fullUrl)}&size=${qrSize}`;
-
-    // Test if QR API is available with a timeout
-    const testImg = new window.Image();
-    const timeout = setTimeout(() => {
-      console.log('QR API is slow/unavailable, will use offline generation');
-      window._qrApiUnavailable = true;
-    }, 5000); // 5 second timeout
-
-    testImg.onload = () => {
-      clearTimeout(timeout);
-      window._preloadedQR = {
-        url: qrUrl,
-        img: testImg,
-        timestamp: Date.now()
-      };
-      console.log('QR API is working, QR preloaded successfully');
-    };
-
-    testImg.onerror = () => {
-      clearTimeout(timeout);
-      console.log('QR API failed, will use offline generation');
-      window._qrApiUnavailable = true;
-    };
-
-    testImg.src = qrUrl;
-  }
-});
-
-//  Enhanced offline QR code generator (backup method)
-//  Enhanced LAN IP and show connection info modal with mDNS support
-async function showConnectionInfo() {
-  // Get current URL info but FORCE LAN IP or mDNS instead of localhost
-  const protocol = location.protocol;
-  let hostname = location.hostname;
-  const port = location.port;
-  let useMDNS = false;
-  let mdnsUrl = null;
-  let networkInfo = null;
-  let lanIpUrl = null;
-
-  //  ALWAYS fetch network info to check for mDNS availability
-  try {
-    const response = await fetch('/api/network-info');
-    if (response.ok) {
-      networkInfo = await response.json();
-      console.log(' Network info received:', networkInfo);
-
-      // Use backend-provided LAN IP URL for consistency
-      if (networkInfo.lan_ip_url) {
-        lanIpUrl = networkInfo.lan_ip_url;
-      }
-
-      // Prefer mDNS if available
-      if (networkInfo.mdns && networkInfo.mdns.status === 'active' && networkInfo.mdns.domain) {
-        hostname = networkInfo.mdns.domain;
-        useMDNS = true;
-        mdnsUrl = networkInfo.mdns.url || networkInfo.hybrid_url;
-        console.log(' mDNS detected:', networkInfo.mdns.domain, 'URL:', mdnsUrl);
-      } else {
-        // Use current hostname if mDNS not available
-        if (hostname === 'localhost' || hostname === '127.0.0.1') {
-          // Fallback to LAN IP for localhost access
-          if (networkInfo.lan_ip && networkInfo.lan_ip !== '127.0.0.1') {
-            hostname = networkInfo.lan_ip;
-          }
-        }
-        console.log(' mDNS not available, using hostname:', hostname);
-      }
-    } else {
-      console.log(' Failed to fetch network info:', response.status);
-    }
-  } catch (error) {
-    console.log(' Network info fetch error:', error);
-  }
-
-  const isHTTPS = protocol === 'https:';
-
-  // Construct URL with proper hostname (mDNS or LAN IP)
-  let fullUrl;
-  if (useMDNS && mdnsUrl) {
-    fullUrl = mdnsUrl;
-  } else {
-    fullUrl = `${protocol}//${hostname}`;
-    if (port && port !== '80' && port !== '443') {
-      fullUrl += `:${port}`;
-    }
-  }
-
-  // Store network info globally for copy functions
-  window._currentNetworkInfo = { networkInfo, lanIpUrl, useMDNS, fullUrl };
-
-  // Debug logging
-  console.log(' Connection Info Debug:', {
-    useMDNS: useMDNS,
-    fullUrl: fullUrl,
-    mdnsUrl: mdnsUrl,
-    lanIpUrl: lanIpUrl,
-    networkInfo: networkInfo
-  });
-
-  // Create modal with immediate QR loading
-  const modal = document.createElement('div');
-  modal.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.7);
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-    box-sizing: border-box;
-  `;
-
-  const dialog = document.createElement('div');
-  dialog.style.cssText = `
-    background: white;
-    border-radius: 15px;
-    width: 90%;
-    max-width: 500px;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    margin: 0 auto;
-    padding: 2rem;
-  `;
-
-  //  ENHANCED: Offline-first QR generation for reliability
-  const isGuest = typeof detectGuestDevice === 'function' && detectGuestDevice();
-  const qrSize = isGuest ? 180 : 200;
-
-  // Use our offline QR generator as primary
-  const qrResult = generateQRCode(fullUrl, qrSize);
-  const primaryQRUrl = qrResult.primary || qrResult.toString();
-  const fallbackQRUrls = qrResult.fallbacks || [
-    `/api/qr-code?text=${encodeURIComponent(fullUrl)}&size=${qrSize}`,
-  ];
-
-  // If preloaded QR matches, use it instantly, otherwise use offline generator
-  setTimeout(() => {
-    const primaryQR = document.getElementById('qr-primary');
-    if (primaryQR) {
-      // Check if QR API was determined to be unavailable during preload
-      if (window._qrApiUnavailable) {
-        console.log('QR API unavailable, using offline generation immediately');
-        // Use requestIdleCallback to prevent blocking during uploads
-        if (window.requestIdleCallback) {
-          requestIdleCallback(() => showOfflineQR());
-        } else {
-          setTimeout(showOfflineQR, 100);
-        }
-        return;
-      }
-
-      if (window._preloadedQR && window._preloadedQR.url === primaryQRUrl) {
-        primaryQR.src = window._preloadedQR.img.src;
-      } else {
-        primaryQR.src = primaryQRUrl; // This will use our offline generator
-      }
-
-      // Aggressive fallback - if QR doesn't load quickly, try offline immediately
-      setTimeout(() => {
-        if (primaryQR.style.display === 'none') {
-          console.log('QR API not responding quickly, trying offline generator immediately...');
-          // Use async to prevent blocking uploads
-          if (window.requestIdleCallback) {
-            requestIdleCallback(() => showOfflineQR());
-          } else {
-            setTimeout(showOfflineQR, 50);
-          }
-        }
-      }, 5000); // Friendly fallback for slower Termux environments (5 seconds)
-
-      // Second fallback - try external service
-      setTimeout(() => {
-        if (primaryQR.style.display === 'none') {
-          console.log('Primary QR failed, trying external fallback...');
-          const fallbackQR = document.getElementById('qr-fallback');
-          if (fallbackQR && fallbackQRUrls.length > 0) {
-            fallbackQR.src = fallbackQRUrls[0];
-            // Final fallback to offline if external also fails
-            setTimeout(() => {
-              if (fallbackQR.style.display === 'none') {
-                console.log('All external QR services failed, forcing offline...');
-                if (window.requestIdleCallback) {
-                  requestIdleCallback(() => showOfflineQR());
-                } else {
-                  setTimeout(showOfflineQR, 50);
-                }
-              }
-            }, 3000);
-          }
-        }
-      }, 8000); // Try external after 8 seconds if local still hasn't loaded
-    }
-  }, 10);
-
-  const lanInstructions = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') && hostname === location.hostname ? `
-    <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
-      <h4 style="margin: 0 0 0.5rem 0; color: #856404;"> To share on LAN:</h4>
-      <p style="margin: 0; font-size: 0.9rem; color: #856404;">
-        • Replace "localhost" with your computer's IP address<br>
-        • Windows: Run <code>ipconfig</code> and look for IPv4<br>
-        • Linux/Mac: Run <code>ip addr</code> or <code>ifconfig</code><br>
-        • Android Termux: Run <code>ip route | grep default</code>
-      </p>
-    </div>
-  ` : '';
-
-  dialog.innerHTML = `
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-      <h3 style="margin: 0; color: #333; display: flex; align-items: center; gap: 0.5rem;">
-        <span>${isHTTPS ? '' : ''}</span>
-        Connection Info
-      </h3>
-      <button onclick="closeConnectionModal()" style="background: #e74c3c; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem;"> Close</button>
-    </div>
-    
-    <div style="margin: 1.5rem 0;">
-      <!-- QR Code Container with Immediate Loading -->
-      <div id="qr-container" style="text-align: center; min-height: 220px; position: relative;">
-        <!-- Primary QR Code -->
-     <img id="qr-primary" 
-       style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; max-width: 180px; height: auto; margin: 0 auto;"
-       onload="showQRSuccess(this, 'primary')"
-       onerror="showOfflineQR()">
-     <!-- Fallback QR Code (skip for guest devices, use offline QR instantly) -->
-     <img id="qr-fallback" 
-       style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; max-width: 180px; height: auto; margin: 0 auto;"
-       onload="showQRSuccess(this, 'fallback')"
-       onerror="showOfflineQR()">
-        
-        <!-- Loading Animation -->
-        <div id="qr-loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-          <div style="width: 40px; height: 40px; border: 4px solid var(--border-color); border-top: 4px solid #007bff; border-radius: 50%; animation: qr-spin 1s linear infinite; margin-bottom: 1rem;"></div>
-          <p style="margin: 0; color: var(--text-color); opacity: 0.8; font-size: 0.9rem;"> Generating QR Code...</p>
-        </div>
-        
-        <!-- Offline QR Fallback -->
-        <canvas id="offline-qr" style="display: none; border: 2px solid #e1e1e1; border-radius: 10px; margin: 0 auto;"></canvas>
-        <p id="offline-qr-text" style="display: none; font-size: 0.8rem; color: var(--text-color); opacity: 0.8; margin-top: 0.5rem;"> Offline QR Code</p>
-      </div>
-    </div>
-    
-    <div style="background: var(--input-bg); border-radius: 10px; padding: 1rem; margin: 1rem 0; border: 1px solid var(--border-color);">
-      ${useMDNS ? `
-        <h4 style="margin: 0 0 0.5rem 0; color: var(--text-color);"> mDNS Connection URL:</h4>
-        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
-          <code id="connection-url" style="flex: 1; background: #d4edda; padding: 0.5rem; border-radius: 5px; border: 1px solid #c3e6cb; font-size: 0.85rem; word-break: break-all; min-width: 200px; color: #155724;">${fullUrl}</code>
-          <button onclick="copyConnectionUrl()" style="background: #28a745; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer; font-size: 0.85rem; white-space: nowrap;" title="Copy mDNS URL to clipboard"> Copy</button>
-        </div>
-        <div style="padding: 0.6rem; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 6px; margin-bottom: 0.8rem;">
-          <small style="color: #155724; display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem;">
-            <span></span>
-            <strong>mDNS Active:</strong> Easy access via domain name - guests can use ${networkInfo?.mdns?.domain || 'lanvan.local'}!
-          </small>
-        </div>
-        <h4 style="margin: 0 0 0.5rem 0; color: var(--text-color); opacity: 0.8; font-size: 0.9rem;"> Alternative IP Connection:</h4>
-        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.8rem;">
-          <code id="alternative-url" style="flex: 1; background: var(--section-bg); color: var(--text-color); padding: 0.4rem; border-radius: 5px; border: 1px solid var(--border-color); font-size: 0.8rem; word-break: break-all; min-width: 200px;">${lanIpUrl || 'http://192.168.x.x'}</code>
-          <button onclick="copyAlternativeUrl()" style="background: var(--settings-bg); color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 5px; cursor: pointer; font-size: 0.8rem; white-space: nowrap;" title="Copy IP URL to clipboard"> Copy</button>
-        </div>
-        
-        <!-- IP QR Code Section -->
-        <div style="text-align: center; margin: 1rem 0; padding: 1rem; background: var(--input-bg); border-radius: 8px; border: 1px solid var(--border-color);">
-          <div style="margin-bottom: 0.5rem;">
-            <small style="color: var(--text-color); opacity: 0.8; font-size: 0.8rem; font-weight: 500;"> IP Access QR Code</small>
-          </div>
-          <div style="display: flex; justify-content: center; align-items: center;">
-            <img src="/api/qr-code?text=${encodeURIComponent(lanIpUrl || 'http://192.168.0.106')}&size=160" 
-                 style="border: 2px solid var(--border-color); border-radius: 8px; max-width: 160px; height: auto; background: var(--section-bg); display: block;" 
-                 alt="IP QR Code"
-                 onerror="this.style.display='none'; this.parentElement.nextElementSibling.style.display='block';"
-                 onload="this.style.display='block';">
-          </div>
-          <div style="display: none; padding: 0.5rem; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 5px; color: var(--text-color); opacity: 0.8; font-size: 0.8rem;">
-            QR code generation failed
-          </div>
-          <div style="margin-top: 0.5rem;">
-            <small style="color: var(--text-color); opacity: 0.7; font-size: 0.75rem;">Scan if mDNS doesn't work</small>
-          </div>
-        </div>
-        <div style="margin-top: 0.5rem;">
-          <small style="color: #666; font-size: 0.75rem;">
-             <strong>For guests:</strong> Try mDNS first (${networkInfo?.mdns?.domain || 'lanvan.local'}), use IP if that fails
-          </small>
-        </div>
-      ` : `
-        <h4 style="margin: 0 0 0.5rem 0; color: var(--text-color);"> Connection URL:</h4>
-        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-          <code id="connection-url" style="flex: 1; background: var(--input-bg); color: var(--text-color); padding: 0.5rem; border-radius: 5px; border: 1px solid var(--border-color); font-size: 0.85rem; word-break: break-all; min-width: 200px;">${fullUrl}</code>
-          <button onclick="copyConnectionUrl()" style="background: #007bff; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer; font-size: 0.85rem; white-space: nowrap;" title="Copy URL to clipboard"> Copy</button>
-        </div>
-        <div style="margin-top: 0.8rem; padding: 0.6rem; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 6px;">
-          <small style="color: var(--text-color); opacity: 0.8; display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem;">
-            <span></span>
-            <strong>Using IP Address:</strong> mDNS not available - guests must use IP to connect
-          </small>
-        </div>
-      `}
-    </div>
-    
-    ${lanInstructions}
-  `;
-
-  modal.appendChild(dialog);
-  document.body.appendChild(modal);
-
-  // Store modal reference
-  window.currentConnectionModal = modal;
-
-  //  IMMEDIATE QR Loading with Smart Fallback System
-  setTimeout(() => {
-    const primaryQR = document.getElementById('qr-primary');
-    if (primaryQR) {
-      primaryQR.src = primaryQRUrl;
-      // For guest devices, if not loaded in 1s, show offline QR immediately
-      if (isGuest) {
-        setTimeout(() => {
-          if (primaryQR.style.display === 'none') {
-            showOfflineQR();
-          }
-        }, 1000);
-      }
-    }
-  }, 10); // Even smaller delay for instant QR
-
-  // Close on background click
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      closeConnectionModal();
-    }
-  });
-
-  // Close on Escape key
-  document.addEventListener('keydown', function escapeHandler(e) {
-    if (e.key === 'Escape') {
-      closeConnectionModal();
-      document.removeEventListener('keydown', escapeHandler);
-    }
-  });
-}
-
-// Network Info & QR Presentation Adapter extracted to features/network/network-info-modal-adapter.js
+// Network Info & QR Presentation Adapter extracted to features/dialogs/qr-code-modal.js
 
 // Make functions globally available
 window.refreshFileListManually = refreshFileListManually;
 window.refreshFileList = refreshFileList;
-window.toggleSettingsMenu = toggleSettingsMenu;
 window.cancelAllUploads = cancelAllUploads;
-window.showDownloadOptions = showDownloadOptions;
 window.showToast = showToast;
 window.toggleDeviceLogs = toggleDeviceLogs;
-window.showAccessControlSettings = showAccessControlSettings;
-window.downloadAsZip = downloadAsZip;
 window.cancelUpload = cancelUpload;
 window.pauseUpload = pauseUpload;
 window.resumeUpload = resumeUpload;
@@ -4792,195 +3790,6 @@ window.closeDeviceLogsModal = closeDeviceLogsModal;
 window.removeCompletedUpload = removeCompletedUpload;
 window.clearCompletedUploads = clearCompletedUploads;
 window.showImagePreview = showImagePreview;
-window.uploadClipboardItem = uploadClipboardItem;
-
-// ===  CLIPBOARD SYSTEM FUNCTIONS ===
-
-// Clipboard state management
-// (Declared at top of file)
-
-// Open clipboard modal
-function openClipboardModal() {
-  const modal = document.getElementById('clipboardModal');
-  modal.style.display = 'flex';
-
-  // Load clipboard history
-  refreshClipboardHistory();
-
-  // Set focus to text input
-  setTimeout(() => {
-    const textInput = document.getElementById('clipboardTextInput');
-    if (textInput) textInput.focus();
-  }, 100);
-
-  // Close on escape key
-  document.addEventListener('keydown', function escapeHandler(e) {
-    if (e.key === 'Escape') {
-      closeClipboardModal();
-      document.removeEventListener('keydown', escapeHandler);
-    }
-  });
-
-  // Close on background click
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      closeClipboardModal();
-    }
-  });
-
-  console.log(' Clipboard modal opened');
-}
-
-// Close clipboard modal
-function closeClipboardModal() {
-  const modal = document.getElementById('clipboardModal');
-  modal.style.display = 'none';
-}
-
-// Handle paste events in the text area
-function handleClipboardPaste(event) {
-  console.log(' Paste event detected');
-
-  // Get clipboard data
-  const clipboardData = event.clipboardData || window.clipboardData;
-
-  if (!clipboardData) {
-    console.log(' No clipboard data available');
-    return;
-  }
-
-  // Check for files/images first (including mobile)
-  const files = clipboardData.files;
-  if (files && files.length > 0) {
-    console.log(' Files detected in clipboard:', files.length);
-    event.preventDefault();
-
-    // Handle each file
-    Array.from(files).forEach(file => {
-      if (file.type.startsWith('image/')) {
-        console.log(' Image file detected:', file.type);
-        handleImagePaste(file);
-      } else {
-        console.log(' Non-image file detected:', file.type);
-        showToast(' File detected, but only images are supported', 3000);
-      }
-    });
-    return;
-  }
-
-  // Check for image data in items
-  const items = clipboardData.items;
-  if (items) {
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      console.log(' Clipboard item type:', item.type);
-
-      if (item.type.indexOf('image') !== -1) {
-        // Handle image paste
-        event.preventDefault();
-        const blob = item.getAsFile();
-        if (blob) {
-          console.log(' Image blob detected from clipboard items');
-          handleImagePaste(blob);
-          return;
-        }
-      }
-    }
-  }
-
-  // Check for text data
-  const textData = clipboardData.getData('text/plain');
-  if (textData) {
-    console.log(' Text data detected, length:', textData.length);
-    // Let the normal paste proceed for text
-  }
-
-  console.log(' Text paste detected - will be added when you click "Add Text"');
-}
-
-// Global document paste listener for Clipboard view (Industry Standard Event Propagation Marking)
-document.addEventListener('paste', function (event) {
-  if (event.defaultPrevented || event._handled) {
-    return;
-  }
-
-  const activeEl = document.activeElement;
-  const isClipInput = activeEl && (activeEl.id === 'clipboardInput' || activeEl.id === 'clipboardTextInput');
-  const isClipView = window.activeTab === 'clipboard' || (document.getElementById('clipboardView') && document.getElementById('clipboardView').style.display !== 'none');
-
-  if (isClipInput || isClipView) {
-    const clipboardData = event.clipboardData || window.clipboardData;
-    if (!clipboardData) return;
-
-    let targetImage = null;
-
-    // 1. Check files array
-    if (clipboardData.files && clipboardData.files.length > 0) {
-      for (let i = 0; i < clipboardData.files.length; i++) {
-        if (clipboardData.files[i].type && clipboardData.files[i].type.startsWith('image/')) {
-          targetImage = clipboardData.files[i];
-          break;
-        }
-      }
-    }
-
-    // 2. Check items array if no file found yet
-    if (!targetImage && clipboardData.items) {
-      for (let i = 0; i < clipboardData.items.length; i++) {
-        const item = clipboardData.items[i];
-        if (item.type && item.type.startsWith('image/')) {
-          const blob = item.getAsFile();
-          if (blob) {
-            targetImage = blob;
-            break;
-          }
-        }
-      }
-    }
-
-    if (targetImage) {
-      event._handled = true;
-      event.preventDefault();
-      if (typeof event.stopImmediatePropagation === 'function') {
-        event.stopImmediatePropagation();
-      }
-      handleImagePaste(targetImage);
-    }
-  }
-}, true);
-
-// Handle image paste from clipboard
-function handleImagePaste(blob) {
-  console.log(' Image pasted from clipboard, size:', blob.size);
-  showToast(' Processing pasted image...', 2000);
-
-  // Create file object
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const filename = `clipboard-image-${timestamp}.png`;
-
-  // Add to clipboard via API
-  const formData = new FormData();
-  formData.append('file', blob, filename);
-
-  fetch('/api/clipboard/add', {
-    method: 'POST',
-    body: formData
-  })
-    .then(response => response.json())
-    .then(data => {
-      if (data.status === 'success') {
-        showToast(` Image added to clipboard: ${filename}`, 3000);
-        refreshClipboardHistory();
-      } else {
-        showToast(` Failed to add image: ${data.msg}`, 4000);
-      }
-    })
-    .catch(error => {
-      console.error('Error adding image to clipboard:', error);
-      showToast(' Failed to add image to clipboard', 4000);
-    });
-}
-
-// Clipboard Controller extracted to features/clipboard/clipboard-controller.js
+// Clipboard Modal & Image Paste Receiver extracted to features/clipboard/clipboard-paste-modal.js
 
 

@@ -17,23 +17,46 @@
         var connectAddress = document.getElementById("connectAddress");
         if (!qrBox) return;
 
-        var url = window.location.origin;
-        if (window._currentNetworkInfo && window._currentNetworkInfo.fullUrl) {
-            url = window._currentNetworkInfo.fullUrl;
+        var netInfo = window._currentNetworkInfo;
+
+        // Docker mode without LANVAN_HOST / LANVAN_ADVERTISE_HOST environment variable.
+        // Fall back to http://localhost and clean text fallback in QR box.
+        if (netInfo && netInfo.docker_needs_host_env) {
+            var fallbackUrl = "http://localhost";
+            if (connectAddress) {
+                connectAddress.textContent = fallbackUrl;
+            }
+            if (qrBox.getAttribute("data-rendered-url") === "docker-fallback") return;
+            qrBox.setAttribute("data-rendered-url", "docker-fallback");
+            qrBox.innerHTML = '<div style="font-size:0.75rem;font-weight:600;color:var(--text-muted);text-align:center;padding:32px 6px;word-break:break-all;">' + fallbackUrl + '</div>';
+            return;
+        }
+
+        var url = netInfo && netInfo.fullUrl ? netInfo.fullUrl : null;
+
+        if (!url) {
+            if (connectAddress) connectAddress.textContent = "...";
+            qrBox.innerHTML = '<div style="font-size:0.75rem;color:var(--text-muted);text-align:center;padding:32px 6px;">Loading...</div>';
+            return;
         }
 
         if (connectAddress) {
             connectAddress.textContent = url;
         }
 
+        if (qrBox.getAttribute("data-rendered-url") === url) {
+            return; // URL unchanged — no duplicate QR request
+        }
+        qrBox.setAttribute("data-rendered-url", url);
+
         qrBox.innerHTML = "";
-        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=140&_=" + Math.random().toString(36).substr(2, 9);
+        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=140";
         var img = document.createElement("img");
         img.alt = "QR Code";
         img.style.cssText = "width:102px;height:102px;object-fit:contain;display:block;margin:0 auto;";
         img.src = qrApiUrl;
         img.onerror = function () {
-            qrBox.innerHTML = '<div style="font-size:0.6rem;color:var(--text-muted);text-align:center;padding:8px;">Scan to connect</div>';
+            qrBox.innerHTML = '<div style="font-size:0.75rem;font-weight:600;color:var(--text-color);text-align:center;padding:24px 6px;word-break:break-all;">' + url + '</div>';
         };
         qrBox.appendChild(img);
     }
@@ -43,23 +66,44 @@
         var dialogAddress = document.getElementById("connectQrDialogAddress");
         if (!dialogBox) return;
 
-        var url = window.location.origin;
-        if (window._currentNetworkInfo && window._currentNetworkInfo.fullUrl) {
-            url = window._currentNetworkInfo.fullUrl;
+        var netInfo = window._currentNetworkInfo;
+
+        if (netInfo && netInfo.docker_needs_host_env) {
+            var fallbackUrl = "http://localhost";
+            if (dialogAddress) {
+                dialogAddress.textContent = fallbackUrl;
+            }
+            if (dialogBox.getAttribute("data-rendered-url") === "docker-fallback") return;
+            dialogBox.setAttribute("data-rendered-url", "docker-fallback");
+            dialogBox.innerHTML = '<div style="font-size:0.9rem;font-weight:600;color:var(--text-muted);text-align:center;padding:48px 12px;word-break:break-all;">' + fallbackUrl + '</div>';
+            return;
+        }
+
+        var url = netInfo && netInfo.fullUrl ? netInfo.fullUrl : null;
+
+        if (!url) {
+            if (dialogAddress) dialogAddress.textContent = "...";
+            dialogBox.innerHTML = '<div style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:36px 12px;">Loading...</div>';
+            return;
         }
 
         if (dialogAddress) {
             dialogAddress.textContent = url;
         }
 
+        if (dialogBox.getAttribute("data-rendered-url") === url) {
+            return; // URL unchanged
+        }
+        dialogBox.setAttribute("data-rendered-url", url);
+
         dialogBox.innerHTML = "";
-        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=200&_=" + Math.random().toString(36).substr(2, 9);
+        var qrApiUrl = "/api/qr-code?text=" + encodeURIComponent(url) + "&size=200";
         var img = document.createElement("img");
         img.alt = "QR Code";
         img.style.cssText = "max-width:100%;max-height:100%;object-fit:contain;display:block;margin:0 auto;";
         img.src = qrApiUrl;
         img.onerror = function () {
-            dialogBox.innerHTML = '<div style="font-size:0.8rem;color:var(--text-muted);text-align:center;padding:12px;">Scan to connect</div>';
+            dialogBox.innerHTML = '<div style="font-size:0.9rem;font-weight:600;color:var(--text-color);text-align:center;padding:40px 12px;word-break:break-all;">' + url + '</div>';
         };
         dialogBox.appendChild(img);
     }
@@ -136,6 +180,10 @@
             var isMdnsActive = window._currentNetworkInfo.networkInfo && 
                                window._currentNetworkInfo.networkInfo.mdns && 
                                window._currentNetworkInfo.networkInfo.mdns.status === 'active';
+            
+            if (mdnsTab) mdnsTab.style.display = isMdnsActive ? "" : "none";
+            if (qrMdnsTab) qrMdnsTab.style.display = isMdnsActive ? "" : "none";
+
             if (isMdns && isMdnsActive) {
                 url = window._currentNetworkInfo.networkInfo.mdns.url || url;
             }
@@ -144,8 +192,6 @@
             renderSidebarQR();
             renderDialogQR();
         }
-
-        if (typeof window.updateMDNSStatus === "function") window.updateMDNSStatus();
     }
 
     function openConnectQrDialog() {

@@ -349,38 +349,45 @@ async def get_network_info():
         import socket
         import os
         
-        # Check if we're on Android/Termux
-        is_android = is_android_environment()
-        
-        # Use mDNS manager's offline-capable method to get LAN IP
-        lan_ip = mdns_manager.get_lan_ip()
-        
-        # Get mDNS info
+        # Get mDNS info and protocol settings
         mdns_info = mdns_manager.get_mdns_info()
-        
-        # Get hybrid URL (IP-optimized for Android/Termux)
-        hybrid_url = mdns_manager.get_hybrid_url()
-        
-        # Also provide separate URL components for QR code generation
         protocol = "https" if mdns_manager.use_https else "http"
         port = mdns_manager.port
-        
+
+        # Use single authoritative address resolver (supports env vars & container host auto-discovery)
+        from app.utils.network_resolver import resolve_advertise_host
+        adv_info = resolve_advertise_host()
+        lan_ip = adv_info["lan_ip"]
+        is_docker = adv_info["is_docker"]
+        is_android = is_android_environment() and not is_docker
+        docker_needs_host_env = is_docker and not bool(lan_ip)
+
         # Format LAN IP URL using the same logic as mDNS URLs
-        if (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
+        if docker_needs_host_env:
+            lan_ip_val = None
+            lan_ip_url = None
+            hybrid_url = f"{protocol}://localhost"
+        elif (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
+            lan_ip_val = lan_ip
             lan_ip_url = f"{protocol}://{lan_ip}"
+            hybrid_url = lan_ip_url
         else:
+            lan_ip_val = lan_ip
             lan_ip_url = f"{protocol}://{lan_ip}:{port}"
+            hybrid_url = lan_ip_url
         
         response_data = {
             "status": "success",
-            "lan_ip": lan_ip,
+            "lan_ip": lan_ip_val,
             "lan_ip_url": lan_ip_url,
+            "is_docker": is_docker,
+            "docker_needs_host_env": docker_needs_host_env,
             "hostname": socket.gethostname(),
             "mdns": mdns_info,
             "hybrid_url": hybrid_url,
             "protocol": protocol,
             "port": port,
-            "platform": "android" if is_android else "desktop"
+            "platform": "android" if is_android else ("docker" if is_docker else "desktop")
         }
         
         # Add Android/Termux specific recommendations

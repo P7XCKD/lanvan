@@ -203,7 +203,7 @@
                 window.deleteSelected();
             }
         } else if (target) {
-            fetch('/api/clipboard/delete/' + target, { method: 'DELETE' })
+            fetch('/api/clipboard/remove/' + target, { method: 'DELETE' })
                 .then(function (res) {
                     if (res.ok) {
                         if (typeof showToast === "function") showToast("Deleted 1 clipboard item.", 3000);

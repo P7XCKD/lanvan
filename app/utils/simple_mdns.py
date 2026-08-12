@@ -397,103 +397,32 @@ class SimpleMDNSManager:
             print(f"[Android] All network detection methods failed: {e}")
             return None
         
+    def _is_docker_bridge_ip(self, ip_str: str) -> bool:
+        """Check if IP belongs to Docker container internal bridge network (172.17.x.x - 172.31.x.x)"""
+        import os
+        if not os.path.exists('/.dockerenv'):
+            return False
+        if not ip_str:
+            return True
+        parts = ip_str.split('.')
+        if len(parts) == 4 and parts[0] == '172':
+            try:
+                second = int(parts[1])
+                if 17 <= second <= 31:
+                    return True
+            except ValueError:
+                pass
+        return False
+
     def get_lan_ip(self) -> str:
-        """Get the LAN IP address - works offline by scanning local interfaces, optimized for Termux"""
+        """Get the LAN IP address - delegates to authoritative network_resolver"""
         try:
-            # Return cached IP if available and still valid
-            if self.lan_ip:
-                # Quick test to see if IP is still valid
-                try:
-                    import socket
-                    test_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    test_socket.bind((self.lan_ip, 0))
-                    test_socket.close()
-                    return self.lan_ip
-                except Exception:
-                    # IP no longer valid, clear cache
-                    self.lan_ip = None
-            
-            # Check if we're on Android/Termux for special handling
-            is_android = is_android_environment()
-            
-            if is_android:
-                print("[MOBILE] Detecting network interface on Android/Termux...")
-                
-                # Use enhanced Android network detection
-                try:
-                    android_ip = self._get_android_network_ip()
-                    if android_ip and android_ip != '192.0.0.4':
-                        self.lan_ip = android_ip
-                        print(f"[MOBILE] Enhanced Android detection found: {android_ip}")
-                        return self.lan_ip
-                except Exception as android_error:
-                    print(f"[MOBILE] Enhanced Android detection failed: {android_error}")
-                
-            # Method 1: Try to get IP without external connection (offline-compatible)
-            # Get all network interfaces
-            import socket
-            hostname = socket.gethostname()
-            
-            # Try getting IP from hostname resolution (works offline on most systems)
-            try:
-                host_ip = socket.gethostbyname(hostname)
-                # Check if it's a valid local IP (not loopback) and not the problematic 192.0.0.4
-                if host_ip and not host_ip.startswith('127.') and host_ip != '192.0.0.4':
-                    self.lan_ip = host_ip
-                    return self.lan_ip
-                elif is_android and host_ip == '192.0.0.4':
-                    print("[MOBILE] Detected problematic IP 192.0.0.4, trying alternatives...")
-            except Exception:
-                pass
-            
-            # Method 2: Scan network interfaces manually (offline-compatible)
-            # Try multiple router addresses for better Termux compatibility
-            router_addresses = [
-                "192.168.1.1",   # Most common
-                "192.168.0.1",   # Common alternative
-                "10.0.0.1",      # Some networks
-                "172.16.0.1",    # Corporate networks
-                "192.168.43.1"   # Android hotspot default
-            ]
-            
-            for router_ip in router_addresses:
-                try:
-                    temp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    temp_socket.settimeout(1.0)  # Quick timeout for faster detection
-                    temp_socket.connect((router_ip, 80))
-                    local_ip = temp_socket.getsockname()[0]
-                    temp_socket.close()
-                    
-                    if local_ip and not local_ip.startswith('127.'):
-                        self.lan_ip = local_ip
-                        if is_android:
-                            print(f"[MOBILE] Android IP detected: {local_ip}")
-                        return self.lan_ip
-                except Exception:
-                    continue
-            
-            # Method 4: Use psutil if available (most reliable offline method)
-            try:
-                import psutil
-                for interface, addrs in psutil.net_if_addrs().items():
-                    for addr in addrs:
-                        if addr.family == socket.AF_INET and not addr.address.startswith('127.'):
-                            # Prefer typical LAN ranges
-                            ip = addr.address
-                            if (ip.startswith('192.168.') or 
-                                ip.startswith('10.') or 
-                                ip.startswith('172.')):
-                                self.lan_ip = ip
-                                return self.lan_ip
-            except ImportError:
-                pass
-            
-            # Fallback: Use loopback if no other option
-            print("[WARN] Could not detect LAN IP offline, using localhost")
-            return "127.0.0.1"
-            
+            from app.utils.network_resolver import resolve_advertise_host
+            res = resolve_advertise_host()
+            self.lan_ip = res["lan_ip"] or "127.0.0.1"
+            return self.lan_ip
         except Exception as e:
-            print(f"[ERR] Failed to get LAN IP offline: {e}")
+            print(f"[ERR] Failed to get LAN IP: {e}")
             return "127.0.0.1"
     
     def generate_service_name(self) -> str:
@@ -517,6 +446,12 @@ class SimpleMDNSManager:
                     print(f"[INFO] mDNS service already running (ref_count={self.ref_count})")
                     return True
                 
+                # Check if running in Docker container environment (Docker bridge network isolates mDNS multicast)
+                from app.utils.network_resolver import is_docker_environment
+                if is_docker_environment():
+                    print("[NET] mDNS service disabled in Docker container mode (multicast isolated by Docker bridge network). Using direct LAN IP access.")
+                    return False
+
                 # Check if mDNS is available
                 if not self.mdns_available or not ZEROCONF_AVAILABLE:
                     print("[ERR] mDNS/Zeroconf is unavailable (library not loaded or blocked)")
@@ -573,6 +508,10 @@ class SimpleMDNSManager:
                 hostname = socket.gethostname()
                 lan_ip = self.get_lan_ip()
                 
+                if lan_ip == "127.0.0.1" or self._is_docker_bridge_ip(lan_ip):
+                    print("[NET] mDNS service disabled: No physical LAN IP available (e.g. Docker bridge or localhost loopback)")
+                    return False
+
                 print(f"[NET] Detected LAN IP: {lan_ip}")
                 print(f"[TAG] Service name: {self.service_name}")
                 
@@ -759,7 +698,8 @@ class SimpleMDNSManager:
     
     def get_mdns_info(self) -> Dict[str, Any]:
         """Get mDNS service information"""
-        if not self.is_running:
+        from app.utils.network_resolver import is_docker_environment
+        if is_docker_environment() or not self.is_running:
             return {
                 "status": "disabled",
                 "domain": None,
@@ -789,15 +729,15 @@ class SimpleMDNSManager:
             return f"{protocol}://{host}:{self.port}"
     
     def get_hybrid_url(self) -> str:
-        """Get the best URL for QR code generation - prioritize IP on Android/Termux"""
-        # Check if we're on Android/Termux
+        """Get the best URL for QR code generation - prioritize IP on Android/Termux or Docker container mode"""
         is_android = is_android_environment()
+        is_docker = os.path.exists('/.dockerenv') or bool(os.getenv("LANVAN_ADVERTISE_HOST"))
         
-        if is_android:
-            # On Android/Termux, always prefer IP-based URLs since .local often fails
+        if is_android or is_docker:
+            # On Android/Termux or Docker container mode, prefer IP-based URLs since mDNS multicast is bridge-isolated
             return self._format_url(self.get_lan_ip())
         else:
-            # On other platforms, prefer mDNS with IP fallback
+            # On native host platforms, prefer mDNS with IP fallback
             if self.is_running and self.domain:
                 return self._format_url(self.domain)
             else:

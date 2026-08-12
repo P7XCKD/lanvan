@@ -511,12 +511,16 @@ async def download_clipboard_zip(request: Request):
             content={"status": "error", "msg": f"Failed to create ZIP archive: {str(e)}"}
         )
 
-@router.delete("/api/clipboard/clear", name="clipboard_clear")
-async def clear_clipboard():
-    """Clear all clipboard items from history and persistent storage."""
+def clear_clipboard_data_sync() -> None:
+    """Clear all clipboard items from in-memory state and persistent storage synchronously."""
     global clipboard_history
     clipboard_history.clear()
     save_clipboard_history()
+
+@router.delete("/api/clipboard/clear", name="clipboard_clear")
+async def clear_clipboard():
+    """Clear all clipboard items from history and persistent storage."""
+    clear_clipboard_data_sync()
     
     # Broadcast clear action to active WebSocket listeners
     try:
@@ -527,6 +531,7 @@ async def clear_clipboard():
 
 
 @router.delete("/api/clipboard/remove/{item_id}", name="clipboard_remove")
+@router.delete("/api/clipboard/delete/{item_id}", name="clipboard_delete_alias")
 async def remove_clipboard_item(item_id: int):
     """Delete a single clipboard item from history."""
     global clipboard_history

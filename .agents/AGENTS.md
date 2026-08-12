@@ -313,4 +313,54 @@ REPOSITORY / PROJECTION STABILITY RULES
 - When validating rendering, compare Repository, Projection, and DOM together whenever possible.
 - Every render-stability regression test must produce detailed diagnostics showing mutation index, render timestamp, Repository items, Projection items, DOM items, and missing filenames.
 
+========================
+EXISTING MODULE & FILE OWNERSHIP CHECK
+========================
+
+Before creating, renaming, moving, deleting, overwriting, or replacing ANY file or module, the agent MUST perform an existing-ownership audit.
+
+1. SEARCH BEFORE CREATE
+Before creating a new module, search the ENTIRE repository for:
+- candidate function names
+- related subsystem names
+- related UI/component names
+- existing adapters, controllers, services, utilities
+- filenames that may already own the same responsibility
+
+Do not assume that a missing filename means the responsibility is unowned.
+
+2. INSPECT EXISTING OWNERS
+If related code is found, inspect the relevant existing files before deciding what to do. Determine whether the responsibility is:
+A. Already fully owned by an existing module
+B. Partially extracted into an existing module
+C. Duplicated across multiple modules
+D. Truly unowned and safe to extract
+
+3. NEVER BLINDLY CREATE DUPLICATE MODULES
+If an existing module already owns the responsibility:
+- DO NOT create another module with overlapping responsibility.
+- Prefer extending/refactoring the existing owner when appropriate.
+- If the existing architecture should not be changed, STOP and report the conflict.
+
+4. NEVER BLINDLY OVERWRITE EXISTING FILES
+Before writing to an existing file: read the existing file, determine what it currently owns, verify no conflict/duplication, and preserve unrelated functionality.
+
+5. NEVER DELETE EXISTING FILES JUST BECAUSE A NEW MODULE IS CREATED
+Creating a replacement/extracted module does NOT automatically authorize deleting the previous module. A file may only be deleted when its ownership has been explicitly established as obsolete, all callers have been audited, its replacement is verified, no unique responsibility remains, and deletion is explicitly part of the task.
+
+6. BEFORE REMOVING CODE FROM main-app.js
+The agent MUST prove: destination module exists, contains complete implementation, does not duplicate an existing module, all dependencies are available, all callers remain valid, required global APIs are preserved, script load order is correct, and exactly ONE authoritative implementation remains. Only then may the original implementation be removed.
+
+7. ONE RESPONSIBILITY -> ONE AUTHORITATIVE OWNER
+Maintain invariant: ONE RESPONSIBILITY -> ONE AUTHORITATIVE MODULE. Avoid duplicate controllers, adapters, services, utilities, or multiple implementations of the same global API.
+
+8. FILE OPERATION SAFETY
+Classify operations before execution: CREATE (verify no conflict), MODIFY (inspect existing responsibility first), RENAME (search all references first), MOVE (verify imports/script tags/load order), DELETE (prove obsolete), OVERWRITE (prohibited unless inspected and explicitly justified).
+
+9. STOP CONDITION
+If ownership is ambiguous, conflicting, duplicated, or cannot be proven: STOP and report existing file/module, detected responsibility, overlapping responsibility, affected callers, recommended resolution, and wait for approval.
+
+10. FINAL REFACTORING AUDIT
+After every extraction/refactor, verify: no duplicate implementation remains, no stale implementation remains, no orphaned module was created, no existing module was accidentally replaced, no unexpected file was deleted/modified, and one authoritative owner exists for the extracted responsibility.
+
 ## codex reviews your entire work everytime
