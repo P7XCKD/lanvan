@@ -52,4 +52,4 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: devprobs/lanvan
-          readme-filepath: ./DOCKER_HUB_DESCRIPTION.md
+          readme-filepath: ./docs/DOCKER_HUB_DESCRIPTION.md
