@@ -100,7 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateSupportCardVisibility() {
     if (newSupportCard) {
-      // Support card is visible ONLY when server is STOPPED and network is CONNECTED (no warning)
+      // Support card is visible ONLY when server is STOPPED and network is CONNECTED
       if (currentServerState === "stopped" && currentNetworkState === "connected") {
         newSupportCard.style.display = "flex";
       } else {
