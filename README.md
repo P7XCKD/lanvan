@@ -193,29 +193,71 @@ docker compose down
 docker compose --profile https up -d lanvan-https
 ```
 
-### 🚀 Public Docker Hub Distribution (`p7xckd/lanvan:latest`)
+### 🚀 Public Docker Hub Distribution (`devprobs/lanvan:latest`)
 
 Run Lanvan instantly on any system using Docker without cloning or downloading the source code:
 
-#### Quickstart (`docker run`)
+#### Quickstart via Launcher Scripts (Automated LAN IP Detection)
 
+- **Windows (PowerShell)**:
+  ```powershell
+  .\start-lanvan.ps1
+  ```
+- **Linux / macOS (Bash)**:
+  ```bash
+  chmod +x start-lanvan.sh
+  ./start-lanvan.sh
+  ```
+
+#### Quickstart via Direct `docker run` Command
+
+> [!TIP]
+> Pass `-e LANVAN_HOST=<YOUR_LAN_IP>` so the container advertises your host PC's Wi-Fi IP address for mobile QR code scanning.
+
+**PowerShell (Windows)**:
+```powershell
+docker run -d `
+  --name lanvan `
+  -p 80:80 `
+  -e LANVAN_HOST=(Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Wi-Fi*","Ethernet*" | Select-Object -ExpandProperty IPAddress -First 1) `
+  -v "${PWD}/data:/app/data" `
+  devprobs/lanvan:latest
+```
+
+**Command Prompt (`cmd.exe` on Windows)**:
+```cmd
+docker run -d --name lanvan -p 80:80 -e LANVAN_HOST=192.168.1.34 -v "%cd%\data:/app/data" devprobs/lanvan:latest
+```
+
+**Linux / macOS**:
 ```bash
 docker run -d \
   --name lanvan \
   -p 80:80 \
-  -e LANVAN_HOST=192.168.1.34 \
+  -e LANVAN_HOST=$(hostname -I | awk '{print $1}') \
   -v ./data:/app/data \
-  p7xckd/lanvan:latest
+  devprobs/lanvan:latest
 ```
 
-#### Docker Compose Quickstart
+#### Quickstart via Docker Desktop GUI
+
+If you are starting the container directly from the **Docker Desktop GUI App**:
+
+1. Search for **`devprobs/lanvan`** in the Docker Desktop search bar and click **Run**.
+2. Expand **Optional Settings**:
+   - **Host Port**: `80` (Container Port: `80`)
+   - **Host Path**: Select your local folder (e.g. `C:\lanvan\data`) → **Container Path**: `/app/data`
+   - **Environment Variables**: Add key `LANVAN_HOST` with value equal to your PC's Wi-Fi IP (e.g. `192.168.1.34`)
+3. Click **Run**!
+
+#### Quickstart via Docker Compose
 
 ```yaml
 name: lanvan
 
 services:
   lanvan:
-    image: p7xckd/lanvan:latest
+    image: devprobs/lanvan:latest
     container_name: lanvan-app
     ports:
       - "80:80"
@@ -232,9 +274,14 @@ services:
     restart: unless-stopped
 ```
 
-Run:
+Run with auto-detected LAN IP:
+```powershell
+# Windows
+$env:LANVAN_HOST = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Wi-Fi*","Ethernet*" | Select-Object -ExpandProperty IPAddress -First 1); docker compose up -d
+```
 ```bash
-docker compose up -d
+# Linux / macOS
+LANVAN_HOST=$(hostname -I | awk '{print $1}') docker compose up -d
 ```
 
 ### Docker Specifications & Security Matrix
@@ -244,7 +291,7 @@ docker compose up -d
 - **Security Policy**: Use `--block-dangerous` or set `BLOCK_DANGEROUS=true` environment variable to block executable extensions (`.exe`, `.bat`, `.dll`, `.sys`). HTTPS mode enables dangerous extension blocking automatically.
 - **Healthcheck**: Container health is monitored automatically via `GET /api/server-status`.
 - **Performance & Transfer Speed**: Running inside Docker containers incurs minor network virtualization/bridge translation overhead from host-to-container NAT. For maximum bare-metal LAN transfer speed, run Lanvan directly on host Python (`python run.py`), native Android App, or Termux.
-- **Publishing & Versioning**: Image tags follow standard OCI conventions: `p7xckd/lanvan:latest`, `p7xckd/lanvan:v1.0.0`. Automated publishing uses GitHub Actions CI/CD to Docker Hub.
+- **Publishing & Versioning**: Image tags follow standard OCI conventions: `devprobs/lanvan:latest`, `devprobs/lanvan:v1.0.0`. Automated publishing uses GitHub Actions CI/CD to Docker Hub.
 
 ---
 
