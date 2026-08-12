@@ -1881,6 +1881,14 @@ async def clear_files():
         except Exception as v_err:
             print(f"[WARN] Failed to reset version metadata during clear: {v_err}")
 
+        # Clear clipboard history from memory and persistent disk store
+        try:
+            from app.routers.clipboard import clear_clipboard_data_sync
+            clear_clipboard_data_sync()
+            print("[CLEAN] Clipboard history cleared successfully.")
+        except Exception as c_err:
+            print(f"[WARN] Failed to clear clipboard history during clear: {c_err}")
+
         # Create detailed response
         if files_locked > 0:
             # Provide helpful information about locked files

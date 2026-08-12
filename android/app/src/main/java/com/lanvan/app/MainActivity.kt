@@ -673,6 +673,28 @@ class MainActivity : AppCompatActivity() {
 
     private fun clearStorageData() {
         try {
+            // Notify active Python backend server to clear in-memory clipboard & file metadata
+            Thread {
+                try {
+                    val url = java.net.URL("http://127.0.0.1:5000/clear")
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.connectTimeout = 1000
+                    conn.readTimeout = 1000
+                    conn.responseCode
+                    conn.disconnect()
+                } catch (_: Exception) {}
+                try {
+                    val url = java.net.URL("http://127.0.0.1:5000/api/clipboard/clear")
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.requestMethod = "DELETE"
+                    conn.connectTimeout = 1000
+                    conn.readTimeout = 1000
+                    conn.responseCode
+                    conn.disconnect()
+                } catch (_: Exception) {}
+            }.start()
+
             val uploadsDir = java.io.File(filesDir, "data/uploads")
             if (uploadsDir.exists()) deleteContents(uploadsDir)
 
