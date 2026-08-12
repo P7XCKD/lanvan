@@ -19,26 +19,24 @@
 
         var netInfo = window._currentNetworkInfo;
 
-        // Docker bridge mode without LANVAN_ADVERTISE_HOST — LAN address is unavailable.
-        // Never advertise localhost as a LAN address for mobile devices.
+        // Docker mode without LANVAN_HOST / LANVAN_ADVERTISE_HOST environment variable.
+        // Fall back to http://localhost and clean text fallback in QR box.
         if (netInfo && netInfo.docker_needs_host_env) {
+            var fallbackUrl = "http://localhost";
             if (connectAddress) {
-                connectAddress.textContent = "LAN address unavailable";
+                connectAddress.textContent = fallbackUrl;
             }
-            if (qrBox.getAttribute("data-rendered-url") === "docker-notice") return;
-            qrBox.setAttribute("data-rendered-url", "docker-notice");
-            qrBox.innerHTML = '<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:10px 4px;line-height:1.35;">Run <code>start-lanvan.ps1</code> or set <strong>LANVAN_ADVERTISE_HOST</strong> in compose.yaml for mobile QR</div>';
+            if (qrBox.getAttribute("data-rendered-url") === "docker-fallback") return;
+            qrBox.setAttribute("data-rendered-url", "docker-fallback");
+            qrBox.innerHTML = '<div style="font-size:0.75rem;font-weight:600;color:var(--text-muted);text-align:center;padding:32px 6px;word-break:break-all;">' + fallbackUrl + '</div>';
             return;
         }
 
-        // lan_ip_url is null when Docker bridge is running without env var — already handled above.
-        // For native runtimes, fullUrl will always be populated by /api/network-info.
         var url = netInfo && netInfo.fullUrl ? netInfo.fullUrl : null;
 
         if (!url) {
-            // No LAN URL available — do not display a misleading localhost QR.
-            if (connectAddress) connectAddress.textContent = "";
-            qrBox.innerHTML = '<div style="font-size:0.6rem;color:var(--text-muted);text-align:center;padding:8px;">Connecting...</div>';
+            if (connectAddress) connectAddress.textContent = "...";
+            qrBox.innerHTML = '<div style="font-size:0.75rem;color:var(--text-muted);text-align:center;padding:32px 6px;">Loading...</div>';
             return;
         }
 
@@ -47,7 +45,7 @@
         }
 
         if (qrBox.getAttribute("data-rendered-url") === url) {
-            return; // URL unchanged — no new QR request needed
+            return; // URL unchanged — no duplicate QR request
         }
         qrBox.setAttribute("data-rendered-url", url);
 
@@ -58,7 +56,7 @@
         img.style.cssText = "width:102px;height:102px;object-fit:contain;display:block;margin:0 auto;";
         img.src = qrApiUrl;
         img.onerror = function () {
-            qrBox.innerHTML = '<div style="font-size:0.6rem;color:var(--text-muted);text-align:center;padding:8px;">Scan to connect</div>';
+            qrBox.innerHTML = '<div style="font-size:0.75rem;font-weight:600;color:var(--text-color);text-align:center;padding:24px 6px;word-break:break-all;">' + url + '</div>';
         };
         qrBox.appendChild(img);
     }
@@ -70,22 +68,22 @@
 
         var netInfo = window._currentNetworkInfo;
 
-        // Docker bridge mode without LANVAN_ADVERTISE_HOST — LAN address is unavailable.
         if (netInfo && netInfo.docker_needs_host_env) {
+            var fallbackUrl = "http://localhost";
             if (dialogAddress) {
-                dialogAddress.textContent = "LAN address unavailable";
+                dialogAddress.textContent = fallbackUrl;
             }
-            if (dialogBox.getAttribute("data-rendered-url") === "docker-notice") return;
-            dialogBox.setAttribute("data-rendered-url", "docker-notice");
-            dialogBox.innerHTML = '<div style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:24px 12px;line-height:1.4;">Run <code>start-lanvan.ps1</code> to launch Docker with your real LAN IP,<br>or set <strong>LANVAN_ADVERTISE_HOST=&lt;YOUR_PC_LAN_IP&gt;</strong> in <code>compose.yaml</code></div>';
+            if (dialogBox.getAttribute("data-rendered-url") === "docker-fallback") return;
+            dialogBox.setAttribute("data-rendered-url", "docker-fallback");
+            dialogBox.innerHTML = '<div style="font-size:0.9rem;font-weight:600;color:var(--text-muted);text-align:center;padding:48px 12px;word-break:break-all;">' + fallbackUrl + '</div>';
             return;
         }
 
         var url = netInfo && netInfo.fullUrl ? netInfo.fullUrl : null;
 
         if (!url) {
-            if (dialogAddress) dialogAddress.textContent = "";
-            dialogBox.innerHTML = '<div style="font-size:0.8rem;color:var(--text-muted);text-align:center;padding:12px;">Connecting...</div>';
+            if (dialogAddress) dialogAddress.textContent = "...";
+            dialogBox.innerHTML = '<div style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:36px 12px;">Loading...</div>';
             return;
         }
 
@@ -94,7 +92,7 @@
         }
 
         if (dialogBox.getAttribute("data-rendered-url") === url) {
-            return; // URL unchanged — no new QR request needed
+            return; // URL unchanged
         }
         dialogBox.setAttribute("data-rendered-url", url);
 
@@ -105,7 +103,7 @@
         img.style.cssText = "max-width:100%;max-height:100%;object-fit:contain;display:block;margin:0 auto;";
         img.src = qrApiUrl;
         img.onerror = function () {
-            dialogBox.innerHTML = '<div style="font-size:0.8rem;color:var(--text-muted);text-align:center;padding:12px;">Scan to connect</div>';
+            dialogBox.innerHTML = '<div style="font-size:0.9rem;font-weight:600;color:var(--text-color);text-align:center;padding:40px 12px;word-break:break-all;">' + url + '</div>';
         };
         dialogBox.appendChild(img);
     }
