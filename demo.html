@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lanvan Android UI Prototype — Baseline vs Proposed Redesign</title>
+  <link rel="stylesheet" href="demo.css">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <!-- TOP PROTOTYPE BAR -->
+  <header class="proto-bar">
+    <div class="proto-brand">
+      <img src="app/static/images/icon.png" alt="Lanvan Logo" class="proto-logo">
+      <div class="proto-title">
+        <h1>Lanvan Android UI Prototype</h1>
+        <p>Interactive baseline (OLD UI) vs proposed redesign (NEW UI)</p>
+      </div>
+    </div>
+
+    <div class="proto-controls">
+      <!-- MODE SWITCHER -->
+      <div class="control-group">
+        <span class="control-label">View Mode:</span>
+        <div class="segmented-control" id="view-mode-control">
+          <button class="btn-segment active" data-view="old">OLD UI</button>
+          <button class="btn-segment" data-view="new">NEW UI</button>
+          <button class="btn-segment" data-view="compare">Compare</button>
+        </div>
+      </div>
+
+      <!-- STATE SWITCHER -->
+      <div class="control-group">
+        <span class="control-label">Server State:</span>
+        <div class="segmented-control" id="server-state-control">
+          <button class="btn-segment active" data-state="stopped">Stopped</button>
+          <button class="btn-segment" data-state="running">Running</button>
+        </div>
+      </div>
+
+      <!-- VIEWPORT RESIZER -->
+      <div class="control-group">
+        <span class="control-label">Preset:</span>
+        <select id="viewport-preset" class="proto-select">
+          <option value="390x844">iPhone / Modern Android (390 × 844)</option>
+          <option value="360x800">Compact Android (360 × 800)</option>
+          <option value="412x915">Large Android (412 × 915)</option>
+          <option value="responsive">Responsive / Fluid</option>
+        </select>
+      </div>
+
+      <!-- NAVIGATION INSET SWITCHER -->
+      <div class="control-group">
+        <span class="control-label">Navigation:</span>
+        <div class="segmented-control" id="nav-mode-control">
+          <button class="btn-segment active" data-nav="gesture">Gesture</button>
+          <button class="btn-segment" data-nav="buttons">3 Button</button>
+        </div>
+      </div>
+
+      <!-- NETWORK STATE SWITCHER (PROTOTYPE TESTING) -->
+      <div class="control-group">
+        <span class="control-label">Network:</span>
+        <div class="segmented-control" id="net-state-control">
+          <button class="btn-segment active" data-net="connected">Connected</button>
+          <button class="btn-segment" data-net="disconnected">Disconnected</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN STAGE -->
+  <main class="proto-stage" id="proto-stage">
+    
+    <!-- =========================================================
+         OLD UI PHONE FRAME
+         ========================================================= -->
+    <section class="phone-wrapper" id="wrapper-old">
+      <div class="phone-header-label">
+        <span class="badge badge-old">OLD UI Baseline</span>
+        <span class="phone-size-indicator">390 × 844</span>
+      </div>
+
+      <div class="phone-frame" id="frame-old">
+        <!-- STATUS BAR SIMULATION -->
+        <div class="status-bar">
+          <span class="status-time">16:20</span>
+          <div class="status-icons">
+            <i data-lucide="wifi" class="icon-sm"></i>
+            <i data-lucide="battery" class="icon-sm"></i>
+          </div>
+        </div>
+
+        <!-- OLD UI SCREEN CONTENT -->
+        <div class="app-screen old-ui-screen">
+          <!-- Header Bar -->
+          <div class="old-header-bar">
+            <span class="old-app-title">Lanvan</span>
+            <button class="old-btn-toggle" id="old-btn-toggle">Start Server</button>
+            <button class="old-btn-settings" id="old-btn-settings" aria-label="Settings Menu">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Status Indicator Bar -->
+          <div class="old-status-bar" id="old-status-text">
+            Server is inactive.
+          </div>
+
+          <!-- INACTIVE CONTAINER (Stopped state) -->
+          <div class="old-content-container" id="old-inactive-container">
+            <h2 class="old-placeholder-title">Lanvan File Transfer</h2>
+            <p class="old-placeholder-subtitle">Tap Start Server to launch local sharing</p>
+          </div>
+
+          <!-- QR & LINK CONTAINER (Running state) -->
+          <div class="old-content-container old-qr-container" id="old-qr-container" style="display:none;">
+            <p class="old-instruction-text">Scan to connect from another device:</p>
+            <div class="old-qr-box">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://192.168.1.34:5000" alt="QR Code" class="old-qr-img">
+            </div>
+            <p class="old-instruction-text">Or click to open in your browser:</p>
+            <a href="#" class="old-ip-link" id="old-ip-link">http://192.168.1.34:5000</a>
+            <a href="#" class="old-mdns-link" id="old-mdns-link" style="display:none;">http://lanvan.local:5000</a>
+          </div>
+
+          <!-- Storage Usage Footer (hidden by default) -->
+          <div class="old-footer-storage" id="old-storage-footer" style="display:none;">
+            <span id="old-txt-storage">App Storage: 21.37 MB</span>
+          </div>
+        </div>
+
+        <!-- OLD SETTINGS DIALOG (Modal overlay) -->
+        <div class="old-dialog-overlay" id="old-settings-dialog" style="display:none;">
+          <div class="old-dialog-card">
+            <h3 class="old-dialog-title">Settings</h3>
+
+            <div class="old-dialog-body">
+              <!-- 1. Battery Optimization -->
+              <div class="old-setting-section">
+                <div class="old-setting-label">Battery Optimization Status</div>
+                <div class="old-battery-status" id="old-battery-status">Status: Background restricted (Optimized)</div>
+                <button class="old-btn-secondary" id="old-btn-battery">Configure Background Access</button>
+              </div>
+
+              <div class="old-divider"></div>
+
+              <!-- 2. Server Protocol -->
+              <div class="old-setting-section">
+                <div class="old-setting-label">Server Protocol</div>
+                <label class="old-switch-row">
+                  <span>Use HTTPS Protocol</span>
+                  <input type="checkbox" id="old-switch-https">
+                </label>
+              </div>
+
+              <div class="old-divider"></div>
+
+              <!-- 3. Security Section -->
+              <div class="old-setting-section">
+                <div class="old-setting-label">Security (Block Dangerous Files)</div>
+                <p class="old-setting-desc" id="old-security-desc">HTTP Protocol: Block known dangerous executable files (.exe, .bat, .dll, etc.).</p>
+                <label class="old-switch-row">
+                  <span>Block Dangerous Files (HTTP)</span>
+                  <input type="checkbox" id="old-switch-block">
+                </label>
+              </div>
+
+              <div class="old-divider"></div>
+
+              <!-- 4. Storage Management Section -->
+              <div class="old-setting-section">
+                <div class="old-setting-label">Storage Management</div>
+                <div class="old-storage-text" id="old-storage-text">Storage Used: 21.37 MB</div>
+                <button class="old-btn-secondary" id="old-btn-clear-storage">Clear Storage Data</button>
+              </div>
+
+              <div class="old-divider"></div>
+
+              <!-- 5. Copy Logs -->
+              <div class="old-setting-section">
+                <button class="old-btn-secondary" id="old-btn-copy-logs">Copy Server Logs</button>
+              </div>
+            </div>
+
+            <div class="old-dialog-actions">
+              <button class="old-btn-action" id="old-btn-close-settings">Close</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- OLD CLEAR STORAGE CONFIRM DIALOG -->
+        <div class="old-dialog-overlay" id="old-confirm-dialog" style="display:none;">
+          <div class="old-dialog-card">
+            <h3 class="old-dialog-title">Clear Storage & Clipboard Data?</h3>
+            <div class="old-dialog-body">
+              <p class="old-confirm-msg">This will permanently delete all uploaded files and saved clipboard history. This action cannot be undone.</p>
+            </div>
+            <div class="old-dialog-actions">
+              <button class="old-btn-action-neg" id="old-btn-cancel-clear">Cancel</button>
+              <button class="old-btn-action" id="old-btn-confirm-clear" disabled>Clear (3s)</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =========================================================
+         NEW UI PHONE FRAME (PROPOSED REDESIGN - ITERATION 3)
+         ========================================================= -->
+    <section class="phone-wrapper" id="wrapper-new">
+      <div class="phone-header-label">
+        <span class="badge badge-new">NEW UI Iteration 3</span>
+        <span class="phone-size-indicator">390 × 844</span>
+      </div>
+
+      <div class="phone-frame nav-gesture" id="frame-new">
+        <!-- STATUS BAR SIMULATION (TOP INSET) -->
+        <div class="status-bar">
+          <span class="status-time">16:20</span>
+          <div class="status-icons">
+            <i data-lucide="wifi" class="icon-sm"></i>
+            <i data-lucide="battery" class="icon-sm"></i>
+          </div>
+        </div>
+
+        <!-- NEW UI SCREEN CONTENT -->
+        <div class="app-screen new-ui-screen">
+          
+          <!-- TOP APP BAR -->
+          <header class="new-app-bar">
+            <div class="new-brand">
+              <span class="new-app-name">Lanvan</span>
+            </div>
+            
+            <!-- HEADER GLOBAL STATUS INDICATOR -->
+            <div class="header-status-pill status-stopped" id="header-status-pill">
+              <span class="status-dotdot"></span>
+              <span id="header-status-text">Stopped</span>
+            </div>
+
+            <button class="new-icon-btn" id="new-btn-settings" aria-label="Open Settings">
+              <i data-lucide="settings"></i>
+            </button>
+          </header>
+
+          <!-- MAIN HERO CONTENT SCROLLER -->
+          <div class="new-screen-body">
+
+            <!-- STOPPED STATE HERO CARD -->
+            <div class="new-card new-hero-card stopped-hero" id="new-stopped-card">
+              <p class="new-hero-subtitle">Start Lanvan to share files with devices on your local network.</p>
+
+              <button class="new-primary-btn" id="new-btn-start">
+                <i data-lucide="play" class="btn-icon"></i>
+                <span>Start Lanvan</span>
+              </button>
+            </div>
+
+            <!-- RUNNING STATE HERO CARD -->
+            <div class="new-card new-hero-card running-hero" id="new-running-card" style="display:none;">
+              <p class="new-running-subtitle">Your files are available on this network.</p>
+
+              <!-- QR CODE HERO (PROMINENT, UNBOXED) -->
+              <div class="new-qr-hero-group">
+                <div class="new-qr-frame">
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://192.168.1.34:5000" alt="QR Code" class="new-qr-img">
+                </div>
+                <span class="new-qr-hint">Scan to connect</span>
+              </div>
+
+              <!-- FLATTENED INLINE NETWORK ADDRESS & COPY ACTION -->
+              <div class="new-address-inline-group">
+                <div class="new-address-url" id="new-address-text">http://192.168.1.34:5000</div>
+                <button class="new-inline-copy-btn" id="new-btn-copy-address" title="Copy Address">
+                  <i data-lucide="copy" class="icon-xs"></i>
+                  <span>Copy</span>
+                </button>
+              </div>
+
+              <!-- NEUTRAL STOP LANVAN BUTTON -->
+              <button class="new-secondary-btn" id="new-btn-stop">
+                <i data-lucide="square" class="btn-icon"></i>
+                <span>Stop Lanvan</span>
+              </button>
+            </div>
+
+            <!-- RUNNING + DEGRADED NETWORK HERO CARD (RUNNING BUT NETWORK UNAVAILABLE) -->
+            <div class="new-card new-hero-card degraded-hero" id="new-degraded-card" style="display:none;">
+              <div class="degraded-icon-box">
+                <i data-lucide="wifi-off" class="degraded-icon"></i>
+              </div>
+              <h3 class="degraded-title">Network unavailable</h3>
+              <p class="degraded-sub">Lanvan is still running, but other devices cannot connect right now. Reconnect to Wi-Fi or enable a hotspot to resume sharing.</p>
+              <p class="degraded-safe-note">Your files are safe.</p>
+
+              <button class="new-primary-btn warning-btn" id="new-btn-reconnect-wifi">
+                <i data-lucide="wifi" class="btn-icon"></i>
+                <span>Open Wi-Fi Settings</span>
+              </button>
+
+              <button class="new-secondary-btn" id="new-btn-degraded-stop">
+                <i data-lucide="square" class="btn-icon"></i>
+                <span>Stop Lanvan</span>
+              </button>
+            </div>
+
+            <!-- STOPPED + DISCONNECTED NETWORK WARNING -->
+            <div class="new-card new-net-warning-card" id="new-net-warning" style="display:none;">
+              <div class="warning-icon-box">
+                <i data-lucide="alert-triangle" class="warning-icon"></i>
+              </div>
+              <div class="warning-text-content">
+                <h4 class="warning-title" id="new-net-warning-title">No network connection</h4>
+                <p class="warning-sub" id="new-net-warning-sub">Connect to Wi-Fi or enable a hotspot before starting Lanvan.</p>
+              </div>
+            </div>
+
+            <!-- COMPACT SUPPORT LANVAN SECTION CARD (WITH LOGO ON RIGHT) -->
+            <div class="new-card new-support-section-card" id="new-support-section-card">
+              <div class="support-card-header-row">
+                <div class="card-section-label">SUPPORT LANVAN</div>
+                <img src="app/static/images/icon.png" alt="Lanvan Logo" class="support-header-logo">
+              </div>
+
+              <div class="support-section-body">
+                <div class="support-section-title">Enjoying Lanvan?</div>
+                <div class="support-section-sub">Help keep Lanvan free and independent.</div>
+              </div>
+
+              <button class="new-outline-btn support-section-btn" id="new-btn-open-support">
+                <i data-lucide="heart" class="heart-icon"></i>
+                <span>Support Lanvan</span>
+              </button>
+            </div>
+
+            <!-- COMPACT STORAGE SECTION CARD (BOTTOM) -->
+            <div class="new-card new-storage-section-card" id="new-storage-section-card">
+              <div class="card-section-label">STORAGE</div>
+
+              <div class="storage-section-body">
+                <div class="storage-section-val" id="new-storage-main-val">21.37 MB</div>
+                <div class="storage-section-sub">Uploaded files & clipboard history</div>
+              </div>
+
+              <button class="new-outline-btn accent-outline storage-section-btn" id="new-btn-main-manage-storage">
+                <i data-lucide="hard-drive"></i>
+                <span>Manage Storage</span>
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- NEW SETTINGS SHEET (MODERN SHEET OVERLAY WITH SAFE INSET) -->
+        <div class="new-sheet-overlay" id="new-settings-sheet" style="display:none;">
+          <div class="new-sheet-card">
+            
+            <div class="new-sheet-header">
+              <h3>Settings</h3>
+              <button class="new-icon-btn sheet-close-btn" id="new-btn-close-settings">
+                <i data-lucide="x"></i>
+              </button>
+            </div>
+
+            <div class="new-sheet-body">
+
+              <!-- GROUP 1: CONNECTION -->
+              <div class="new-settings-group">
+                <div class="group-title">CONNECTION</div>
+
+                <div class="new-setting-row">
+                  <div class="row-main">
+                    <div class="row-title">Connection protocol</div>
+                    <div class="row-sub">Use HTTPS encryption with auto-generated certificate</div>
+                  </div>
+                  <div class="row-action">
+                    <label class="new-toggle-switch">
+                      <input type="checkbox" id="new-switch-https">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- GROUP 2: SECURITY -->
+              <div class="new-settings-group">
+                <div class="group-title">SECURITY</div>
+
+                <div class="new-setting-row">
+                  <div class="row-main">
+                    <div class="row-title">Block potentially dangerous files</div>
+                    <div class="row-sub">Prevent executable files such as .exe, .bat and .dll</div>
+                  </div>
+                  <div class="row-action">
+                    <label class="new-toggle-switch">
+                      <input type="checkbox" id="new-switch-block">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- GROUP 3: STORAGE -->
+              <div class="new-settings-group">
+                <div class="group-title">STORAGE</div>
+
+                <div class="new-setting-row">
+                  <div class="row-main">
+                    <div class="row-title">Storage used</div>
+                    <div class="row-sub" id="new-storage-val">21.37 MB</div>
+                  </div>
+                </div>
+
+                <button class="new-outline-btn accent-outline" id="new-btn-manage-storage">
+                  <i data-lucide="hard-drive"></i>
+                  <span>Manage Storage</span>
+                </button>
+              </div>
+
+              <!-- GROUP 4: DIAGNOSTICS -->
+              <div class="new-settings-group">
+                <div class="group-title">DIAGNOSTICS</div>
+
+                <button class="new-outline-btn" id="new-btn-copy-logs">
+                  <i data-lucide="file-text"></i>
+                  <span>Copy Lanvan Logs</span>
+                </button>
+              </div>
+
+              <!-- GROUP 5: BACKGROUND -->
+              <div class="new-settings-group">
+                <div class="group-title">BACKGROUND</div>
+
+                <div class="new-setting-row">
+                  <div class="row-main">
+                    <div class="row-title">Background operation</div>
+                    <div class="row-sub" id="new-battery-sub">Battery optimization is disabled</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SAFE BOTTOM INSET PADDING GAP -->
+              <div class="sheet-safe-bottom-padding"></div>
+
+            </div>
+
+          </div>
+        </div>
+
+        <!-- NEW MANAGE STORAGE SHEET / MODAL -->
+        <div class="new-sheet-overlay" id="new-storage-sheet" style="display:none;">
+          <div class="new-sheet-card storage-sheet-card">
+            
+            <div class="new-sheet-header">
+              <h3>Manage Storage</h3>
+              <button class="new-icon-btn sheet-close-btn" id="new-btn-close-storage-sheet">
+                <i data-lucide="x"></i>
+              </button>
+            </div>
+
+            <div class="new-sheet-body">
+              <!-- STORAGE SUMMARY HEADER -->
+              <div class="storage-summary-box">
+                <i data-lucide="hard-drive" class="storage-box-icon"></i>
+                <div class="storage-box-text">
+                  <span class="storage-box-val" id="storage-sheet-val">21.37 MB</span>
+                  <span class="storage-box-sub">Uploaded files & clipboard history</span>
+                </div>
+              </div>
+
+              <!-- OPTION 1: CLEAR STORAGE DATA NOW -->
+              <div class="new-settings-group">
+                <div class="group-title">MANUAL STORAGE CLEANUP</div>
+                <p class="storage-warning-text">Clearing storage data removes all uploaded files and clipboards stored on this device immediately.</p>
+                <button class="new-danger-btn" id="new-btn-open-clear-confirm">
+                  <i data-lucide="trash-2" class="btn-icon"></i>
+                  <span>Clear Storage Data</span>
+                </button>
+              </div>
+
+              <!-- OPTION 2: AUTOMATIC CLEANUP ON SHUTDOWN -->
+              <div class="new-settings-group">
+                <div class="group-title">AUTOMATIC STORAGE CLEANUP</div>
+
+                <div class="new-setting-row">
+                  <div class="row-main">
+                    <div class="row-title">Auto-clear storage on shutdown</div>
+                    <div class="row-sub">Automatically purge uploaded files and clipboards whenever Lanvan stops</div>
+                  </div>
+                  <div class="row-action">
+                    <label class="new-toggle-switch">
+                      <input type="checkbox" id="new-switch-autoclear">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sheet-safe-bottom-padding"></div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- NEW CONFIRM CLEAR STORAGE MODAL -->
+        <div class="new-sheet-overlay" id="new-confirm-modal" style="display:none;">
+          <div class="new-confirm-card">
+            <div class="confirm-icon-circle">
+              <i data-lucide="alert-triangle"></i>
+            </div>
+            <h4>Clear Storage & Clipboard Data?</h4>
+            <p>This will permanently delete all uploaded files and saved clipboard history. This action cannot be undone.</p>
+            <div class="confirm-actions">
+              <button class="new-outline-btn" id="new-btn-cancel-clear">Cancel</button>
+              <button class="new-danger-btn" id="new-btn-confirm-clear" disabled>Clear (3s)</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- NEW SUPPORT LANVAN PROTOTYPE MODAL DIALOG -->
+        <div class="new-sheet-overlay" id="new-support-modal" style="display:none;">
+          <div class="new-sheet-card support-sheet-card">
+            <div class="new-sheet-header">
+              <h3>Support Lanvan</h3>
+              <button class="new-icon-btn sheet-close-btn" id="new-btn-close-support">
+                <i data-lucide="x"></i>
+              </button>
+            </div>
+
+            <div class="new-sheet-body">
+              <div class="support-modal-hero">
+                <div class="support-heart-circle">
+                  <i data-lucide="heart" class="modal-heart-icon"></i>
+                </div>
+                <h4>Lanvan is completely free to use</h4>
+                <p>If you find Lanvan helpful, optional support helps keep the project free, open-source, and independent.</p>
+              </div>
+
+              <div class="new-settings-group">
+                <div class="support-options-grid">
+                  <button class="support-tier-card">
+                    <span class="support-tier-amount">$3</span>
+                    <span class="support-tier-name">Supporter</span>
+                  </button>
+                  <button class="support-tier-card active">
+                    <span class="support-tier-amount">$5</span>
+                    <span class="support-tier-name">Sponsor</span>
+                  </button>
+                  <button class="support-tier-card">
+                    <span class="support-tier-amount">$10</span>
+                    <span class="support-tier-name">Patron</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="support-notice-box">
+                <i data-lucide="info" class="notice-icon"></i>
+                <span>Prototype only — payment flow will be configured later.</span>
+              </div>
+
+              <button class="new-primary-btn" id="new-btn-confirm-support">
+                <span>Continue</span>
+              </button>
+
+              <div class="sheet-safe-bottom-padding"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SIMULATED SYSTEM NAVIGATION INSET BAR (BOTTOM INSET) -->
+        <div class="system-nav-bar" id="system-nav-bar">
+          <div class="nav-gesture-handle"></div>
+          <div class="nav-3button-controls">
+            <i data-lucide="triangle" class="nav-3btn-icon rotate-back"></i>
+            <i data-lucide="circle" class="nav-3btn-icon"></i>
+            <i data-lucide="square" class="nav-3btn-icon"></i>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <script src="demo.js"></script>
+</body>
+</html>
+
+  <script src="demo.js"></script>
+</body>
+</html>
