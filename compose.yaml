@@ -3,15 +3,15 @@ name: lanvan
 services:
   lanvan:
     build: .
-    image: lanvan:latest
+    image: p7xckd/lanvan:latest
     container_name: lanvan-app
     ports:
       - "80:80"
     volumes:
       - ./data:/app/data
     environment:
-      # Inject the real Windows/host LAN IP so Lanvan can advertise it for mobile QR codes.
-      # Set via start-lanvan.ps1 or manually: $env:LANVAN_HOST="192.168.x.x"
+      # Inject host LAN IP so Lanvan can advertise it for mobile QR code scanning.
+      # Automatically set via start-lanvan.ps1 (Windows) or start-lanvan.sh (Linux/macOS)
       LANVAN_HOST: ${LANVAN_HOST:-${LANVAN_ADVERTISE_HOST:-}}
       LANVAN_ADVERTISE_HOST: ${LANVAN_ADVERTISE_HOST:-${LANVAN_HOST:-}}
     healthcheck:
@@ -25,7 +25,7 @@ services:
   lanvan-https:
     profiles: ["https"]
     build: .
-    image: lanvan:latest
+    image: p7xckd/lanvan:latest
     container_name: lanvan-https-app
     command: ["--https"]
     ports:

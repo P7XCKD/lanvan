@@ -193,12 +193,58 @@ docker compose down
 docker compose --profile https up -d lanvan-https
 ```
 
+### 🚀 Public Docker Hub Distribution (`p7xckd/lanvan:latest`)
+
+Run Lanvan instantly on any system using Docker without cloning or downloading the source code:
+
+#### Quickstart (`docker run`)
+
+```bash
+docker run -d \
+  --name lanvan \
+  -p 80:80 \
+  -e LANVAN_HOST=192.168.1.34 \
+  -v ./data:/app/data \
+  p7xckd/lanvan:latest
+```
+
+#### Docker Compose Quickstart
+
+```yaml
+name: lanvan
+
+services:
+  lanvan:
+    image: p7xckd/lanvan:latest
+    container_name: lanvan-app
+    ports:
+      - "80:80"
+    volumes:
+      - ./data:/app/data
+    environment:
+      LANVAN_HOST: ${LANVAN_HOST:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/api/server-status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+```
+
+Run:
+```bash
+docker compose up -d
+```
+
 ### Docker Specifications & Security Matrix
 
-- **Default Production Runtime**: Docker runs `python run.py prod` automatically using minified static assets in `dist/`.
+- **Default Production Runtime**: Docker runs `python run.py` automatically using minified static assets in `dist/`.
 - **Persistent Storage**: `./data:/app/data` ensures uploads, clipboards, and version history survive container recreation.
 - **Security Policy**: Use `--block-dangerous` or set `BLOCK_DANGEROUS=true` environment variable to block executable extensions (`.exe`, `.bat`, `.dll`, `.sys`). HTTPS mode enables dangerous extension blocking automatically.
 - **Healthcheck**: Container health is monitored automatically via `GET /api/server-status`.
+- **Performance & Transfer Speed**: Running inside Docker containers incurs minor network virtualization/bridge translation overhead from host-to-container NAT. For maximum bare-metal LAN transfer speed, run Lanvan directly on host Python (`python run.py`), native Android App, or Termux.
+- **Publishing & Versioning**: Image tags follow standard OCI conventions: `p7xckd/lanvan:latest`, `p7xckd/lanvan:v1.0.0`. Automated publishing uses GitHub Actions CI/CD to Docker Hub.
 
 ---
 

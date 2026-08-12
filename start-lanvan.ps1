@@ -199,11 +199,14 @@ docker compose up -d
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
     Write-Host "  ========================================" -ForegroundColor Cyan
-    Write-Host "  LAN IP     : $detectedIP" -ForegroundColor Green
-    Write-Host "  LAN URL    : http://$detectedIP" -ForegroundColor Green
-    Write-Host "  Local URL  : http://localhost" -ForegroundColor Cyan
-    Write-Host "  Docker     : Running" -ForegroundColor Green
-    Write-Host "  QR         : Ready" -ForegroundColor Green
+    Write-Host "  Lanvan" -ForegroundColor White
+    Write-Host "  ------" -ForegroundColor White
+    Write-Host "  Docker   : Running" -ForegroundColor Green
+    Write-Host "  LAN IP   : $detectedIP" -ForegroundColor Green
+    Write-Host "  LAN URL  : http://$detectedIP" -ForegroundColor Green
+    Write-Host "  Local    : http://localhost" -ForegroundColor Cyan
+    Write-Host "  Data     : ./data" -ForegroundColor White
+    Write-Host "  QR       : Ready" -ForegroundColor Green
     Write-Host "  ========================================" -ForegroundColor Cyan
     Write-Host ""
 }

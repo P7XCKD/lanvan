@@ -13,10 +13,4 @@ scratch/
 docs/
 android/
 .gradle/
-data/uploads/*
-data/temp_chunks/*
-data/clipboards/*
-data/*.json
-!data/uploads/.gitkeep
-!data/temp_chunks/.gitkeep
-!data/clipboards/.gitkeep
+data/
