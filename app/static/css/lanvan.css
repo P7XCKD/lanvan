@@ -360,13 +360,13 @@ body {
 }
 
 .connect-tabs {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
     gap: 0.35rem;
     margin: 0.7rem 0;
 }
 
 .connect-tab {
+    flex: 1;
     border: 1px solid var(--border-color);
     border-radius: 999px;
     background: transparent;
@@ -376,6 +376,7 @@ body {
     font-size: 0.68rem;
     font-weight: 750;
     cursor: pointer;
+    text-align: center;
 }
 
 .connect-tab.active {
