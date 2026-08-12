@@ -3,7 +3,7 @@ name: lanvan
 services:
   lanvan:
     build: .
-    image: p7xckd/lanvan:latest
+    image: devprobs/lanvan:latest
     container_name: lanvan-app
     ports:
       - "80:80"
@@ -25,7 +25,7 @@ services:
   lanvan-https:
     profiles: ["https"]
     build: .
-    image: p7xckd/lanvan:latest
+    image: devprobs/lanvan:latest
     container_name: lanvan-https-app
     command: ["--https"]
     ports:
