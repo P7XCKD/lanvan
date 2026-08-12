@@ -481,6 +481,10 @@ class FileValidator(AdvancedFileValidator):
                 'stage': 'filename_validation'
             }
         
+        # Default initialization for analysis metadata
+        content_warnings = []
+        extension_check = None
+        
         # Step 2: Extension manipulation detection (only when dangerous file blocking is active)
         if cls.is_dangerous_blocking_enabled(is_https):
             try:
@@ -498,7 +502,6 @@ class FileValidator(AdvancedFileValidator):
                     }
                 
                 # If there's a warning-level mismatch, proceed but flag it
-                content_warnings = []
                 if extension_check.get('mismatch', False) and extension_check['security_risk'] == 'MEDIUM':
                     content_warnings.append(extension_check['reason'])
                 
