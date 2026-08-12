@@ -191,8 +191,9 @@ if ($detectedIP -notmatch "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$") {
 $env:LANVAN_HOST = $detectedIP
 $env:LANVAN_ADVERTISE_HOST = $detectedIP
 
-# Remove pre-existing container if present to ensure fresh container env binding
-docker rm -f lanvan-app 2>$null | Out-Null
+# Remove pre-existing container if present to ensure fresh container env binding.
+# Suppressed: "No such container" is expected when first run.
+try { docker rm -f lanvan-app 2>$null | Out-Null } catch { }
 
 docker compose up -d
 
