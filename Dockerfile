@@ -19,14 +19,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy application files
+# Copy core application files (data/ directory is mounted dynamically at runtime)
 COPY app/ ./app/
 COPY certs/ ./certs/
-COPY data/ ./data/
 COPY build.py run.py docker-entrypoint.sh ./
 
-# Make entrypoint executable & pre-build production assets
-RUN chmod +x docker-entrypoint.sh && python build.py
+# Create data directory structure & pre-build production assets
+RUN mkdir -p /app/data/uploads /app/data/temp_chunks /app/data/clipboards && \
+    chmod +x docker-entrypoint.sh && \
+    python build.py
 
 # Expose standard HTTP and HTTPS ports
 EXPOSE 80 443

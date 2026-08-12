@@ -616,6 +616,25 @@ if __name__ == "__main__":
         stdin_thread = threading.Thread(target=_stdin_monitor, daemon=True)
         stdin_thread.start()
 
+        def _handle_sigterm(signum, frame):
+            print("\n[INFO] Shutdown signal received - stopping server...")
+            if proc and proc.poll() is None:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=3)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+            sys.exit(0)
+
+        try:
+            signal.signal(signal.SIGTERM, _handle_sigterm)
+            signal.signal(signal.SIGINT, _handle_sigterm)
+        except Exception:
+            pass
+
         print("[INFO] Server starting (Ctrl+C or type 'close' to stop)...")
         try:
             # Must poll with timeout — on Windows, wait() with no timeout
