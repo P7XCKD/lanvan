@@ -867,7 +867,7 @@ body {
   text-transform: uppercase;
 }
 
-/* COMPACT STORAGE SECTION CARD (ANCHORED AT BOTTOM) */
+/* COMPACT STORAGE SECTION CARD */
 .new-storage-section-card {
   background-color: #1b1c1f;
   border: 1px solid #2b2c30;
@@ -876,7 +876,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: auto; /* Anchors Storage card to the bottom edge */
 }
 
 .storage-section-body {
