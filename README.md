@@ -116,17 +116,68 @@ Open the LAN address in any browser on the same network to start transferring fi
 
 Lanvan includes first-class Docker and Docker Compose support. Running via Docker Desktop or Compose boots in **Production Mode** using minified assets, persistent volume storage (`./data:/app/data`), and port `80:80` pre-configured.
 
-### 1. Recommended Launch (Docker Compose — 1 Command)
+### 1. Recommended Windows Launcher (`start-lanvan.ps1`)
+
+A Linux container running under Docker Desktop cannot discover the Windows host's physical Wi-Fi or Ethernet LAN IP from inside Docker's bridge network.
+
+Use the included 1-line PowerShell launcher script on Windows:
+
+```powershell
+.\start-lanvan.ps1
+```
+
+**What `start-lanvan.ps1` does automatically:**
+- Detects the active physical Wi-Fi / Ethernet IPv4 address on the host PC (e.g. `192.168.1.34`).
+- Passes `LANVAN_HOST=192.168.1.34` into the Docker container environment.
+- Generates a valid mobile QR code and LAN connection URL for phones on the same Wi-Fi.
+- Displays explicit startup diagnostics in the terminal:
+  ```text
+  ========================================
+  LAN IP     : 192.168.1.34
+  LAN URL    : http://192.168.1.34
+  Local URL  : http://localhost
+  Docker     : Running
+  QR         : Ready
+  ========================================
+  ```
+
+---
+
+### 2. Recommended Docker Compose (Cross-Platform)
 
 ```bash
+# Optional: Set your host's LAN IP for mobile QR code scanning across Wi-Fi:
+# Windows (PowerShell): $env:LANVAN_HOST="192.168.1.34"
+# Linux / macOS:        export LANVAN_HOST="192.168.1.34"
+
 # Start Lanvan Production Container (HTTP, Port 80, Persistent Storage)
 docker compose up -d
 ```
 
 > **Note on Docker Desktop GUI:**
-> Using Docker Desktop's `Images → Run` button opens a generic dialog that requires manually typing host port `80` into the port field. Standard OCI `EXPOSE 80` metadata documents port usage but does not auto-bind host ports without user input. **`docker compose up -d`** is the recommended one-click / one-command launcher because it pre-configures `80:80` and `./data:/app/data` automatically.
+> Using Docker Desktop's `Images → Run` button opens a generic dialog that requires manually typing host port `80` into the port field. Standard OCI `EXPOSE 80` metadata documents port usage but does not auto-bind host ports without user input. **`.\start-lanvan.ps1`** (Windows) or **`docker compose up -d`** is recommended because it pre-configures `80:80`, `./data:/app/data`, and host LAN IP environment variables automatically.
 
-### 2. Common Docker Compose Commands
+---
+
+### 3. CLI Commands (`docker run`)
+
+When running via `docker run` manually, pass `-e LANVAN_HOST=<YOUR_LAN_IP>` so the Connect panel and mobile QR code point to your physical network IP:
+
+```bash
+# Standard Production Container (HTTP)
+docker run -d --name lanvan-app -p 80:80 -e LANVAN_HOST=192.168.1.34 -v "${PWD}\data:/app/data" lanvan
+
+# Production Container with HTTPS / SSL (Port 443)
+docker run -d --name lanvan-app -p 443:443 -e LANVAN_HOST=192.168.1.34 -v "${PWD}\data:/app/data" lanvan --https
+
+# Production Container with Dangerous File Extension Blocking
+docker run -d --name lanvan-app -p 80:80 -e LANVAN_HOST=192.168.1.34 -v "${PWD}\data:/app/data" lanvan --block-dangerous
+
+# Opt-In Development Container (Unminified Assets)
+docker run -it --rm -p 80:80 -e LANVAN_HOST=192.168.1.34 -v "${PWD}\data:/app/data" lanvan --dev
+```
+
+### 4. Common Docker Management Commands
 
 ```bash
 # View Container Status & Published Ports
@@ -142,27 +193,11 @@ docker compose down
 docker compose --profile https up -d lanvan-https
 ```
 
-### 3. Alternative CLI Commands (`docker run`)
+### Docker Specifications & Security Matrix
 
-```bash
-# Standard Production Container (HTTP)
-docker run -d --name lanvan-app -p 80:80 -v "${PWD}\data:/app/data" lanvan
-
-# Production Container with HTTPS / SSL
-docker run -d --name lanvan-app -p 443:443 -v "${PWD}\data:/app/data" lanvan --https
-
-# Production Container with Dangerous File Blocking
-docker run -d --name lanvan-app -p 80:80 -v "${PWD}\data:/app/data" lanvan --block-dangerous
-
-# Opt-In Development Container (Unminified Assets)
-docker run -it --rm -p 80:80 -v "${PWD}\data:/app/data" lanvan --dev
-```
-
-### Docker Security Matrix & Specifications
-
-- **Default Production Runtime**: Docker runs `python run.py prod` automatically unless `--dev` is explicitly passed.
+- **Default Production Runtime**: Docker runs `python run.py prod` automatically using minified static assets in `dist/`.
 - **Persistent Storage**: `./data:/app/data` ensures uploads, clipboards, and version history survive container recreation.
-- **Security Policy**: Use `--block-dangerous` or set `BLOCK_DANGEROUS=true` environment variable to block `.exe`, `.bat`, `.dll`, `.sys`, and executable scripts. HTTPS mode blocks dangerous file extensions by default.
+- **Security Policy**: Use `--block-dangerous` or set `BLOCK_DANGEROUS=true` environment variable to block executable extensions (`.exe`, `.bat`, `.dll`, `.sys`). HTTPS mode enables dangerous extension blocking automatically.
 - **Healthcheck**: Container health is monitored automatically via `GET /api/server-status`.
 
 ---
