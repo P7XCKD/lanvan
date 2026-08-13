@@ -1814,3 +1814,225 @@ input:checked + .toggle-slider:before {
   }
 }
 
+/* PROTOTYPE TEST BUTTON */
+.proto-btn-test {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: rgba(138, 180, 248, 0.12);
+  color: #8ab4f8;
+  border: 1px solid rgba(138, 180, 248, 0.3);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.proto-btn-test:hover {
+  background-color: rgba(138, 180, 248, 0.22);
+  border-color: #8ab4f8;
+}
+
+/* SPOTLIGHT WALKTHROUGH OVERLAY & DYNAMIC HIGHLIGHT HOLE */
+.spotlight-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+  pointer-events: auto;
+  animation: fadeIn 0.2s ease;
+}
+
+.spotlight-hole {
+  position: absolute;
+  border-radius: 16px;
+  border: 2px solid #8ab4f8;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.72), 0 0 24px rgba(138, 180, 248, 0.45);
+  transition: all 0.3s cubic-bezier(0.25, 0.9, 0.25, 1);
+  pointer-events: none;
+  z-index: 101;
+}
+
+/* SPOTLIGHT DEBUG OVERLAY STYLES */
+.spotlight-debug-target {
+  position: absolute;
+  border: 1.5px dashed #00ffff;
+  background: rgba(0, 255, 255, 0.12);
+  pointer-events: none;
+  z-index: 105;
+}
+
+.spotlight-debug-info {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #00ffff;
+  font-family: monospace;
+  font-size: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 255, 255, 0.4);
+  pointer-events: none;
+  z-index: 106;
+}
+
+.spotlight-tooltip-card {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  background-color: #1b1c1f;
+  border: 1px solid #2b2c30;
+  border-radius: 20px;
+  padding: 16px 20px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 0 1px rgba(255, 255, 255, 0.1);
+  z-index: 102;
+  transition: all 0.3s cubic-bezier(0.25, 0.9, 0.25, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+.spotlight-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.spotlight-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spotlight-logo {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.spotlight-brand-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: #e8eaed;
+}
+
+.spotlight-skip-btn {
+  background: transparent;
+  border: none;
+  color: #9aa0a6;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.spotlight-skip-btn:hover {
+  color: #e8eaed;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.spotlight-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.spotlight-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+
+.spotlight-text {
+  font-size: 13px;
+  color: #9aa0a6;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.spotlight-note {
+  font-size: 12px;
+  color: #8ab4f8;
+  background-color: rgba(138, 180, 248, 0.1);
+  border: 1px solid rgba(138, 180, 248, 0.2);
+  padding: 8px 12px;
+  border-radius: 10px;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.spotlight-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 4px;
+}
+
+.spotlight-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.spotlight-dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #3c4043;
+  transition: all 0.2s ease;
+}
+
+.spotlight-dots .dot.active {
+  width: 18px;
+  border-radius: 4px;
+  background-color: #8ab4f8;
+}
+
+.spotlight-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spotlight-btn-pri {
+  background-color: #8ab4f8;
+  color: #041e49;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.spotlight-btn-pri:hover {
+  background-color: #a8c7fa;
+}
+
+.spotlight-btn-sec {
+  background-color: #242528;
+  color: #e8eaed;
+  border: 1px solid #3c4043;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.spotlight-btn-sec:hover {
+  background-color: #2d2f33;
+}
+
