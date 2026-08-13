@@ -68,6 +68,16 @@
           <button class="btn-segment" data-net="disconnected">Disconnected</button>
         </div>
       </div>
+
+      <!-- BACKGROUND STATE SWITCHER (PROTOTYPE TESTING) -->
+      <div class="control-group">
+        <span class="control-label">Background:</span>
+        <div class="segmented-control" id="bg-state-control">
+          <button class="btn-segment active" data-bg="allowed">Allowed</button>
+          <button class="btn-segment" data-bg="restricted">Restricted</button>
+          <button class="btn-segment" data-bg="unknown">Unknown</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -349,13 +359,9 @@
               </div>
 
               <div class="support-card-actions-row">
-                <button class="new-outline-btn support-section-btn" id="new-btn-open-support">
+                <button class="new-outline-btn support-section-btn" id="new-btn-open-support" style="width: 100%;">
                   <i data-lucide="heart" class="heart-icon"></i>
                   <span>Support Lanvan</span>
-                </button>
-                <button class="new-outline-btn about-section-btn" id="new-btn-open-about">
-                  <i data-lucide="info"></i>
-                  <span>About Lanvan</span>
                 </button>
               </div>
             </div>
@@ -437,21 +443,29 @@
               <div class="new-settings-group">
                 <div class="group-title">BACKGROUND</div>
 
-                <div class="new-setting-row">
+                <!-- CONSOLIDATED BACKGROUND OPERATION SETTING ROW -->
+                <div class="new-setting-row tappable-setting-row" id="new-row-background-operation" style="cursor: pointer;">
+                  <div class="row-icon">
+                    <i data-lucide="cpu" class="setting-icon"></i>
+                  </div>
                   <div class="row-main">
                     <div class="row-title">Background operation</div>
-                    <div class="row-sub" id="new-battery-sub">Battery optimization is disabled</div>
+                    <div class="row-sub">Allows Lanvan to keep running in the background.</div>
+                    <div class="row-summary-tag" id="new-background-summary-text"><span class="summary-item summary-on">Allowed</span></div>
+                  </div>
+                  <div class="row-action">
+                    <i data-lucide="chevron-right" class="chevron-icon"></i>
                   </div>
                 </div>
               </div>
 
-              <!-- GROUP 5: DIAGNOSTICS -->
+              <!-- GROUP 5: HELP & FEEDBACK -->
               <div class="new-settings-group">
-                <div class="group-title">DIAGNOSTICS</div>
+                <div class="group-title">HELP &amp; FEEDBACK</div>
 
-                <button class="new-outline-btn" id="new-btn-copy-logs">
-                  <i data-lucide="file-text"></i>
-                  <span>Copy Lanvan Logs</span>
+                <button class="new-outline-btn" id="new-btn-send-feedback">
+                  <i data-lucide="message-square"></i>
+                  <span>Send Feedback</span>
                 </button>
               </div>
 
@@ -512,6 +526,114 @@
 
             </div>
 
+          </div>
+        </div>
+
+        <!-- NEW BACKGROUND OPERATION DETAIL SHEET -->
+        <div class="new-sheet-overlay" id="new-background-detail-sheet" style="display:none; z-index: 100;">
+          <div class="new-sheet-card">
+            
+            <div class="new-sheet-header">
+              <h3>Background operation</h3>
+              <button class="new-icon-btn sheet-close-btn" id="new-btn-close-background-detail">
+                <i data-lucide="x"></i>
+              </button>
+            </div>
+
+            <div class="new-sheet-body">
+              <!-- STATUS CONTAINER CARD -->
+              <div class="bg-status-card allowed" id="bg-detail-status-card">
+                <div class="bg-status-header">
+                  <span class="group-title">STATUS</span>
+                  <div class="bg-status-title" id="bg-detail-status-title">Allowed</div>
+                </div>
+                <div class="bg-status-sub" id="bg-detail-status-sub">
+                  Lanvan can continue running in the background.
+                </div>
+              </div>
+
+              <!-- ACTION BUTTON -->
+              <button class="new-outline-btn accent-outline" id="new-btn-configure-background" style="margin-top: 4px; width: 100%;">
+                <i data-lucide="settings"></i>
+                <span>Configure Background Access</span>
+              </button>
+
+              <!-- SAFE BOTTOM INSET PADDING GAP -->
+              <div class="sheet-safe-bottom-padding"></div>
+
+            </div>
+
+          </div>
+        </div>
+
+        <!-- NEW SEND FEEDBACK DETAIL SHEET -->
+        <div class="new-sheet-overlay" id="new-feedback-sheet" style="display:none; z-index: 100;">
+          <div class="new-sheet-card">
+            
+            <div class="new-sheet-header">
+              <h3>Send Feedback</h3>
+              <button class="new-icon-btn sheet-close-btn" id="new-btn-close-feedback">
+                <i data-lucide="x"></i>
+              </button>
+            </div>
+
+            <div class="new-sheet-body">
+              <p class="security-detail-description">
+                Tell us what happened or how we can improve Lanvan.
+              </p>
+
+              <!-- FEEDBACK MESSAGE TEXTAREA -->
+              <div class="feedback-field-group">
+                <textarea id="feedback-message-input" class="feedback-textarea" rows="4" placeholder="Tell us what happened or what you'd like to see improved..."></textarea>
+              </div>
+
+              <!-- DIAGNOSTICS TOGGLE ROW -->
+              <div class="new-setting-row" style="padding: 12px 14px; background-color: #232428; border: 1px solid #3c4043; border-radius: 12px;">
+                <div class="row-main">
+                  <div class="row-title">Include diagnostic information</div>
+                  <div class="row-sub">Helps us investigate problems</div>
+                </div>
+                <div class="row-action">
+                  <label class="new-toggle-switch">
+                    <input type="checkbox" id="feedback-switch-diagnostics" checked>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- SUBMIT FEEDBACK BUTTON -->
+              <button class="new-outline-btn accent-outline" id="new-btn-submit-feedback" style="margin-top: 4px; width: 100%;">
+                <i data-lucide="mail"></i>
+                <span>Send Feedback</span>
+              </button>
+
+              <!-- SAFE BOTTOM INSET PADDING GAP -->
+              <div class="sheet-safe-bottom-padding"></div>
+
+            </div>
+
+          </div>
+        </div>
+
+        <!-- NEW FEEDBACK PREPARED CONFIRMATION MODAL -->
+        <div class="new-sheet-overlay" id="new-feedback-confirm-dialog" style="display:none; z-index: 110;">
+          <div class="new-sheet-card" style="max-width: 340px; margin: auto;">
+            <div class="new-sheet-header">
+              <h3 id="feedback-confirm-title">Feedback ready</h3>
+              <button class="new-icon-btn sheet-close-btn" id="new-btn-close-confirm">
+                <i data-lucide="x"></i>
+              </button>
+            </div>
+
+            <div class="new-sheet-body" style="gap: 16px;">
+              <p class="security-detail-description" style="color: #e8eaed;" id="feedback-confirm-msg">
+                Your email app should now open.
+              </p>
+
+              <button class="new-outline-btn accent-outline" id="new-btn-confirm-close-action" style="width: 100%;">
+                <span>Close</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -685,59 +807,7 @@
               <div class="sheet-safe-bottom-padding"></div>
             </div>
           </div>
-        </div>
-
-        <!-- NEW ABOUT LANVAN PROTOTYPE MODAL DIALOG -->
-        <div class="new-sheet-overlay" id="new-about-modal" style="display:none;">
-          <div class="new-sheet-card about-sheet-card">
-            <div class="new-sheet-header">
-              <h3>About Lanvan</h3>
-              <button class="new-icon-btn sheet-close-btn" id="new-btn-close-about">
-                <i data-lucide="x"></i>
-              </button>
-            </div>
-
-            <div class="new-sheet-body">
-              <div class="about-section-group">
-                <div class="about-group-label">WHAT IS LANVAN?</div>
-                <p class="about-description">Lanvan is a self-hosted local file sharing app that lets you transfer files between devices over your local network using a web browser.</p>
-              </div>
-
-              <div class="about-divider"></div>
-
-              <button class="about-row-action" id="new-btn-about-github">
-                <div class="about-row-info">
-                  <div class="about-row-title">GitHub Repository</div>
-                  <div class="about-row-sub">View source code</div>
-                </div>
-                <i data-lucide="external-link" class="about-row-arrow"></i>
-              </button>
-
-              <div class="about-divider"></div>
-
-              <div class="about-row-static">
-                <div class="about-row-info">
-                  <div class="about-row-title">Version</div>
-                  <div class="about-row-sub">v1.0.0</div>
-                </div>
-              </div>
-
-              <div class="about-divider"></div>
-
-              <button class="about-row-action" id="new-btn-about-feedback">
-                <div class="about-row-info">
-                  <div class="about-row-title">Feedback</div>
-                  <div class="about-row-sub">Send Feedback</div>
-                </div>
-                <i data-lucide="mail" class="about-row-arrow"></i>
-              </button>
-
-              <div class="sheet-safe-bottom-padding"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- SIMULATED SYSTEM NAVIGATION INSET BAR (BOTTOM INSET) -->
+           <!-- SIMULATED SYSTEM NAVIGATION INSET BAR (BOTTOM INSET) -->
         <div class="system-nav-bar" id="system-nav-bar">
           <div class="nav-gesture-handle"></div>
           <div class="nav-3button-controls">
@@ -751,10 +821,6 @@
     </section>
 
   </main>
-
-  <script src="demo.js"></script>
-</body>
-</html>
 
   <script src="demo.js"></script>
 </body>

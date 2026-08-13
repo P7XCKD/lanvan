@@ -1219,6 +1219,46 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease;
+}
+
+/* SUBTLE NATIVE MOBILE SCROLLBAR (HIDDEN BY DEFAULT, FADES IN ON SCROLL) */
+.new-sheet-body::-webkit-scrollbar,
+.new-screen-body::-webkit-scrollbar,
+.new-sheet-card::-webkit-scrollbar {
+  display: block;
+  width: 3px;
+  height: 3px;
+}
+
+.new-sheet-body::-webkit-scrollbar-track,
+.new-screen-body::-webkit-scrollbar-track,
+.new-sheet-card::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 12px 0;
+}
+
+.new-sheet-body::-webkit-scrollbar-thumb,
+.new-screen-body::-webkit-scrollbar-thumb,
+.new-sheet-card::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 10px;
+  transition: background-color 0.3s ease;
+}
+
+/* ACTIVE SCROLLING STATE: FADES IN SUBTLE MUTED GREY THUMB */
+.new-sheet-body.is-scrolling,
+.new-screen-body.is-scrolling,
+.new-sheet-card.is-scrolling {
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.new-sheet-body.is-scrolling::-webkit-scrollbar-thumb,
+.new-screen-body.is-scrolling::-webkit-scrollbar-thumb,
+.new-sheet-card.is-scrolling::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.25);
 }
 
 .sheet-safe-bottom-padding {
@@ -1422,6 +1462,90 @@ body {
   font-size: 12px;
   color: #9aa0a6;
   margin-top: 4px;
+}
+
+/* FEEDBACK FORM TEXTAREA & INPUT STYLES */
+.feedback-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.feedback-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  background-color: #232428;
+  border: 1px solid #3c4043;
+  border-radius: 12px;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  resize: vertical;
+  min-height: 100px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
+}
+
+.feedback-textarea:focus {
+  border-color: #8ab4f8;
+  box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.2);
+}
+
+.feedback-textarea::placeholder {
+  color: #80868b;
+}
+
+/* BACKGROUND OPERATION STATUS CARD STYLES */
+.summary-item.summary-warning {
+  color: #f9ab00;
+}
+
+.bg-status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background-color: #232428;
+  border: 1px solid #3c4043;
+  border-radius: 14px;
+  margin-top: 4px;
+  transition: all 0.2s ease;
+}
+
+.bg-status-card.allowed {
+  background-color: rgba(138, 180, 248, 0.08);
+  border-color: rgba(138, 180, 248, 0.3);
+}
+
+.bg-status-card.restricted {
+  background-color: rgba(249, 171, 0, 0.08);
+  border-color: rgba(249, 171, 0, 0.35);
+}
+
+.bg-status-card.unknown {
+  background-color: #232428;
+  border-color: #3c4043;
+}
+
+.bg-status-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bg-status-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #8ab4f8;
+}
+
+.bg-status-sub {
+  font-size: 13px;
+  color: #bdc1c6;
+  line-height: 1.4;
 }
 
 /* CUSTOM TOGGLE SWITCH (48dp touch target container) */
