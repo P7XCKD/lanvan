@@ -39,15 +39,14 @@
         android:layout_height="48dp"
         android:layout_gravity="center_horizontal"
         android:gravity="center"
-        android:background="@drawable/bg_card_sub"
-        android:backgroundTint="#26F2B8B5"
+        android:background="@drawable/bg_circle_blue_tint"
         android:layout_marginBottom="12dp">
 
         <ImageView
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:src="@drawable/ic_heart"
-            app:tint="@color/danger_red_text" />
+            app:tint="@color/primary_accent_blue" />
     </LinearLayout>
 
     <TextView
@@ -96,7 +95,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="₹39"
-                android:textColor="@color/text_secondary"
+                android:textColor="@color/text_primary"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -163,7 +162,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="₹399"
-                android:textColor="@color/text_secondary"
+                android:textColor="@color/text_primary"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -189,8 +188,8 @@
         android:layout_marginBottom="20dp">
 
         <ImageView
-            android:layout_width="18dp"
-            android:layout_height="18dp"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
             android:src="@drawable/ic_info"
             android:layout_marginEnd="10dp"
             app:tint="@color/primary_accent_blue" />
@@ -209,7 +208,7 @@
         android:layout_height="48dp"
         android:text="Continue"
         android:textAllCaps="false"
-        android:textColor="#FFFFFF"
+        android:textColor="#041E49"
         android:textSize="14sp"
         android:textStyle="bold"
         android:backgroundTint="@color/primary_accent_blue" />

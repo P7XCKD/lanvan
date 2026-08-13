@@ -1240,20 +1240,23 @@ class MainActivity : AppCompatActivity() {
         val selectTier = { selected: Int ->
             currentlySelectedTier = selected
             val activeColor = ContextCompat.getColor(this, R.color.primary_accent_blue)
+            val primaryTextColor = ContextCompat.getColor(this, R.color.text_primary)
             val mutedColor = ContextCompat.getColor(this, R.color.text_muted)
-            val secondaryColor = ContextCompat.getColor(this, R.color.text_secondary)
 
-            tier49.setBackgroundResource(if (selected == 39 || selected == 49) R.drawable.bg_card_active else R.drawable.bg_card_sub)
-            val49.setTextColor(if (selected == 39 || selected == 49) activeColor else secondaryColor)
-            name49.setTextColor(if (selected == 39 || selected == 49) activeColor else mutedColor)
+            val isSelected39 = (selected == 39 || selected == 49)
+            tier49.setBackgroundResource(if (isSelected39) R.drawable.bg_card_active else R.drawable.bg_card_sub)
+            val49.setTextColor(if (isSelected39) activeColor else primaryTextColor)
+            name49.setTextColor(if (isSelected39) activeColor else mutedColor)
 
-            tier159.setBackgroundResource(if (selected == 149 || selected == 159) R.drawable.bg_card_active else R.drawable.bg_card_sub)
-            val159.setTextColor(if (selected == 149 || selected == 159) activeColor else secondaryColor)
-            name159.setTextColor(if (selected == 149 || selected == 159) activeColor else mutedColor)
+            val isSelected149 = (selected == 149 || selected == 159)
+            tier159.setBackgroundResource(if (isSelected149) R.drawable.bg_card_active else R.drawable.bg_card_sub)
+            val159.setTextColor(if (isSelected149) activeColor else primaryTextColor)
+            name159.setTextColor(if (isSelected149) activeColor else mutedColor)
 
-            tier399.setBackgroundResource(if (selected == 399) R.drawable.bg_card_active else R.drawable.bg_card_sub)
-            val399.setTextColor(if (selected == 399) activeColor else secondaryColor)
-            name399.setTextColor(if (selected == 399) activeColor else mutedColor)
+            val isSelected399 = (selected == 399)
+            tier399.setBackgroundResource(if (isSelected399) R.drawable.bg_card_active else R.drawable.bg_card_sub)
+            val399.setTextColor(if (isSelected399) activeColor else primaryTextColor)
+            name399.setTextColor(if (isSelected399) activeColor else mutedColor)
         }
         selectTier(149)
 
