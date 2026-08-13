@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Lanvan Dark Design System Palette -->
+    <!-- Lanvan Dark Design System Palette matching demo.css -->
     <color name="bg_surface">#121316</color>
     <color name="card_surface">#1b1c1f</color>
-    <color name="card_surface_sub">#232428</color>
-    <color name="header_surface">#1b1c1f</color>
+    <color name="card_surface_sub">#242528</color>
+    <color name="header_surface">#16171a</color>
     <color name="primary_accent_blue">#8ab4f8</color>
     <color name="primary_accent_blue_tint">#1F8AB4F8</color>
     <color name="text_primary">#ffffff</color>
     <color name="text_secondary">#e8eaed</color>
     <color name="text_muted">#9aa0a6</color>
-    <color name="border_subtle">#3c4043</color>
+    <color name="border_subtle">#2b2c30</color>
+    <color name="border_outline_btn">#3c4043</color>
     <color name="warning_amber">#f9ab00</color>
     <color name="warning_amber_tint">#1FF9AB00</color>
     <color name="danger_red">#8c1d18</color>
