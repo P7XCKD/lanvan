@@ -946,5 +946,338 @@ None`;
   updateViewMode("compare"); // Default to side-by-side comparison mode for instant evaluation
   updateServerState("stopped");
   updateNavMode("gesture");
+
+  // ==========================================================================
+  // REAL UI SPOTLIGHT WALKTHROUGH CONTROLLER
+  // ==========================================================================
+  const spotlightOverlay = document.getElementById("new-spotlight-overlay");
+  const spotlightHole = document.getElementById("spotlight-hole");
+  const spotlightTooltipCard = document.getElementById("spotlight-tooltip-card");
+  const spotlightTitle = document.getElementById("spotlight-title");
+  const spotlightText = document.getElementById("spotlight-text");
+  const spotlightNote = document.getElementById("spotlight-note");
+  const spotlightBtnSkip = document.getElementById("spotlight-btn-skip");
+  const spotlightBtnBack = document.getElementById("spotlight-btn-back");
+  const spotlightBtnNext = document.getElementById("spotlight-btn-next");
+  const spotlightBtnFinish = document.getElementById("spotlight-btn-finish");
+  const btnResetOnboarding = document.getElementById("btn-reset-onboarding");
+  const btnToggleSpotlightDebug = document.getElementById("btn-toggle-spotlight-debug");
+  const spotlightDebugTarget = document.getElementById("spotlight-debug-target");
+  const spotlightDebugInfo = document.getElementById("spotlight-debug-info");
+  const spotlightDots = document.querySelectorAll("#spotlight-dots .dot");
+
+  let currentSpotlightStep = 1;
+  const TOTAL_SPOTLIGHT_STEPS = 5;
+  let preTutorialState = "stopped";
+  let isSpotlightDebugMode = false;
+
+  const spotlightStepConfigs = [
+    {
+      step: 1,
+      title: "Start Lanvan",
+      text: "Tap here to start sharing files with devices on your local network.",
+      note: null,
+      state: "stopped",
+      targetSelector: "#new-btn-start",
+      padding: 6,
+      radius: 28
+    },
+    {
+      step: 2,
+      title: "Connect another device",
+      text: "Scan this QR code with another phone, tablet, or computer to open Lanvan.",
+      note: "No Lanvan app is required on the other device. A web browser is enough.",
+      state: "running",
+      targetSelector: ".new-qr-hero-group",
+      padding: 8,
+      radius: 16
+    },
+    {
+      step: 3,
+      title: "Share files",
+      text: "Once connected, the other device can upload or download files through the browser.",
+      note: "Or tap the network address to open Lanvan in your browser directly on this device.",
+      state: "running",
+      targetSelector: ".new-address-inline-group",
+      padding: 8,
+      radius: 14
+    },
+    {
+      step: 4,
+      title: "Settings",
+      text: "Connection, security, storage, background operation, and feedback are available here.",
+      note: null,
+      state: "stopped",
+      targetSelector: "#new-btn-settings",
+      padding: 6,
+      radius: "50%"
+    },
+    {
+      step: 5,
+      title: "You're ready",
+      text: "Start Lanvan whenever you want to share files with another device.",
+      note: null,
+      state: "stopped",
+      targetSelector: null,
+      padding: 0,
+      radius: 0
+    }
+  ];
+
+  if (btnToggleSpotlightDebug) {
+    btnToggleSpotlightDebug.addEventListener("click", () => {
+      isSpotlightDebugMode = !isSpotlightDebugMode;
+      btnToggleSpotlightDebug.classList.toggle("active", isSpotlightDebugMode);
+      btnToggleSpotlightDebug.querySelector("span").textContent = isSpotlightDebugMode ? "Hide Spotlight Debug" : "Show Spotlight Debug";
+      updateSpotlightPosition();
+    });
+  }
+
+  function updateSpotlightPosition() {
+    if (!spotlightOverlay || spotlightOverlay.style.display === "none") return;
+    const config = spotlightStepConfigs.find(c => c.step === currentSpotlightStep);
+    if (config) {
+      positionSpotlightForStep(config);
+    }
+  }
+
+  function positionSpotlightForStep(config) {
+    if (!spotlightHole || !spotlightTooltipCard || !spotlightOverlay) return;
+
+    if (!config || !config.targetSelector) {
+      // Step 5: Center tooltip card, hide spotlight cutout
+      spotlightHole.style.opacity = "0";
+      spotlightHole.style.width = "0px";
+      spotlightHole.style.height = "0px";
+      if (spotlightDebugTarget) spotlightDebugTarget.style.display = "none";
+      if (spotlightDebugInfo) spotlightDebugInfo.style.display = "none";
+
+      spotlightTooltipCard.style.top = "50%";
+      spotlightTooltipCard.style.bottom = "auto";
+      spotlightTooltipCard.style.transform = "translateY(-50%)";
+      spotlightTooltipCard.style.left = "20px";
+      spotlightTooltipCard.style.right = "20px";
+      return;
+    }
+
+    const targetEl = document.querySelector(config.targetSelector);
+    if (!targetEl) {
+      spotlightHole.style.opacity = "0";
+      return;
+    }
+
+    // Scroll target into view inside scrollable phone container if needed
+    try {
+      targetEl.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+    } catch (_) {}
+
+    // Compute bounding rectangles in viewport space
+    const overlayRect = spotlightOverlay.getBoundingClientRect();
+    const targetRect = targetEl.getBoundingClientRect();
+
+    if (overlayRect.width === 0 || targetRect.width === 0) {
+      spotlightHole.style.opacity = "0";
+      return;
+    }
+
+    // Calculate exact scale factor between rendered viewport pixels and unscaled overlay layout pixels
+    const scaleX = overlayRect.width / (spotlightOverlay.offsetWidth || overlayRect.width) || 1;
+    const scaleY = overlayRect.height / (spotlightOverlay.offsetHeight || overlayRect.height) || 1;
+
+    // Convert target viewport coordinates to local overlay coordinate space
+    const localLeft = (targetRect.left - overlayRect.left) / scaleX;
+    const localTop = (targetRect.top - overlayRect.top) / scaleY;
+    const localWidth = targetRect.width / scaleX;
+    const localHeight = targetRect.height / scaleY;
+
+    // Determine visual padding and border radius
+    const padding = typeof config.padding === "number" ? config.padding : 6;
+    const radius = config.radius || (config.radius === 0 ? 0 : 16);
+
+    const holeLeft = localLeft - padding;
+    const holeTop = localTop - padding;
+    const holeWidth = localWidth + (padding * 2);
+    const holeHeight = localHeight + (padding * 2);
+
+    spotlightHole.style.opacity = "1";
+    spotlightHole.style.left = `${holeLeft}px`;
+    spotlightHole.style.top = `${holeTop}px`;
+    spotlightHole.style.width = `${holeWidth}px`;
+    spotlightHole.style.height = `${holeHeight}px`;
+    spotlightHole.style.borderRadius = typeof radius === "string" ? radius : `${radius}px`;
+
+    // Debug mode rendering
+    if (isSpotlightDebugMode) {
+      if (spotlightDebugTarget) {
+        spotlightDebugTarget.style.display = "block";
+        spotlightDebugTarget.style.left = `${localLeft}px`;
+        spotlightDebugTarget.style.top = `${localTop}px`;
+        spotlightDebugTarget.style.width = `${localWidth}px`;
+        spotlightDebugTarget.style.height = `${localHeight}px`;
+      }
+
+      if (spotlightDebugInfo) {
+        spotlightDebugInfo.style.display = "block";
+        spotlightDebugInfo.innerHTML =
+          `Target: (${localLeft.toFixed(1)}, ${localTop.toFixed(1)}) ${localWidth.toFixed(1)}x${localHeight.toFixed(1)}px | ` +
+          `Hole: (${holeLeft.toFixed(1)}, ${holeTop.toFixed(1)}) ${holeWidth.toFixed(1)}x${holeHeight.toFixed(1)}px | ` +
+          `Scale: (${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`;
+      }
+    } else {
+      if (spotlightDebugTarget) spotlightDebugTarget.style.display = "none";
+      if (spotlightDebugInfo) spotlightDebugInfo.style.display = "none";
+    }
+
+    // Position floating Tooltip Card safely relative to spotlight hole bounds
+    spotlightTooltipCard.style.transform = "none";
+    const overlayUnscaledHeight = spotlightOverlay.offsetHeight || overlayRect.height;
+    const tooltipHeight = spotlightTooltipCard.offsetHeight || 150;
+    const targetCenterY = localTop + (localHeight / 2);
+
+    if (targetCenterY > (overlayUnscaledHeight / 2) - 20) {
+      // Target is in lower half -> Place tooltip ABOVE target hole
+      let calcTop = holeTop - tooltipHeight - 14;
+      if (calcTop < 50) calcTop = 50; // Guard against top overflow
+      spotlightTooltipCard.style.top = `${calcTop}px`;
+      spotlightTooltipCard.style.bottom = "auto";
+    } else {
+      // Target is in upper half -> Place tooltip BELOW target hole
+      let calcTop = holeTop + holeHeight + 14;
+      if (calcTop + tooltipHeight > overlayUnscaledHeight - 65) {
+        calcTop = overlayUnscaledHeight - tooltipHeight - 65; // Guard against bottom nav collision
+      }
+      spotlightTooltipCard.style.top = `${calcTop}px`;
+      spotlightTooltipCard.style.bottom = "auto";
+    }
+
+    spotlightTooltipCard.style.left = "20px";
+    spotlightTooltipCard.style.right = "20px";
+  }
+
+  function renderSpotlightStep(stepIndex) {
+    currentSpotlightStep = stepIndex;
+    const config = spotlightStepConfigs.find(c => c.step === stepIndex);
+    if (!config) return;
+
+    // Switch server state for simulation during tutorial
+    if (config.state) {
+      updateServerState(config.state);
+    }
+
+    // Render texts
+    if (spotlightTitle) spotlightTitle.textContent = config.title;
+    if (spotlightText) spotlightText.textContent = config.text;
+
+    if (spotlightNote) {
+      if (config.note) {
+        spotlightNote.textContent = config.note;
+        spotlightNote.style.display = "block";
+      } else {
+        spotlightNote.style.display = "none";
+      }
+    }
+
+    // Dots update
+    spotlightDots.forEach(dot => {
+      const dotNum = parseInt(dot.dataset.dot, 10);
+      if (dotNum === stepIndex) {
+        dot.classList.add("active");
+      } else {
+        dot.classList.remove("active");
+      }
+    });
+
+    // Nav buttons update
+    if (spotlightBtnBack) {
+      spotlightBtnBack.style.display = stepIndex > 1 ? "inline-block" : "none";
+    }
+
+    if (stepIndex === TOTAL_SPOTLIGHT_STEPS) {
+      if (spotlightBtnNext) spotlightBtnNext.style.display = "none";
+      if (spotlightBtnFinish) spotlightBtnFinish.style.display = "inline-block";
+    } else {
+      if (spotlightBtnNext) spotlightBtnNext.style.display = "inline-block";
+      if (spotlightBtnFinish) spotlightBtnFinish.style.display = "none";
+    }
+
+    // Reposition spotlight ring & tooltip after DOM/layout updates
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        positionSpotlightForStep(config);
+      }, 50);
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function startSpotlightWalkthrough() {
+    preTutorialState = currentServerState;
+    currentSpotlightStep = 1;
+    if (spotlightOverlay) spotlightOverlay.style.display = "block";
+    renderSpotlightStep(1);
+  }
+
+  function completeSpotlightWalkthrough() {
+    localStorage.setItem("lanvan_onboarding_completed", "true");
+    if (spotlightOverlay) spotlightOverlay.style.display = "none";
+    updateServerState(preTutorialState);
+  }
+
+  function checkFirstLaunchSpotlight() {
+    const isCompleted = localStorage.getItem("lanvan_onboarding_completed") === "true";
+    if (!isCompleted) {
+      startSpotlightWalkthrough();
+    }
+  }
+
+  if (spotlightBtnNext) {
+    spotlightBtnNext.addEventListener("click", () => {
+      if (currentSpotlightStep < TOTAL_SPOTLIGHT_STEPS) {
+        renderSpotlightStep(currentSpotlightStep + 1);
+      }
+    });
+  }
+
+  if (spotlightBtnBack) {
+    spotlightBtnBack.addEventListener("click", () => {
+      if (currentSpotlightStep > 1) {
+        renderSpotlightStep(currentSpotlightStep - 1);
+      }
+    });
+  }
+
+  if (spotlightBtnSkip) {
+    spotlightBtnSkip.addEventListener("click", () => {
+      completeSpotlightWalkthrough();
+    });
+  }
+
+  if (spotlightBtnFinish) {
+    spotlightBtnFinish.addEventListener("click", () => {
+      completeSpotlightWalkthrough();
+    });
+  }
+
+  if (btnResetOnboarding) {
+    btnResetOnboarding.addEventListener("click", () => {
+      localStorage.removeItem("lanvan_onboarding_completed");
+      startSpotlightWalkthrough();
+    });
+  }
+
+  // Recalculate spotlight alignment dynamically on window resize, scroll, or container size changes
+  window.addEventListener("resize", updateSpotlightPosition);
+  window.addEventListener("scroll", updateSpotlightPosition, true);
+
+  if (window.ResizeObserver && frameNew) {
+    const ro = new ResizeObserver(() => {
+      updateSpotlightPosition();
+    });
+    ro.observe(frameNew);
+    if (spotlightOverlay) ro.observe(spotlightOverlay);
+  }
+
+  // Check onboarding on load
+  checkFirstLaunchSpotlight();
   updateNetworkState("connected");
 });
