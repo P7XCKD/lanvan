@@ -544,7 +544,8 @@ class MainActivity : AppCompatActivity() {
         txtProtocolSummary.text = if (useHttps) "HTTPS · Encrypted" else "HTTP · Default"
 
         val blockHttp = sharedPrefs.getBoolean("block_dangerous_http", false)
-        txtSecuritySummary.text = "HTTP: ${if (blockHttp) "On" else "Off"} · HTTPS: On"
+        val blockHttps = sharedPrefs.getBoolean("block_dangerous_https", true)
+        txtSecuritySummary.text = "HTTP: ${if (blockHttp) "On" else "Off"} · HTTPS: ${if (blockHttps) "On" else "Off"}"
 
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         val isExempted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -585,15 +586,27 @@ class MainActivity : AppCompatActivity() {
 
         val btnClose = view.findViewById<ImageButton>(R.id.btn_close_protocol)
         val cardHttp = view.findViewById<LinearLayout>(R.id.card_option_http)
-        val radioHttp = view.findViewById<RadioButton>(R.id.radio_http)
+        val imgRadioHttp = view.findViewById<ImageView>(R.id.img_radio_http)
         val cardHttps = view.findViewById<LinearLayout>(R.id.card_option_https)
-        val radioHttps = view.findViewById<RadioButton>(R.id.radio_https)
+        val imgRadioHttps = view.findViewById<ImageView>(R.id.img_radio_https)
 
         val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
         val currentHttps = sharedPrefs.getBoolean("use_https", false)
 
-        radioHttp.isChecked = !currentHttps
-        radioHttps.isChecked = currentHttps
+        val updateSelectionUI = { isHttps: Boolean ->
+            if (isHttps) {
+                cardHttps.setBackgroundResource(R.drawable.bg_card_active)
+                imgRadioHttps.setImageResource(R.drawable.ic_radio_checked)
+                cardHttp.setBackgroundResource(R.drawable.bg_card)
+                imgRadioHttp.setImageResource(R.drawable.ic_radio_unchecked)
+            } else {
+                cardHttp.setBackgroundResource(R.drawable.bg_card_active)
+                imgRadioHttp.setImageResource(R.drawable.ic_radio_checked)
+                cardHttps.setBackgroundResource(R.drawable.bg_card)
+                imgRadioHttps.setImageResource(R.drawable.ic_radio_unchecked)
+            }
+        }
+        updateSelectionUI(currentHttps)
 
         btnClose.setOnClickListener { dialog.dismiss() }
 
@@ -608,8 +621,14 @@ class MainActivity : AppCompatActivity() {
             dialog.dismiss()
         }
 
-        cardHttp.setOnClickListener { selectProtocol(false) }
-        cardHttps.setOnClickListener { selectProtocol(true) }
+        cardHttp.setOnClickListener {
+            updateSelectionUI(false)
+            selectProtocol(false)
+        }
+        cardHttps.setOnClickListener {
+            updateSelectionUI(true)
+            selectProtocol(true)
+        }
 
         dialog.show()
     }
@@ -625,13 +644,16 @@ class MainActivity : AppCompatActivity() {
 
         val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
         switchHttp.isChecked = sharedPrefs.getBoolean("block_dangerous_http", false)
+        switchHttps.isChecked = sharedPrefs.getBoolean("block_dangerous_https", true)
+        switchHttps.isEnabled = true
 
         switchHttp.setOnCheckedChangeListener { _, isChecked ->
             sharedPrefs.edit().putBoolean("block_dangerous_http", isChecked).apply()
         }
 
-        switchHttps.isChecked = true
-        switchHttps.isEnabled = false
+        switchHttps.setOnCheckedChangeListener { _, isChecked ->
+            sharedPrefs.edit().putBoolean("block_dangerous_https", isChecked).apply()
+        }
 
         btnClose.setOnClickListener { dialog.dismiss() }
         dialog.show()
@@ -656,10 +678,12 @@ class MainActivity : AppCompatActivity() {
             txtTitle.text = "Allowed"
             txtTitle.setTextColor(ContextCompat.getColor(this, R.color.primary_accent_blue))
             txtDesc.text = "Lanvan is allowed to run continuously in the background without battery restrictions."
+            btnConfigure.visibility = View.GONE
         } else {
             txtTitle.text = "Restricted"
             txtTitle.setTextColor(ContextCompat.getColor(this, R.color.warning_amber))
             txtDesc.text = "Background optimization is active. The system may restrict Lanvan when the screen is off."
+            btnConfigure.visibility = View.VISIBLE
         }
 
         btnClose.setOnClickListener { dialog.dismiss() }
@@ -967,15 +991,19 @@ class MainActivity : AppCompatActivity() {
             val mutedColor = ContextCompat.getColor(this, R.color.text_muted)
             val secondaryColor = ContextCompat.getColor(this, R.color.text_secondary)
 
+            tier49.setBackgroundResource(if (selected == 49) R.drawable.bg_card_active else R.drawable.bg_card_sub)
             val49.setTextColor(if (selected == 49) activeColor else secondaryColor)
             name49.setTextColor(if (selected == 49) activeColor else mutedColor)
 
+            tier159.setBackgroundResource(if (selected == 159) R.drawable.bg_card_active else R.drawable.bg_card_sub)
             val159.setTextColor(if (selected == 159) activeColor else secondaryColor)
             name159.setTextColor(if (selected == 159) activeColor else mutedColor)
 
+            tier399.setBackgroundResource(if (selected == 399) R.drawable.bg_card_active else R.drawable.bg_card_sub)
             val399.setTextColor(if (selected == 399) activeColor else secondaryColor)
             name399.setTextColor(if (selected == 399) activeColor else mutedColor)
         }
+        selectTier(159)
 
         tier49.setOnClickListener { selectTier(49) }
         tier159.setOnClickListener { selectTier(159) }
