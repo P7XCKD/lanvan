@@ -127,11 +127,16 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updateMainUIState() {
-    // Header Status is always 'Running' when server is running, 'Stopped' when stopped
+    // Header Status pill update: status-warning (yellow) with 'Unavailable' text when running without network
     if (headerStatusPill && headerStatusText) {
       if (currentServerState === "running") {
-        headerStatusPill.className = "header-status-pill status-running";
-        headerStatusText.textContent = "Running";
+        if (currentNetworkState === "disconnected") {
+          headerStatusPill.className = "header-status-pill status-warning";
+          headerStatusText.textContent = "Unavailable";
+        } else {
+          headerStatusPill.className = "header-status-pill status-running";
+          headerStatusText.textContent = "Running";
+        }
       } else {
         headerStatusPill.className = "header-status-pill status-stopped";
         headerStatusText.textContent = "Stopped";
@@ -392,6 +397,118 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ==========================================================================
+  // CONNECTION PROTOCOL DETAIL SHEET & SELECTION HANDLERS
+  // ==========================================================================
+  const rowConnectionProtocol = document.getElementById("new-row-connection-protocol");
+  const newProtocolDetailSheet = document.getElementById("new-protocol-detail-sheet");
+  const newBtnCloseProtocolDetail = document.getElementById("new-btn-close-protocol-detail");
+  const protocolOptionHttp = document.getElementById("protocol-option-http");
+  const protocolOptionHttps = document.getElementById("protocol-option-https");
+  const protocolSummaryText = document.getElementById("new-protocol-summary-text");
+
+  let currentProtocolSelection = "http"; // "http" (default) or "https"
+
+  // Dynamically updates protocol detail card selections and main Settings summary text tag
+  function updateProtocolUI() {
+    if (!protocolSummaryText) return;
+
+    if (currentProtocolSelection === "https") {
+      if (protocolOptionHttp) protocolOptionHttp.classList.remove("active");
+      if (protocolOptionHttps) protocolOptionHttps.classList.add("active");
+      protocolSummaryText.innerHTML = `<span class="summary-item summary-on">HTTPS · Encrypted</span>`;
+    } else {
+      if (protocolOptionHttp) protocolOptionHttp.classList.add("active");
+      if (protocolOptionHttps) protocolOptionHttps.classList.remove("active");
+      protocolSummaryText.innerHTML = `<span class="summary-item summary-off">HTTP · Default</span>`;
+    }
+  }
+
+  // Open protocol detail sheet when main Settings row is tapped
+  if (rowConnectionProtocol && newProtocolDetailSheet) {
+    rowConnectionProtocol.addEventListener("click", () => {
+      newProtocolDetailSheet.style.display = "flex";
+      if (window.lucide) window.lucide.createIcons();
+    });
+  }
+
+  // Close protocol detail sheet
+  if (newBtnCloseProtocolDetail && newProtocolDetailSheet) {
+    newBtnCloseProtocolDetail.addEventListener("click", () => {
+      newProtocolDetailSheet.style.display = "none";
+    });
+  }
+
+  // Option selection handlers (only one protocol selected at a time)
+  if (protocolOptionHttp) {
+    protocolOptionHttp.addEventListener("click", () => {
+      currentProtocolSelection = "http";
+      updateProtocolUI();
+    });
+  }
+
+  if (protocolOptionHttps) {
+    protocolOptionHttps.addEventListener("click", () => {
+      currentProtocolSelection = "https";
+      updateProtocolUI();
+    });
+  }
+
+  // Initial call on load
+  updateProtocolUI();
+
+  // ==========================================================================
+  // DANGEROUS FILE PROTECTION DETAIL SHEET & SUMMARY HANDLERS
+  // ==========================================================================
+  const rowDangerousProtection = document.getElementById("new-row-dangerous-protection");
+  const newSecurityDetailSheet = document.getElementById("new-security-detail-sheet");
+  const newBtnCloseSecurityDetail = document.getElementById("new-btn-close-security-detail");
+  const switchBlockHttps = document.getElementById("new-switch-block-https");
+  const switchBlockHttp = document.getElementById("new-switch-block-http");
+  const securitySummaryText = document.getElementById("new-security-summary-text");
+
+  // Dynamically updates the main Settings row summary tag with proper ON (blue) / OFF (grey) state colors
+  function updateSecuritySummary() {
+    if (!securitySummaryText || !switchBlockHttps || !switchBlockHttp) return;
+    const isHttpOn = switchBlockHttp.checked;
+    const isHttpsOn = switchBlockHttps.checked;
+
+    const httpClass = isHttpOn ? "summary-on" : "summary-off";
+    const httpsClass = isHttpsOn ? "summary-on" : "summary-off";
+
+    const httpText = isHttpOn ? "On" : "Off";
+    const httpsText = isHttpsOn ? "On" : "Off";
+
+    securitySummaryText.innerHTML = `<span class="summary-item ${httpClass}">HTTP: ${httpText}</span><span class="summary-sep"> · </span><span class="summary-item ${httpsClass}">HTTPS: ${httpsText}</span>`;
+  }
+
+  // Open detail sheet when main Settings row is tapped
+  if (rowDangerousProtection && newSecurityDetailSheet) {
+    rowDangerousProtection.addEventListener("click", () => {
+      newSecurityDetailSheet.style.display = "flex";
+      if (window.lucide) window.lucide.createIcons();
+    });
+  }
+
+  // Close detail sheet
+  if (newBtnCloseSecurityDetail && newSecurityDetailSheet) {
+    newBtnCloseSecurityDetail.addEventListener("click", () => {
+      newSecurityDetailSheet.style.display = "none";
+    });
+  }
+
+  // Update main Settings summary immediately when either toggle changes
+  if (switchBlockHttps) {
+    switchBlockHttps.addEventListener("change", updateSecuritySummary);
+  }
+
+  if (switchBlockHttp) {
+    switchBlockHttp.addEventListener("change", updateSecuritySummary);
+  }
+
+  // Set initial summary state on load
+  updateSecuritySummary();
+
+  // ==========================================================================
   // SUPPORT LANVAN PROTOTYPE HANDLERS
   // ==========================================================================
   const newBtnOpenSupport = document.getElementById("new-btn-open-support");
@@ -425,6 +542,39 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.classList.add("active");
     });
   });
+
+  // ==========================================================================
+  // ABOUT LANVAN PROTOTYPE HANDLERS
+  // ==========================================================================
+  const newBtnOpenAbout = document.getElementById("new-btn-open-about");
+  const newAboutModal = document.getElementById("new-about-modal");
+  const newBtnCloseAbout = document.getElementById("new-btn-close-about");
+  const newBtnAboutGithub = document.getElementById("new-btn-about-github");
+  const newBtnAboutFeedback = document.getElementById("new-btn-about-feedback");
+
+  if (newBtnOpenAbout) {
+    newBtnOpenAbout.addEventListener("click", () => {
+      newAboutModal.style.display = "flex";
+    });
+  }
+
+  if (newBtnCloseAbout) {
+    newBtnCloseAbout.addEventListener("click", () => {
+      newAboutModal.style.display = "none";
+    });
+  }
+
+  if (newBtnAboutGithub) {
+    newBtnAboutGithub.addEventListener("click", () => {
+      alert("Simulated: Opening GitHub Repository (https://github.com/P7XCKD/lanvan)");
+    });
+  }
+
+  if (newBtnAboutFeedback) {
+    newBtnAboutFeedback.addEventListener("click", () => {
+      alert("Simulated: Opening Email App to send feedback");
+    });
+  }
 
   // ==========================================================================
   // NAVIGATION MODE SWITCHER (Gesture vs 3-Button System Inset Simulation)

@@ -339,7 +339,7 @@
             <!-- COMPACT SUPPORT LANVAN SECTION CARD -->
             <div class="new-card new-support-section-card" id="new-support-section-card">
               <div class="support-card-header-row">
-                <div class="card-section-label">SUPPORT LANVAN</div>
+                <div class="card-section-label">SUPPORT</div>
                 <img src="app/static/images/icon.png" alt="Lanvan Logo" class="support-header-logo">
               </div>
 
@@ -348,10 +348,16 @@
                 <div class="support-section-sub">Help keep Lanvan free and independent.</div>
               </div>
 
-              <button class="new-outline-btn support-section-btn" id="new-btn-open-support">
-                <i data-lucide="heart" class="heart-icon"></i>
-                <span>Support Lanvan</span>
-              </button>
+              <div class="support-card-actions-row">
+                <button class="new-outline-btn support-section-btn" id="new-btn-open-support">
+                  <i data-lucide="heart" class="heart-icon"></i>
+                  <span>Support Lanvan</span>
+                </button>
+                <button class="new-outline-btn about-section-btn" id="new-btn-open-about">
+                  <i data-lucide="info"></i>
+                  <span>About Lanvan</span>
+                </button>
+              </div>
             </div>
 
           </div>
@@ -375,16 +381,17 @@
               <div class="new-settings-group">
                 <div class="group-title">CONNECTION</div>
 
-                <div class="new-setting-row">
+                <!-- CONSOLIDATED CONNECTION PROTOCOL SETTING ROW -->
+                <div class="new-setting-row tappable-setting-row" id="new-row-connection-protocol" style="cursor: pointer;">
+                  <div class="row-icon">
+                    <i data-lucide="globe" class="setting-icon"></i>
+                  </div>
                   <div class="row-main">
                     <div class="row-title">Connection protocol</div>
-                    <div class="row-sub">Use HTTPS encryption with auto-generated certificate</div>
+                    <div class="row-summary-tag" id="new-protocol-summary-text"><span class="summary-item summary-off">HTTP · Default</span></div>
                   </div>
                   <div class="row-action">
-                    <label class="new-toggle-switch">
-                      <input type="checkbox" id="new-switch-https">
-                      <span class="toggle-slider"></span>
-                    </label>
+                    <i data-lucide="chevron-right" class="chevron-icon"></i>
                   </div>
                 </div>
               </div>
@@ -393,16 +400,18 @@
               <div class="new-settings-group">
                 <div class="group-title">SECURITY</div>
 
-                <div class="new-setting-row">
+                <!-- CONSOLIDATED DANGEROUS FILE PROTECTION SETTING ROW -->
+                <div class="new-setting-row tappable-setting-row" id="new-row-dangerous-protection" style="cursor: pointer;">
+                  <div class="row-icon">
+                    <i data-lucide="shield" class="setting-icon"></i>
+                  </div>
                   <div class="row-main">
-                    <div class="row-title">Block potentially dangerous files</div>
-                    <div class="row-sub">Prevent executable files such as .exe, .bat and .dll</div>
+                    <div class="row-title">Dangerous file protection</div>
+                    <div class="row-sub">Blocks potentially dangerous files</div>
+                    <div class="row-summary-tag" id="new-security-summary-text"><span class="summary-item summary-off">HTTP: Off</span><span class="summary-sep"> · </span><span class="summary-item summary-on">HTTPS: On</span></div>
                   </div>
                   <div class="row-action">
-                    <label class="new-toggle-switch">
-                      <input type="checkbox" id="new-switch-block">
-                      <span class="toggle-slider"></span>
-                    </label>
+                    <i data-lucide="chevron-right" class="chevron-icon"></i>
                   </div>
                 </div>
               </div>
@@ -424,7 +433,19 @@
                 </button>
               </div>
 
-              <!-- GROUP 4: DIAGNOSTICS -->
+              <!-- GROUP 4: BACKGROUND -->
+              <div class="new-settings-group">
+                <div class="group-title">BACKGROUND</div>
+
+                <div class="new-setting-row">
+                  <div class="row-main">
+                    <div class="row-title">Background operation</div>
+                    <div class="row-sub" id="new-battery-sub">Battery optimization is disabled</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- GROUP 5: DIAGNOSTICS -->
               <div class="new-settings-group">
                 <div class="group-title">DIAGNOSTICS</div>
 
@@ -434,15 +455,107 @@
                 </button>
               </div>
 
-              <!-- GROUP 5: BACKGROUND -->
-              <div class="new-settings-group">
-                <div class="group-title">BACKGROUND</div>
+              <!-- SAFE BOTTOM INSET PADDING GAP -->
+              <div class="sheet-safe-bottom-padding"></div>
 
-                <div class="new-setting-row">
-                  <div class="row-main">
-                    <div class="row-title">Background operation</div>
-                    <div class="row-sub" id="new-battery-sub">Battery optimization is disabled</div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- NEW CONNECTION PROTOCOL DETAIL SHEET -->
+        <div class="new-sheet-overlay" id="new-protocol-detail-sheet" style="display:none; z-index: 100;">
+          <div class="new-sheet-card">
+            
+            <div class="new-sheet-header">
+              <h3>Connection protocol</h3>
+              <button class="new-icon-btn sheet-close-btn" id="new-btn-close-protocol-detail">
+                <i data-lucide="x"></i>
+              </button>
+            </div>
+
+            <div class="new-sheet-body">
+              <p class="security-detail-description">
+                Choose how Lanvan should provide the local sharing page.
+              </p>
+
+              <!-- PROTOCOL OPTIONS GROUP -->
+              <div class="protocol-options-group">
+                
+                <!-- OPTION 1: HTTP (DEFAULT) -->
+                <div class="protocol-option-card active" id="protocol-option-http">
+                  <div class="option-radio">
+                    <span class="radio-circle"></span>
                   </div>
+                  <div class="option-main">
+                    <div class="option-title">HTTP</div>
+                    <div class="option-sub">Simple local connection · Default</div>
+                  </div>
+                </div>
+
+                <!-- OPTION 2: HTTPS -->
+                <div class="protocol-option-card" id="protocol-option-https">
+                  <div class="option-radio">
+                    <span class="radio-circle"></span>
+                  </div>
+                  <div class="option-main">
+                    <div class="option-title">HTTPS</div>
+                    <div class="option-sub">Encrypted local connection</div>
+                    <div class="option-hint">Uses an auto-generated certificate</div>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- SAFE BOTTOM INSET PADDING GAP -->
+              <div class="sheet-safe-bottom-padding"></div>
+
+            </div>
+
+          </div>
+        </div>
+
+        <!-- NEW DANGEROUS FILE PROTECTION DETAIL SHEET -->
+        <div class="new-sheet-overlay" id="new-security-detail-sheet" style="display:none; z-index: 100;">
+          <div class="new-sheet-card">
+            
+            <div class="new-sheet-header">
+              <h3>Dangerous file protection</h3>
+              <button class="new-icon-btn sheet-close-btn" id="new-btn-close-security-detail">
+                <i data-lucide="x"></i>
+              </button>
+            </div>
+
+            <div class="new-sheet-body">
+              <p class="security-detail-description">
+                Restricts executable files (.exe, .apk, .bat, .dll, .sh) from being uploaded or received.
+              </p>
+
+              <!-- CONTROL 1: HTTP CONNECTIONS -->
+              <div class="new-setting-row">
+                <div class="row-main">
+                  <div class="row-title">HTTP connections</div>
+                  <div class="row-sub">Blocks dangerous files when sharing over HTTP</div>
+                </div>
+                <div class="row-action">
+                  <label class="new-toggle-switch">
+                    <input type="checkbox" id="new-switch-block-http">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- CONTROL 2: HTTPS CONNECTIONS -->
+              <div class="new-setting-row">
+                <div class="row-main">
+                  <div class="row-title">HTTPS connections</div>
+                  <div class="row-sub">Blocks dangerous files when sharing over HTTPS</div>
+                </div>
+                <div class="row-action">
+                  <label class="new-toggle-switch">
+                    <input type="checkbox" id="new-switch-block-https" checked>
+                    <span class="toggle-slider"></span>
+                  </label>
                 </div>
               </div>
 
@@ -567,6 +680,56 @@
 
               <button class="new-primary-btn" id="new-btn-confirm-support">
                 <span>Continue</span>
+              </button>
+
+              <div class="sheet-safe-bottom-padding"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- NEW ABOUT LANVAN PROTOTYPE MODAL DIALOG -->
+        <div class="new-sheet-overlay" id="new-about-modal" style="display:none;">
+          <div class="new-sheet-card about-sheet-card">
+            <div class="new-sheet-header">
+              <h3>About Lanvan</h3>
+              <button class="new-icon-btn sheet-close-btn" id="new-btn-close-about">
+                <i data-lucide="x"></i>
+              </button>
+            </div>
+
+            <div class="new-sheet-body">
+              <div class="about-section-group">
+                <div class="about-group-label">WHAT IS LANVAN?</div>
+                <p class="about-description">Lanvan is a self-hosted local file sharing app that lets you transfer files between devices over your local network using a web browser.</p>
+              </div>
+
+              <div class="about-divider"></div>
+
+              <button class="about-row-action" id="new-btn-about-github">
+                <div class="about-row-info">
+                  <div class="about-row-title">GitHub Repository</div>
+                  <div class="about-row-sub">View source code</div>
+                </div>
+                <i data-lucide="external-link" class="about-row-arrow"></i>
+              </button>
+
+              <div class="about-divider"></div>
+
+              <div class="about-row-static">
+                <div class="about-row-info">
+                  <div class="about-row-title">Version</div>
+                  <div class="about-row-sub">v1.0.0</div>
+                </div>
+              </div>
+
+              <div class="about-divider"></div>
+
+              <button class="about-row-action" id="new-btn-about-feedback">
+                <div class="about-row-info">
+                  <div class="about-row-title">Feedback</div>
+                  <div class="about-row-sub">Send Feedback</div>
+                </div>
+                <i data-lucide="mail" class="about-row-arrow"></i>
               </button>
 
               <div class="sheet-safe-bottom-padding"></div>
