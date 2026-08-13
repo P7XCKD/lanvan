@@ -41,12 +41,16 @@
                       android:value="Running local Python FastAPI server for high-performance peer-to-peer file sharing and clipboard syncing over local Wi-Fi." />
         </service>
 
-        <!-- Explicitly remove ProfileInstallReceiver to address DUMP permission vulnerability -->
-        <receiver
-            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-            android:enabled="false"
+        <!-- FileProvider for safe diagnostic report content URI sharing -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
             android:exported="false"
-            tools:node="remove" />
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 
