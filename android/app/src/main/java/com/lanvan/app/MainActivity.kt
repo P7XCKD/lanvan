@@ -957,6 +957,8 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
+                val sanitizedLogs = sanitizeLogContent(capturedLogs)
+
                 val reportContent = StringBuilder().apply {
                     appendLine("=== Lanvan Diagnostic Report ===")
                     appendLine("Report Generated: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date())}")
@@ -971,8 +973,8 @@ class MainActivity : AppCompatActivity() {
                     appendLine("Background Operation Access: ${if (isExempted) "Allowed" else "Restricted"}")
                     appendLine("App Storage Usage: ${txtStorageUsage.text}")
                     appendLine()
-                    appendLine("=== Application & Server Logs ===")
-                    appendLine(if (capturedLogs.trim().isEmpty()) "No logs captured yet." else capturedLogs.trim())
+                    appendLine("=== Application & Server Logs (Sanitized) ===")
+                    appendLine(if (sanitizedLogs.trim().isEmpty()) "No logs captured yet." else sanitizedLogs.trim())
                     appendLine("=== End of Report ===")
                 }.toString()
 
@@ -1642,5 +1644,28 @@ class MainActivity : AppCompatActivity() {
         params.leftMargin = (20f * density).toInt()
         params.rightMargin = (20f * density).toInt()
         tooltipCard.layoutParams = params
+    }
+
+    /**
+     * Sanitizes application log contents before attaching to diagnostics or writing to output.
+     * Masks sensitive user file names and replaces raw clipboard text with generic placeholders.
+     */
+    private fun sanitizeLogContent(rawLogs: String): String {
+        if (rawLogs.isBlank()) return ""
+
+        var sanitized = rawLogs
+
+        // 1. Sanitize raw clipboard data & payloads
+        sanitized = sanitized.replace(Regex("(?i)(clipboard[\\s_\\-:=]+)[^\\r\\n]+"), "$1[Clipboard Data]")
+        sanitized = sanitized.replace(Regex("(?i)(clipboard_data[\"']?\\s*:\\s*[\"']?)[^\"'\\r\\n]+"), "$1[Clipboard Data]")
+        sanitized = sanitized.replace(Regex("(?i)(\"clipboard\"\\s*:\\s*\"?)[^\",\\}\\r\\n]+"), "$1[Clipboard Data]")
+
+        // 2. Sanitize file names & explicit file paths
+        sanitized = sanitized.replace(Regex("(?i)((?:filename|path|full_path|file|target_dir)[\\s=:]+)([^\\s;,\\r\\n]+)"), "$1[Sanitized File]")
+        sanitized = sanitized.replace(Regex("(?i)(data/(?:uploads|clipboard|temp_chunks)/)([^\\s;,\\r\\n]+)"), "$1[Sanitized File]")
+        sanitized = sanitized.replace(Regex("(?i)([a-zA-Z]:\\\\(?:[^\\\\\\r\\n]+\\\\)+)([^\\s;,\\r\\n]+)"), "$1[Sanitized Path]")
+        sanitized = sanitized.replace(Regex("(?i)(/(?:sdcard|storage|data/data)/[^\\s;,\\r\\n]+)"), "[Sanitized Android Path]")
+
+        return sanitized
     }
 }

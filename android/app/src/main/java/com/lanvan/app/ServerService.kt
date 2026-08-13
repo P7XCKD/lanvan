@@ -225,7 +225,8 @@ class ServerService : Service() {
                 } else {
                     val sw = java.io.StringWriter()
                     e.printStackTrace(java.io.PrintWriter(sw))
-                    lastErrorLog = "Kotlin Exception: " + e.message + "\n" + sw.toString()
+                    val rawErr = "Kotlin Exception: " + e.message + "\n" + sw.toString()
+                    lastErrorLog = sanitizeLogContent(rawErr)
                     e.printStackTrace()
                     sendServerStatus(STATUS_ERROR)
                 }
@@ -473,5 +474,24 @@ class ServerService : Service() {
             e.printStackTrace()
         }
         return "127.0.0.1"
+    }
+
+    private fun sanitizeLogContent(rawLogs: String): String {
+        if (rawLogs.isBlank()) return ""
+
+        var sanitized = rawLogs
+
+        // 1. Sanitize raw clipboard content & payloads
+        sanitized = sanitized.replace(Regex("(?i)(clipboard[\\s_\\-:=]+)[^\\r\\n]+"), "$1[Clipboard Data]")
+        sanitized = sanitized.replace(Regex("(?i)(clipboard_data[\"']?\\s*:\\s*[\"']?)[^\"'\\r\\n]+"), "$1[Clipboard Data]")
+        sanitized = sanitized.replace(Regex("(?i)(\"clipboard\"\\s*:\\s*\"?)[^\",\\}\\r\\n]+"), "$1[Clipboard Data]")
+
+        // 2. Sanitize file names & explicit file paths
+        sanitized = sanitized.replace(Regex("(?i)((?:filename|path|full_path|file|target_dir)[\\s=:]+)([^\\s;,\\r\\n]+)"), "$1[Sanitized File]")
+        sanitized = sanitized.replace(Regex("(?i)(data/(?:uploads|clipboard|temp_chunks)/)([^\\s;,\\r\\n]+)"), "$1[Sanitized File]")
+        sanitized = sanitized.replace(Regex("(?i)([a-zA-Z]:\\\\(?:[^\\\\\\r\\n]+\\\\)+)([^\\s;,\\r\\n]+)"), "$1[Sanitized Path]")
+        sanitized = sanitized.replace(Regex("(?i)(/(?:sdcard|storage|data/data)/[^\\s;,\\r\\n]+)"), "[Sanitized Android Path]")
+
+        return sanitized
     }
 }

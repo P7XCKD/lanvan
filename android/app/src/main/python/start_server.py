@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 import uvicorn
 import asyncio
 from datetime import datetime
@@ -7,14 +8,38 @@ from datetime import datetime
 # Inject paths so python can resolve local imports properly inside Android environment
 sys.path.append(os.path.dirname(__file__))
 
+def sanitize_log_message(message: str) -> str:
+    """
+    Sanitizes log messages at write-time to prevent sensitive file names,
+    file paths, and raw user clipboard content from appearing in app logs.
+    """
+    if not message:
+        return message
+
+    sanitized = message
+
+    # 1. Sanitize raw clipboard content & payloads
+    sanitized = re.sub(r'(?i)(clipboard[\s_\-:=]+)[^\r\n]+', r'\1[Clipboard Data]', sanitized)
+    sanitized = re.sub(r'(?i)(clipboard_data["\']?\s*:\s*["\']?)[^"\'\r\n]+', r'\1[Clipboard Data]', sanitized)
+    sanitized = re.sub(r'(?i)("clipboard"\s*:\s*"?[^",\}\r\n]+)', r'"clipboard": "[Clipboard Data]"', sanitized)
+
+    # 2. Sanitize file names & explicit file paths
+    sanitized = re.sub(r'(?i)((?:filename|path|full_path|file|target_dir)[\s=:]+)([^\s;,\r\n]+)', r'\1[Sanitized File]', sanitized)
+    sanitized = re.sub(r'(?i)(data/(?:uploads|clipboard|temp_chunks)/)([^\s;,\r\n]+)', r'\1[Sanitized File]', sanitized)
+    sanitized = re.sub(r'(?i)([a-zA-Z]:\\(?:[^\\[\r\n]+\\)+)([^\s;,\r\n]+)', r'\1[Sanitized Path]', sanitized)
+    sanitized = re.sub(r'(?i)(/(?:sdcard|storage|data/data)/[^\s;,\r\n]+)', r'[Sanitized Android Path]', sanitized)
+
+    return sanitized
+
 class LogWriter:
     def __init__(self, filepath, terminal):
         self.file = open(filepath, 'a', encoding='utf-8')
         self.terminal = terminal
         
     def write(self, message):
-        self.terminal.write(message)
-        self.file.write(message)
+        sanitized_msg = sanitize_log_message(message)
+        self.terminal.write(sanitized_msg)
+        self.file.write(sanitized_msg)
         self.file.flush()
         
     def flush(self):
