@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+    <!-- Lanvan App Theme inheriting from Theme.MaterialComponents.NoActionBar -->
+    <style name="AppTheme" parent="Theme.MaterialComponents.NoActionBar">
         <item name="android:windowBackground">@color/bg_surface</item>
         <item name="android:colorBackground">@color/bg_surface</item>
         <item name="android:textColorPrimary">@color/text_primary</item>

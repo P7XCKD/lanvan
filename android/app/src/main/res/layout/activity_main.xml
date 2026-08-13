@@ -113,16 +113,21 @@
                     android:lineSpacingExtra="4dp"
                     android:layout_marginBottom="20dp" />
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_start_server"
+                    style="@style/Widget.MaterialComponents.Button"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
                     android:text="Start Lanvan"
                     android:textAllCaps="false"
-                    android:textColor="#FFFFFF"
+                    android:textColor="#121316"
                     android:textSize="14sp"
                     android:textStyle="bold"
-                    android:backgroundTint="@color/primary_accent_blue" />
+                    app:backgroundTint="@color/primary_accent_blue"
+                    app:icon="@drawable/ic_play"
+                    app:iconTint="#121316"
+                    app:iconGravity="textStart"
+                    app:cornerRadius="12dp" />
             </LinearLayout>
 
             <!-- STATE 2: RUNNING SERVER + NETWORK AVAILABLE CARD -->
@@ -189,9 +194,9 @@
                     android:layout_height="wrap_content"
                     android:orientation="horizontal">
 
-                    <Button
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_copy_address"
-                        style="?attr/materialButtonOutlinedStyle"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                         android:layout_width="0dp"
                         android:layout_height="48dp"
                         android:layout_weight="1"
@@ -200,11 +205,17 @@
                         android:textColor="@color/text_primary"
                         android:textSize="14sp"
                         android:layout_marginEnd="8dp"
-                        app:strokeColor="@color/border_subtle" />
+                        app:backgroundTint="@android:color/transparent"
+                        app:strokeColor="@color/border_outline_btn"
+                        app:strokeWidth="1dp"
+                        app:icon="@drawable/ic_copy"
+                        app:iconTint="@color/text_primary"
+                        app:iconGravity="textStart"
+                        app:cornerRadius="12dp" />
 
-                    <Button
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_stop_server"
-                        style="?attr/materialButtonOutlinedStyle"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                         android:layout_width="0dp"
                         android:layout_height="48dp"
                         android:layout_weight="1"
@@ -213,7 +224,10 @@
                         android:textColor="@color/danger_red_text"
                         android:textSize="14sp"
                         android:layout_marginStart="8dp"
-                        app:strokeColor="@color/danger_red" />
+                        app:backgroundTint="@android:color/transparent"
+                        app:strokeColor="@color/danger_red"
+                        app:strokeWidth="1dp"
+                        app:cornerRadius="12dp" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -255,16 +269,19 @@
                     android:lineSpacingExtra="3dp"
                     android:layout_marginBottom="20dp" />
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_reconnect_wifi"
-                    style="?attr/materialButtonOutlinedStyle"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
                     android:text="Open Wi-Fi Settings"
                     android:textAllCaps="false"
                     android:textColor="@color/primary_accent_blue"
                     android:textSize="14sp"
-                    app:strokeColor="@color/primary_accent_blue" />
+                    app:backgroundTint="@android:color/transparent"
+                    app:strokeColor="@color/primary_accent_blue"
+                    app:strokeWidth="1dp"
+                    app:cornerRadius="12dp" />
             </LinearLayout>
 
             <!-- STORAGE CARD -->
@@ -304,16 +321,22 @@
                     android:textSize="12sp"
                     android:layout_marginBottom="16dp" />
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_manage_storage"
-                    style="?attr/materialButtonOutlinedStyle"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
                     android:text="Manage Storage"
                     android:textAllCaps="false"
                     android:textColor="@color/primary_accent_blue"
                     android:textSize="14sp"
-                    app:strokeColor="@color/primary_accent_blue" />
+                    app:backgroundTint="@android:color/transparent"
+                    app:strokeColor="@color/primary_accent_blue"
+                    app:strokeWidth="1dp"
+                    app:icon="@drawable/ic_hard_drive"
+                    app:iconTint="@color/primary_accent_blue"
+                    app:iconGravity="textStart"
+                    app:cornerRadius="12dp" />
             </LinearLayout>
 
             <!-- SUPPORT LANVAN CARD -->
@@ -352,16 +375,22 @@
                     android:textSize="12sp"
                     android:layout_marginBottom="16dp" />
 
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_support_lanvan"
-                    style="?attr/materialButtonOutlinedStyle"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
                     android:text="Support Lanvan"
                     android:textAllCaps="false"
                     android:textColor="@color/text_primary"
                     android:textSize="14sp"
-                    app:strokeColor="@color/border_subtle" />
+                    app:backgroundTint="@android:color/transparent"
+                    app:strokeColor="@color/border_outline_btn"
+                    app:strokeWidth="1dp"
+                    app:icon="@drawable/ic_heart"
+                    app:iconTint="@color/text_primary"
+                    app:iconGravity="textStart"
+                    app:cornerRadius="12dp" />
             </LinearLayout>
 
         </LinearLayout>

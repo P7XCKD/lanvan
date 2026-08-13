@@ -289,8 +289,8 @@ class MainActivity : AppCompatActivity() {
                 // Update Header Status Pill to RUNNING
                 headerStatusText.text = "Running"
                 headerStatusText.setTextColor(ContextCompat.getColor(this, R.color.primary_accent_blue))
-                statusDot.setBackgroundResource(R.drawable.bg_card_sub)
-                statusDot.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, R.color.primary_accent_blue))
+                statusDot.setBackgroundResource(R.drawable.bg_dot_running)
+                statusDot.backgroundTintList = null
 
                 val lanIp = getLocalIpAddress()
                 if (lanIp == "127.0.0.1") {
@@ -330,8 +330,8 @@ class MainActivity : AppCompatActivity() {
                 // Update Header Status Pill to STOPPED
                 headerStatusText.text = "Stopped"
                 headerStatusText.setTextColor(ContextCompat.getColor(this, R.color.text_muted))
-                statusDot.setBackgroundResource(R.drawable.bg_card_sub)
-                statusDot.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, R.color.border_subtle))
+                statusDot.setBackgroundResource(R.drawable.bg_dot_stopped)
+                statusDot.backgroundTintList = null
 
                 cardRunningConnected.visibility = View.GONE
                 cardRunningDegraded.visibility = View.GONE
