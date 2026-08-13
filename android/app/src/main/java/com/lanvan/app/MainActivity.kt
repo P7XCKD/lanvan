@@ -474,28 +474,68 @@ class MainActivity : AppCompatActivity() {
         return size
     }
 
+    private fun sendHttpRequest(url: java.net.URL, method: String) {
+        try {
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            if (conn is javax.net.ssl.HttpsURLConnection) {
+                conn.sslSocketFactory = getTrustAllSSLSocketFactory()
+                conn.hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true }
+            }
+            conn.requestMethod = method
+            conn.connectTimeout = 2000
+            conn.readTimeout = 2000
+            conn.responseCode
+            conn.disconnect()
+        } catch (_: Exception) {}
+    }
+
+    private fun getTrustAllSSLSocketFactory(): javax.net.ssl.SSLSocketFactory {
+        val trustAllCerts = arrayOf<javax.net.ssl.TrustManager>(
+            object : javax.net.ssl.X509TrustManager {
+                override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+            }
+        )
+        val sslContext = javax.net.ssl.SSLContext.getInstance("SSL")
+        sslContext.init(null, trustAllCerts, java.security.SecureRandom())
+        return sslContext.socketFactory
+    }
+
     private fun clearStorageData() {
         try {
             Thread {
-                try {
-                    val url = java.net.URL("http://127.0.0.1:5000/clear")
-                    val conn = url.openConnection() as java.net.HttpURLConnection
-                    conn.requestMethod = "POST"
-                    conn.connectTimeout = 1000
-                    conn.readTimeout = 1000
-                    conn.responseCode
-                    conn.disconnect()
-                } catch (_: Exception) {}
-                try {
-                    val url = java.net.URL("http://127.0.0.1:5000/api/clipboard/clear")
-                    val conn = url.openConnection() as java.net.HttpURLConnection
-                    conn.requestMethod = "DELETE"
-                    conn.connectTimeout = 1000
-                    conn.readTimeout = 1000
-                    conn.responseCode
-                    conn.disconnect()
-                } catch (_: Exception) {}
+                val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
+                val useHttps = sharedPrefs.getBoolean("use_https", false)
+                val scheme = if (useHttps) "https" else "http"
+
+                val uri = try { Uri.parse(currentServerUrl) } catch (_: Exception) { null }
+                val port = if (uri != null && uri.port != -1) uri.port else 5000
+
+                val targets = listOf(
+                    "$scheme://127.0.0.1:$port",
+                    "http://127.0.0.1:5000",
+                    "https://127.0.0.1:5000",
+                    "http://127.0.0.1:5001",
+                    "https://127.0.0.1:5001"
+                ).distinct()
+
+                for (target in targets) {
+                    try {
+                        sendHttpRequest(java.net.URL("$target/api/files/clear"), "POST")
+                    } catch (_: Exception) {}
+                    try {
+                        sendHttpRequest(java.net.URL("$target/api/clipboard/clear"), "DELETE")
+                    } catch (_: Exception) {}
+                }
             }.start()
+
+            try {
+                if (com.chaquo.python.Python.isStarted()) {
+                    val py = com.chaquo.python.Python.getInstance()
+                    py.getModule("app.routers.clipboard").callAttr("clear_clipboard_data_sync")
+                }
+            } catch (_: Exception) {}
 
             val uploadsDir = File(filesDir, "data/uploads")
             if (uploadsDir.exists()) deleteContents(uploadsDir)
@@ -503,12 +543,18 @@ class MainActivity : AppCompatActivity() {
             val tempChunksDir = File(filesDir, "data/temp_chunks")
             if (tempChunksDir.exists()) deleteContents(tempChunksDir)
 
+            val clipboardDir = File(filesDir, "data/clipboard")
+            if (clipboardDir.exists()) deleteContents(clipboardDir)
+
             val dataDir = File(filesDir, "data")
             if (dataDir.exists()) {
                 val files = dataDir.listFiles()
                 if (files != null) {
                     for (f in files) {
-                        if (f.isFile && (f.name.contains("clipboard") || f.name.endsWith(".json") || f.name.endsWith(".tmp"))) {
+                        if (f.isDirectory) {
+                            deleteContents(f)
+                            f.delete()
+                        } else if (f.isFile && (f.name.contains("clipboard") || f.name.endsWith(".json") || f.name.endsWith(".tmp"))) {
                             f.delete()
                         }
                     }

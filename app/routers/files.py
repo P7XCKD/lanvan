@@ -1854,6 +1854,7 @@ async def selection_demo():
     return Response("Demo page not found", status_code=404)
 
 @router.post("/clear", name="clear_files")
+@router.post("/api/files/clear", name="clear_files_api_alias")
 async def clear_files():
     """Clear all uploaded files and temporary chunks with enhanced Windows compatibility"""
     from app.core.windows_file_manager import WindowsFileManager
