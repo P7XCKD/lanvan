@@ -160,7 +160,7 @@
 
         var previewHtml = '';
         if (isFolder) {
-            previewHtml = '<div class="grid-card-preview folder-preview-box" style="background: rgba(59, 130, 246, 0.08); display: flex !important; align-items: center !important; justify-content: center !important; text-align: center; width: 100%; height: calc(100% - 39px); position: absolute; top: 39px; left: 0; right: 0; bottom: 0;">' +
+            previewHtml = '<div class="grid-card-preview folder-preview-box" style="background: rgba(59, 130, 246, 0.08); display: flex !important; align-items: center !important; justify-content: center !important; text-align: center; width: 100%; height: calc(100% - 48px); position: absolute; top: 48px; left: 0; right: 0; bottom: 0;">' +
                 '<div style="display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; margin: auto;">' +
                 '<i data-lucide="folder" style="width: 48px; height: 48px; min-width: 48px; min-height: 48px; color: var(--primary, #2563eb); stroke-width: 1.5; display: block; margin: auto;"></i>' +
                 '</div>' +
@@ -191,7 +191,7 @@
                 var curFolder = typeof window.cleanFolderPath === "function" ? window.cleanFolderPath(window.currentFolderPath || "") : "";
                 var scopedPath = (typeof window.getCanonicalIdentity === "function") ? window.getCanonicalIdentity(curFolder, name) : (curFolder ? (curFolder + "/" + name) : name);
                 var downloadUrl = "/download/" + encodeURIComponent(scopedPath);
-                previewHtml = '<div class="grid-card-preview video-preview-box" style="position:absolute;top:39px;left:0;right:0;bottom:0;width:100%;height:calc(100% - 39px);padding:0;margin:0;background:#0f172a;overflow:hidden;">' +
+                previewHtml = '<div class="grid-card-preview video-preview-box" style="position:absolute;top:48px;left:0;right:0;bottom:0;width:100%;height:calc(100% - 48px);padding:0;margin:0;background:#0f172a;overflow:hidden;">' +
                     '<video src="' + downloadUrl + '#t=0.5" preload="metadata" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;pointer-events:none;" muted controlsList="nodownload no-fullscreen noremoteplayback" disablePictureInPicture></video>' +
                     '<div class="video-play-badge" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;margin:0;">' +
                     '<i data-lucide="play" style="width:20px;height:20px;fill:currentColor;margin:0;"></i>' +

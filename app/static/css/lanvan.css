@@ -1544,23 +1544,27 @@ html[data-view-mode="list"] #gridViewBtn {
     align-items: center;
     justify-content: space-between;
     padding: 0.5rem 0.75rem;
-    gap: 0.5rem;
+    gap: 0.55rem;
     background: var(--card-bg);
     border-bottom: 1px solid var(--border-color);
-    min-height: 40px;
+    min-height: 48px;
 }
 
 .grid-card-head .avatar-icon {
-    width: 24px;
-    height: 24px;
-    border-radius: 6px;
-    font-size: 0.75rem;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
 }
 
-.grid-card-head .avatar-icon i {
-    width: 14px;
-    height: 14px;
+.grid-card-head .avatar-icon i,
+.grid-card-head .avatar-icon svg {
+    width: 20px;
+    height: 20px;
 }
 
 .grid-card-head .item-title {
@@ -1575,12 +1579,12 @@ html[data-view-mode="list"] #gridViewBtn {
 
 .grid-card-preview {
     position: absolute;
-    top: 39px;
+    top: 48px;
     left: 0;
     right: 0;
     bottom: 0;
     width: 100%;
-    height: calc(100% - 39px);
+    height: calc(100% - 48px);
     z-index: 1;
     display: flex;
     align-items: center;
