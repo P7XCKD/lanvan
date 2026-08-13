@@ -12,7 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- STATE VARIABLES ---
   let currentView = "old"; // "old", "new", "compare"
   let serverState = "stopped"; // "stopped", "running"
-  let storageMB = 21.37;
+  let storageMB = 0.00;
 
   // --- DOM ELEMENTS: CONTROLS ---
   const viewModeButtons = document.querySelectorAll("#view-mode-control .btn-segment");
@@ -137,6 +137,9 @@ document.addEventListener("DOMContentLoaded", () => {
           headerStatusPill.className = "header-status-pill status-running";
           headerStatusText.textContent = "Running";
         }
+      } else if (currentServerState === "stopping") {
+        headerStatusPill.className = "header-status-pill status-warning";
+        headerStatusText.textContent = "Stopping...";
       } else {
         headerStatusPill.className = "header-status-pill status-stopped";
         headerStatusText.textContent = "Stopped";
