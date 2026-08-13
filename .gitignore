@@ -216,3 +216,7 @@ temp_gradle/
 android/app/src/main/assets/certs/
 android/app/src/main/assets/app/
 
+# Test runner screenshots and output artifacts
+testing/tools/test_screenshots/
+test_screenshots/
+
