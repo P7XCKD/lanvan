@@ -722,19 +722,13 @@ class MainActivity : AppCompatActivity() {
         btnClearStorage.setOnClickListener {
             // Show 3-Second Countdown Storage Clear Confirmation Dialog
             val confirmDialog = BottomSheetDialog(this, R.style.LanvanBottomSheetDialog)
-            val confirmView = layoutInflater.inflate(R.layout.sheet_feedback_confirm, null)
+            val confirmView = layoutInflater.inflate(R.layout.dialog_confirm_clear_storage, null)
 
-            val txtTitle = confirmView.findViewById<TextView>(R.id.txt_feedback_confirm_title)
-            val txtMsg = confirmView.findViewById<TextView>(R.id.txt_feedback_confirm_msg)
-            val btnConfirmClose = confirmView.findViewById<ImageButton>(R.id.btn_close_feedback_confirm)
-            val btnAction = confirmView.findViewById<Button>(R.id.btn_confirm_close_action)
+            val btnCancelClear = confirmView.findViewById<Button>(R.id.btn_cancel_clear)
+            val btnConfirmClearData = confirmView.findViewById<Button>(R.id.btn_confirm_clear_data)
 
-            txtTitle.text = "Clear Storage & Clipboard Data?"
-            txtMsg.text = "This will permanently delete all uploaded files and saved clipboard history. This action cannot be undone."
-            btnAction.setTextColor(ContextCompat.getColor(this, R.color.danger_red_text))
-            btnAction.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, R.color.danger_red))
-            btnAction.isEnabled = false
-            btnAction.text = "Clear Data (3s)"
+            btnConfirmClearData.isEnabled = false
+            btnConfirmClearData.text = "Clear (3s)"
 
             var count = 3
             val handler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -742,11 +736,11 @@ class MainActivity : AppCompatActivity() {
                 override fun run() {
                     count--
                     if (count > 0) {
-                        btnAction.text = "Clear Data (${count}s)"
+                        btnConfirmClearData.text = "Clear (${count}s)"
                         handler.postDelayed(this, 1000)
                     } else {
-                        btnAction.text = "Clear Data"
-                        btnAction.isEnabled = true
+                        btnConfirmClearData.text = "Clear Data"
+                        btnConfirmClearData.isEnabled = true
                     }
                 }
             }
@@ -756,12 +750,12 @@ class MainActivity : AppCompatActivity() {
                 handler.removeCallbacks(runnable)
             }
 
-            btnConfirmClose.setOnClickListener {
+            btnCancelClear.setOnClickListener {
                 handler.removeCallbacks(runnable)
                 confirmDialog.dismiss()
             }
 
-            btnAction.setOnClickListener {
+            btnConfirmClearData.setOnClickListener {
                 handler.removeCallbacks(runnable)
                 clearStorageData()
                 updateVal()

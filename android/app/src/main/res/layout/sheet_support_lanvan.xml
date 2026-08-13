@@ -28,9 +28,26 @@
             android:layout_width="32dp"
             android:layout_height="32dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:src="@drawable/ic_close"
             app:tint="@color/text_muted"
             android:contentDescription="Close" />
+    </LinearLayout>
+
+    <!-- SUPPORT HEART CIRCLE -->
+    <LinearLayout
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center_horizontal"
+        android:gravity="center"
+        android:background="@drawable/bg_card_sub"
+        android:backgroundTint="#26F2B8B5"
+        android:layout_marginBottom="12dp">
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_heart"
+            app:tint="@color/danger_red_text" />
     </LinearLayout>
 
     <TextView
