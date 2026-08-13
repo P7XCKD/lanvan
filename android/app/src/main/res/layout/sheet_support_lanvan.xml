@@ -77,7 +77,7 @@
         android:orientation="horizontal"
         android:layout_marginBottom="20dp">
 
-        <!-- TIER 1: ₹49 -->
+        <!-- TIER 1: ₹39 -->
         <LinearLayout
             android:id="@+id/tier_card_49"
             android:layout_width="0dp"
@@ -95,7 +95,7 @@
                 android:id="@+id/txt_tier_val_49"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="₹49"
+                android:text="₹39"
                 android:textColor="@color/text_secondary"
                 android:textSize="18sp"
                 android:textStyle="bold" />
@@ -110,7 +110,7 @@
                 android:layout_marginTop="2dp" />
         </LinearLayout>
 
-        <!-- TIER 2: ₹159 (DEFAULT ACTIVE) -->
+        <!-- TIER 2: ₹149 (DEFAULT ACTIVE) -->
         <LinearLayout
             android:id="@+id/tier_card_159"
             android:layout_width="0dp"
@@ -129,7 +129,7 @@
                 android:id="@+id/txt_tier_val_159"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="₹159"
+                android:text="₹149"
                 android:textColor="@color/primary_accent_blue"
                 android:textSize="18sp"
                 android:textStyle="bold" />

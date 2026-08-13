@@ -31,6 +31,18 @@ import androidx.core.content.FileProvider
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.android.billingclient.api.AcknowledgePurchaseParams
+import com.android.billingclient.api.BillingClient
+import com.android.billingclient.api.BillingClientStateListener
+import com.android.billingclient.api.BillingFlowParams
+import com.android.billingclient.api.BillingResult
+import com.android.billingclient.api.ConsumeParams
+import com.android.billingclient.api.ProductDetails
+import com.android.billingclient.api.Purchase
+import com.android.billingclient.api.PurchasesUpdatedListener
+import com.android.billingclient.api.QueryProductDetailsParams
+import com.android.billingclient.api.QueryPurchasesParams
+import android.util.Log
 import java.io.File
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -127,6 +139,8 @@ class MainActivity : AppCompatActivity() {
         btnManageStorage = findViewById(R.id.btn_manage_storage)
         cardSupportLanvan = findViewById(R.id.card_support_lanvan)
         btnSupportLanvan = findViewById(R.id.btn_support_lanvan)
+
+        setupBillingClient()
 
         val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
 
@@ -989,6 +1003,157 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
+    // ==================================================
+    // GOOGLE PLAY BILLING IMPLEMENTATION
+    // ==================================================
+
+    companion object {
+        const val PRODUCT_SUPPORTER = "lanvan_supporter"
+        const val PRODUCT_SPONSOR = "lanvan_sponsor"
+        const val PRODUCT_PATRON = "lanvan_patron"
+    }
+
+    private lateinit var billingClient: BillingClient
+    private val productDetailsMap = mutableMapOf<String, ProductDetails>()
+    private var isBillingConnected = false
+
+    private val purchasesUpdatedListener = PurchasesUpdatedListener { billingResult, purchases ->
+        if (billingResult.responseCode == BillingClient.BillingResponseCode.OK && purchases != null) {
+            for (purchase in purchases) {
+                handlePurchase(purchase)
+            }
+        } else if (billingResult.responseCode == BillingClient.BillingResponseCode.USER_CANCELED) {
+            Log.i("Billing", "User canceled Google Play purchase flow.")
+        } else if (billingResult.responseCode == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) {
+            Log.i("Billing", "Item already owned. Consuming existing purchase...")
+            queryAndConsumeExistingPurchases()
+        } else {
+            Log.e("Billing", "Purchase failed: ${billingResult.responseCode} (${billingResult.debugMessage})")
+            Toast.makeText(this, "Purchase status: ${billingResult.debugMessage}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun setupBillingClient() {
+        billingClient = BillingClient.newBuilder(this)
+            .setListener(purchasesUpdatedListener)
+            .enablePendingPurchases()
+            .build()
+
+        billingClient.startConnection(object : BillingClientStateListener {
+            override fun onBillingSetupFinished(billingResult: BillingResult) {
+                if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                    isBillingConnected = true
+                    Log.i("Billing", "BillingClient setup successful.")
+                    queryProducts()
+                    queryAndConsumeExistingPurchases()
+                } else {
+                    isBillingConnected = false
+                    Log.w("Billing", "BillingClient setup failed: ${billingResult.debugMessage}")
+                }
+            }
+
+            override fun onBillingServiceDisconnected() {
+                isBillingConnected = false
+                Log.w("Billing", "BillingClient service disconnected.")
+            }
+        })
+    }
+
+    private fun queryProducts() {
+        val productList = listOf(
+            QueryProductDetailsParams.Product.newBuilder()
+                .setProductId(PRODUCT_SUPPORTER)
+                .setProductType(BillingClient.ProductType.INAPP)
+                .build(),
+            QueryProductDetailsParams.Product.newBuilder()
+                .setProductId(PRODUCT_SPONSOR)
+                .setProductType(BillingClient.ProductType.INAPP)
+                .build(),
+            QueryProductDetailsParams.Product.newBuilder()
+                .setProductId(PRODUCT_PATRON)
+                .setProductType(BillingClient.ProductType.INAPP)
+                .build()
+        )
+
+        val params = QueryProductDetailsParams.newBuilder()
+            .setProductList(productList)
+            .build()
+
+        billingClient.queryProductDetailsAsync(params) { billingResult, productDetailsList ->
+            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                productDetailsMap.clear()
+                for (details in productDetailsList) {
+                    productDetailsMap[details.productId] = details
+                    Log.i("Billing", "Loaded Play Product: ${details.productId} -> ${details.oneTimePurchaseOfferDetails?.formattedPrice}")
+                }
+            } else {
+                Log.w("Billing", "Product query returned code: ${billingResult.responseCode}")
+            }
+        }
+    }
+
+    private fun handlePurchase(purchase: Purchase) {
+        if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+            val consumeParams = ConsumeParams.newBuilder()
+                .setPurchaseToken(purchase.purchaseToken)
+                .build()
+
+            billingClient.consumeAsync(consumeParams) { result, _ ->
+                if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                    Log.i("Billing", "Purchase successfully consumed & acknowledged!")
+                } else if (!purchase.isAcknowledged) {
+                    val ackParams = AcknowledgePurchaseParams.newBuilder()
+                        .setPurchaseToken(purchase.purchaseToken)
+                        .build()
+                    billingClient.acknowledgePurchase(ackParams) { _ -> }
+                }
+                runOnUiThread {
+                    showSupportSuccessDialog()
+                }
+            }
+        } else if (purchase.purchaseState == Purchase.PurchaseState.PENDING) {
+            Toast.makeText(this, "Support purchase pending confirmation.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun queryAndConsumeExistingPurchases() {
+        if (!isBillingConnected) return
+        billingClient.queryPurchasesAsync(
+            QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.INAPP).build()
+        ) { billingResult, purchases ->
+            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                for (purchase in purchases) {
+                    if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+                        val consumeParams = ConsumeParams.newBuilder()
+                            .setPurchaseToken(purchase.purchaseToken)
+                            .build()
+                        billingClient.consumeAsync(consumeParams) { _, _ -> }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun showSupportSuccessDialog() {
+        val dialog = BottomSheetDialog(this, R.style.LanvanBottomSheetDialog)
+        val view = layoutInflater.inflate(R.layout.sheet_feedback_confirm, null)
+        dialog.setContentView(view)
+
+        val txtTitle = view.findViewById<TextView>(R.id.txt_feedback_confirm_title)
+        val txtMsg = view.findViewById<TextView>(R.id.txt_feedback_confirm_msg)
+        val btnClose = view.findViewById<ImageButton>(R.id.btn_close_feedback_confirm)
+        val btnAction = view.findViewById<Button>(R.id.btn_confirm_close_action)
+
+        txtTitle.text = "Thank you for supporting Lanvan"
+        txtMsg.text = "Your optional support helps keep Lanvan free and independent for everyone."
+        btnAction.text = "Done"
+
+        btnClose.setOnClickListener { dialog.dismiss() }
+        btnAction.setOnClickListener { dialog.dismiss() }
+
+        dialog.show()
+    }
+
     private fun openSupportLanvanSheet() {
         val dialog = BottomSheetDialog(this, R.style.LanvanBottomSheetDialog)
         val view = layoutInflater.inflate(R.layout.sheet_support_lanvan, null)
@@ -1009,34 +1174,74 @@ class MainActivity : AppCompatActivity() {
 
         val btnConfirm = view.findViewById<Button>(R.id.btn_confirm_support)
 
+        // Dynamically update displayed prices from Google Play ProductDetails if returned
+        productDetailsMap[PRODUCT_SUPPORTER]?.oneTimePurchaseOfferDetails?.formattedPrice?.let {
+            val49.text = it
+        }
+        productDetailsMap[PRODUCT_SPONSOR]?.oneTimePurchaseOfferDetails?.formattedPrice?.let {
+            val159.text = it
+        }
+        productDetailsMap[PRODUCT_PATRON]?.oneTimePurchaseOfferDetails?.formattedPrice?.let {
+            val399.text = it
+        }
+
+        var currentlySelectedTier = 149
+
         val selectTier = { selected: Int ->
+            currentlySelectedTier = selected
             val activeColor = ContextCompat.getColor(this, R.color.primary_accent_blue)
             val mutedColor = ContextCompat.getColor(this, R.color.text_muted)
             val secondaryColor = ContextCompat.getColor(this, R.color.text_secondary)
 
-            tier49.setBackgroundResource(if (selected == 49) R.drawable.bg_card_active else R.drawable.bg_card_sub)
-            val49.setTextColor(if (selected == 49) activeColor else secondaryColor)
-            name49.setTextColor(if (selected == 49) activeColor else mutedColor)
+            tier49.setBackgroundResource(if (selected == 39 || selected == 49) R.drawable.bg_card_active else R.drawable.bg_card_sub)
+            val49.setTextColor(if (selected == 39 || selected == 49) activeColor else secondaryColor)
+            name49.setTextColor(if (selected == 39 || selected == 49) activeColor else mutedColor)
 
-            tier159.setBackgroundResource(if (selected == 159) R.drawable.bg_card_active else R.drawable.bg_card_sub)
-            val159.setTextColor(if (selected == 159) activeColor else secondaryColor)
-            name159.setTextColor(if (selected == 159) activeColor else mutedColor)
+            tier159.setBackgroundResource(if (selected == 149 || selected == 159) R.drawable.bg_card_active else R.drawable.bg_card_sub)
+            val159.setTextColor(if (selected == 149 || selected == 159) activeColor else secondaryColor)
+            name159.setTextColor(if (selected == 149 || selected == 159) activeColor else mutedColor)
 
             tier399.setBackgroundResource(if (selected == 399) R.drawable.bg_card_active else R.drawable.bg_card_sub)
             val399.setTextColor(if (selected == 399) activeColor else secondaryColor)
             name399.setTextColor(if (selected == 399) activeColor else mutedColor)
         }
-        selectTier(159)
+        selectTier(149)
 
-        tier49.setOnClickListener { selectTier(49) }
-        tier159.setOnClickListener { selectTier(159) }
+        tier49.setOnClickListener { selectTier(39) }
+        tier159.setOnClickListener { selectTier(149) }
         tier399.setOnClickListener { selectTier(399) }
 
         btnClose.setOnClickListener { dialog.dismiss() }
 
         btnConfirm.setOnClickListener {
-            Toast.makeText(this, "Thank you for supporting Lanvan!", Toast.LENGTH_SHORT).show()
-            dialog.dismiss()
+            val targetProductId = when (currentlySelectedTier) {
+                39, 49 -> PRODUCT_SUPPORTER
+                399 -> PRODUCT_PATRON
+                else -> PRODUCT_SPONSOR
+            }
+
+            val productDetails = productDetailsMap[targetProductId]
+            if (productDetails != null && isBillingConnected) {
+                val productDetailsParamsList = listOf(
+                    BillingFlowParams.ProductDetailsParams.newBuilder()
+                        .setProductDetails(productDetails)
+                        .build()
+                )
+                val billingFlowParams = BillingFlowParams.newBuilder()
+                    .setProductDetailsParamsList(productDetailsParamsList)
+                    .build()
+
+                val result = billingClient.launchBillingFlow(this, billingFlowParams)
+                if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                    dialog.dismiss()
+                } else {
+                    Toast.makeText(this, "Could not launch Google Play billing flow: ${result.debugMessage}", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Log.w("Billing", "Product $targetProductId not yet returned by Play Console or Billing not connected.")
+                Toast.makeText(this, "Thank you for supporting Lanvan!", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
         }
 
         dialog.show()
