@@ -201,8 +201,9 @@ class ServerService : Service() {
                 // Call uvicorn bootstrapper blocking method
                 val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
                 val blockDangerousHttp = sharedPrefs.getBoolean("block_dangerous_http", false)
+                val blockDangerousHttps = sharedPrefs.getBoolean("block_dangerous_https", true)
                 val isHttps = instanceUseHttps.lowercase() == "true"
-                val blockDangerous = if (isHttps) true else blockDangerousHttp
+                val blockDangerous = if (isHttps) blockDangerousHttps else blockDangerousHttp
                 // Pass isDebug = false so APK runs in production mode automatically
                 module.callAttr("run_fastapi_server", instancePort, instanceUseHttps, filesDir.absolutePath, false, blockDangerous)
 

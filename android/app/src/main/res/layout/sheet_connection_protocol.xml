@@ -7,6 +7,7 @@
     android:background="@drawable/bg_sheet_top_rounded"
     android:padding="24dp">
 
+    <!-- HEADER -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -39,94 +40,108 @@
         android:text="Choose how Lanvan should provide the local sharing page."
         android:textColor="@color/text_muted"
         android:textSize="13sp"
+        android:lineSpacingExtra="3dp"
         android:layout_marginBottom="20dp" />
 
-    <!-- OPTION 1: HTTP -->
+    <!-- OPTION 1: HTTP CARD -->
     <LinearLayout
         android:id="@+id/card_option_http"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:background="@drawable/bg_card"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_card_active"
         android:padding="16dp"
         android:clickable="true"
         android:focusable="true"
         android:layout_marginBottom="12dp">
 
+        <ImageView
+            android:id="@+id/img_radio_http"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_radio_checked"
+            android:layout_marginEnd="14dp" />
+
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:layout_weight="1"
+            android:orientation="vertical">
 
             <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="HTTP"
-                android:textColor="@color/text_primary"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <RadioButton
-                android:id="@+id/radio_http"
+                android:id="@+id/txt_title_http"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:clickable="false"
-                android:focusable="false" />
-        </LinearLayout>
+                android:text="HTTP"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Simple local connection · Default"
-            android:textColor="@color/text_muted"
-            android:textSize="13sp"
-            android:layout_marginTop="4dp" />
+            <TextView
+                android:id="@+id/txt_sub_http"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Simple local connection · Default"
+                android:textColor="@color/text_muted"
+                android:textSize="13sp"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
     </LinearLayout>
 
-    <!-- OPTION 2: HTTPS -->
+    <!-- OPTION 2: HTTPS CARD -->
     <LinearLayout
         android:id="@+id/card_option_https"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:background="@drawable/bg_card"
         android:padding="16dp"
         android:clickable="true"
         android:focusable="true"
         android:layout_marginBottom="20dp">
 
+        <ImageView
+            android:id="@+id/img_radio_https"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_radio_unchecked"
+            android:layout_marginEnd="14dp" />
+
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:layout_weight="1"
+            android:orientation="vertical">
 
             <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="HTTPS"
-                android:textColor="@color/text_primary"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <RadioButton
-                android:id="@+id/radio_https"
+                android:id="@+id/txt_title_https"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:clickable="false"
-                android:focusable="false" />
-        </LinearLayout>
+                android:text="HTTPS"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Encrypted local connection · Uses an auto-generated certificate"
-            android:textColor="@color/text_muted"
-            android:textSize="13sp"
-            android:layout_marginTop="4dp" />
+            <TextView
+                android:id="@+id/txt_sub_https"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Encrypted local connection"
+                android:textColor="@color/text_muted"
+                android:textSize="13sp"
+                android:layout_marginTop="2dp" />
+
+            <TextView
+                android:id="@+id/txt_hint_https"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Uses an auto-generated certificate"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
     </LinearLayout>
 
 </LinearLayout>
