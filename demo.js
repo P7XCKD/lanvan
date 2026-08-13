@@ -293,21 +293,32 @@ document.addEventListener("DOMContentLoaded", () => {
   // ==========================================================================
   // NEW UI INTERACTION HANDLERS
   // ==========================================================================
-  newBtnStart.addEventListener("click", () => {
-    updateServerState("running");
-  });
+  // ==========================================================================
+  // NEW UI INTERACTION HANDLERS
+  // ==========================================================================
+  if (newBtnStart) {
+    newBtnStart.addEventListener("click", () => {
+      updateServerState("running");
+    });
+  }
 
-  newBtnStop.addEventListener("click", () => {
-    updateServerState("stopped");
-  });
+  if (newBtnStop) {
+    newBtnStop.addEventListener("click", () => {
+      updateServerState("stopped");
+    });
+  }
 
-  newBtnSettings.addEventListener("click", () => {
-    newSettingsSheet.style.display = "flex";
-  });
+  if (newBtnSettings) {
+    newBtnSettings.addEventListener("click", () => {
+      newSettingsSheet.style.display = "flex";
+    });
+  }
 
-  newBtnCloseSettings.addEventListener("click", () => {
-    newSettingsSheet.style.display = "none";
-  });
+  if (newBtnCloseSettings) {
+    newBtnCloseSettings.addEventListener("click", () => {
+      newSettingsSheet.style.display = "none";
+    });
+  }
 
   // --- NEW UI STORAGE SHEET & DIALOG HANDLERS ---
   const newStorageSheet = document.getElementById("new-storage-sheet");
@@ -318,83 +329,100 @@ document.addEventListener("DOMContentLoaded", () => {
   const newStorageMainVal = document.getElementById("new-storage-main-val");
 
   function openStorageManagementSheet() {
-    storageSheetVal.textContent = `${storageMB.toFixed(2)} MB`;
-    newStorageSheet.style.display = "flex";
+    if (storageSheetVal) storageSheetVal.textContent = `${storageMB.toFixed(2)} MB`;
+    if (newStorageSheet) newStorageSheet.style.display = "flex";
   }
 
-  newBtnManageStorage.addEventListener("click", openStorageManagementSheet);
+  if (newBtnManageStorage) {
+    newBtnManageStorage.addEventListener("click", openStorageManagementSheet);
+  }
   if (newBtnMainManageStorage) {
     newBtnMainManageStorage.addEventListener("click", openStorageManagementSheet);
   }
 
-  newBtnCloseStorageSheet.addEventListener("click", () => {
-    newStorageSheet.style.display = "none";
-  });
+  if (newBtnCloseStorageSheet) {
+    newBtnCloseStorageSheet.addEventListener("click", () => {
+      if (newStorageSheet) newStorageSheet.style.display = "none";
+    });
+  }
 
-  newBtnOpenClearConfirm.addEventListener("click", () => {
-    newConfirmModal.style.display = "flex";
-    newBtnConfirmClear.disabled = true;
-    let count = 3;
-    newBtnConfirmClear.textContent = `Clear (${count}s)`;
-
-    const timer = setInterval(() => {
-      count--;
-      if (count > 0) {
+  if (newBtnOpenClearConfirm) {
+    newBtnOpenClearConfirm.addEventListener("click", () => {
+      if (newConfirmModal) newConfirmModal.style.display = "flex";
+      if (newBtnConfirmClear) {
+        newBtnConfirmClear.disabled = true;
+        let count = 3;
         newBtnConfirmClear.textContent = `Clear (${count}s)`;
-      } else {
-        clearInterval(timer);
-        newBtnConfirmClear.textContent = "Clear Data";
-        newBtnConfirmClear.disabled = false;
+
+        const timer = setInterval(() => {
+          count--;
+          if (count > 0) {
+            newBtnConfirmClear.textContent = `Clear (${count}s)`;
+          } else {
+            clearInterval(timer);
+            newBtnConfirmClear.textContent = "Clear Data";
+            newBtnConfirmClear.disabled = false;
+          }
+        }, 1000);
       }
-    }, 1000);
-  });
+    });
+  }
 
-  newBtnCancelClear.addEventListener("click", () => {
-    newConfirmModal.style.display = "none";
-  });
+  if (newBtnCancelClear) {
+    newBtnCancelClear.addEventListener("click", () => {
+      if (newConfirmModal) newConfirmModal.style.display = "none";
+    });
+  }
 
-  newBtnConfirmClear.addEventListener("click", () => {
-    storageMB = 0.0;
-    oldStorageText.textContent = "Storage Used: 0.00 MB";
-    newStorageVal.textContent = "0.00 MB";
-    storageSheetVal.textContent = "0.00 MB";
-    if (newStorageMainVal) newStorageMainVal.textContent = "0.00 MB";
-    newConfirmModal.style.display = "none";
-    newStorageSheet.style.display = "none";
-    alert("Simulated: Storage and clipboard data cleared!");
-  });
+  if (newBtnConfirmClear) {
+    newBtnConfirmClear.addEventListener("click", () => {
+      storageMB = 0.0;
+      if (oldStorageText) oldStorageText.textContent = "Storage Used: 0.00 MB";
+      if (newStorageVal) newStorageVal.textContent = "0.00 MB";
+      if (storageSheetVal) storageSheetVal.textContent = "0.00 MB";
+      if (newStorageMainVal) newStorageMainVal.textContent = "0.00 MB";
+      if (newConfirmModal) newConfirmModal.style.display = "none";
+      if (newStorageSheet) newStorageSheet.style.display = "none";
+      alert("Simulated: Storage and clipboard data cleared!");
+    });
+  }
 
-  newBtnCopyLogs.addEventListener("click", () => {
-    alert("Simulated: Lanvan server logs copied to clipboard!");
-  });
+  if (newBtnCopyLogs) {
+    newBtnCopyLogs.addEventListener("click", () => {
+      alert("Simulated: Lanvan server logs copied to clipboard!");
+    });
+  }
 
   // --- COPY ADDRESS BUTTON WITH RELIABLE 2S TIMEOUT RESET ---
   let copyResetTimer = null;
   const originalCopyHtml = `<i data-lucide="copy" class="icon-xs"></i><span>Copy</span>`;
 
-  newBtnCopyAddress.addEventListener("click", () => {
-    const text = document.getElementById("new-address-text").textContent;
-    
-    // Clear any pending reset timer to avoid timer collisions
-    if (copyResetTimer) {
-      clearTimeout(copyResetTimer);
-    }
+  if (newBtnCopyAddress) {
+    newBtnCopyAddress.addEventListener("click", () => {
+      const addrEl = document.getElementById("new-address-text");
+      const text = addrEl ? addrEl.textContent : "";
 
-    newBtnCopyAddress.innerHTML = `<i data-lucide="check" class="icon-xs"></i><span>Copied!</span>`;
-    if (window.lucide) window.lucide.createIcons();
+      // Clear any pending reset timer to avoid timer collisions
+      if (copyResetTimer) {
+        clearTimeout(copyResetTimer);
+      }
 
-    // Reset back to original Copy button after 2000ms
-    copyResetTimer = setTimeout(() => {
-      newBtnCopyAddress.innerHTML = originalCopyHtml;
+      newBtnCopyAddress.innerHTML = `<i data-lucide="check" class="icon-xs"></i><span>Copied!</span>`;
       if (window.lucide) window.lucide.createIcons();
-      copyResetTimer = null;
-    }, 2000);
 
-    // Write to clipboard in background (or fallback gracefully)
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).catch(() => {});
-    }
-  });
+      // Reset back to original Copy button after 2000ms
+      copyResetTimer = setTimeout(() => {
+        newBtnCopyAddress.innerHTML = originalCopyHtml;
+        if (window.lucide) window.lucide.createIcons();
+        copyResetTimer = null;
+      }, 2000);
+
+      // Write to clipboard in background (or fallback gracefully)
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(() => { });
+      }
+    });
+  }
 
   // ==========================================================================
   // CONNECTION PROTOCOL DETAIL SHEET & SELECTION HANDLERS
@@ -455,6 +483,94 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Initial call on load
   updateProtocolUI();
+
+  // ==========================================================================
+  // BACKGROUND OPERATION DETAIL SHEET & STATE SWITCHER HANDLERS
+  // ==========================================================================
+  const rowBackgroundOperation = document.getElementById("new-row-background-operation");
+  const newBackgroundDetailSheet = document.getElementById("new-background-detail-sheet");
+  const newBtnCloseBackgroundDetail = document.getElementById("new-btn-close-background-detail");
+  const bgSummaryText = document.getElementById("new-background-summary-text");
+  const bgDetailStatusCard = document.getElementById("bg-detail-status-card");
+  const bgDetailStatusTitle = document.getElementById("bg-detail-status-title");
+  const bgDetailStatusSub = document.getElementById("bg-detail-status-sub");
+  const bgStateButtons = document.querySelectorAll("#bg-state-control .btn-segment");
+  const newBtnConfigureBackground = document.getElementById("new-btn-configure-background");
+
+  let currentBgState = "allowed"; // "allowed", "restricted", "unknown"
+
+  // Dynamically updates background summary tag, detail card state, and colors
+  function updateBackgroundUI() {
+    if (!bgSummaryText) return;
+
+    // Update prototype toolbar segmented button active state
+    bgStateButtons.forEach(btn => {
+      if (btn.dataset.bg === currentBgState) {
+        btn.classList.add("active");
+      } else {
+        btn.classList.remove("active");
+      }
+    });
+
+    if (currentBgState === "allowed") {
+      bgSummaryText.innerHTML = `<span class="summary-item summary-on">Allowed</span>`;
+      if (bgDetailStatusCard) bgDetailStatusCard.className = "bg-status-card allowed";
+      if (bgDetailStatusTitle) {
+        bgDetailStatusTitle.textContent = "Allowed";
+        bgDetailStatusTitle.style.color = "#8ab4f8";
+      }
+      if (bgDetailStatusSub) bgDetailStatusSub.textContent = "Lanvan can continue running in the background.";
+    } else if (currentBgState === "restricted") {
+      bgSummaryText.innerHTML = `<span class="summary-item summary-warning">Restricted</span>`;
+      if (bgDetailStatusCard) bgDetailStatusCard.className = "bg-status-card restricted";
+      if (bgDetailStatusTitle) {
+        bgDetailStatusTitle.textContent = "Restricted";
+        bgDetailStatusTitle.style.color = "#f9ab00";
+      }
+      if (bgDetailStatusSub) bgDetailStatusSub.textContent = "Android may stop Lanvan when it is running in the background.";
+    } else {
+      bgSummaryText.innerHTML = `<span class="summary-item summary-off">Unknown</span>`;
+      if (bgDetailStatusCard) bgDetailStatusCard.className = "bg-status-card unknown";
+      if (bgDetailStatusTitle) {
+        bgDetailStatusTitle.textContent = "Unknown";
+        bgDetailStatusTitle.style.color = "#9aa0a6";
+      }
+      if (bgDetailStatusSub) bgDetailStatusSub.textContent = "Background access status could not be determined.";
+    }
+  }
+
+  // Open background detail sheet when main Settings row is tapped
+  if (rowBackgroundOperation && newBackgroundDetailSheet) {
+    rowBackgroundOperation.addEventListener("click", () => {
+      newBackgroundDetailSheet.style.display = "flex";
+      if (window.lucide) window.lucide.createIcons();
+    });
+  }
+
+  // Close background detail sheet
+  if (newBtnCloseBackgroundDetail && newBackgroundDetailSheet) {
+    newBtnCloseBackgroundDetail.addEventListener("click", () => {
+      newBackgroundDetailSheet.style.display = "none";
+    });
+  }
+
+  // Handle toolbar state switcher buttons (Allowed / Restricted / Unknown)
+  bgStateButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      currentBgState = btn.dataset.bg;
+      updateBackgroundUI();
+    });
+  });
+
+  // Prototype action button inside detail sheet
+  if (newBtnConfigureBackground) {
+    newBtnConfigureBackground.addEventListener("click", () => {
+      alert("Simulated: Opening Android System Battery & Background Access Settings");
+    });
+  }
+
+  // Initial call on load
+  updateBackgroundUI();
 
   // ==========================================================================
   // DANGEROUS FILE PROTECTION DETAIL SHEET & SUMMARY HANDLERS
@@ -544,37 +660,203 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ==========================================================================
-  // ABOUT LANVAN PROTOTYPE HANDLERS
+  // HELP & FEEDBACK / DIAGNOSTICS WORKFLOW HANDLERS
   // ==========================================================================
-  const newBtnOpenAbout = document.getElementById("new-btn-open-about");
-  const newAboutModal = document.getElementById("new-about-modal");
-  const newBtnCloseAbout = document.getElementById("new-btn-close-about");
-  const newBtnAboutGithub = document.getElementById("new-btn-about-github");
-  const newBtnAboutFeedback = document.getElementById("new-btn-about-feedback");
+  const newBtnSendFeedback = document.getElementById("new-btn-send-feedback");
+  const newFeedbackSheet = document.getElementById("new-feedback-sheet");
+  const newBtnCloseFeedback = document.getElementById("new-btn-close-feedback");
+  const feedbackMessageInput = document.getElementById("feedback-message-input");
+  const feedbackSwitchDiagnostics = document.getElementById("feedback-switch-diagnostics");
+  const newBtnSubmitFeedback = document.getElementById("new-btn-submit-feedback");
+  const newFeedbackConfirmDialog = document.getElementById("new-feedback-confirm-dialog");
+  const newBtnCloseConfirm = document.getElementById("new-btn-close-confirm");
+  const newBtnConfirmCloseAction = document.getElementById("new-btn-confirm-close-action");
+  const feedbackConfirmTitle = document.getElementById("feedback-confirm-title");
+  const feedbackConfirmMsg = document.getElementById("feedback-confirm-msg");
 
-  if (newBtnOpenAbout) {
-    newBtnOpenAbout.addEventListener("click", () => {
-      newAboutModal.style.display = "flex";
+  // Open Send Feedback sheet
+  if (newBtnSendFeedback && newFeedbackSheet) {
+    newBtnSendFeedback.addEventListener("click", () => {
+      if (feedbackMessageInput) feedbackMessageInput.value = "";
+      newFeedbackSheet.style.display = "flex";
+      if (window.lucide) window.lucide.createIcons();
     });
   }
 
-  if (newBtnCloseAbout) {
-    newBtnCloseAbout.addEventListener("click", () => {
-      newAboutModal.style.display = "none";
+  // Close Send Feedback sheet
+  if (newBtnCloseFeedback && newFeedbackSheet) {
+    newBtnCloseFeedback.addEventListener("click", () => {
+      newFeedbackSheet.style.display = "none";
     });
   }
 
-  if (newBtnAboutGithub) {
-    newBtnAboutGithub.addEventListener("click", () => {
-      alert("Simulated: Opening GitHub Repository (https://github.com/P7XCKD/lanvan)");
-    });
-  }
+  /*
+  ==============================================================================
+  FUTURE PRODUCTION ANDROID IMPLEMENTATION NOTE
+  ==============================================================================
+  In the production Android app (Kotlin / ServerService.kt / MainActivity.kt):
+  1. Do NOT use browser mailto: links or JS Blob downloads.
+  2. Write diagnostic data to context.cacheDir:
+     val diagFile = File(context.cacheDir, "lanvan-diagnostics-${dateStr}.txt")
+  3. Use FileProvider to obtain a safe content URI:
+     val contentUri = FileProvider.getUriForFile(context, "${packageName}.fileprovider", diagFile)
+  4. Prepare an explicit Intent.ACTION_SEND:
+     val intent = Intent(Intent.ACTION_SEND).apply {
+         type = "text/plain"
+         putExtra(Intent.EXTRA_EMAIL, arrayOf("p7xckd@gmail.com"))
+         putExtra(Intent.EXTRA_SUBJECT, "Lanvan Feedback")
+         putExtra(Intent.EXTRA_TEXT, "Hello Lanvan team,\n\n${userMessage}\n\nI've attached a diagnostic report to help investigate this issue.\n\nLanvan version: 1.0.0\n\nThank you,\nLanvan user")
+         putExtra(Intent.EXTRA_STREAM, contentUri)
+         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+     }
+     context.startActivity(Intent.createChooser(intent, "Send Feedback"))
+  5. The user reviews the email in Gmail/Outlook and taps Send themselves.
+  ==============================================================================
+  */
 
-  if (newBtnAboutFeedback) {
-    newBtnAboutFeedback.addEventListener("click", () => {
-      alert("Simulated: Opening Email App to send feedback");
+  // Submit Feedback action handler with strict single-execution guard & timer tracking
+  let isFeedbackSubmitting = false;
+
+  const closeConfirmModal = () => {
+    isFeedbackSubmitting = false;
+    if (newFeedbackConfirmDialog) newFeedbackConfirmDialog.style.display = "none";
+    if (newFeedbackSheet) newFeedbackSheet.style.display = "none";
+  };
+
+  if (newBtnCloseConfirm) newBtnCloseConfirm.addEventListener("click", closeConfirmModal);
+  if (newBtnConfirmCloseAction) newBtnConfirmCloseAction.addEventListener("click", closeConfirmModal);
+
+  if (newBtnSubmitFeedback) {
+    newBtnSubmitFeedback.addEventListener("click", () => {
+      // Guard against double clicks or repeated triggers
+      if (isFeedbackSubmitting) return;
+      isFeedbackSubmitting = true;
+
+      const userMessage = feedbackMessageInput ? feedbackMessageInput.value.trim() : "";
+      const feedbackText = userMessage || "(No feedback message provided)";
+      const isDiagEnabled = feedbackSwitchDiagnostics ? feedbackSwitchDiagnostics.checked : true;
+      const recipient = "p7xckd@gmail.com";
+      const subject = "Lanvan Feedback";
+
+      const currentDateStr = "2026-08-13";
+      const fileName = `lanvan-diagnostics-${currentDateStr}.txt`;
+
+      if (feedbackConfirmTitle) {
+        feedbackConfirmTitle.textContent = "Feedback ready";
+      }
+
+      if (isDiagEnabled) {
+        // --- 1. PROTOTYPE EMAIL BODY (Honest browser limitation wording) ---
+        const emailBody = `Hello Lanvan team,\r\n\r\n${feedbackText}\r\n\r\nA diagnostic report was created:\r\n${fileName}\r\n\r\nThe browser prototype cannot attach local files automatically.\r\n\r\nLanvan version: 1.0.0\r\n\r\nThank you,\r\nLanvan user`;
+        const mailtoUrl = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+
+        // --- 2. GATHER NON-SENSITIVE DIAGNOSTIC INFORMATION ---
+        const switchBlockHttp = document.getElementById("new-switch-block-http");
+        const switchBlockHttps = document.getElementById("new-switch-block-https");
+
+        const httpBlock = switchBlockHttp ? (switchBlockHttp.checked ? "On" : "Off") : "Off";
+        const httpsBlock = switchBlockHttps ? (switchBlockHttps.checked ? "On" : "Off") : "On";
+
+        const bgStateFormatted = currentBgState.charAt(0).toUpperCase() + currentBgState.slice(1);
+        const serverStateFormatted = currentServerState.charAt(0).toUpperCase() + currentServerState.slice(1);
+        const netStateFormatted = currentNetworkState.charAt(0).toUpperCase() + currentNetworkState.slice(1);
+        const protocolFormatted = currentProtocolSelection.toUpperCase();
+
+        const diagReportText = `LANVAN DIAGNOSTIC REPORT
+========================
+
+Generated:
+${currentDateStr}
+
+Lanvan Version:
+1.0.0
+
+Android Version:
+Android 14 (API 34)
+
+Device:
+Pixel / Modern Android (Prototype)
+
+Server State:
+${serverStateFormatted}
+
+Network State:
+${netStateFormatted}
+
+Connection Protocol:
+${protocolFormatted}
+
+HTTP Dangerous File Protection:
+${httpBlock}
+
+HTTPS Dangerous File Protection:
+${httpsBlock}
+
+Background Operation:
+${bgStateFormatted}
+
+Storage Used:
+${storageMB.toFixed(2)} MB
+
+Recent Errors:
+None`;
+
+        // --- 3. DOWNLOAD DIAGNOSTIC FILE ONCE FOR INSPECTION ---
+        const blob = new Blob([diagReportText], { type: "text/plain;charset=utf-8" });
+        const downloadUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = fileName;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+
+        // --- 4. RENDER DIAGNOSTICS ON CONFIRMATION MESSAGE ---
+        if (feedbackConfirmMsg) {
+          feedbackConfirmMsg.innerHTML =
+            `Your feedback has been added to an email draft.` +
+            `<br><br>` +
+            `<strong>Diagnostic report created:</strong><br>` +
+            `<code style="color:#8ab4f8; font-size:12px;">${fileName}</code>` +
+            `<br><br>` +
+            `Your email app should now open.` +
+            `<br><br>` +
+            `<span style="font-size:11px; color:#9aa0a6;">The report was downloaded because the browser cannot attach local files automatically.</span>`;
+        }
+
+        // --- 5. OPEN MAIL APP ---
+        try {
+          window.location.href = mailtoUrl;
+        } catch (e) {
+          if (feedbackConfirmTitle) feedbackConfirmTitle.textContent = "Email app not available";
+          if (feedbackConfirmMsg) feedbackConfirmMsg.innerHTML = "We couldn't open an email app on this device.";
+        }
+      } else {
+        // --- DIAGNOSTICS OFF: FEEDBACK ONLY DRAFT ---
+        const emailBody = `Hello Lanvan team,\r\n\r\n${feedbackText}\r\n\r\nLanvan version: 1.0.0\r\n\r\nThank you,\r\nLanvan user`;
+        const mailtoUrl = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+
+        if (feedbackConfirmMsg) {
+          feedbackConfirmMsg.innerHTML =
+            `Your feedback has been added to an email draft.` +
+            `<br><br>` +
+            `Your email app should now open.`;
+        }
+
+        // Open mail app
+        try {
+          window.location.href = mailtoUrl;
+        } catch (e) {
+          if (feedbackConfirmTitle) feedbackConfirmTitle.textContent = "Email app not available";
+          if (feedbackConfirmMsg) feedbackConfirmMsg.innerHTML = "We couldn't open an email app on this device.";
+        }
+      }
+
+      // Show confirmation dialog
+      if (newFeedbackConfirmDialog) {
+        newFeedbackConfirmDialog.style.display = "flex";
+      }
     });
-  }
+   }
 
   // ==========================================================================
   // NAVIGATION MODE SWITCHER (Gesture vs 3-Button System Inset Simulation)
