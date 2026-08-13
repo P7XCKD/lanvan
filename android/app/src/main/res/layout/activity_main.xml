@@ -1,11 +1,14 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="@color/bg_surface"
     android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
     <!-- HEADER BAR -->
     <LinearLayout
@@ -444,4 +447,176 @@
         </LinearLayout>
     </ScrollView>
 
-</LinearLayout>
+    </LinearLayout>
+
+    <!-- NATIVE SPOTLIGHT WALKTHROUGH OVERLAY CONTAINER -->
+    <FrameLayout
+        android:id="@+id/spotlight_overlay_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone">
+
+        <!-- CUTOUT & GLOWING HIGHLIGHT RING VIEW -->
+        <com.lanvan.app.SpotlightOverlayView
+            android:id="@+id/spotlight_overlay_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <!-- FLOATING TOOLTIP CARD -->
+        <LinearLayout
+            android:id="@+id/spotlight_tooltip_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:padding="20dp"
+            android:layout_marginStart="20dp"
+            android:layout_marginEnd="20dp"
+            android:elevation="12dp">
+
+            <!-- HEADER ROW (LOGO + APP NAME + SKIP) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="12dp">
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:src="@mipmap/ic_launcher"
+                    android:contentDescription="Lanvan Logo"
+                    android:layout_marginEnd="8dp" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Lanvan"
+                    android:textColor="@color/text_primary"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_spotlight_skip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Skip"
+                    android:textColor="@color/text_muted"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:padding="6dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+            </LinearLayout>
+
+            <!-- BODY CONTENT -->
+            <TextView
+                android:id="@+id/txt_spotlight_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Start Lanvan"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="6dp" />
+
+            <TextView
+                android:id="@+id/txt_spotlight_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Tap here to start sharing files with devices on your local network."
+                android:textColor="@color/text_muted"
+                android:textSize="13sp"
+                android:lineSpacingExtra="3dp"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/txt_spotlight_note"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="No Lanvan app is required on the other device."
+                android:textColor="@color/primary_accent_blue"
+                android:textSize="12sp"
+                android:background="@drawable/bg_circle_blue_tint"
+                android:padding="10dp"
+                android:visibility="gone"
+                android:layout_marginBottom="12dp" />
+
+            <!-- FOOTER ROW (DOTS + BACK / NEXT / GET STARTED) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+
+                <!-- 5 STEP DOT INDICATOR CONTAINER -->
+                <LinearLayout
+                    android:id="@+id/spotlight_dots_container"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginEnd="16dp">
+
+                    <View android:id="@+id/dot_step_1" android:layout_width="18dp" android:layout_height="6dp" android:background="@drawable/bg_dot_active" android:layout_marginEnd="4dp" />
+                    <View android:id="@+id/dot_step_2" android:layout_width="6dp" android:layout_height="6dp" android:background="@drawable/bg_dot_inactive" android:layout_marginEnd="4dp" />
+                    <View android:id="@+id/dot_step_3" android:layout_width="6dp" android:layout_height="6dp" android:background="@drawable/bg_dot_inactive" android:layout_marginEnd="4dp" />
+                    <View android:id="@+id/dot_step_4" android:layout_width="6dp" android:layout_height="6dp" android:background="@drawable/bg_dot_inactive" android:layout_marginEnd="4dp" />
+                    <View android:id="@+id/dot_step_5" android:layout_width="6dp" android:layout_height="6dp" android:background="@drawable/bg_dot_inactive" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <!-- NAV BUTTONS -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_spotlight_back"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:text="Back"
+                    android:textAllCaps="false"
+                    android:textColor="@color/text_primary"
+                    android:textSize="13sp"
+                    android:visibility="gone"
+                    android:layout_marginEnd="8dp"
+                    app:strokeColor="@color/border_outline_btn"
+                    app:strokeWidth="1dp"
+                    app:cornerRadius="19dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_spotlight_next"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:text="Next"
+                    android:textAllCaps="false"
+                    android:textColor="#041E49"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    app:backgroundTint="@color/primary_accent_blue"
+                    app:cornerRadius="19dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_spotlight_finish"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:text="Get Started"
+                    android:textAllCaps="false"
+                    android:textColor="#041E49"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    app:backgroundTint="@color/primary_accent_blue"
+                    app:cornerRadius="19dp" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </FrameLayout>
+
+</FrameLayout>

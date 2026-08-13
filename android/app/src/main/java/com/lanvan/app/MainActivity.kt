@@ -22,6 +22,9 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RadioButton
+import android.graphics.RectF
+import android.view.Gravity
+import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -212,8 +215,18 @@ class MainActivity : AppCompatActivity() {
         imgQrCode.setOnClickListener(openBrowserListener)
         txtIpLink.setOnClickListener(openBrowserListener)
 
+        val appTitle = findViewById<TextView>(R.id.app_title)
+        appTitle.setOnLongClickListener {
+            val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
+            sharedPrefs.edit().remove("lanvan_onboarding_completed").apply()
+            Toast.makeText(this, "Onboarding reset for testing", Toast.LENGTH_SHORT).show()
+            startSpotlightWalkthrough()
+            true
+        }
+
         setupNetworkCallback()
         updateStorageUsage()
+        initSpotlightWalkthrough()
     }
 
     override fun onResume() {
@@ -583,6 +596,9 @@ class MainActivity : AppCompatActivity() {
 
             val extDir = getExternalFilesDir(null)
             if (extDir != null && extDir.exists()) deleteContents(extDir)
+
+            val downloadsDir = getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)
+            if (downloadsDir != null && downloadsDir.exists()) deleteContents(downloadsDir)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -1342,5 +1358,289 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {
             "1.0.0"
         }
+    }
+
+    // =========================================================================
+    // PRODUCTION SPOTLIGHT WALKTHROUGH ONBOARDING
+    // =========================================================================
+
+    private var spotlightOverlayContainer: FrameLayout? = null
+    private var spotlightOverlayView: SpotlightOverlayView? = null
+    private var spotlightTooltipCard: View? = null
+    private var txtSpotlightTitle: TextView? = null
+    private var txtSpotlightText: TextView? = null
+    private var txtSpotlightNote: TextView? = null
+    private var btnSpotlightSkip: TextView? = null
+    private var btnSpotlightBack: Button? = null
+    private var btnSpotlightNext: Button? = null
+    private var btnSpotlightFinish: Button? = null
+    private var dotStep1: View? = null
+    private var dotStep2: View? = null
+    private var dotStep3: View? = null
+    private var dotStep4: View? = null
+    private var dotStep5: View? = null
+
+    private var currentSpotlightStep = 1
+    private val TOTAL_SPOTLIGHT_STEPS = 5
+    private var preTutorialStatus = ServerService.STATUS_STOPPED
+
+    private data class SpotlightStepConfig(
+        val step: Int,
+        val title: String,
+        val text: String,
+        val note: String?,
+        val forceRunningPreview: Boolean,
+        val targetViewId: Int?,
+        val paddingDp: Float,
+        val radiusDp: Float
+    )
+
+    private fun initSpotlightWalkthrough() {
+        spotlightOverlayContainer = findViewById(R.id.spotlight_overlay_container)
+        spotlightOverlayView = findViewById(R.id.spotlight_overlay_view)
+        spotlightTooltipCard = findViewById(R.id.spotlight_tooltip_card)
+        txtSpotlightTitle = findViewById(R.id.txt_spotlight_title)
+        txtSpotlightText = findViewById(R.id.txt_spotlight_text)
+        txtSpotlightNote = findViewById(R.id.txt_spotlight_note)
+        btnSpotlightSkip = findViewById(R.id.btn_spotlight_skip)
+        btnSpotlightBack = findViewById(R.id.btn_spotlight_back)
+        btnSpotlightNext = findViewById(R.id.btn_spotlight_next)
+        btnSpotlightFinish = findViewById(R.id.btn_spotlight_finish)
+        dotStep1 = findViewById(R.id.dot_step_1)
+        dotStep2 = findViewById(R.id.dot_step_2)
+        dotStep3 = findViewById(R.id.dot_step_3)
+        dotStep4 = findViewById(R.id.dot_step_4)
+        dotStep5 = findViewById(R.id.dot_step_5)
+
+        btnSpotlightNext?.setOnClickListener {
+            if (currentSpotlightStep < TOTAL_SPOTLIGHT_STEPS) {
+                renderSpotlightStep(currentSpotlightStep + 1)
+            }
+        }
+
+        btnSpotlightBack?.setOnClickListener {
+            if (currentSpotlightStep > 1) {
+                renderSpotlightStep(currentSpotlightStep - 1)
+            }
+        }
+
+        btnSpotlightSkip?.setOnClickListener {
+            completeSpotlightWalkthrough()
+        }
+
+        btnSpotlightFinish?.setOnClickListener {
+            completeSpotlightWalkthrough()
+        }
+
+        checkFirstLaunchSpotlight()
+    }
+
+    private fun checkFirstLaunchSpotlight() {
+        val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
+        val isCompleted = sharedPrefs.getBoolean("lanvan_onboarding_completed", false)
+        if (!isCompleted) {
+            startSpotlightWalkthrough()
+        }
+    }
+
+    private fun startSpotlightWalkthrough() {
+        preTutorialStatus = if (ServerService.isRunning) ServerService.STATUS_RUNNING else ServerService.STATUS_STOPPED
+        currentSpotlightStep = 1
+        spotlightOverlayContainer?.visibility = View.VISIBLE
+        renderSpotlightStep(1)
+    }
+
+    private fun completeSpotlightWalkthrough() {
+        val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
+        sharedPrefs.edit().putBoolean("lanvan_onboarding_completed", true).apply()
+        spotlightOverlayContainer?.visibility = View.GONE
+        handleStatusUpdate(preTutorialStatus)
+    }
+
+    private fun renderSpotlightStep(stepIndex: Int) {
+        currentSpotlightStep = stepIndex
+
+        val configs = listOf(
+            SpotlightStepConfig(
+                step = 1,
+                title = "Start Lanvan",
+                text = "Tap here to start sharing files with devices on your local network.",
+                note = null,
+                forceRunningPreview = false,
+                targetViewId = R.id.btn_start_server,
+                paddingDp = 6f,
+                radiusDp = 28f
+            ),
+            SpotlightStepConfig(
+                step = 2,
+                title = "Connect another device",
+                text = "Scan this QR code with another phone, tablet, or computer to open Lanvan.",
+                note = "No Lanvan app is required on the other device. A web browser is enough.",
+                forceRunningPreview = true,
+                targetViewId = R.id.img_qrcode,
+                paddingDp = 8f,
+                radiusDp = 16f
+            ),
+            SpotlightStepConfig(
+                step = 3,
+                title = "Share files",
+                text = "Once connected, the other device can upload or download files through the browser.",
+                note = "Or tap the network address to open Lanvan in your browser directly on this device.",
+                forceRunningPreview = true,
+                targetViewId = R.id.txt_ip_link,
+                paddingDp = 8f,
+                radiusDp = 14f
+            ),
+            SpotlightStepConfig(
+                step = 4,
+                title = "Settings",
+                text = "Connection, security, storage, background operation, and feedback are available here.",
+                note = null,
+                forceRunningPreview = false,
+                targetViewId = R.id.btn_settings,
+                paddingDp = 6f,
+                radiusDp = 50f
+            ),
+            SpotlightStepConfig(
+                step = 5,
+                title = "You're ready",
+                text = "Start Lanvan whenever you want to share files with another device.",
+                note = null,
+                forceRunningPreview = false,
+                targetViewId = null,
+                paddingDp = 0f,
+                radiusDp = 0f
+            )
+        )
+
+        val config = configs.find { it.step == stepIndex } ?: return
+
+        // Switch card preview representation for tutorial steps
+        if (config.forceRunningPreview) {
+            cardStopped.visibility = View.GONE
+            cardRunningConnected.visibility = View.VISIBLE
+
+            val displayUrl = if (currentServerUrl.isNotEmpty()) currentServerUrl else "http://192.168.1.100:5000"
+            txtIpLink.text = displayUrl
+            val qrBitmap = generateQrCodeBitmap(displayUrl)
+            if (qrBitmap != null) {
+                imgQrCode.setImageBitmap(qrBitmap)
+            }
+        } else {
+            handleStatusUpdate(preTutorialStatus)
+        }
+
+        txtSpotlightTitle?.text = config.title
+        txtSpotlightText?.text = config.text
+
+        if (config.note != null) {
+            txtSpotlightNote?.text = config.note
+            txtSpotlightNote?.visibility = View.VISIBLE
+        } else {
+            txtSpotlightNote?.visibility = View.GONE
+        }
+
+        // Update 5-dot indicator states
+        val dots = listOf(dotStep1, dotStep2, dotStep3, dotStep4, dotStep5)
+        for (i in dots.indices) {
+            val d = dots[i] ?: continue
+            val params = d.layoutParams
+            if (i + 1 == stepIndex) {
+                params.width = (18f * resources.displayMetrics.density).toInt()
+                d.setBackgroundResource(R.drawable.bg_dot_active)
+            } else {
+                params.width = (6f * resources.displayMetrics.density).toInt()
+                d.setBackgroundResource(R.drawable.bg_dot_inactive)
+            }
+            d.layoutParams = params
+        }
+
+        // Update button visibility
+        btnSpotlightBack?.visibility = if (stepIndex > 1) View.VISIBLE else View.GONE
+        if (stepIndex == TOTAL_SPOTLIGHT_STEPS) {
+            btnSpotlightNext?.visibility = View.GONE
+            btnSpotlightFinish?.visibility = View.VISIBLE
+        } else {
+            btnSpotlightNext?.visibility = View.VISIBLE
+            btnSpotlightFinish?.visibility = View.GONE
+        }
+
+        // Position spotlight cutout & floating tooltip after layout pass
+        spotlightOverlayContainer?.post {
+            positionSpotlightForConfig(config)
+        }
+    }
+
+    private fun positionSpotlightForConfig(config: SpotlightStepConfig) {
+        val container = spotlightOverlayContainer ?: return
+        val overlayView = spotlightOverlayView ?: return
+        val tooltipCard = spotlightTooltipCard ?: return
+
+        val targetId = config.targetViewId
+        if (targetId == null) {
+            // Step 5: Center tooltip card, dim backdrop without target cutout
+            overlayView.setHighlight(null, 0f)
+
+            val params = tooltipCard.layoutParams as FrameLayout.LayoutParams
+            params.gravity = Gravity.CENTER
+            params.topMargin = 0
+            tooltipCard.layoutParams = params
+            return
+        }
+
+        val targetView = findViewById<View>(targetId)
+        if (targetView == null || targetView.width == 0 || targetView.height == 0) {
+            overlayView.setHighlight(null, 0f)
+            return
+        }
+
+        // Measure exact screen locations for target and overlay container
+        val targetLoc = IntArray(2)
+        val overlayLoc = IntArray(2)
+        targetView.getLocationOnScreen(targetLoc)
+        overlayView.getLocationOnScreen(overlayLoc)
+
+        val relLeft = (targetLoc[0] - overlayLoc[0]).toFloat()
+        val relTop = (targetLoc[1] - overlayLoc[1]).toFloat()
+        val relRight = relLeft + targetView.width.toFloat()
+        val relBottom = relTop + targetView.height.toFloat()
+
+        val density = resources.displayMetrics.density
+        val paddingPx = config.paddingDp * density
+
+        val holeRect = RectF(
+            relLeft - paddingPx,
+            relTop - paddingPx,
+            relRight + paddingPx,
+            relBottom + paddingPx
+        )
+
+        overlayView.setHighlight(holeRect, config.radiusDp)
+
+        // Intelligent Tooltip Placement
+        val overlayHeight = overlayView.height.toFloat()
+        val tooltipHeight = tooltipCard.height.toFloat()
+        val targetCenterY = holeRect.centerY()
+
+        val params = tooltipCard.layoutParams as FrameLayout.LayoutParams
+        params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+
+        if (targetCenterY > (overlayHeight / 2f) - 20f * density) {
+            // Target is in lower half -> Position tooltip ABOVE target
+            var calcTop = (holeRect.top - tooltipHeight - 14f * density).toInt()
+            val minTop = (40f * density).toInt()
+            if (calcTop < minTop) calcTop = minTop
+            params.topMargin = calcTop
+        } else {
+            // Target is in upper half -> Position tooltip BELOW target
+            var calcTop = (holeRect.bottom + 14f * density).toInt()
+            val maxTop = (overlayHeight - tooltipHeight - 65f * density).toInt()
+            if (calcTop > maxTop) calcTop = maxTop
+            params.topMargin = calcTop
+        }
+
+        params.leftMargin = (20f * density).toInt()
+        params.rightMargin = (20f * density).toInt()
+        tooltipCard.layoutParams = params
     }
 }
