@@ -454,11 +454,30 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun calculateStorageBytes(): Long {
-        var totalBytes = getDirSize(filesDir)
-        val extDir = getExternalFilesDir(null)
-        if (extDir != null) {
-            totalBytes += getDirSize(extDir)
+        var totalBytes: Long = 0
+
+        // Only count user data directories (uploads, temp_chunks, clipboard)
+        val dataDirs = listOf("data/uploads", "data/temp_chunks", "data/clipboard")
+        for (subPath in dataDirs) {
+            val dir = File(filesDir, subPath)
+            if (dir.exists()) totalBytes += getDirSize(dir)
         }
+
+        // Count loose user data files in data/ root (clipboard json, tmp files)
+        val dataRoot = File(filesDir, "data")
+        if (dataRoot.exists()) {
+            val rootFiles = dataRoot.listFiles()
+            if (rootFiles != null) {
+                for (f in rootFiles) {
+                    if (f.isFile) totalBytes += f.length()
+                }
+            }
+        }
+
+        // Count external files directory (user-accessible storage)
+        val extDir = getExternalFilesDir(null)
+        if (extDir != null) totalBytes += getDirSize(extDir)
+
         return totalBytes
     }
 
