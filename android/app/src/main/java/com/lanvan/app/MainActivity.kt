@@ -160,6 +160,7 @@ class MainActivity : AppCompatActivity() {
                 currentState = ServerState.STOPPING
                 btnStopServer.isEnabled = false
                 btnStopServer.text = "Stopping..."
+                headerStatusText.text = "Stopping..."
                 stopServerService()
             }
         }
@@ -676,6 +677,9 @@ class MainActivity : AppCompatActivity() {
                 sharedPrefs.edit().putBoolean("use_https", isHttps).apply()
                 if (currentState == ServerState.RUNNING) {
                     currentState = ServerState.STOPPING
+                    btnStopServer.isEnabled = false
+                    btnStopServer.text = "Stopping..."
+                    headerStatusText.text = "Stopping..."
                     stopServerService()
                 }
             }
