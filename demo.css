@@ -618,6 +618,20 @@ body {
   background-color: #8ab4f8;
 }
 
+/* Yellow Warning Status Pill (Running but Network Disconnected) */
+.status-warning {
+  background-color: rgba(249, 171, 0, 0.12);
+  color: #f9ab00;
+  border: 1px solid rgba(249, 171, 0, 0.35);
+}
+
+.status-warning .status-dotdot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #f9ab00;
+}
+
 .stopped-hero {
   padding: 24px 20px;
 }
@@ -947,14 +961,109 @@ body {
   color: #8ab4f8;
 }
 
-.support-section-btn {
+/* Action buttons container - stacked vertically inside the Support card */
+.support-card-actions-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   margin-top: 4px;
+}
+
+/* Full width buttons for vertical action layout */
+.support-card-actions-row .support-section-btn,
+.support-card-actions-row .about-section-btn {
+  width: 100%;
+  margin-top: 0;
+}
+
+.support-section-btn {
   border-color: rgba(138, 180, 248, 0.3);
 }
 
 .support-section-btn:hover {
   background-color: rgba(138, 180, 248, 0.08);
   border-color: #8ab4f8;
+}
+
+.about-section-btn {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #bdc1c6;
+}
+
+.about-section-btn:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: #bdc1c6;
+  color: #e8eaed;
+}
+
+/* ABOUT MODAL STYLES */
+.about-section-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.about-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8ab4f8;
+  letter-spacing: 0.8px;
+}
+
+.about-description {
+  font-size: 13px;
+  color: #bdc1c6;
+  line-height: 1.5;
+}
+
+.about-divider {
+  height: 1px;
+  background-color: #2b2c30;
+  margin: 12px 0;
+}
+
+.about-row-action, .about-row-static {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 8px 4px;
+  text-align: left;
+}
+
+.about-row-action {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.about-row-action:hover {
+  background-color: rgba(138, 180, 248, 0.08);
+}
+
+.about-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.about-row-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e8eaed;
+}
+
+.about-row-sub {
+  font-size: 12px;
+  color: #9aa0a6;
+}
+
+.about-row-arrow {
+  width: 18px;
+  height: 18px;
+  color: #8ab4f8;
 }
 
 /* PROTOTYPE SUPPORT MODAL STYLES */
@@ -1163,6 +1272,158 @@ body {
   flex-shrink: 0;
 }
 
+/* TAPPABLE ROW & SECURITY SUMMARY STYLES */
+.tappable-setting-row {
+  cursor: pointer;
+  border-radius: 12px;
+  padding: 8px 10px;
+  margin: 0 -10px;
+  transition: background-color 0.2s ease;
+}
+
+.tappable-setting-row:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.tappable-setting-row:active {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.row-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #8ab4f8;
+}
+
+.setting-icon {
+  width: 20px;
+  height: 20px;
+  color: #8ab4f8;
+}
+
+.row-summary-tag {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.summary-item.summary-off {
+  color: #9aa0a6;
+}
+
+.summary-item.summary-on {
+  color: #8ab4f8;
+}
+
+.summary-sep {
+  color: #5f6368;
+  margin: 0 3px;
+}
+
+.chevron-icon {
+  width: 18px;
+  height: 18px;
+  color: #9aa0a6;
+}
+
+.security-detail-description {
+  font-size: 13px;
+  color: #9aa0a6;
+  line-height: 1.45;
+  margin-bottom: 4px;
+}
+
+/* PROTOCOL OPTION SELECTION CARDS */
+.protocol-options-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.protocol-option-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  background-color: #232428;
+  border: 1px solid #3c4043;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.protocol-option-card:hover {
+  background-color: #2a2b30;
+  border-color: #5f6368;
+}
+
+.protocol-option-card.active {
+  background-color: rgba(138, 180, 248, 0.12);
+  border-color: #8ab4f8;
+}
+
+.option-radio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.radio-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #80868b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.protocol-option-card.active .radio-circle {
+  border-color: #8ab4f8;
+}
+
+.protocol-option-card.active .radio-circle::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #8ab4f8;
+}
+
+.option-main {
+  flex: 1;
+}
+
+.option-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 3px;
+}
+
+.option-sub {
+  font-size: 13px;
+  color: #bdc1c6;
+  line-height: 1.4;
+}
+
+.protocol-option-card.active .option-sub {
+  color: #e8eaed;
+}
+
+.option-hint {
+  font-size: 12px;
+  color: #9aa0a6;
+  margin-top: 4px;
+}
+
 /* CUSTOM TOGGLE SWITCH (48dp touch target container) */
 .new-toggle-switch {
   position: relative;
@@ -1184,29 +1445,31 @@ body {
   cursor: pointer;
   inset: 0;
   background-color: #3c4043;
-  transition: 0.25s;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.25s ease;
   border-radius: 24px;
 }
 
 .toggle-slider:before {
   position: absolute;
   content: "";
-  height: 18px;
-  width: 18px;
+  height: 16px;
+  width: 16px;
   left: 3px;
   bottom: 3px;
   background-color: #e8eaed;
-  transition: 0.25s;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 50%;
 }
 
 input:checked + .toggle-slider {
   background-color: #8ab4f8;
+  border-color: #8ab4f8;
 }
 
 input:checked + .toggle-slider:before {
   transform: translateX(20px);
-  background-color: #041e49;
+  background-color: #ffffff;
 }
 
 .new-outline-btn {
