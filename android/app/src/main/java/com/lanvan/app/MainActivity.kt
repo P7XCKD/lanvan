@@ -733,14 +733,30 @@ class MainActivity : AppCompatActivity() {
 
         switchHttp.setOnCheckedChangeListener { _, isChecked ->
             sharedPrefs.edit().putBoolean("block_dangerous_http", isChecked).apply()
+            updateLiveBlockDangerous()
         }
 
         switchHttps.setOnCheckedChangeListener { _, isChecked ->
             sharedPrefs.edit().putBoolean("block_dangerous_https", isChecked).apply()
+            updateLiveBlockDangerous()
         }
 
         btnClose.setOnClickListener { dialog.dismiss() }
         dialog.show()
+    }
+
+    private fun updateLiveBlockDangerous() {
+        try {
+            if (com.chaquo.python.Python.isStarted()) {
+                val py = com.chaquo.python.Python.getInstance()
+                val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
+                val useHttps = sharedPrefs.getBoolean("use_https", false)
+                val blockHttp = sharedPrefs.getBoolean("block_dangerous_http", false)
+                val blockHttps = sharedPrefs.getBoolean("block_dangerous_https", true)
+                val activeBlock = if (useHttps) blockHttps else blockHttp
+                py.getModule("os").get("environ")?.callAttr("__setitem__", "BLOCK_DANGEROUS", if (activeBlock) "true" else "false")
+            }
+        } catch (_: Exception) {}
     }
 
     private fun openBackgroundOperationSheet() {
