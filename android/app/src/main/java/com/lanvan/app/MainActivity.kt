@@ -65,6 +65,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var headerStatusText: TextView
     private lateinit var btnSettings: ImageButton
 
+    private lateinit var cardStoppedNetWarning: LinearLayout
     private lateinit var cardStopped: LinearLayout
     private lateinit var btnStartServer: Button
 
@@ -79,6 +80,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var txtStorageUsage: TextView
     private lateinit var btnManageStorage: Button
+    private lateinit var cardSupportLanvan: LinearLayout
     private lateinit var btnSupportLanvan: Button
 
     private var connectivityManager: ConnectivityManager? = null
@@ -107,6 +109,7 @@ class MainActivity : AppCompatActivity() {
         headerStatusText = findViewById(R.id.header_status_text)
         btnSettings = findViewById(R.id.btn_settings)
 
+        cardStoppedNetWarning = findViewById(R.id.card_stopped_net_warning)
         cardStopped = findViewById(R.id.card_stopped)
         btnStartServer = findViewById(R.id.btn_start_server)
 
@@ -121,6 +124,7 @@ class MainActivity : AppCompatActivity() {
 
         txtStorageUsage = findViewById(R.id.txt_storage_usage)
         btnManageStorage = findViewById(R.id.btn_manage_storage)
+        cardSupportLanvan = findViewById(R.id.card_support_lanvan)
         btnSupportLanvan = findViewById(R.id.btn_support_lanvan)
 
         val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
@@ -275,6 +279,18 @@ class MainActivity : AppCompatActivity() {
             action = ServerService.ACTION_STOP
         }
         startService(intent)
+
+        val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
+        if (sharedPrefs.getBoolean("auto_clear_storage", false)) {
+            clearStorageData()
+            updateStorageUsage()
+        }
+    }
+
+    private fun updateSupportCardVisibility() {
+        val lanIp = getLocalIpAddress()
+        val isStoppedAndConnected = (currentState == ServerState.STOPPED && lanIp != "127.0.0.1")
+        cardSupportLanvan.visibility = if (isStoppedAndConnected) View.VISIBLE else View.GONE
     }
 
     private fun handleStatusUpdate(status: String) {
@@ -286,21 +302,29 @@ class MainActivity : AppCompatActivity() {
                 btnStopServer.isEnabled = true
                 btnStopServer.text = "Stop Lanvan"
 
-                // Update Header Status Pill to RUNNING
-                headerStatusText.text = "Running"
-                headerStatusText.setTextColor(ContextCompat.getColor(this, R.color.primary_accent_blue))
-                statusDot.setBackgroundResource(R.drawable.bg_dot_running)
-                statusDot.backgroundTintList = null
+                cardStoppedNetWarning.visibility = View.GONE
 
                 val lanIp = getLocalIpAddress()
                 if (lanIp == "127.0.0.1") {
                     // DEGRADED STATE: Server is running but network is disconnected
                     currentServerUrl = ""
+
+                    // Header pill = Unavailable (Amber)
+                    headerStatusText.text = "Unavailable"
+                    headerStatusText.setTextColor(ContextCompat.getColor(this, R.color.warning_amber))
+                    statusDot.setBackgroundResource(R.drawable.bg_dot_warning)
+                    statusDot.backgroundTintList = null
+
                     cardStopped.visibility = View.GONE
                     cardRunningConnected.visibility = View.GONE
                     cardRunningDegraded.visibility = View.VISIBLE
                 } else {
                     // NORMAL RUNNING STATE: Network available
+                    headerStatusText.text = "Running"
+                    headerStatusText.setTextColor(ContextCompat.getColor(this, R.color.primary_accent_blue))
+                    statusDot.setBackgroundResource(R.drawable.bg_dot_running)
+                    statusDot.backgroundTintList = null
+
                     val serviceUrl = ServerService.currentUrl ?: ""
                     val scheme = if (serviceUrl.startsWith("https")) "https" else "http"
                     val port = ServerService.currentPort
@@ -336,8 +360,17 @@ class MainActivity : AppCompatActivity() {
                 cardRunningConnected.visibility = View.GONE
                 cardRunningDegraded.visibility = View.GONE
                 cardStopped.visibility = View.VISIBLE
+
+                val lanIp = getLocalIpAddress()
+                if (lanIp == "127.0.0.1") {
+                    cardStoppedNetWarning.visibility = View.VISIBLE
+                } else {
+                    cardStoppedNetWarning.visibility = View.GONE
+                }
             }
         }
+
+        updateSupportCardVisibility()
     }
 
     private fun generateQrCodeBitmap(data: String): Bitmap? {
@@ -667,6 +700,15 @@ class MainActivity : AppCompatActivity() {
         val btnClose = view.findViewById<ImageButton>(R.id.btn_close_storage)
         val txtStorageVal = view.findViewById<TextView>(R.id.txt_storage_sheet_val)
         val btnClearStorage = view.findViewById<Button>(R.id.btn_clear_storage_now)
+        val switchAutoclear = view.findViewById<SwitchCompat>(R.id.new_switch_autoclear)
+
+        val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
+        val useAutoclear = sharedPrefs.getBoolean("auto_clear_storage", false)
+        switchAutoclear.isChecked = useAutoclear
+
+        switchAutoclear.setOnCheckedChangeListener { _, isChecked ->
+            sharedPrefs.edit().putBoolean("auto_clear_storage", isChecked).apply()
+        }
 
         val updateVal = {
             val totalBytes = calculateStorageBytes()
@@ -678,11 +720,59 @@ class MainActivity : AppCompatActivity() {
         btnClose.setOnClickListener { dialog.dismiss() }
 
         btnClearStorage.setOnClickListener {
-            clearStorageData()
-            updateVal()
-            updateStorageUsage()
-            Toast.makeText(this, "Storage and clipboard data cleared!", Toast.LENGTH_SHORT).show()
-            dialog.dismiss()
+            // Show 3-Second Countdown Storage Clear Confirmation Dialog
+            val confirmDialog = BottomSheetDialog(this, R.style.LanvanBottomSheetDialog)
+            val confirmView = layoutInflater.inflate(R.layout.sheet_feedback_confirm, null)
+
+            val txtTitle = confirmView.findViewById<TextView>(R.id.txt_feedback_confirm_title)
+            val txtMsg = confirmView.findViewById<TextView>(R.id.txt_feedback_confirm_msg)
+            val btnConfirmClose = confirmView.findViewById<ImageButton>(R.id.btn_close_feedback_confirm)
+            val btnAction = confirmView.findViewById<Button>(R.id.btn_confirm_close_action)
+
+            txtTitle.text = "Clear Storage & Clipboard Data?"
+            txtMsg.text = "This will permanently delete all uploaded files and saved clipboard history. This action cannot be undone."
+            btnAction.setTextColor(ContextCompat.getColor(this, R.color.danger_red_text))
+            btnAction.backgroundTintList = android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, R.color.danger_red))
+            btnAction.isEnabled = false
+            btnAction.text = "Clear Data (3s)"
+
+            var count = 3
+            val handler = android.os.Handler(android.os.Looper.getMainLooper())
+            val runnable = object : Runnable {
+                override fun run() {
+                    count--
+                    if (count > 0) {
+                        btnAction.text = "Clear Data (${count}s)"
+                        handler.postDelayed(this, 1000)
+                    } else {
+                        btnAction.text = "Clear Data"
+                        btnAction.isEnabled = true
+                    }
+                }
+            }
+            handler.postDelayed(runnable, 1000)
+
+            confirmDialog.setOnDismissListener {
+                handler.removeCallbacks(runnable)
+            }
+
+            btnConfirmClose.setOnClickListener {
+                handler.removeCallbacks(runnable)
+                confirmDialog.dismiss()
+            }
+
+            btnAction.setOnClickListener {
+                handler.removeCallbacks(runnable)
+                clearStorageData()
+                updateVal()
+                updateStorageUsage()
+                Toast.makeText(this, "Storage and clipboard data cleared!", Toast.LENGTH_SHORT).show()
+                confirmDialog.dismiss()
+                dialog.dismiss()
+            }
+
+            confirmDialog.setContentView(confirmView)
+            confirmDialog.show()
         }
 
         dialog.show()
@@ -705,10 +795,13 @@ class MainActivity : AppCompatActivity() {
             val includeDiagnostics = switchDiagnostics.isChecked
             val appVersion = getAppVersionName()
 
+            var reportFileName = ""
+            var emailSuccess = false
+
             if (includeDiagnostics) {
                 // Generate Safe Plain-Text Diagnostic Report File
                 val timeStamp = SimpleDateFormat("yyyy-MM-dd-HHmmss", Locale.US).format(Date())
-                val reportFileName = "lanvan-diagnostics-$timeStamp.txt"
+                reportFileName = "lanvan-diagnostics-$timeStamp.txt"
                 val reportFile = File(cacheDir, reportFileName)
 
                 val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
@@ -777,8 +870,9 @@ class MainActivity : AppCompatActivity() {
 
                 try {
                     startActivity(Intent.createChooser(intent, "Send Feedback"))
+                    emailSuccess = true
                 } catch (_: Exception) {
-                    Toast.makeText(this, "Could not open email app.", Toast.LENGTH_SHORT).show()
+                    emailSuccess = false
                 }
             } else {
                 val emailBody = """
@@ -800,6 +894,7 @@ class MainActivity : AppCompatActivity() {
 
                 try {
                     startActivity(intent)
+                    emailSuccess = true
                 } catch (_: Exception) {
                     val fallbackIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -809,14 +904,46 @@ class MainActivity : AppCompatActivity() {
                     }
                     try {
                         startActivity(Intent.createChooser(fallbackIntent, "Send Feedback"))
+                        emailSuccess = true
                     } catch (_: Exception) {
-                        Toast.makeText(this, "Could not open email app.", Toast.LENGTH_SHORT).show()
+                        emailSuccess = false
                     }
                 }
             }
 
             dialog.dismiss()
+
+            // Open Feedback Confirmation Dialog
+            openFeedbackConfirmSheet(includeDiagnostics, reportFileName, emailSuccess)
         }
+
+        dialog.show()
+    }
+
+    private fun openFeedbackConfirmSheet(isDiagEnabled: Boolean, reportFileName: String, emailOpened: Boolean) {
+        val dialog = BottomSheetDialog(this, R.style.LanvanBottomSheetDialog)
+        val view = layoutInflater.inflate(R.layout.sheet_feedback_confirm, null)
+        dialog.setContentView(view)
+
+        val txtTitle = view.findViewById<TextView>(R.id.txt_feedback_confirm_title)
+        val txtMsg = view.findViewById<TextView>(R.id.txt_feedback_confirm_msg)
+        val btnClose = view.findViewById<ImageButton>(R.id.btn_close_feedback_confirm)
+        val btnAction = view.findViewById<Button>(R.id.btn_confirm_close_action)
+
+        if (emailOpened) {
+            txtTitle.text = "Feedback ready"
+            if (isDiagEnabled && reportFileName.isNotEmpty()) {
+                txtMsg.text = "Your feedback has been added to an email draft.\n\nDiagnostic report created:\n$reportFileName\n\nYour email app should now open."
+            } else {
+                txtMsg.text = "Your feedback has been added to an email draft.\n\nYour email app should now open."
+            }
+        } else {
+            txtTitle.text = "Email app not available"
+            txtMsg.text = "Could not open email app on this device."
+        }
+
+        btnClose.setOnClickListener { dialog.dismiss() }
+        btnAction.setOnClickListener { dialog.dismiss() }
 
         dialog.show()
     }

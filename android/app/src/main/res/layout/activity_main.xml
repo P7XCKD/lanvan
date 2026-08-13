@@ -91,6 +91,49 @@
             android:orientation="vertical"
             android:padding="20dp">
 
+            <!-- STATE 0: STOPPED + DISCONNECTED NETWORK WARNING CARD -->
+            <LinearLayout
+                android:id="@+id/card_stopped_net_warning"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:background="@drawable/bg_card"
+                android:padding="16dp"
+                android:gravity="center_vertical"
+                android:visibility="gone"
+                android:layout_marginBottom="16dp">
+
+                <ImageView
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_alert_triangle"
+                    android:layout_marginEnd="16dp"
+                    app:tint="@color/warning_amber" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="No network connection"
+                        android:textColor="@color/warning_amber"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Connect to Wi-Fi or enable a hotspot before starting Lanvan."
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+            </LinearLayout>
+
             <!-- STATE 1: STOPPED SERVER CARD -->
             <LinearLayout
                 android:id="@+id/card_stopped"
@@ -341,6 +384,7 @@
 
             <!-- SUPPORT LANVAN CARD -->
             <LinearLayout
+                android:id="@+id/card_support_lanvan"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
