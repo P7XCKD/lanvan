@@ -12,6 +12,7 @@ import android.net.NetworkRequest
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Parcelable
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
@@ -814,7 +815,7 @@ class MainActivity : AppCompatActivity() {
             val appVersion = getAppVersionName()
 
             var reportFileName = ""
-            var emailSuccess = false
+            val emailIntent: Intent
 
             if (includeDiagnostics) {
                 // Generate Safe Plain-Text Diagnostic Report File
@@ -865,7 +866,7 @@ class MainActivity : AppCompatActivity() {
                 val emailBody = """
                     Hello Lanvan team,
 
-                    ${if (userFeedback.isNotEmpty()) userFeedback else "[USER FEEDBACK]"}
+                    ${if (userFeedback.isNotEmpty()) userFeedback else "[Enter Your Feedback Here]"}
 
                     I've attached a diagnostic report to help investigate this issue.
 
@@ -877,26 +878,19 @@ class MainActivity : AppCompatActivity() {
 
                 val contentUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", reportFile)
 
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "message/rfc822"
+                emailIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "*/*"
                     putExtra(Intent.EXTRA_EMAIL, arrayOf("p7xckd@gmail.com"))
                     putExtra(Intent.EXTRA_SUBJECT, "Lanvan Feedback")
                     putExtra(Intent.EXTRA_TEXT, emailBody)
                     putExtra(Intent.EXTRA_STREAM, contentUri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
-
-                try {
-                    startActivity(Intent.createChooser(intent, "Send Feedback"))
-                    emailSuccess = true
-                } catch (_: Exception) {
-                    emailSuccess = false
-                }
             } else {
                 val emailBody = """
                     Hello Lanvan team,
 
-                    ${if (userFeedback.isNotEmpty()) userFeedback else "[USER FEEDBACK]"}
+                    ${if (userFeedback.isNotEmpty()) userFeedback else "[Enter Your Feedback Here]"}
 
                     Lanvan version: $appVersion
 
@@ -904,41 +898,23 @@ class MainActivity : AppCompatActivity() {
                     Lanvan user
                 """.trimIndent()
 
-                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                emailIntent = Intent(Intent.ACTION_SENDTO).apply {
                     data = Uri.parse("mailto:p7xckd@gmail.com")
                     putExtra(Intent.EXTRA_SUBJECT, "Lanvan Feedback")
                     putExtra(Intent.EXTRA_TEXT, emailBody)
-                }
-
-                try {
-                    startActivity(intent)
-                    emailSuccess = true
-                } catch (_: Exception) {
-                    val fallbackIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_EMAIL, arrayOf("p7xckd@gmail.com"))
-                        putExtra(Intent.EXTRA_SUBJECT, "Lanvan Feedback")
-                        putExtra(Intent.EXTRA_TEXT, emailBody)
-                    }
-                    try {
-                        startActivity(Intent.createChooser(fallbackIntent, "Send Feedback"))
-                        emailSuccess = true
-                    } catch (_: Exception) {
-                        emailSuccess = false
-                    }
                 }
             }
 
             dialog.dismiss()
 
-            // Open Feedback Confirmation Dialog
-            openFeedbackConfirmSheet(includeDiagnostics, reportFileName, emailSuccess)
+            // Open 3s Feedback Guidance Dialog before triggering share menu
+            openFeedbackConfirmSheet(emailIntent, includeDiagnostics, reportFileName)
         }
 
         dialog.show()
     }
 
-    private fun openFeedbackConfirmSheet(isDiagEnabled: Boolean, reportFileName: String, emailOpened: Boolean) {
+    private fun openFeedbackConfirmSheet(emailIntent: Intent, isDiagEnabled: Boolean, reportFileName: String) {
         val dialog = BottomSheetDialog(this, R.style.LanvanBottomSheetDialog)
         val view = layoutInflater.inflate(R.layout.sheet_feedback_confirm, null)
         dialog.setContentView(view)
@@ -948,20 +924,67 @@ class MainActivity : AppCompatActivity() {
         val btnClose = view.findViewById<ImageButton>(R.id.btn_close_feedback_confirm)
         val btnAction = view.findViewById<Button>(R.id.btn_confirm_close_action)
 
-        if (emailOpened) {
-            txtTitle.text = "Feedback ready"
-            if (isDiagEnabled && reportFileName.isNotEmpty()) {
-                txtMsg.text = "Your feedback has been added to an email draft.\n\nDiagnostic report created:\n$reportFileName\n\nYour email app should now open."
-            } else {
-                txtMsg.text = "Your feedback has been added to an email draft.\n\nYour email app should now open."
-            }
+        txtTitle.text = "Feedback ready"
+        if (isDiagEnabled && reportFileName.isNotEmpty()) {
+            txtMsg.text = "Your feedback has been added to an email draft.\n\nDiagnostic report created:\n$reportFileName\n\nYour email app should now open."
         } else {
-            txtTitle.text = "Email app not available"
-            txtMsg.text = "Could not open email app on this device."
+            txtMsg.text = "Your feedback has been added to an email draft.\n\nYour email app should now open."
         }
 
-        btnClose.setOnClickListener { dialog.dismiss() }
-        btnAction.setOnClickListener { dialog.dismiss() }
+        val launchEmailApp = {
+            try {
+                startActivity(Intent.createChooser(emailIntent, "Send Feedback"))
+            } catch (_: Exception) {
+                val fallbackIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_EMAIL, arrayOf("p7xckd@gmail.com"))
+                    putExtra(Intent.EXTRA_SUBJECT, "Lanvan Feedback")
+                    putExtra(Intent.EXTRA_TEXT, emailIntent.getStringExtra(Intent.EXTRA_TEXT) ?: "")
+                    if (emailIntent.hasExtra(Intent.EXTRA_STREAM)) {
+                        putExtra(Intent.EXTRA_STREAM, emailIntent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM))
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                }
+                try {
+                    startActivity(Intent.createChooser(fallbackIntent, "Send Feedback"))
+                } catch (_: Exception) {
+                    Toast.makeText(this, "Could not open email app.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            dialog.dismiss()
+        }
+
+        var count = 3
+        btnAction.text = "Open Email App (3s)"
+
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val runnable = object : Runnable {
+            override fun run() {
+                count--
+                if (count > 0) {
+                    btnAction.text = "Open Email App (${count}s)"
+                    handler.postDelayed(this, 1000)
+                } else {
+                    handler.removeCallbacks(this)
+                    launchEmailApp()
+                }
+            }
+        }
+        handler.postDelayed(runnable, 1000)
+
+        dialog.setOnDismissListener {
+            handler.removeCallbacks(runnable)
+        }
+
+        btnClose.setOnClickListener {
+            handler.removeCallbacks(runnable)
+            dialog.dismiss()
+        }
+
+        btnAction.setOnClickListener {
+            handler.removeCallbacks(runnable)
+            launchEmailApp()
+        }
 
         dialog.show()
     }
