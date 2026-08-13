@@ -65,7 +65,7 @@
                     '<div class="clipboard-card-head">' +
                     '<div style="display:flex;align-items:center;gap:0.5rem;min-width:0;flex:1;">' +
                     '<div class="avatar-icon avatar-image" style="width:32px;height:32px;border-radius:8px;flex-shrink:0;"><i data-lucide="image" style="width:16px;height:16px;"></i></div>' +
-                    '<div style="display:flex;flex-direction:column;min-width:0;flex:1;">' +
+                    '<div class="clipboard-head-text" style="display:flex;flex-direction:column;min-width:0;flex:1;">' +
                     '<span style="font-weight:600;font-size:0.85rem;color:var(--text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:text;">' + fnEscape(imgTitle) + '</span>' +
                     '<span style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:text;">' + fnEscape(subtitle) + '</span>' +
                     '</div>' +
@@ -94,7 +94,7 @@
                     '<div class="clipboard-card-head">' +
                     '<div style="display:flex;align-items:center;gap:0.5rem;min-width:0;flex:1;">' +
                     '<div class="avatar-icon ' + avatarClass + '"><i data-lucide="' + iconName + '"></i></div>' +
-                    '<div style="display:flex;flex-direction:column;min-width:0;flex:1;">' +
+                    '<div class="clipboard-head-text" style="display:flex;flex-direction:column;min-width:0;flex:1;">' +
                     '<span style="font-weight:600;font-size:0.85rem;color:var(--text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:text;">' + fnEscape(displayTitle) + '</span>' +
                     '<span style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:text;">' + fnEscape(subtitle) + '</span>' +
                     '</div>' +
