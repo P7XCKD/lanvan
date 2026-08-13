@@ -652,6 +652,20 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  /*
+  ==============================================================================
+  FUTURE PRODUCTION GOOGLE PLAY BILLING CONCEPT NOTE
+  ==============================================================================
+  In production, Support Lanvan products map directly to Google Play Billing IDs:
+  - Supporter: 'lanvan_support_tier_1' (Base price ₹49 / localized by Play Store)
+  - Sponsor:   'lanvan_support_tier_2' (Base price ₹159 / localized by Play Store)
+  - Patron:    'lanvan_support_tier_3' (Base price ₹399 / localized by Play Store)
+
+  Google Play Billing client automatically handles localized currency display,
+  regional taxes, and payment processing per user locale.
+  ==============================================================================
+  */
+
   supportTierCards.forEach(btn => {
     btn.addEventListener("click", () => {
       supportTierCards.forEach(b => b.classList.remove("active"));
