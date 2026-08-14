@@ -147,9 +147,9 @@ def main():
 
     # PHASE 1: Launch & Stopped State
     print("\n--- PHASE 1: Launch & Stopped State ---")
-    run_cmd(f'"{ADB_PATH}" shell am force-stop com.lanvan.app')
+    run_cmd(f'"{ADB_PATH}" shell am force-stop com.probz.lanvan')
     time.sleep(1)
-    run_cmd(f'"{ADB_PATH}" shell am start -n com.lanvan.app/.MainActivity')
+    run_cmd(f'"{ADB_PATH}" shell am start -n com.probz.lanvan/.MainActivity')
     time.sleep(3)
     capture_screenshot("01_launch_stopped_connected.png")
     results.append(("01 Launch Stopped Connected", "PASS"))

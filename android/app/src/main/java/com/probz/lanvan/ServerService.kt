@@ -1,4 +1,4 @@
-package com.lanvan.app
+package com.probz.lanvan
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -59,7 +59,7 @@ class ServerService : Service() {
         const val ACTION_NOTIFICATION_DISMISSED = "NOTIFICATION_DISMISSED"
         
         // Status Broadcast Actions
-        const val ACTION_STATUS_CHANGE = "com.lanvan.app.STATUS_CHANGE"
+        const val ACTION_STATUS_CHANGE = "com.probz.lanvan.STATUS_CHANGE"
         const val EXTRA_STATUS = "status"
         
         const val STATUS_RUNNING = "running"

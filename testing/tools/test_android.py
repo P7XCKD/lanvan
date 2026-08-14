@@ -104,7 +104,7 @@ def query_endpoint(url, data=None, headers=None, is_https=False, method=None):
 
 def dump_device_logs():
     print("\n[LOG] Dumping last 100 lines of Android application logs...")
-    run_cmd(f'"{ADB_PATH}" shell "run-as com.lanvan.app tail -n 100 files/lanvan_app.log"')
+    run_cmd(f'"{ADB_PATH}" shell "run-as com.probz.lanvan tail -n 100 files/lanvan_app.log"')
 
 def perform_tests():
     print("[TEST] Setting up ADB port forwarding...")
@@ -113,13 +113,13 @@ def perform_tests():
     
     # Ensure any active service instances are shut down first
     print("[TEST] Stopping existing server instances...")
-    run_cmd(f'"{ADB_PATH}" shell am startservice -n com.lanvan.app/.ServerService -a STOP_SERVER')
+    run_cmd(f'"{ADB_PATH}" shell am startservice -n com.probz.lanvan/.ServerService -a STOP_SERVER')
     time.sleep(6)
     
     # ------------------ TEST 1: HTTP MODE ------------------
     print("\n--- PHASE 1: HTTP Server Testing ---")
     print("[TEST] Starting Server in HTTP Mode on port 5000...")
-    run_cmd(f'"{ADB_PATH}" shell am startforegroundservice -n com.lanvan.app/.ServerService -a START_SERVER --es PORT 5000 --es USE_HTTPS false')
+    run_cmd(f'"{ADB_PATH}" shell am startforegroundservice -n com.probz.lanvan/.ServerService -a START_SERVER --es PORT 5000 --es USE_HTTPS false')
     time.sleep(10)
     
     # Check homepage endpoint
@@ -241,13 +241,13 @@ def perform_tests():
 
     # Stop HTTP Server
     print("[TEST] Stopping HTTP Server...")
-    run_cmd(f'"{ADB_PATH}" shell am startservice -n com.lanvan.app/.ServerService -a STOP_SERVER')
+    run_cmd(f'"{ADB_PATH}" shell am startservice -n com.probz.lanvan/.ServerService -a STOP_SERVER')
     time.sleep(6)
 
     # ------------------ TEST 5: HTTPS MODE ------------------
     print("\n--- PHASE 5: HTTPS Server Testing ---")
     print("[TEST] Starting Server in HTTPS Mode on port 5001...")
-    run_cmd(f'"{ADB_PATH}" shell am startforegroundservice -n com.lanvan.app/.ServerService -a START_SERVER --es PORT 5001 --es USE_HTTPS true')
+    run_cmd(f'"{ADB_PATH}" shell am startforegroundservice -n com.probz.lanvan/.ServerService -a START_SERVER --es PORT 5001 --es USE_HTTPS true')
     time.sleep(10)
     
     # Check homepage endpoint over HTTPS
@@ -317,7 +317,7 @@ def perform_tests():
 
     # Stop HTTPS Server
     print("[TEST] Stopping HTTPS Server...")
-    run_cmd(f'"{ADB_PATH}" shell am startservice -n com.lanvan.app/.ServerService -a STOP_SERVER')
+    run_cmd(f'"{ADB_PATH}" shell am startservice -n com.probz.lanvan/.ServerService -a STOP_SERVER')
     time.sleep(3)
     
     # Clear port forwarding
@@ -340,8 +340,8 @@ def main():
     success = perform_tests()
     
     print("\n[TEST] Ensuring app and server are fully closed...")
-    run_cmd(f'"{ADB_PATH}" shell am startservice -n com.lanvan.app/.ServerService -a STOP_SERVER')
-    run_cmd(f'"{ADB_PATH}" shell am force-stop com.lanvan.app')
+    run_cmd(f'"{ADB_PATH}" shell am startservice -n com.probz.lanvan/.ServerService -a STOP_SERVER')
+    run_cmd(f'"{ADB_PATH}" shell am force-stop com.probz.lanvan')
     
     print("\n====================================================")
     if success:

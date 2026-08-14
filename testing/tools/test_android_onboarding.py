@@ -46,9 +46,9 @@ def main():
 
     # 1. Reset onboarding completion flag in SharedPreferences via ADB
     print("\n[TEST 1] Reset onboarding completion flag & relaunch app...")
-    run_cmd(f'"{ADB_PATH}" shell am force-stop com.lanvan.app')
-    run_cmd(f'"{ADB_PATH}" shell "run-as com.lanvan.app rm -f /data/data/com.lanvan.app/shared_prefs/lanvan_prefs.xml"')
-    run_cmd(f'"{ADB_PATH}" shell am start -n com.lanvan.app/.MainActivity')
+    run_cmd(f'"{ADB_PATH}" shell am force-stop com.probz.lanvan')
+    run_cmd(f'"{ADB_PATH}" shell "run-as com.probz.lanvan rm -f /data/data/com.probz.lanvan/shared_prefs/lanvan_prefs.xml"')
+    run_cmd(f'"{ADB_PATH}" shell am start -n com.probz.lanvan/.MainActivity')
     time.sleep(2.5)
 
     # Capture Step 1: Start Lanvan
@@ -83,8 +83,8 @@ def main():
 
     # Step 7: Relaunch app -> Verify onboarding DOES NOT appear
     print("\n[TEST 4] Relaunch app & verify onboarding remains completed...")
-    run_cmd(f'"{ADB_PATH}" shell am force-stop com.lanvan.app')
-    run_cmd(f'"{ADB_PATH}" shell am start -n com.lanvan.app/.MainActivity')
+    run_cmd(f'"{ADB_PATH}" shell am force-stop com.probz.lanvan')
+    run_cmd(f'"{ADB_PATH}" shell am start -n com.probz.lanvan/.MainActivity')
     time.sleep(2.0)
 
     # Step 8: Perform Clear Storage Data test
@@ -94,8 +94,8 @@ def main():
     time.sleep(1.0)
     run_cmd(f'"{ADB_PATH}" shell input tap 540 1680') # Click Clear Storage
     time.sleep(1.0)
-    run_cmd(f'"{ADB_PATH}" shell am force-stop com.lanvan.app')
-    run_cmd(f'"{ADB_PATH}" shell am start -n com.lanvan.app/.MainActivity')
+    run_cmd(f'"{ADB_PATH}" shell am force-stop com.probz.lanvan')
+    run_cmd(f'"{ADB_PATH}" shell am start -n com.probz.lanvan/.MainActivity')
     time.sleep(2.0)
     capture_screenshot("07_normal_app_after_clear_storage.png")
 

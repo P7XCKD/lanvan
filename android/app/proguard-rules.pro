@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # Lanvan ProGuard / R8 Rules
 # ============================================================
 
@@ -20,8 +20,8 @@
 -keep public class * extends android.content.ContentProvider
 
 # Keep our specific components by name (extra safety)
--keep class com.lanvan.app.MainActivity { *; }
--keep class com.lanvan.app.ServerService { *; }
+-keep class com.probz.lanvan.MainActivity { *; }
+-keep class com.probz.lanvan.ServerService { *; }
 
 # ---------- Kotlin Metadata ----------
 -keep class kotlin.Metadata { *; }

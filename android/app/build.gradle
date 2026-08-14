@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace 'com.lanvan.app'
+    namespace 'com.probz.lanvan'
     compileSdk 35
 
     defaultConfig {
-        applicationId "com.lanvan.app"
+        applicationId "com.probz.lanvan"
         minSdk 29
         targetSdk 35
         versionCode 3
