@@ -31,7 +31,21 @@ data class LanNetworkState(
  *
  * Cellular-only and loopback interfaces are explicitly rejected.
  */
+private var cachedNetworkState: LanNetworkState? = null
+private var lastNetworkCheckTime: Long = 0L
+
+fun invalidateLanNetworkCache() {
+    cachedNetworkState = null
+    lastNetworkCheckTime = 0L
+}
+
 fun detectShareableLanNetwork(context: Context): LanNetworkState {
+    val now = System.currentTimeMillis()
+    val cached = cachedNetworkState
+    if (cached != null && (now - lastNetworkCheckTime) < 3000L) {
+        return cached
+    }
+
     try {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
@@ -101,77 +115,31 @@ fun detectShareableLanNetwork(context: Context): LanNetworkState {
             }
         }
 
-        // Priority 1: Wi-Fi — candidateWlanIp present on active wlan interface
-        if (candidateWlanIp != null) {
-            val state = LanNetworkState(
-                available = true,
-                ipAddress = candidateWlanIp,
-                interfaceName = candidateWlanName,
-                transport = "WIFI",
-                reason = "WIFI_CONNECTED"
-            )
-            Log.d("LANVAN_NETWORK", "[LANVAN NETWORK] available=true interface=${state.interfaceName} transport=${state.transport} ip=${state.ipAddress} reason=${state.reason}")
-            return state
+        val state = when {
+            candidateWlanIp != null -> LanNetworkState(true, candidateWlanIp, candidateWlanName, "WIFI", "WIFI_CONNECTED")
+            candidateHotspotIp != null -> LanNetworkState(true, candidateHotspotIp, candidateHotspotName, "HOTSPOT", "HOTSPOT_ACTIVE")
+            hasEthernetTransport && candidateEthIp != null -> LanNetworkState(true, candidateEthIp, candidateEthName, "ETHERNET", "ETHERNET_CONNECTED")
+            foundCellularOnlyIp != null -> LanNetworkState(false, null, foundCellularName, "CELLULAR", "CELLULAR_ONLY")
+            else -> LanNetworkState(false, null, null, "NONE", "NO_LAN_INTERFACE")
         }
 
-        // Priority 2: Wi-Fi Hotspot / Tethering
-        if (candidateHotspotIp != null) {
-            val state = LanNetworkState(
-                available = true,
-                ipAddress = candidateHotspotIp,
-                interfaceName = candidateHotspotName,
-                transport = "HOTSPOT",
-                reason = "HOTSPOT_ACTIVE"
-            )
-            Log.d("LANVAN_NETWORK", "[LANVAN NETWORK] available=true interface=${state.interfaceName} transport=${state.transport} ip=${state.ipAddress} reason=${state.reason}")
-            return state
-        }
-
-        // Priority 3: Ethernet
-        if (hasEthernetTransport && candidateEthIp != null) {
-            val state = LanNetworkState(
-                available = true,
-                ipAddress = candidateEthIp,
-                interfaceName = candidateEthName,
-                transport = "ETHERNET",
-                reason = "ETHERNET_CONNECTED"
-            )
-            Log.d("LANVAN_NETWORK", "[LANVAN NETWORK] available=true interface=${state.interfaceName} transport=${state.transport} ip=${state.ipAddress} reason=${state.reason}")
-            return state
-        }
-
-        // No usable LAN interface — cellular only or nothing
-        if (foundCellularOnlyIp != null) {
-            val state = LanNetworkState(
-                available = false,
-                ipAddress = null,
-                interfaceName = foundCellularName,
-                transport = "CELLULAR",
-                reason = "CELLULAR_ONLY"
-            )
-            Log.d("LANVAN_NETWORK", "[LANVAN NETWORK] available=false interface=${state.interfaceName} transport=${state.transport} ip=REDACTED reason=${state.reason}")
-            return state
-        }
-
-        val state = LanNetworkState(
-            available = false,
-            ipAddress = null,
-            interfaceName = null,
-            transport = "NONE",
-            reason = "NO_LAN_INTERFACE"
-        )
-        Log.d("LANVAN_NETWORK", "[LANVAN NETWORK] available=false interface=none transport=NONE ip=null reason=${state.reason}")
+        Log.d("LANVAN_NETWORK", "[LANVAN NETWORK] available=${state.available} interface=${state.interfaceName} transport=${state.transport} ip=${state.ipAddress} reason=${state.reason}")
+        cachedNetworkState = state
+        lastNetworkCheckTime = now
         return state
 
     } catch (e: Exception) {
         Log.e("LANVAN_NETWORK", "[LANVAN NETWORK] Exception during detection: ${e.message}")
     }
 
-    return LanNetworkState(
+    val errState = LanNetworkState(
         available = false,
         ipAddress = null,
         interfaceName = null,
         transport = "NONE",
         reason = "ERROR"
     )
+    cachedNetworkState = errState
+    lastNetworkCheckTime = now
+    return errState
 }
