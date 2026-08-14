@@ -245,14 +245,14 @@
       state = 'IDLE';
     } else if (activeFiles > 0 || queuedFiles > 0) {
       state = 'UPLOADING';
-    } else if (pausedFiles > 0 && activeFiles === 0 && queuedFiles === 0) {
+    } else if (pausedFiles > 0) {
       state = 'PAUSED';
+    } else if (completedFiles > 0 && activeFiles === 0 && queuedFiles === 0) {
+      state = 'COMPLETED';
     } else if (failedFiles > 0 && activeFiles === 0 && queuedFiles === 0) {
       state = 'FAILED';
     } else if (cancelledFiles > 0 && activeFiles === 0 && queuedFiles === 0) {
       state = 'CANCELLED';
-    } else if (completedFiles === effectiveTotalFiles && effectiveTotalFiles > 0) {
-      state = 'COMPLETED';
     }
 
     var batchEtaSeconds = (sumSpeed > 0 && remainingBytes > 0) ? (remainingBytes / sumSpeed) : 0;

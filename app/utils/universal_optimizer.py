@@ -132,7 +132,7 @@ class UniversalOptimizer:
         try:
             # OPTIMIZED: Only run GC optimization for major operations
             if operation_type in ['upload_complete', 'large_file_finished']:
-                print(f"[CLEAN] Strategic memory cleanup for {operation_type}")
+                logger.debug("STORAGE", "Strategic memory cleanup triggered", details={"Operation": operation_type})
                 gc.collect()
                 optimizations['gc_optimization'] = True
             
@@ -150,12 +150,12 @@ class UniversalOptimizer:
             return optimizations
             
         except Exception as e:
-            print(f"[WARN] Optimization warning: {e}")
+            logger.warn("STORAGE", "Optimization warning", details={"Reason": str(e)})
             return optimizations
     
     def _optimize_termux(self) -> Dict:
         """Termux-specific optimizations with memory monitoring"""
-        print("[BOT] Applying Termux optimizations")
+        logger.info("ANDROID", "Applying Termux optimizations")
         
         try:
             # Set environment variables for better Termux performance
@@ -174,7 +174,7 @@ class UniversalOptimizer:
                 'memory_status': get_termux_memory_status()
             }
         except Exception as e:
-            print(f"[WARN] Termux optimization warning: {e}")
+            logger.warn("ANDROID", "Termux optimization warning", details={"Reason": str(e)})
             return {'performance_mode': 'termux_fallback'}
     
     def _optimize_android(self) -> Dict:
@@ -232,7 +232,7 @@ class UniversalOptimizer:
                 while self.keep_alive_active:
                     # Check memory status before doing any work
                     if not enforce_termux_memory_limit("background_keepalive"):
-                        print("[BOT] Background keepalive paused due to memory pressure")
+                        logger.info("ANDROID", "Background keepalive paused due to memory pressure")
                         time.sleep(60)  # Wait longer during memory pressure
                         continue
                     
@@ -252,18 +252,18 @@ class UniversalOptimizer:
                     time.sleep(60)  # 1 minute between cycles
                     
             except Exception as e:
-                print(f"[WARN] Keepalive warning: {e}")
+                logger.warn("ANDROID", "Keepalive warning", details={"Reason": str(e)})
         
         self.keep_alive_active = True
         self.background_keeper = threading.Thread(target=keepalive_worker, daemon=True)
         self.background_keeper.start()
-        print("[BOT] Background keepalive started with memory monitoring")
+        logger.info("ANDROID", "Background keepalive started with memory monitoring")
     
     def stop_background_keepalive(self):
         """Stop background keepalive"""
         if self.keep_alive_active:
             self.keep_alive_active = False
-            print("[INFO] Background keepalive stopped")
+            logger.info("ANDROID", "Background keepalive stopped")
     
     def memory_cleanup(self, force: bool = False):
         """Perform memory cleanup with garbage collection"""

@@ -113,13 +113,9 @@ class StructuredLogger:
         full_line = header + detail_str
         
         with self._lock:
-            # Prevent duplicate identical consecutive log lines
-            line_comparison_key = f"[{lvl}] [{cat}]{op_suffix} {message}" + detail_str
-            if self._last_line == line_comparison_key:
-                return
-            self._last_line = line_comparison_key
-
-            print(full_line, flush=True)
+            if self._last_line != full_line:
+                print(full_line, flush=True)
+                self._last_line = full_line
 
             entry = {
                 "timestamp": timestamp,

@@ -211,7 +211,8 @@
                     if (existingIdx >= 0) {
                         // Clone the existing item before modifying (immutability)
                         var clone = Object.assign({}, normalizedDiskFiles[existingIdx]);
-                        if (status !== 'COMPLETED') {
+                        var isDone = (status === 'COMPLETED' || itemPct >= 100);
+                        if (!isDone) {
                             clone.uploading = true;
                             clone.uploadProgress = itemPct;
                             clone.uploadStatus = status;
@@ -223,15 +224,16 @@
                         }
                         normalizedDiskFiles[existingIdx] = clone;
                     } else {
+                        var isOverlayDone = (status === 'COMPLETED' || itemPct >= 100);
                         uploadOverlayItems.push({
                             name: itemName,
                             identity: getCanonicalIdentity(targetDir, itemName),
                             size: formatSize(fileSize),
                             mtime: null, // Unknown mtime — deterministic sentinel
                             isFolder: false,
-                            uploading: (status !== 'COMPLETED'),
-                            uploadProgress: (status === 'COMPLETED') ? 100 : itemPct,
-                            uploadStatus: status,
+                            uploading: !isOverlayDone,
+                            uploadProgress: isOverlayDone ? 100 : itemPct,
+                            uploadStatus: isOverlayDone ? 'COMPLETED' : status,
                             uploadId: item.id
                         });
                     }

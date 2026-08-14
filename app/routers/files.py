@@ -267,17 +267,16 @@ def cleanup_orphaned_temp_files():
     try:
         temp_files = list(UPLOAD_FOLDER.glob("*.tmp"))
         if temp_files:
-            print(f"[CLEAN] Cleaning up {len(temp_files)} orphaned .tmp files...")
+            logger.info("STORAGE", "Cleaning up orphaned .tmp files", details={"Count": len(temp_files)})
             for temp_file in temp_files:
                 try:
                     temp_file.unlink()
-                    print(f"[CLEANUP] Removed: {temp_file.name}")
                 except Exception as e:
-                    print(f"[WARNING] Failed to remove {temp_file.name}: {e}")
+                    logger.warn("STORAGE", "Failed to remove orphaned temp file", details={"Reason": str(e)})
         else:
-            print(f"[OK] No orphaned .tmp files found")
+            logger.debug("STORAGE", "No orphaned .tmp files found")
     except Exception as e:
-        print(f"[ERROR] Error during temp file cleanup: {e}")
+        logger.error("STORAGE", "Error during temp file cleanup", details={"Reason": str(e)})
 
 async def initialize_file_locking():
     """Initialize file locking system and clean up stale locks"""
@@ -285,11 +284,10 @@ async def initialize_file_locking():
         lock_manager = get_file_lock_manager(UPLOAD_FOLDER)
         locks_dir = lock_manager.locks_dir
         
-        # Clean up stale locks from previous sessions
-        await cleanup_stale_locks(locks_dir, max_age_seconds=300)  # 5 minutes
-        print("[LOCK] File locking system initialized")
+        await cleanup_stale_locks(locks_dir, max_age_seconds=300)
+        logger.info("STORAGE", "File locking system initialized")
     except Exception as e:
-        print(f"[WARN] File locking initialization error: {e}")
+        logger.warn("STORAGE", "File locking initialization error", details={"Reason": str(e)})
 
 def format_size(size_bytes):
     """Format bytes to human readable string"""
@@ -304,16 +302,10 @@ def format_size(size_bytes):
 LOCKED_DELETIONS_SET = set()
 
 def is_pending_deletion(filename_or_path: str) -> bool:
-    """Check if file is in pending locked deletion list.
-
-    The set stores absolute filesystem paths only. Comparison uses resolved
-    absolute paths on both sides so that 'A' and 'Inside/A' are always distinct.
-    """
     global LOCKED_DELETIONS_SET
     if not filename_or_path:
         return False
     p = Path(filename_or_path)
-    # Resolve to absolute path; relative inputs are anchored under UPLOAD_FOLDER.
     if not p.is_absolute():
         p = UPLOAD_FOLDER / filename_or_path
     try:
@@ -343,7 +335,7 @@ def retry_pending_deletions():
         try:
             p.unlink()
             to_remove.add(item)
-            print(f"[BACKGROUND CLEANUP] Unlinked locked file: {p.name}")
+            logger.debug("STORAGE", "Unlinked locked file during background cleanup")
         except Exception:
             pass
     LOCKED_DELETIONS_SET -= to_remove
@@ -621,30 +613,23 @@ async def scan_file_async(path: Path):
         # In real implementation, this would do virus scanning, checksums, etc.
         file_size = path.stat().st_size
         
-        # For large files, break processing into smaller chunks with yielding
-        if file_size > 100 * 1024 * 1024:  # >100MB
-            logger.info("UPLOAD", "Processing large file", details={"Size": logger.format_size(file_size)})
+        if file_size > 100 * 1024 * 1024:
+            logger.info("UPLOAD", "Processing large file", details={"Size": file_size})
             
-            # Simulate chunked processing with frequent yielding
-            chunk_count = max(1, file_size // (50 * 1024 * 1024))  # 50MB chunks
+            chunk_count = max(1, file_size // (50 * 1024 * 1024))
             for i in range(chunk_count):
-                # Yield every processing chunk to keep server responsive
-                await asyncio.sleep(0.01)  # 10ms yield per chunk
+                await asyncio.sleep(0.01)
                 
-                # Simulate some processing work
-                if i % 10 == 0:  # Progress every 10 chunks
+                if i % 10 == 0:
                     progress = (i + 1) / chunk_count * 100
-                    print(f"[RETRY] Processing {path.name}: {progress:.1f}% complete")
+                    logger.debug("UPLOAD", "Processing progress", details={"Progress": round(progress, 1)})
         else:
-            # Small files process quickly with minimal yielding - OPTIMIZED
-            await asyncio.sleep(0.01)  # 10ms instead of 1ms
+            await asyncio.sleep(0.01)
             
-        print(f"[OK] File scan completed: {path.name}")
+        logger.debug("UPLOAD", "File scan completed")
         
     except Exception as e:
-        # Silently handle scan errors during testing/normal operation
-        # This is expected when testing with dummy files or during file cleanup
-        pass  # No output to avoid alarming users with test artifacts
+        pass
         # Don't let scanning errors affect the main upload flow
     
     # Final yield to ensure responsiveness
@@ -1197,23 +1182,19 @@ async def upload_auto_file(
 @router.get("/download/{filename:path}", name="download_file")
 @router.head("/download/{filename:path}")
 async def download_file(filename: str, request: Request):
-    print(f"[IN] Download request for: {filename}")
-    
     clean_filename = urllib.parse.unquote(filename).strip("/\\")
     safe_name = secure_filename(clean_filename)
     file_path = _resolve_target_dir(None) / clean_filename
 
     if file_path.exists() and file_path.is_dir():
-        print(f"[DIR] Directory requested via /download/{clean_filename}. Redirecting to /download-folder/{clean_filename}...")
+        logger.info("DOWNLOAD", "Directory requested via /download/ redirecting to folder ZIP")
         return RedirectResponse(url=f"/download-folder/{urllib.parse.quote(clean_filename)}", status_code=307)
 
     if not file_path.is_file():
         file_path = _resolve_target_dir(None) / safe_name
         if not file_path.is_file():
-            print(f"[ERR] File not found: {clean_filename}")
+            logger.warn("DOWNLOAD", "Download requested file not found")
             return Response("File not found", status_code=404)
-            
-    print(f"[DIR] Looking for file at: {file_path}")
 
     mime_type, _ = guess_type(str(file_path))
     if not mime_type or mime_type == "application/octet-stream":
@@ -1251,29 +1232,26 @@ async def download_file(filename: str, request: Request):
     file_size = stat_info["file_size"]
     etag = stat_info["etag"]
     
-    print(f"[STATS] File info (cached) - Size: {file_size} bytes, MIME: {mime_type}, ETag: {etag}")
+    session_id = uuid.uuid4().hex[:12]
+    logger.info("DOWNLOAD", "Download started", details={"OpID": session_id, "Type": mime_type or "unknown", "Size": file_size})
     
     is_download_requested = request.query_params.get("download") == "1"
     disposition_type = "attachment" if is_download_requested else "inline"
 
-    # OK: Handle HEAD requests - return headers only for file info
     if request.method == "HEAD":
         headers = {
             "Content-Length": str(file_size),
             "Content-Type": mime_type or "application/octet-stream",
             "Content-Disposition": f'{disposition_type}; filename="{safe_name}"',
-            "Accept-Ranges": "bytes",  # Indicate support for range requests
+            "Accept-Ranges": "bytes",
             "ETag": etag,
             "Cache-Control": "public, max-age=86400"
         }
         return Response(content="", headers=headers, status_code=200)
     
-    # Classify client capabilities and transfer strategy via DownloadEngine
     plan = download_engine_v2.classify_request(request, safe_name, file_size)
 
-    # Deficit Round Robin (DRR) Fair-Share Concurrency Scheduler
     wait_time = await download_engine_v2.scheduler.acquire_slot(plan["client_ip"])
-    session_id = uuid.uuid4().hex[:12]
     download_engine_v2.analytics.record_start(session_id, wait_time_sec=wait_time)
 
     client_ip = plan["client_ip"]
@@ -1289,15 +1267,17 @@ async def download_file(filename: str, request: Request):
             except RuntimeError:
                 pass
             download_engine_v2.analytics.record_completion(session_id, bytes_sent=bytes_transferred, interrupted=interrupted)
+            status_str = "INTERRUPTED" if interrupted else "SUCCESS"
+            logger.info("DOWNLOAD", "Download completed", details={"OpID": session_id, "Size": bytes_transferred, "Status": status_str})
 
     try:
         if plan["strategy"] == "range":
             return await range_download_file(file_path, safe_name, mime_type, file_size, plan["range_header"], disposition_type=disposition_type, request=request, release_slot_cb=_release_scheduler_slot)
         elif plan["strategy"] == "chunked":
-            print("[PKG] Using chunked download strategy via DownloadEngine")
+            logger.debug("DOWNLOAD", "Using chunked download strategy", details={"OpID": session_id})
             return await chunked_download_file(file_path, safe_name, mime_type, file_size, request, disposition_type=disposition_type, release_slot_cb=_release_scheduler_slot)
         else:
-            print("[FILE] Using full download strategy via DownloadEngine")
+            logger.debug("DOWNLOAD", "Using full download strategy", details={"OpID": session_id})
             return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type, etag=etag, release_slot_cb=_release_scheduler_slot)
     except Exception:
         _release_scheduler_slot(bytes_transferred=0, interrupted=True)
@@ -1427,12 +1407,12 @@ async def range_download_file(file_path: Path, safe_name: str, mime_type: str | 
         print(f"[STREAM] Serving Range 206 ({disposition_type}): bytes {start}-{end}/{file_size} (buffer {buffer_size // 1024}KB) for {safe_name}")
         return StreamingResponse(iterfile(), status_code=206, headers=headers)
     except Exception as e:
-        print(f"[ERR] Range request failed ({e}), falling back to full download")
+        logger.warn("DOWNLOAD", "Range request failed, falling back to full download", details={"Reason": str(e)})
         return await full_download_file(file_path, safe_name, mime_type, file_size, disposition_type=disposition_type, release_slot_cb=release_slot_cb)
 
 async def full_download_file(file_path: Path, safe_name: str, mime_type: str | None, file_size: int, disposition_type: str = "inline", etag: str | None = None, release_slot_cb: Any = None):
     """Ultra-optimized full file download - for small files and .enc files"""
-    print(f"[OUT] Starting full download ({disposition_type}) for: {safe_name}")
+    logger.debug("DOWNLOAD", "Starting full download", details={"Type": disposition_type, "Size": file_size})
     session = get_stream_manager().register_stream(file_path, "http-client")
     
     STREAM_BUFFER_SIZE = max(65536, min(file_size, 32 * 1024 * 1024, max(65536, file_size // 4)))

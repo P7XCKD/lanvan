@@ -17,6 +17,7 @@ import threading
 from typing import List, Dict, Set, Optional, Any
 from dataclasses import dataclass
 from pathlib import Path
+from app.core.logger import logger
 
 
 @dataclass
@@ -35,9 +36,9 @@ class StreamSession:
         if self.file_handle:
             try:
                 self.file_handle.close()
-                print(f"[STREAM_MANAGER] Explicitly closed file handle for session {self.session_id}")
+                logger.debug("DOWNLOAD", "Explicitly closed file handle for session", details={"Session": self.session_id})
             except Exception as e:
-                print(f"[STREAM_MANAGER] Exception closing file handle for {self.session_id}: {e}")
+                logger.warn("DOWNLOAD", "Exception closing file handle", details={"Session": self.session_id, "Reason": str(e)})
 
 
 class StreamManager:
@@ -80,7 +81,7 @@ class StreamManager:
         with self._lock:
             self._sessions[session_id] = session
 
-        print(f"[STREAM_MANAGER] Registered stream {session_id} for '{file_path.name}' (IP: {client_ip})")
+        logger.info("DOWNLOAD", "Stream registered", details={"Session": session_id})
         return session
 
     def unregister_stream(self, session: StreamSession):
@@ -96,24 +97,12 @@ class StreamManager:
             except Exception:
                 pass
 
-        print(f"[STREAM_MANAGER] Unregistered stream {session.session_id} for '{session.path.name}'")
+        logger.info("DOWNLOAD", "Stream unregistered", details={"Session": session.session_id})
 
     def get_active_sessions_for_path(self, target_path: Path) -> List[StreamSession]:
-        """
-        Find all active stream sessions matching target_path (exact file, .enc variants, or inside a folder).
-        """
+        """Find all active stream sessions matching target_path (or any child path inside target_path)."""
         target_canonical = self._canonical_path_str(target_path)
-        variants = {
-            target_canonical,
-            target_canonical + ".enc",
-            target_canonical + ".enc.meta",
-        }
-        if target_canonical.endswith(".enc"):
-            variants.add(target_canonical[:-4])
-            variants.add(target_canonical + ".meta")
-        elif target_canonical.endswith(".enc.meta"):
-            variants.add(target_canonical[:-9])
-            variants.add(target_canonical[:-5])
+        variants = {target_canonical}
 
         matched: List[StreamSession] = []
 
@@ -139,7 +128,7 @@ class StreamManager:
         if not matched:
             return 0
 
-        print(f"[STREAM_MANAGER] Canceling {len(matched)} active stream session(s) for '{target_path.name}'...")
+        logger.info("DOWNLOAD", "Canceling active stream sessions for path cleanup", details={"Count": len(matched)})
 
         finished_waiters = []
         for session in matched:
@@ -161,9 +150,9 @@ class StreamManager:
                     asyncio.gather(*finished_waiters, return_exceptions=True),
                     timeout=timeout
                 )
-                print(f"[STREAM_MANAGER] All {len(matched)} stream session(s) finalized cleanup successfully.")
+                logger.info("DOWNLOAD", "Stream sessions finalized cleanup successfully", details={"Count": len(matched)})
             except asyncio.TimeoutError:
-                print(f"[STREAM_MANAGER] Timed out waiting for stream cleanup after {timeout}s")
+                logger.warn("DOWNLOAD", "Timed out waiting for stream cleanup", details={"TimeoutSec": timeout})
 
         return len(matched)
 

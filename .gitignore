@@ -206,17 +206,28 @@ scratch/
 # Android builds and packages
 .gradle/
 local.properties
+android/local.properties
 .cxx/
 *.apk
 *.aab
 *.zip
+*.iml
 android/.gradle/
+android/build/
 android/app/build/
 temp_gradle/
+testing/tools/temp_gradle/
 android/app/src/main/assets/certs/
 android/app/src/main/assets/app/
 
-# Test runner screenshots and output artifacts
+# Test runner screenshots, logs and output artifacts
 testing/tools/test_screenshots/
 test_screenshots/
+testing/tools/test downloads/
+testing/scratch/
+testing/logs/
+testing/reports/
+reports/
+
+
 

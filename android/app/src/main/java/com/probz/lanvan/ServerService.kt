@@ -42,6 +42,8 @@ class ServerService : Service() {
         var lastErrorLog = ""
         
         // Static state flags so MainActivity can read them on resume
+        @Volatile var isStarting = false
+            internal set
         @Volatile var isRunning = false
             private set
         var currentPort = "5000"
@@ -132,10 +134,12 @@ class ServerService : Service() {
             }
         }
 
-        // Guard: prevent double-start if server is already running
-        if (isRunning && action != ACTION_STOP && action != ACTION_NOTIFICATION_SHUTDOWN && action != ACTION_NOTIFICATION_OPEN) {
+        // Guard: prevent double-start if server is already starting or running
+        if ((isRunning || isStarting) && action == ACTION_START) {
             return START_STICKY
         }
+        isStarting = true
+        isStopping = false
 
         // Acquire WakeLocks to keep CPU and WiFi active
         acquireLocks()
@@ -152,33 +156,36 @@ class ServerService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        // Recursively extract app/static and app/templates assets to filesDir.
-        // Skip extraction if a version marker exists matching the current versionCode,
-        // avoiding 1-5 seconds of redundant I/O on every service start.
-        val markerFile = java.io.File(filesDir, ".asset_version")
-        val packageInfo = packageManager.getPackageInfo(packageName, 0)
-        val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            packageInfo.longVersionCode.toString()
-        } else {
-            @Suppress("DEPRECATION")
-            packageInfo.versionCode.toString()
-        }
-        val currentVersion = "${versionCode}_${packageInfo.lastUpdateTime}"
-        val cachedVersion = if (markerFile.exists()) {
-            try { markerFile.readText().trim() } catch (_: Exception) { "" }
-        } else { "" }
-
-        if (cachedVersion != currentVersion) {
-            copyAssetsToFilesDir("app")
-            copyAssetsToFilesDir("certs")
-            try {
-                markerFile.writeText(currentVersion)
-            } catch (_: Exception) { /* best-effort */ }
-        }
-
         val oldThread = serverThread
         // Launch Python FastAPI thread
         serverThread = Thread {
+            // Asynchronously extract app/static and app/templates assets to filesDir if version changed.
+            // Executing in background thread prevents blocking UI thread on start button click.
+            try {
+                val markerFile = java.io.File(filesDir, ".asset_version")
+                val packageInfo = packageManager.getPackageInfo(packageName, 0)
+                val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    packageInfo.longVersionCode.toString()
+                } else {
+                    @Suppress("DEPRECATION")
+                    packageInfo.versionCode.toString()
+                }
+                val currentVersion = "${versionCode}_${packageInfo.lastUpdateTime}"
+                val cachedVersion = if (markerFile.exists()) {
+                    try { markerFile.readText().trim() } catch (_: Exception) { "" }
+                } else { "" }
+
+                if (cachedVersion != currentVersion) {
+                    copyAssetsToFilesDir("app")
+                    copyAssetsToFilesDir("certs")
+                    try {
+                        markerFile.writeText(currentVersion)
+                    } catch (_: Exception) { /* best-effort */ }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
             if (oldThread != null && oldThread.isAlive) {
                 try {
                     oldThread.join(3000) // Wait up to 3 seconds in the background
@@ -240,9 +247,8 @@ class ServerService : Service() {
                     sendServerStatus(STATUS_ERROR)
                 }
             } finally {
+                isStarting = false
                 sendServerStatus(STATUS_STOPPED)
-                // Now that the Python server is actually dead, clean up locks and stop the service
-                // only if this thread is still the active server thread (prevents overlapping restart races)
                 if (serverThread == Thread.currentThread()) {
                     releaseLocks()
                     stopSelf()
@@ -448,7 +454,7 @@ class ServerService : Service() {
             val outFile = java.io.File(filesDir, filename)
             outFile.parentFile?.mkdirs()
             outStream = java.io.FileOutputStream(outFile)
-            val buffer = ByteArray(1024)
+            val buffer = ByteArray(65536)
             var read: Int
             while (inStream.read(buffer).also { read = it } != -1) {
                 outStream.write(buffer, 0, read)

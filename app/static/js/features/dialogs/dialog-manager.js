@@ -592,6 +592,11 @@
     }
 
     function deleteSelected() {
+        if (window._isDeleteInProgress) {
+            return;
+        }
+        window._isDeleteInProgress = true;
+
         if (typeof window.closePreviewModal === "function") {
             window.closePreviewModal();
         }
@@ -612,7 +617,10 @@
         }
 
         window._contextMenuTarget = "";
-        if (itemsToDelete.length === 0) return;
+        if (itemsToDelete.length === 0) {
+            window._isDeleteInProgress = false;
+            return;
+        }
 
         var isClipboardDelete = window.activeTab === "clipboard" || (!isNaN(itemsToDelete[0]) && !isNaN(parseFloat(itemsToDelete[0])));
         if (isClipboardDelete) {
@@ -621,9 +629,12 @@
                 return fetch('/api/clipboard/remove/' + cbId, { method: 'DELETE' })
                     .then(function (res) { if (res.ok) completedCb++; });
             })).then(function () {
+                window._isDeleteInProgress = false;
                 if (typeof showToast === "function") showToast("Deleted " + completedCb + " clipboard item(s).", 3000);
                 if (typeof window.clearSelection === "function") window.clearSelection();
                 if (typeof refreshClipboardHistory === "function") refreshClipboardHistory();
+            }).catch(function() {
+                window._isDeleteInProgress = false;
             });
             return;
         }
@@ -633,6 +644,7 @@
 
         function deleteNext(index) {
             if (index >= itemsToDelete.length) {
+                window._isDeleteInProgress = false;
                 if (failed.length > 0) {
                     if (typeof showToast === "function") showToast("Deleted " + completed + " item(s). " + failed.length + " failed.", 4000);
                 } else {
