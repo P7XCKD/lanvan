@@ -386,7 +386,7 @@ class ResponsivenessMonitor:
     async def stop_monitoring(self):
         """Stop monitoring (compatibility wrapper)"""
         responsiveness_manager.stop_monitoring()
-        print("⏸ Responsiveness monitor stopped")
+        print("[STOP] Responsiveness monitor stopped")
     
     def get_recommended_settings(self) -> Dict[str, Any]:
         """Get recommended settings (compatibility wrapper)"""

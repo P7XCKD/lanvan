@@ -478,7 +478,9 @@ function initUploadWebSocket() {
     uploadWs = new WebSocket(wsUrl);
 
     uploadWs.onopen = function () {
-      console.log('[WS UPLOAD] 🟢 Connected to Upload Status WebSocket');
+      if (window.Logger && window.Logger.logWebSocket) {
+        window.Logger.logWebSocket('Connected', 'upload_status', 'CONNECTED');
+      }
       uploadWsBackoffDelay = 1000;
       if (uploadWsReconnectTimer) {
         clearTimeout(uploadWsReconnectTimer);
@@ -493,7 +495,9 @@ function initUploadWebSocket() {
           window.__lanvanTimelineTracker.recordEvent("wsEvent", "uploadWs: " + payload.type);
         }
         if (payload.type === 'file_list_updated' || payload.type === 'upload_complete') {
-          console.log('[WS UPLOAD] 🔄 Received real-time sync event across devices:', payload);
+          if (window.Logger && window.Logger.logWebSocket) {
+            window.Logger.logWebSocket('Event received', 'upload_status', 'SUCCESS', (payload.type || 'SYNC').toUpperCase());
+          }
           if (typeof window.requestSafeVisibleFilesRefresh === 'function') {
             window.requestSafeVisibleFilesRefresh(120);
           } else if (typeof refreshFileList === 'function') {
@@ -505,6 +509,9 @@ function initUploadWebSocket() {
 
     uploadWs.onclose = function () {
       uploadWs = null;
+      if (window.Logger && window.Logger.logWebSocket) {
+        window.Logger.logWebSocket('Disconnected', 'upload_status', 'DISCONNECTED');
+      }
       if (!uploadWsReconnectTimer) {
         uploadWsBackoffDelay = getNextWsBackoffDelay(uploadWsBackoffDelay);
         uploadWsReconnectTimer = setTimeout(initUploadWebSocket, uploadWsBackoffDelay);
@@ -540,7 +547,9 @@ function initFileEventsWebSocket() {
     fileEventsWs = new WebSocket(wsUrl);
 
     fileEventsWs.onopen = function () {
-      console.log('[WS FILE EVENTS] 🟢 Connected to Cross-Device Real-Time File Sync');
+      if (window.Logger && window.Logger.logWebSocket) {
+        window.Logger.logWebSocket('Connected', 'file_events', 'CONNECTED');
+      }
       fileEventsWsBackoffDelay = 1000;
       if (fileEventsWsReconnectTimer) {
         clearTimeout(fileEventsWsReconnectTimer);
@@ -555,14 +564,14 @@ function initFileEventsWebSocket() {
           window.__lanvanTimelineTracker.recordEvent("wsEvent", "fileEventsWs: " + payload.type);
         }
         if (payload.type === 'file_change') {
-          console.log('[WS FILE EVENTS] ⚡ Real-time file system mutation event received across devices:', payload);
-          console.log("[TRACE] WebSocket event | action: '" + payload.action + "' | target_dir: '" + payload.target_dir + "' | path: '" + payload.path + "'");
+          if (window.Logger && window.Logger.logWebSocket) {
+            window.Logger.logWebSocket('Event received', 'file_events', 'SUCCESS', (payload.action || 'file_change').toUpperCase());
+          }
           var wsFolder = (typeof window.getCurrentFolderPath === 'function') ? window.getCurrentFolderPath() : (window.currentFolderPath || '');
           var wsName = payload.path || '';
           var wsIdentity = (typeof window.getCanonicalIdentity === 'function')
             ? window.getCanonicalIdentity(payload.target_dir || '', wsName)
             : wsName;
-          console.log('[REAL WS RECEIVE] timestamp=' + new Date().toISOString() + ' action=' + payload.action + ' target_dir=' + (payload.target_dir || '') + ' path=' + (payload.path || '') + ' filename=' + wsName + ' canonicalIdentity=' + wsIdentity);
           if (typeof window.__lanvanForensicEmit === 'function') {
             window.__lanvanForensicEmit('websocket_receive', payload.action || 'file_change', {
               folder: wsFolder,
@@ -593,8 +602,6 @@ function initFileEventsWebSocket() {
               var afterSnap = (typeof window.__lanvanForensicSnapshotRepoCache === 'function')
                 ? window.__lanvanForensicSnapshotRepoCache('AFTER')
                 : null;
-              console.log('[REAL WS APPLY] repository cache modified=' + (beforeSnap && afterSnap ? JSON.stringify(beforeSnap) !== JSON.stringify(afterSnap) : 'unknown') +
-                ' folder invalidated=' + (payload.target_dir || '') + ' item removed=' + (payload.path || ''));
               if (typeof window.__lanvanForensicEmit === 'function') {
                 window.__lanvanForensicEmit('websocket_apply', payload.action || 'file_change', {
                   folder: wsFolder,

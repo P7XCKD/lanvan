@@ -7,6 +7,7 @@ Includes persistence mechanisms to save clipboard logs onto disk.
 import json
 import time
 import io
+import os
 import asyncio
 from pathlib import Path
 
@@ -21,13 +22,13 @@ from starlette.status import HTTP_400_BAD_REQUEST
 from app.ws_manager import clipboard_ws_manager
 from app.routers.files import generate_simple_file_preview
 from app.utils.universal_optimizer import get_adaptive_chunk_size
+from app.core.logger import logger
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+
 class _DynamicCacheVersion:
-    """Cache-busting version string that changes only on server restart, not every second.
-    Uses server start time converted to a compact hex string, so cache is valid
-    for the entire server session but invalidates on restart."""
+    """Cache-busting version string that changes only on server restart, not every second."""
     def __init__(self):
         self._version = hex(int(time.time()))[2:10]
     def __str__(self):
@@ -56,11 +57,11 @@ def load_clipboard_history():
                 data = json.load(f)
                 clipboard_history = data.get('items', [])
                 clipboard_id_counter = data.get('last_id', 0)
-                print(f"[INFO] Loaded {len(clipboard_history)} clipboard items from persistent storage")
+                logger.info("CLIPBOARD", "Loaded history from storage", details={"Items": len(clipboard_history)})
         else:
-            print("[INFO] No persistent clipboard history found, starting fresh")
+            logger.info("CLIPBOARD", "No persistent history found, starting fresh")
     except Exception as e:
-        print(f"[ERR] Error loading clipboard history: {e}")
+        logger.error("CLIPBOARD", "Error loading history", details={"Reason": str(e)})
         clipboard_history = []
         clipboard_id_counter = 0
 
@@ -70,11 +71,9 @@ def save_clipboard_history():
     global clipboard_history, clipboard_id_counter
 
     try:
-        # Enforce history limit to prevent file bloating
         if len(clipboard_history) > 50:
             clipboard_history = clipboard_history[:50]
 
-        # Prepare data for saving (convert binary data to base64 for JSON serialization)
         save_data = {
             'items': [],
             'last_id': clipboard_id_counter
@@ -82,28 +81,21 @@ def save_clipboard_history():
 
         for item in clipboard_history:
             save_item = item.copy()
-
-            # Handle binary data for files
             if item['type'] == 'file' and 'data' in item:
                 import base64
                 save_item['data'] = base64.b64encode(item['data']).decode('utf-8')
                 save_item['data_encoding'] = 'base64'
-
             save_data['items'].append(save_item)
 
-        # Ensure directory exists before writing
         CLIPBOARD_FOLDER.mkdir(parents=True, exist_ok=True)
-
-        # Write to file atomically
         temp_file = CLIPBOARD_HISTORY_FILE.with_suffix('.tmp')
         with open(temp_file, 'w', encoding='utf-8') as f:
             json.dump(save_data, f, indent=2, ensure_ascii=False)
 
-        # Atomic rename
         temp_file.replace(CLIPBOARD_HISTORY_FILE)
 
     except Exception as e:
-        print(f"[ERR] Error saving clipboard history: {e}")
+        logger.error("CLIPBOARD", "Error saving history", details={"Reason": str(e)})
 
 
 def restore_clipboard_data(items):
@@ -113,12 +105,10 @@ def restore_clipboard_data(items):
             import base64
             try:
                 item['data'] = base64.b64decode(item['data'])
-                del item['data_encoding']  # Remove the encoding marker
+                del item['data_encoding']
             except Exception as e:
-                print(f"[ERR] Error decoding clipboard item {item.get('id', 'unknown')}: {e}")
-                # Remove corrupted item
+                logger.error("CLIPBOARD", "Error decoding item", details={"ID": item.get('id', 'unknown'), "Reason": str(e)})
                 continue
-
     return items
 
 
@@ -130,9 +120,9 @@ def initialize_clipboard_persistence():
         global clipboard_history
         if clipboard_history:
             clipboard_history = restore_clipboard_data(clipboard_history)
-        print(f"[INFO] Clipboard persistence initialized successfully with {len(clipboard_history)} items")
+        logger.info("CLIPBOARD", "Persistence initialized", details={"Items": len(clipboard_history)})
     except Exception as e:
-        print(f"[ERR] Error initializing clipboard persistence: {e}")
+        logger.error("CLIPBOARD", "Persistence initialization failed", details={"Reason": str(e)})
         clipboard_history.clear()
         global clipboard_id_counter
         clipboard_id_counter = 0
@@ -166,7 +156,6 @@ async def add_to_clipboard(
     global clipboard_id_counter, clipboard_history
 
     try:
-        # Fallback extraction if FastAPI parameter binding didn't capture file/data
         if not file and not data:
             try:
                 content_type_header = request.headers.get("content-type", "")
@@ -179,8 +168,8 @@ async def add_to_clipboard(
                         file = form["file"]
                     elif "data" in form:
                         data = form["data"]
-            except Exception as e:
-                print(f"[DEBUG clipboard_add fallback err]: {e}")
+            except Exception:
+                pass
 
         clipboard_id_counter += 1
         timestamp = time.time()
@@ -188,14 +177,12 @@ async def add_to_clipboard(
         if file and (isinstance(file, UploadFile) or hasattr(file, "filename")):
             filename = getattr(file, "filename", None) or f"clipboard-image-{int(timestamp)}.png"
 
-            # Handle file upload to clipboard
             if not filename:
                 return JSONResponse(
                     status_code=400,
                     content={"status": "error", "msg": "No filename provided"}
                 )
 
-            # Validate file type for clipboard
             allowed_types = {
                 'image': ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'],
                 'text': ['txt', 'md', 'json', 'csv', 'xml'],
@@ -211,13 +198,11 @@ async def add_to_clipboard(
                     content_type = type_name
                     break
 
-            # Get platform-optimal chunk size
             CHUNK_SIZE = get_adaptive_chunk_size(1024 * 1024)
-            MAX_SIZE = 10 * 1024 * 1024  # 10MB limit
+            MAX_SIZE = 10 * 1024 * 1024
             file_content = b""
             file_size = 0
 
-            # Read content from UploadFile or bytes
             if hasattr(file, "read"):
                 while True:
                     chunk = await file.read(CHUNK_SIZE) if asyncio.iscoroutinefunction(file.read) else file.read(CHUNK_SIZE)
@@ -236,7 +221,6 @@ async def add_to_clipboard(
                 file_content = file
                 file_size = len(file)
 
-            # Create clipboard item for file (with base64 image preview)
             preview = generate_simple_file_preview(filename, file_content, content_type)
 
             clipboard_item = {
@@ -252,16 +236,14 @@ async def add_to_clipboard(
                 "is_image_preview": content_type == 'image' and preview.startswith('data:')
             }
 
+            logger.log_clipboard("Add", item_type=content_type, size_bytes=file_size, status="SUCCESS")
 
         elif data and isinstance(data, str):
-
-            # Handle text/data content
             content_size = len(data.encode('utf-8'))
 
-            # Detect content type
             if data.startswith('data:image/'):
                 content_type = 'image_base64'
-                preview = "Base64 image data (no preview)"  # No image preview
+                preview = "Base64 image data (no preview)"
             elif data.startswith('http://') or data.startswith('https://'):
                 content_type = 'url'
                 preview = data[:100] + "..." if len(data) > 100 else data
@@ -279,23 +261,21 @@ async def add_to_clipboard(
                 "formatted_time": time.strftime("%I:%M:%S %p", time.localtime(timestamp)),
                 "preview": preview
             }
+
+            logger.log_clipboard("Add", item_type=content_type, size_bytes=content_size, status="SUCCESS")
         else:
             return JSONResponse(
                 status_code=400,
                 content={"status": "error", "msg": "No content provided"}
             )
 
-        # Add to clipboard history (newest first)
         clipboard_history.insert(0, clipboard_item)
 
-        # Keep only last 50 items to prevent memory bloat
         if len(clipboard_history) > 50:
             clipboard_history = clipboard_history[:50]
 
-        # Save to persistent storage
         save_clipboard_history()
 
-        # Notify all websocket clients (real-time clipboard update)
         try:
             await clipboard_ws_manager.broadcast("refresh")
         except Exception:
@@ -316,9 +296,7 @@ async def add_to_clipboard(
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-
+        logger.log_clipboard("Add", status="FAILED", reason=str(e))
         return JSONResponse(
             status_code=500,
             content={"status": "error", "msg": f"Failed to add to clipboard: {str(e)}"}
@@ -331,7 +309,6 @@ async def get_clipboard_history():
     global clipboard_history
 
     try:
-        # Return sanitized clipboard history (without large data but with image previews)
         history = []
         for item in clipboard_history:
             sanitized_item = {
@@ -344,7 +321,6 @@ async def get_clipboard_history():
                 "is_image_preview": item.get("is_image_preview", False)
             }
 
-            # Add filename for file items
             if item["type"] == "file":
                 sanitized_item["filename"] = item["filename"]
 
@@ -374,11 +350,10 @@ async def get_clipboard_item(item_id: int, request: Request, download: Optional[
                 content={"status": "error", "msg": "Clipboard item not found"}
             )
 
+        logger.log_clipboard("Read", item_type=item.get("content_type", "TEXT"), size_bytes=item.get("size"))
         is_download = download is not None and str(download).lower() in ("1", "true", "yes")
 
         if item["type"] == "file":
-            # Return file as download or inline preview
-
             file_data = item["data"]
             filename = item["filename"]
             
@@ -388,7 +363,6 @@ async def get_clipboard_item(item_id: int, request: Request, download: Optional[
             safe_name = secure_filename(filename) or "file"
             encoded_filename = quote(safe_name)
 
-            # Determine MIME type
             mime_type, _ = guess_type(safe_name)
             if not mime_type:
                 mime_type = "application/octet-stream"
@@ -419,8 +393,6 @@ async def get_clipboard_item(item_id: int, request: Request, download: Optional[
                         "Content-Length": str(len(text_bytes))
                     }
                 )
-
-            # Return text content JSON for non-download API callers
 
             return JSONResponse(content={
                 "status": "success",
@@ -521,8 +493,8 @@ def clear_clipboard_data_sync() -> None:
 async def clear_clipboard():
     """Clear all clipboard items from history and persistent storage."""
     clear_clipboard_data_sync()
+    logger.log_clipboard("Clear", status="SUCCESS")
     
-    # Broadcast clear action to active WebSocket listeners
     try:
         await clipboard_ws_manager.broadcast("refresh")
     except Exception:
@@ -539,8 +511,8 @@ async def remove_clipboard_item(item_id: int):
         if item["id"] == item_id:
             clipboard_history.pop(idx)
             save_clipboard_history()
+            logger.log_clipboard("Remove", status="SUCCESS")
             
-            # Broadcast delete action to active WebSocket listeners
             try:
                 await clipboard_ws_manager.broadcast("refresh")
             except Exception:
@@ -553,10 +525,9 @@ async def remove_clipboard_item(item_id: int):
     )
 
 
-
 @router.get("/api/clipboard", name="clipboard_status")
 async def clipboard_status():
-    """Get simple clipboard status status information."""
+    """Get simple clipboard status information."""
     return {"status": "success", "count": len(clipboard_history)}
 
 
@@ -586,9 +557,6 @@ async def clipboard_write(request: Request):
             content={"status": "error", "msg": "No clipboard data provided"}
         )
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-
         return JSONResponse(
             status_code=500,
             content={"status": "error", "msg": f"Clipboard write failed: {str(e)}"}

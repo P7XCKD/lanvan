@@ -137,6 +137,12 @@ class UIEventsConnectionManager:
             await self.disconnect(conn_id)
 
 
+    async def broadcast_server_shutdown(self, reason: str = "Server shutting down", graceful_time: float = 3.0):
+        """
+        Broadcasts a server shutdown notification to all connected UI clients.
+        """
+        await self.broadcast("server_shutdown", {"reason": reason, "graceful_time": graceful_time})
+
     async def shutdown(self):
         """
         Gracefully closes all active WebSocket connections and clears
