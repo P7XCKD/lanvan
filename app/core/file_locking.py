@@ -19,6 +19,7 @@ from typing import Optional, Union, AsyncIterator
 import logging
 
 from app.utils.termux_compat import is_android_environment
+from app.core.logger import logger
 
 # Platform detection
 IS_WINDOWS = os.name == 'nt'

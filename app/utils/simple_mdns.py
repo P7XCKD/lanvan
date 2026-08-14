@@ -84,12 +84,12 @@ def force_cleanup_mdns_resources():
                          if t.daemon and 'zeroconf' in str(t).lower()]
         
         if daemon_threads:
-            print(f"[CLEAN] Found {len(daemon_threads)} zeroconf daemon threads (will be cleaned up on exit)")
+            logger.debug("MDNS", "Active daemon threads detected during cleanup", details={"Count": len(daemon_threads)})
         
-        print("[CLEAN] Forced cleanup of mDNS resources")
+        logger.debug("MDNS", "Cleanup of mDNS resources executed")
         return True
     except Exception as e:
-        print(f"[WARN] Cleanup warning: {e}")
+        logger.warn("MDNS", "Cleanup warning", details={"Reason": str(e)})
         return False
 
 class SimpleMDNSManager:
@@ -248,55 +248,44 @@ class SimpleMDNSManager:
                 """Handle service discovery with compatibility for different zeroconf versions"""
                 services_found.append(name.lower())
             
+            browser = None
             try:
-                # Create zeroconf with local-only interfaces to work offline
                 zeroconf_browser = Zeroconf()
-                
                 try:
                     browser = ServiceBrowser(zeroconf_browser, self.service_type, handlers=[service_added])
-                    
-                    # Wait briefly for discovery (reduced time for offline scenarios)
-                    time.sleep(0.4)  # 400ms for stable packet capture
-                    
-                    try:
-                        browser.cancel()
-                    except Exception:
-                        pass  # Ignore cancel errors
-                        
+                    time.sleep(0.3)
                 except Exception as browser_error:
                     print(f"[WARN] Service browser error (non-critical): {browser_error}")
-                    # Continue without collision detection
                 
-                # Check if our desired name conflicts
                 normalized_services = [s.split('.')[0] for s in services_found]
                 base_lower = service_name.lower()
                 
                 if base_lower not in normalized_services:
                     return service_name, False
                 
-                # Find the next free incremental name (e.g. Lanvan-2, Lanvan-3)
                 counter = 2
                 while True:
                     candidate = f"{service_name}-{counter}"
                     if candidate.lower() not in normalized_services:
-                        print(f"[WARN] Name collision detected! '{service_name}' is already in use")
-                        print(f"[RETRY] Using alternative name: '{candidate}'")
+                        logger.warn("MDNS", "Name collision detected, using alternative", details={"BaseName": service_name, "Candidate": candidate})
                         return candidate, True
                     counter += 1
-                    if counter > 100:  # Safety bound
+                    if counter > 100:
                         break
                 
-                # Fallback to device ID if counter is too large
                 alternative_name = f"{service_name}-{self.device_id}"
                 return alternative_name, True
                     
             except Exception as browse_error:
-                print(f"[WARN] Collision detection failed (possibly offline): {browse_error}")
-                # If collision detection fails, add device identifier as safety measure
                 safe_name = f"{service_name}-{self.device_id}"
-                print(f"[CFG] Using safe unique name for offline: '{safe_name}'")
+                logger.info("MDNS", "Using unique name fallback", details={"SafeName": safe_name, "Reason": str(browse_error)})
                 return safe_name, False
             finally:
+                if browser:
+                    try:
+                        browser.cancel()
+                    except Exception:
+                        pass
                 if zeroconf_browser:
                     try:
                         zeroconf_browser.close()
@@ -304,10 +293,8 @@ class SimpleMDNSManager:
                         pass
                 
         except Exception as e:
-            print(f"[WARN] Collision detection system failure: {e}")
-            # If collision detection completely fails, add device identifier as safety measure
             safe_name = f"{service_name}-{self.device_id}"
-            print(f"[CFG] Using safe unique name: '{safe_name}'")
+            logger.warn("MDNS", "Collision detection system warning", details={"SafeName": safe_name, "Reason": str(e)})
             return safe_name, False
         self._lock = threading.Lock()
         
@@ -335,7 +322,7 @@ class SimpleMDNSManager:
                                 if not ip.startswith('127.') and ip != '192.0.0.4':
                                     return ip
             except Exception as e:
-                print(f"[Android] IP route method failed: {e}")
+                logger.debug("ANDROID", "IP route method failed", details={"Reason": str(e)})
             
             # Method 2: Connect to external service to get our IP
             try:
@@ -346,7 +333,7 @@ class SimpleMDNSManager:
                     if not ip.startswith('127.') and ip != '192.0.0.4':
                         return ip
             except Exception as e:
-                print(f"[Android] Socket method failed: {e}")
+                logger.debug("ANDROID", "Socket method failed", details={"Reason": str(e)})
             
             # Method 3: Parse network interfaces directly
             try:
@@ -356,7 +343,6 @@ class SimpleMDNSManager:
                     lines = result.stdout.split('\n')
                     for line in lines:
                         if 'inet ' in line and 'wlan' in line:
-                            # Extract IP from line like "inet 192.168.1.100/24"
                             parts = line.strip().split()
                             for part in parts:
                                 if '/' in part and not part.startswith('127.') and '192.0.0.4' not in part:
@@ -364,11 +350,11 @@ class SimpleMDNSManager:
                                     if ip.startswith('192.168.') or ip.startswith('10.') or ip.startswith('172.'):
                                         return ip
             except Exception as e:
-                print(f"[Android] Interface parsing failed: {e}")
+                logger.debug("ANDROID", "Interface parsing failed", details={"Reason": str(e)})
             
             return None
         except Exception as e:
-            print(f"[Android] All network detection methods failed: {e}")
+            logger.debug("ANDROID", "All network detection methods failed", details={"Reason": str(e)})
             return None
         
     def _is_docker_bridge_ip(self, ip_str: str) -> bool:
@@ -389,46 +375,39 @@ class SimpleMDNSManager:
         return False
 
     def get_lan_ip(self) -> str:
-        """Get the LAN IP address - delegates to authoritative network_resolver"""
+        """Get the LAN IP address - delegates to authoritative ServerNetworkState"""
         try:
-            from app.utils.network_resolver import resolve_advertise_host
-            res = resolve_advertise_host()
-            self.lan_ip = res["lan_ip"] or "127.0.0.1"
+            from app.core.network_state import ServerNetworkState
+            self.lan_ip = ServerNetworkState.get_canonical_ip()
             return self.lan_ip
         except Exception as e:
-            print(f"[ERR] Failed to get LAN IP: {e}")
+            logger.warn("MDNS", "Failed to get LAN IP from ServerNetworkState", details={"Reason": str(e)})
             return "127.0.0.1"
     
     def generate_service_name(self) -> str:
         """Generate unique service name with collision resolution"""
-        base_name = self.base_service_name  # Use same base name for both HTTP and HTTPS
-        
-        # Use collision detection for the base name
+        base_name = self.base_service_name
         final_name, collision_resolved = self._detect_collision(base_name)
-        
         if collision_resolved:
             self.conflict_count += 1
-        
         return final_name
     
     def start_service(self) -> bool:
         """Start mDNS service with offline support, collision detection, and Termux compatibility"""
         try:
             with self._lock:
-                self.ref_count += 1
                 if self.is_running:
-                    print(f"[INFO] mDNS service already running (ref_count={self.ref_count})")
+                    logger.info("MDNS", "mDNS service already running")
                     return True
                 
-                # Check if running in Docker container environment (Docker bridge network isolates mDNS multicast)
+                self.ref_count = 1
                 from app.utils.network_resolver import is_docker_environment
                 if is_docker_environment():
-                    print("[NET] mDNS service disabled in Docker container mode (multicast isolated by Docker bridge network). Using direct LAN IP access.")
+                    logger.info("MDNS", "mDNS service disabled in Docker container mode")
                     return False
 
-                # Check if mDNS is available
                 if not self.mdns_available or not ZEROCONF_AVAILABLE:
-                    print("[ERR] mDNS/Zeroconf is unavailable (library not loaded or blocked)")
+                    logger.warn("MDNS", "mDNS/Zeroconf is unavailable")
                     return False
 
 
@@ -448,7 +427,21 @@ class SimpleMDNSManager:
                 
                 self.service_name = self.generate_service_name()
                 self.domain = f"{self.service_name}.local"
-                
+
+                # Sync port and protocol from the authoritative network state so the
+                # advertised mDNS URL always matches the actual server endpoint.
+                # The constructor default of port=80 is a placeholder; the real port
+                # (e.g. 5000) is only known after the app starts and sets PORT env var.
+                try:
+                    from app.core.network_state import ServerNetworkState
+                    self.port = ServerNetworkState.get_canonical_port()
+                    self.actual_port = self.port
+                    self.protocol = ServerNetworkState.get_canonical_protocol()
+                    self.actual_protocol = self.protocol
+                except Exception as ns_err:
+                    logger.warn("MDNS", "Could not sync port from ServerNetworkState, using default",
+                                details={"Reason": str(ns_err), "Port": self.port})
+
                 lan_ip = self.get_lan_ip()
                 if lan_ip == "127.0.0.1" or self._is_docker_bridge_ip(lan_ip):
                     logger.warn("MDNS", "Service discovery disabled: No physical LAN IP available", details={"IP": lan_ip})
@@ -534,10 +527,7 @@ class SimpleMDNSManager:
         """Stop the mDNS service with enhanced cleanup for Termux/Android"""
         try:
             with self._lock:
-                self.ref_count -= 1
-                if self.ref_count > 0:
-                    logger.info("MDNS", "Stop requested but instances active", details={"RefCount": self.ref_count})
-                    return
+                self.ref_count = 0
                 if not self.is_running:
                     return
                 
@@ -552,10 +542,10 @@ class SimpleMDNSManager:
                         logger.info("MDNS", "Service unregistered", details={"Host": self.domain})
                     except Exception as unreg_error:
                         logger.warn("MDNS", "Unregister warning", details={"Reason": str(unreg_error)})
-                
-                if self.zeroconf:
+                    
                     try:
                         self.zeroconf.close()
+                        time.sleep(0.1)
                         logger.info("MDNS", "Zeroconf resources closed")
                     except Exception as close_error:
                         logger.warn("MDNS", "Zeroconf close warning", details={"Reason": str(close_error)})
@@ -574,8 +564,8 @@ class SimpleMDNSManager:
                 logger.info("MDNS", "Service stopped", details={"Status": "INACTIVE"})
                 
         except Exception as e:
-            print(f"[ERR] Error stopping mDNS service: {e}")
-            # Force reset even if there were errors
+            logger.error("MDNS", "Error stopping mDNS service", details={"Reason": str(e)})
+            self.ref_count = 0
             self.is_running = False
             self.service_info = None
             self.zeroconf = None

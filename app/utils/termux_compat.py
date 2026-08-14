@@ -10,6 +10,7 @@ import time
 import gc
 import platform as py_platform
 from typing import Any, Dict, Optional, Callable, Union
+from app.core.logger import logger
 
 
 def is_termux_environment() -> bool:
@@ -243,7 +244,7 @@ def should_use_lightweight_mode() -> bool:
 
 # Initialize Termux optimizations if we're in Termux
 if is_termux_environment():
-    print("[BOT] Termux environment detected - initializing compatibility layer")
+    logger.info("ANDROID", "Termux environment detected, initializing compatibility layer")
     optimize_for_termux()
 
 

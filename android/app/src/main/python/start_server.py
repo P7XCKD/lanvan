@@ -4,6 +4,7 @@ import re
 import uvicorn
 import asyncio
 from datetime import datetime
+from app.core.logger import logger
 
 # Inject paths so python can resolve local imports properly inside Android environment
 sys.path.append(os.path.dirname(__file__))
@@ -35,21 +36,17 @@ class LogWriter:
     def __init__(self, filepath, terminal):
         self.file = open(filepath, 'a', encoding='utf-8')
         self.terminal = terminal
-        self._last_line = ""
         
     def write(self, message):
         sanitized_msg = sanitize_log_message(message)
-        stripped = sanitized_msg.strip()
-        if stripped and stripped == self._last_line:
-            return
-        if stripped:
-            self._last_line = stripped
-        self.terminal.write(sanitized_msg)
+        if self.terminal:
+            self.terminal.write(sanitized_msg)
         self.file.write(sanitized_msg)
         self.file.flush()
         
     def flush(self):
-        self.terminal.flush()
+        if self.terminal:
+            self.terminal.flush()
         self.file.flush()
 
     def isatty(self):
@@ -75,10 +72,12 @@ def run_fastapi_server(port="5000", use_https="false", files_dir=None, is_debug=
     if files_dir:
         log_path = os.path.join(files_dir, "lanvan_app.log")
         
-        # Redirect stdout and stderr to the single persistent log file
-        writer = LogWriter(log_path, sys.stderr)
-        sys.stdout = LogWriter(log_path, sys.stdout)
-        sys.stderr = writer
+        # Redirect stdout and stderr to the single persistent log file if not already wrapped
+        if not isinstance(sys.stdout, LogWriter):
+            orig_stdout = getattr(sys, '__stdout__', sys.stdout) or sys.stdout
+            orig_stderr = getattr(sys, '__stderr__', sys.stderr) or sys.stderr
+            sys.stdout = LogWriter(log_path, orig_stdout)
+            sys.stderr = LogWriter(log_path, orig_stderr)
         
         # Change working directory so relative resource directories (like app/static) resolve
         os.chdir(files_dir)
@@ -115,18 +114,9 @@ def run_fastapi_server(port="5000", use_https="false", files_dir=None, is_debug=
         
     global _active_server
     
-    # Create and set a fresh asyncio event loop for this server thread in Chaquopy
+    # Import app module for Uvicorn runner
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    except Exception as e:
-        print(f"[WARN] Failed to reset asyncio event loop: {e}")
-
-    # Re-import and reload app module so fresh FastAPI app and lifespan are created
-    try:
-        import importlib
         import app.main
-        importlib.reload(app.main)
         app_instance = app.main.app
     except Exception as e:
         import traceback
@@ -136,20 +126,36 @@ def run_fastapi_server(port="5000", use_https="false", files_dir=None, is_debug=
     os.environ['PORT'] = str(port)
     os.environ['USE_HTTPS'] = str(use_https).lower()
 
-    # If Android passed in the correct Wi-Fi LAN IP, pin it as the authoritative advertise host.
-    # This prevents Python's own interface detection from picking a hotspot or VPN bridge address.
+    from app.core.network_state import ServerNetworkState
+
+    # Probe the target port before touching any global state.
+    # If port is already occupied (by our own running instance or another process),
+    # skip startup entirely — do NOT modify ServerNetworkState, which would corrupt
+    # the running server's status and trigger false "Server is Offline" overlays.
+    import socket as _socket
+    with _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM) as _probe:
+        _probe.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
+        if _probe.connect_ex(('127.0.0.1', int(port))) == 0:
+            logger.info("SYSTEM", "Port already in use — server already running, skipping restart",
+                        details={"Port": port})
+            return
+
+    current_status = ServerNetworkState.get_status()
+    if current_status == "RUNNING" and _active_server is not None:
+        logger.info("SYSTEM", "Server is already running, skipping duplicate initialization", details={"Status": current_status})
+        return
+
+    ServerNetworkState.increment_generation()
     if lan_ip and str(lan_ip).strip() and str(lan_ip).strip() != "127.0.0.1":
-        os.environ['LANVAN_HOST'] = str(lan_ip).strip()
-        print(f"[NET] Android LAN IP pinned: {os.environ['LANVAN_HOST']}")
+        ServerNetworkState.set_pinned_lan_ip(str(lan_ip).strip())
     
-    # Configure SSL arguments dynamically if HTTPS protocol is selected
     uvicorn_kwargs = {
         "app": app_instance,
         "host": "0.0.0.0",
         "port": int(port),
         "log_level": "info",
-        "timeout_keep_alive": 5,
-        "timeout_graceful_shutdown": 3
+        "timeout_keep_alive": 1,
+        "timeout_graceful_shutdown": 1
     }
     
     if str(use_https).lower() == "true":
@@ -158,23 +164,33 @@ def run_fastapi_server(port="5000", use_https="false", files_dir=None, is_debug=
         if os.path.exists(ssl_key) and os.path.exists(ssl_cert):
             uvicorn_kwargs["ssl_keyfile"] = ssl_key
             uvicorn_kwargs["ssl_certfile"] = ssl_cert
-            print(f"[LOCK] SSL certificates configured successfully on Android")
+            logger.info("LOCK", "SSL certificates configured on Android")
         else:
-            print(f"[WARN] HTTPS requested but SSL certificates not found at {ssl_key} / {ssl_cert}")
+            logger.warn("LOCK", "HTTPS requested but SSL certificates missing")
             
+    # Track whether this invocation successfully owned the server lifecycle
+    _owned_lifecycle = False
     try:
         config = uvicorn.Config(**uvicorn_kwargs)
         _active_server = uvicorn.Server(config)
-        # Configure and launch Uvicorn on all local network interfaces
+        # Mark RUNNING only after we have created the server object and are
+        # about to block inside run(). This is the point of no return.
+        ServerNetworkState.set_status("RUNNING")
+        _owned_lifecycle = True
         _active_server.run()
     except SystemExit as e:
-        print(f"[!] Server thread received SystemExit")
+        logger.info("SYSTEM", "Server thread received SystemExit")
         raise e
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise e
     finally:
+        # Only update global state when we actually owned the lifecycle.
+        # If binding failed before run() was called, _owned_lifecycle is False
+        # and we must not overwrite state that belongs to a running instance.
+        if _owned_lifecycle:
+            ServerNetworkState.set_status("STOPPED")
         _active_server = None
 
 _active_server = None
@@ -185,8 +201,10 @@ def get_active_server():
 
 def force_stop_uvicorn_server():
     global _active_server
+    from app.core.network_state import ServerNetworkState
+    ServerNetworkState.set_status("STOPPING")
     if _active_server is not None:
-        print("[HOT] Force-stopping Uvicorn server from Python code...")
+        logger.info("SYSTEM", "Force-stopping Uvicorn server")
         _active_server.should_exit = True
 
 def get_qr_matrix(data: str):

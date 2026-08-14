@@ -64,12 +64,10 @@ class ClientDisconnectFilter(logging.Filter):
                 return False
         return True
 
-logging.getLogger("uvicorn.error").addFilter(ClientDisconnectFilter())
-logging.getLogger("uvicorn").addFilter(ClientDisconnectFilter())
-logging.getLogger("uvicorn.access").addFilter(ClientDisconnectFilter())
-logging.getLogger("starlette").addFilter(ClientDisconnectFilter())
-logging.getLogger("fastapi").addFilter(ClientDisconnectFilter())
-logging.getLogger().addFilter(ClientDisconnectFilter())
+for _logger_name in ("uvicorn.error", "uvicorn", "uvicorn.access", "starlette", "fastapi", ""):
+    _target_logger = logging.getLogger(_logger_name)
+    if not any(isinstance(f, ClientDisconnectFilter) for f in _target_logger.filters):
+        _target_logger.addFilter(ClientDisconnectFilter())
 
 shutdown_event = asyncio.Event()
 active_connections = set()

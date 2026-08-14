@@ -185,6 +185,15 @@ class MainActivity : AppCompatActivity() {
                 btnStartServer.isEnabled = false
                 btnStartServer.text = "Starting..."
                 val useHttps = sharedPrefs.getBoolean("use_https", false)
+                val port = sharedPrefs.getInt("server_port", 5000)
+                val lanIp = getLocalIpAddress()
+                if (lanIp != "127.0.0.1") {
+                    val scheme = if (useHttps) "https" else "http"
+                    val previewUrl = if (port == 80 || port == 443) "$scheme://$lanIp" else "$scheme://$lanIp:$port"
+                    currentServerUrl = previewUrl
+                    txtIpLink.text = previewUrl
+                    generateQrCodeBitmapAsync(previewUrl)
+                }
                 startServerService(useHttps)
                 refreshLanNetworkState()
                 lanFallbackHandler.removeCallbacks(lanFallbackRunnable)
@@ -456,11 +465,7 @@ class MainActivity : AppCompatActivity() {
                     txtIpLink.text = currentServerUrl
 
                     if (currentServerUrl.isNotEmpty() && currentServerUrl != lastGeneratedQrUrl) {
-                        val bitmap = generateQrCodeBitmap(currentServerUrl)
-                        if (bitmap != null) {
-                            imgQrCode.setImageBitmap(bitmap)
-                            lastGeneratedQrUrl = currentServerUrl
-                        }
+                        generateQrCodeBitmapAsync(currentServerUrl)
                     }
 
                     cardStopped.visibility = View.GONE
@@ -509,34 +514,79 @@ class MainActivity : AppCompatActivity() {
         updateSupportCardVisibility()
     }
 
-    private fun generateQrCodeBitmap(data: String): Bitmap? {
-        try {
-            val py = Python.getInstance()
-            val module = py.getModule("start_server")
-            val matrixList = module.callAttr("get_qr_matrix", data).asList()
+    private fun generateQrCodeBitmapAsync(data: String) {
+        if (data.isEmpty()) return
+        val targetUrl = data
+        java.util.concurrent.Executors.newSingleThreadExecutor().execute {
+            try {
+                // 1. Fast Native ZXing Generation (Zero latency, works during onboarding before Python boots)
+                try {
+                    val writer = com.google.zxing.qrcode.QRCodeWriter()
+                    val matrix = writer.encode(
+                        targetUrl,
+                        com.google.zxing.BarcodeFormat.QR_CODE,
+                        300,
+                        300,
+                        mapOf(com.google.zxing.EncodeHintType.MARGIN to 1)
+                    )
+                    val width = matrix.width
+                    val height = matrix.height
+                    val pixels = IntArray(width * height)
+                    for (y in 0 until height) {
+                        val offset = y * width
+                        for (x in 0 until width) {
+                            pixels[offset + x] = if (matrix.get(x, y)) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+                        }
+                    }
+                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
 
-            val size = matrixList.size
-            val scale = 8
-            val width = size * scale
-            val bitmap = Bitmap.createBitmap(width, width, Bitmap.Config.ARGB_8888)
+                    runOnUiThread {
+                        imgQrCode.setImageBitmap(bitmap)
+                        lastGeneratedQrUrl = targetUrl
+                    }
+                    return@execute
+                } catch (_: Exception) {
+                    // Fallback to Python matrix generation if ZXing fails
+                }
 
-            for (y in 0 until size) {
-                val row = matrixList[y].asList()
-                for (x in 0 until size) {
-                    val isBlack = row[x].toBoolean()
-                    val color = if (isBlack) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
-                    for (dy in 0 until scale) {
-                        for (dx in 0 until scale) {
-                            bitmap.setPixel(x * scale + dx, y * scale + dy, color)
+                // 2. Python Fallback
+                if (!Python.isStarted()) return@execute
+                val py = Python.getInstance()
+                val module = py.getModule("start_server")
+                val matrixList = module.callAttr("get_qr_matrix", targetUrl).asList()
+
+                val size = matrixList.size
+                val scale = 8
+                val width = size * scale
+                val pixels = IntArray(width * width)
+
+                for (y in 0 until size) {
+                    val row = matrixList[y].asList()
+                    for (x in 0 until size) {
+                        val isBlack = row[x].toBoolean()
+                        val color = if (isBlack) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+                        val startY = y * scale
+                        val startX = x * scale
+                        for (dy in 0 until scale) {
+                            val rowOffset = (startY + dy) * width
+                            for (dx in 0 until scale) {
+                                pixels[rowOffset + startX + dx] = color
+                            }
                         }
                     }
                 }
+                val bitmap = Bitmap.createBitmap(width, width, Bitmap.Config.ARGB_8888)
+                bitmap.setPixels(pixels, 0, width, 0, 0, width, width)
+
+                runOnUiThread {
+                    imgQrCode.setImageBitmap(bitmap)
+                    lastGeneratedQrUrl = targetUrl
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-            return bitmap
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
-        return null
     }
 
     private fun detectShareableLanNetwork(): LanNetworkState = com.probz.lanvan.detectShareableLanNetwork(this)
@@ -551,12 +601,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStorageUsage() {
-        try {
-            val totalBytes = calculateStorageBytes()
-            val totalMB = totalBytes.toDouble() / (1024.0 * 1024.0)
-            txtStorageUsage.text = String.format(Locale.US, "%.2f MB", totalMB)
-        } catch (_: Exception) {
-            txtStorageUsage.text = "0.00 MB"
+        java.util.concurrent.Executors.newSingleThreadExecutor().execute {
+            try {
+                val totalBytes = calculateStorageBytes()
+                val totalMB = totalBytes.toDouble() / (1024.0 * 1024.0)
+                val formatted = String.format(Locale.US, "%.2f MB", totalMB)
+                runOnUiThread {
+                    txtStorageUsage.text = formatted
+                }
+            } catch (_: Exception) {
+                runOnUiThread {
+                    txtStorageUsage.text = "0.00 MB"
+                }
+            }
         }
     }
 
@@ -1665,7 +1722,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderSpotlightStep(stepIndex: Int) {
-        currentSpotlightStep = stepIndex
+        var effectiveStep = stepIndex
+        if (effectiveStep == 4 && isBatteryOptimizationExempted()) {
+            effectiveStep = if (currentSpotlightStep < 4) 5 else 3
+        }
+        currentSpotlightStep = effectiveStep
 
         val isExempted = isBatteryOptimizationExempted()
         val bgTargetId = if (!isExempted) R.id.card_stopped_bg_warning else R.id.btn_settings
@@ -1753,10 +1814,7 @@ class MainActivity : AppCompatActivity() {
 
             val displayUrl = if (currentServerUrl.isNotEmpty()) currentServerUrl else "http://192.168.1.100:5000"
             txtIpLink.text = displayUrl
-            val qrBitmap = generateQrCodeBitmap(displayUrl)
-            if (qrBitmap != null) {
-                imgQrCode.setImageBitmap(qrBitmap)
-            }
+            generateQrCodeBitmapAsync(displayUrl)
         } else {
             handleStatusUpdate(preTutorialStatus)
             if (!isExempted && (stepIndex >= 4 || hasSeenBatteryStep)) {

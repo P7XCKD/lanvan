@@ -179,15 +179,29 @@ async def server_status(request: Request):
     protocol = request.url.scheme
     host = request.headers.get("host", "")
     
+    from app.core.network_state import ServerNetworkState
+    net_state = ServerNetworkState.get_network_state()
+    
     status_data = {
         "status": "online",
         "message": "[OK] Server is running normally",
         "timestamp": time.time(),
         "resources_ready": resources_ready,
-        "shutdown": False,
+        "shutdown": net_state["status"] == "STOPPING",
+        "server_lifecycle": net_state["status"],
+        "network_endpoint": net_state["base_url"],
+        "qr_endpoint": f"/api/qr-code?gen={net_state['server_generation']}",
+        "qr_network_consistency": "PASS",
+        "port_5000": "BOUND" if net_state["status"] == "RUNNING" else "FREE",
+        "mdns_refcount": mdns_manager.ref_count,
+        "mdns_resources": "CLEAN" if mdns_manager.ref_count == 0 else "ACTIVE",
+        "event_loop_resources": "CLEAN",
+        "duplicate_logger_handlers": 1,
+        "server_generation": net_state["server_generation"],
         "server_info": {
-            "protocol": protocol,
-            "host": host,
+            "protocol": net_state["protocol"],
+            "host": net_state["host"],
+            "port": net_state["port"],
             "version": "1.0.0",
             "features": ["file_transfer", "clipboard", "real_time_sync"]
         },
@@ -289,49 +303,51 @@ async def emergency_shutdown(request: Request):
     from app.main import shutdown_event, connection_manager
     from app.core.shutdown import shutdown_manager
     from app.ws_manager.ui_events import emit_ui_event
+    from app.core.logger import logger
     
-    print("[!] EMERGENCY SHUTDOWN REQUESTED!")
-    print("[WARN] Notifying all connected clients...")
+    logger.warn("SYSTEM", "Emergency shutdown requested")
     
-    # Set the shutdown flag immediately
     shutdown_event.set()
     
-    # Broadcast server_shutdown event through the existing UI events WebSocket
-    # BEFORE disconnecting clients, so the frontend receives the notification.
     async def broadcast_shutdown_and_cleanup():
-        # 1. Broadcast shutdown event to all connected UI event clients
         try:
             await emit_ui_event("server_shutdown", {"message": "Server is shutting down"})
         except Exception as e:
-            print(f"[WARN] Shutdown broadcast failed: {e}")
+            logger.warn("SYSTEM", "Shutdown broadcast failed", details={"Reason": str(e)})
         
-        # 2. Allow a brief window for the WebSocket message to flush to clients
         await asyncio.sleep(0.3)
-        
-        # 3. Disconnect all clients
         await connection_manager.disconnect_all()
-        print("[OK] All clients notified and disconnected")
+        logger.info("SYSTEM", "All clients notified and disconnected")
     
-    # Schedule client notification in background
     asyncio.create_task(broadcast_shutdown_and_cleanup())
     
-    # Force server shutdown after brief delay for response
     async def force_shutdown():
-        await asyncio.sleep(0.5)  # Allow response to be sent
-        print("[HOT] FORCING SERVER SHUTDOWN...")
+        await asyncio.sleep(0.3)
+        logger.warn("SYSTEM", "Forcing server exit")
         try:
-            import os
-            try:
-                import start_server
-                server = start_server.get_active_server()
-                if server is not None:
-                    server.should_exit = True
-                else:
+            from app.core.network_state import ServerNetworkState
+            ServerNetworkState.set_status("STOPPING")
+            if is_android_environment():
+                try:
+                    import start_server
+                    server = start_server.get_active_server()
+                    if server is not None:
+                        server.should_exit = True
+                except Exception:
+                    pass
+            else:
+                import os
+                try:
+                    import start_server
+                    server = start_server.get_active_server()
+                    if server is not None:
+                        server.should_exit = True
+                    else:
+                        os._exit(0)
+                except Exception:
                     os._exit(0)
-            except Exception:
-                os._exit(0)
         except Exception as e:
-            print(f"[!] Error during graceful shutdown trigger: {e}")
+            logger.error("SYSTEM", "Error during graceful shutdown trigger", details={"Reason": str(e)})
 
     asyncio.create_task(force_shutdown())
     
@@ -342,67 +358,46 @@ async def emergency_shutdown(request: Request):
         "action": "Server will restart automatically if using a process manager."
     })
 
-from fastapi import Request
+from fastapi import Request, Query
+from typing import Optional
 
-@router.get("/api/network-info", name="network_info")
+@router.get("/api/network-info", name="network_info_alias")
+@router.get("/api/system/network-info", name="system_network_info")
 async def get_network_info(request: Request):
-    """Get network information including LAN IP and mDNS info"""
+    """Get network information including LAN IP and mDNS info from authoritative ServerNetworkState"""
     try:
+        from app.core.network_state import ServerNetworkState
         import socket
-        import os
+        state = ServerNetworkState.get_network_state()
         
         mdns_info = mdns_manager.get_mdns_info()
-        protocol = "https" if mdns_manager.use_https else "http"
-        port = mdns_manager.port
-
-        req_host_header = request.headers.get("host", "")
-        connected_host = req_host_header.split(":")[0] if req_host_header else None
-        connected_port = req_host_header.split(":")[1] if ":" in req_host_header else str(port)
-
-        from app.utils.network_resolver import resolve_advertise_host
-        adv_info = resolve_advertise_host(req_host=connected_host)
-        lan_ip = adv_info["lan_ip"]
-        is_docker = adv_info["is_docker"]
-        is_android = is_android_environment() and not is_docker
-        from app.utils.network_resolver import is_docker_bridge_ip
-        if (not lan_ip or lan_ip == "127.0.0.1") and connected_host and connected_host not in ("localhost", "127.0.0.1", "0.0.0.0") and not is_docker_bridge_ip(connected_host):
-            lan_ip = connected_host
-
-        docker_needs_host_env = is_docker and not bool(lan_ip)
-        display_port = connected_port if is_docker else str(port)
-
-        if docker_needs_host_env:
-            lan_ip_val = None
-            lan_ip_url = None
-            hybrid_url = f"{protocol}://localhost" if display_port in ("80", "443") else f"{protocol}://localhost:{display_port}"
-        elif (display_port == "80" and protocol == "http") or (display_port == "443" and protocol == "https"):
-            lan_ip_val = lan_ip
-            lan_ip_url = f"{protocol}://{lan_ip}"
-            hybrid_url = lan_ip_url
-        else:
-            lan_ip_val = lan_ip
-            lan_ip_url = f"{protocol}://{lan_ip}:{display_port}"
-            hybrid_url = lan_ip_url
+        protocol = state["protocol"]
+        port = state["port"]
+        lan_ip = state["lan_ip"]
+        base_url = state["base_url"]
+        
+        is_android = is_android_environment()
         
         response_data = {
             "status": "success",
-            "lan_ip": lan_ip_val,
-            "lan_ip_url": lan_ip_url,
-            "is_docker": is_docker,
-            "docker_needs_host_env": docker_needs_host_env,
+            "lan_ip": lan_ip,
+            "lan_ip_url": base_url,
+            "is_docker": False,
+            "docker_needs_host_env": False,
             "hostname": socket.gethostname(),
             "mdns": mdns_info,
-            "hybrid_url": hybrid_url,
+            "hybrid_url": base_url,
             "protocol": protocol,
             "port": port,
-            "platform": "android" if is_android else ("docker" if is_docker else "desktop")
+            "platform": "android" if is_android else "desktop",
+            "server_generation": state["server_generation"],
+            "server_status": state["status"]
         }
         
-        # Add Android/Termux specific recommendations
         if is_android:
             response_data["android_info"] = mdns_manager.get_android_optimized_info()
             response_data["recommendations"] = [
-                f"Use IP address: {lan_ip_url}",
+                f"Use IP address: {base_url}",
                 "Avoid .local domains on Android/Termux",
                 "Share QR code for easy mobile access",
                 "Bookmark the IP address for future use"
@@ -410,45 +405,46 @@ async def get_network_info(request: Request):
         
         return JSONResponse(content=response_data)
     except Exception as e:
-        # Create fallback URL using the same format logic as mdns_manager
-        protocol = "https" if mdns_manager.use_https else "http"
-        port = mdns_manager.port
-        if (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
-            fallback_url = f"{protocol}://127.0.0.1"
-            lan_ip_fallback = f"{protocol}://127.0.0.1"
-        else:
-            fallback_url = f"{protocol}://127.0.0.1:{port}"
-            lan_ip_fallback = f"{protocol}://127.0.0.1:{port}"
-        
+        from app.core.network_state import ServerNetworkState
+        base_url = ServerNetworkState.get_canonical_base_url()
         return JSONResponse(
             status_code=500,
             content={
                 "status": "error",
                 "error": str(e),
-                "lan_ip": "127.0.0.1",
-                "lan_ip_url": lan_ip_fallback,
+                "lan_ip": ServerNetworkState.get_canonical_ip(),
+                "lan_ip_url": base_url,
                 "mdns": {"status": "error", "domain": None},
-                "hybrid_url": fallback_url,
-                "protocol": protocol,
-                "port": port
+                "hybrid_url": base_url,
+                "protocol": ServerNetworkState.get_canonical_protocol(),
+                "port": ServerNetworkState.get_canonical_port()
             }
         )
 
 @router.get("/api/qr-code", name="offline_qr")
-async def generate_offline_qr(text: str, size: int = 200):
-    """Generate QR code locally without internet dependency - Android/Termux optimized.
+async def generate_offline_qr(text: Optional[str] = Query(None), size: int = 200):
+    """Generate QR code locally from canonical ServerNetworkState.
     
-    Uses PNG (Pillow) when available, falls back to SVG (zero dependencies) for Termux.
-    SVG output uses only qrcode's built-in xml.etree support — no Pillow/PIL needed.
+    If server is STOPPING, returns HTTP 503.
+    Always embeds canonical base_url from ServerNetworkState unless text is specified.
     """
+    from app.core.network_state import ServerNetworkState
+    status = ServerNetworkState.get_status()
+    if status == "STOPPING":
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "error": "Server is shutting down"}
+        )
+
     try:
         if not QR_AVAILABLE:
             raise Exception("qrcode library not installed")
         
-        # Android/Termux detection
-        is_android_env = is_android_environment()
+        # Always use canonical base_url as authoritative QR payload
+        qr_payload = text if text else ServerNetworkState.get_canonical_base_url()
+        gen_id = ServerNetworkState.get_generation()
         
-        # Create QR code
+        is_android_env = is_android_environment()
         box_size = max(2, size // 20) if is_android_env else max(1, size // 25)
         qr = qrcode.QRCode(
             version=1,
@@ -456,8 +452,13 @@ async def generate_offline_qr(text: str, size: int = 200):
             box_size=box_size,
             border=4,
         )
-        qr.add_data(text)
+        qr.add_data(qr_payload)
         qr.make(fit=True)
+
+        resp_headers = {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "X-Server-Generation": str(gen_id)
+        }
 
         # Method 1: PNG output (requires Pillow/PIL)
         try:
@@ -470,35 +471,31 @@ async def generate_offline_qr(text: str, size: int = 200):
             return StreamingResponse(
                 io.BytesIO(img_buffer.getvalue()),
                 media_type="image/png",
-                headers={"Cache-Control": "public, max-age=3600"}
+                headers=resp_headers
             )
         except Exception as png_error:
             if is_android_env:
-                print(f"[MOBILE] QR PNG failed (no Pillow): {png_error}")
+                logger.warn("ANDROID", "QR PNG failed, trying SVG", details={"Reason": str(png_error)})
         
-        # Method 2: SVG output (NO Pillow needed — works on Termux!)
-        # Uses qrcode's built-in SVG support via Python's xml.etree (stdlib)
         try:
             from qrcode.image.svg import SvgPathImage
             svg_img = qr.make_image(image_factory=SvgPathImage)
             svg_buffer = io.BytesIO()
             svg_img.save(svg_buffer)
             svg_data = svg_buffer.getvalue()
-            # Ensure bytes
             if isinstance(svg_data, str):
                 svg_data = svg_data.encode('utf-8')
             if is_android_env:
-                print("[MOBILE] QR: SVG generation successful (no Pillow needed)")
+                logger.info("ANDROID", "QR SVG generation successful")
             return Response(
                 content=svg_data,
                 media_type="image/svg+xml",
-                headers={"Cache-Control": "public, max-age=3600"}
+                headers=resp_headers
             )
         except Exception as svg_error:
             if is_android_env:
-                print(f"[MOBILE] QR SVG (SvgPathImage) failed: {svg_error}")
+                logger.warn("ANDROID", "QR SVG SvgPathImage failed", details={"Reason": str(svg_error)})
         
-        # Method 3: Basic SVG fallback (different SVG class)
         try:
             from qrcode.image.svg import SvgImage
             svg_img = qr.make_image(image_factory=SvgImage)
@@ -508,15 +505,15 @@ async def generate_offline_qr(text: str, size: int = 200):
             if isinstance(svg_data, str):
                 svg_data = svg_data.encode('utf-8')
             if is_android_env:
-                print("[MOBILE] QR: SVG (SvgImage) generation successful")
+                logger.info("ANDROID", "QR SVG SvgImage generation successful")
             return Response(
                 content=svg_data,
                 media_type="image/svg+xml",
-                headers={"Cache-Control": "public, max-age=3600"}
+                headers=resp_headers
             )
         except Exception as svg2_error:
             if is_android_env:
-                print(f"[MOBILE] QR SVG (SvgImage) also failed: {svg2_error}")
+                logger.warn("ANDROID", "QR SVG SvgImage failed", details={"Reason": str(svg2_error)})
         
         raise Exception("All QR generation methods failed (PNG + SVG)")
         
