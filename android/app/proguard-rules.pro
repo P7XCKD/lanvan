@@ -35,9 +35,18 @@
 -keep class androidx.** { *; }
 -dontwarn androidx.**
 
+# ---------- Google Play Billing ----------
+-keep class com.android.billingclient.** { *; }
+-keep interface com.android.billingclient.** { *; }
+-dontwarn com.android.billingclient.**
+
+# ---------- FileProvider ----------
+-keep class androidx.core.content.FileProvider { *; }
+
 # ---------- Suppress common warnings ----------
 -dontwarn org.python.**
 -dontwarn sun.misc.**
 -dontwarn java.lang.invoke.**
 -dontwarn okhttp3.**
 -dontwarn okio.**
+

@@ -51,6 +51,32 @@ android {
         }
     }
 
+    def keystorePropertiesFile = rootProject.file("keystore.properties")
+    def keystoreProperties = new Properties()
+
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+                def storeFilePath = keystoreProperties['storeFile']
+                def resolvedStoreFile = storeFilePath ? rootProject.file(storeFilePath) : null
+                if (resolvedStoreFile == null || !resolvedStoreFile.exists()) {
+                    throw new GradleException("Release build failed: Keystore file '${storeFilePath}' not found.")
+                }
+                storeFile resolvedStoreFile
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            } else {
+                // If running a release task without keystore.properties, fail immediately
+                def isReleaseTaskRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
+                if (isReleaseTaskRequested) {
+                    throw new GradleException("Release build failed: 'android/keystore.properties' is missing. Release builds must be signed.")
+                }
+            }
+        }
+    }
+
     buildTypes {
         debug {
             minifyEnabled false
@@ -60,6 +86,7 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
     compileOptions {

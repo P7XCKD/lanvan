@@ -162,6 +162,11 @@ async def lifespan(app: FastAPI):
     """
     [LIFESPAN] Lifespan context manager for resource initialization and clean shutdown.
     """
+    global graceful_shutdown_initiated, shutdown_event
+    # Reset shutdown flags on startup to prevent stale status on in-process server restart
+    graceful_shutdown_initiated = False
+    shutdown_event = asyncio.Event()
+
     logger.info("SERVER", "Server starting up")
     
     setup_signal_handlers()

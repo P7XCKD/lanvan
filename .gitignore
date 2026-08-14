@@ -213,6 +213,8 @@ android/local.properties
 *.aab
 *.zip
 *.iml
+*.jks
+*.keystore
 android/.gradle/
 android/build/
 android/app/build/
@@ -232,3 +234,12 @@ reports/
 
 
 
+
+# Android release signing keys and property files
+*.jks
+*.keystore
+keystore.properties
+android/keystore.properties
+testing/reports/latest-test-report.txt
+testing/reports/
+reports/
