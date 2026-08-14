@@ -872,6 +872,49 @@ body {
   line-height: 1.35;
 }
 
+/* CONTEXTUAL BACKGROUND / BATTERY OPTIMIZATION WARNING CARD */
+.new-bg-warning-card {
+  background-color: rgba(249, 171, 0, 0.08);
+  border: 1px solid rgba(249, 171, 0, 0.3);
+  padding: 14px 16px;
+  border-radius: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.warning-icon-box.bg-warning-box {
+  background-color: rgba(249, 171, 0, 0.15);
+  color: #f9ab00;
+}
+
+.warning-title.bg-warning-title {
+  color: #f9ab00;
+}
+
+.spotlight-btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: rgba(138, 180, 248, 0.15);
+  color: #8ab4f8;
+  border: 1px solid rgba(138, 180, 248, 0.35);
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 6px;
+  width: 100%;
+  transition: all 0.2s ease;
+}
+
+.spotlight-btn-action:hover {
+  background-color: rgba(138, 180, 248, 0.25);
+  border-color: #8ab4f8;
+}
+
 /* CARD SECTION LABELS (INTEGRATED INSIDE CARD) */
 .card-section-label {
   font-size: 11px;
