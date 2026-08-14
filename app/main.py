@@ -141,16 +141,21 @@ def initiate_graceful_shutdown_process():
     threading.Thread(target=force_exit, daemon=True).start()
 
 def setup_signal_handlers():
-    """Setup graceful signal handling for CTRL+C and SIGTERM"""
+    """Setup graceful signal handling for CTRL+C and SIGTERM on the main thread."""
     def handle_signal(sig, frame):
         logger.info("SERVER", "Shutdown signal received")
         initiate_graceful_shutdown_process()
     
-    try:
-        signal.signal(signal.SIGINT, handle_signal)
-        signal.signal(signal.SIGTERM, handle_signal)
-    except (ValueError, AttributeError):
-        pass
+    # Signal handlers can only be set from the main thread in Python
+    if threading.current_thread() is threading.main_thread():
+        try:
+            signal.signal(signal.SIGINT, handle_signal)
+            signal.signal(signal.SIGTERM, handle_signal)
+        except (ValueError, AttributeError):
+            pass
+    else:
+        # Expected and normal when running as an embedded background service (e.g. Android JVM)
+        logger.debug("SERVER", "Skipping signal handlers (running in background thread)")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

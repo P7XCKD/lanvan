@@ -379,6 +379,14 @@
         if (!item || !item.fileName) return;
 
         if (item.status === 'COMPLETED') {
+            // Cancel pending rAF for this item so final state is immediate
+            if (this._progressRafMap && this._progressRafMap[item.fileName]) {
+                cancelAnimationFrame(this._progressRafMap[item.fileName]);
+                delete this._progressRafMap[item.fileName];
+            }
+            // Immediate sync render for completed items
+            this._renderRowProgressDirect(item);
+
             var hasOtherActiveUploads = Array.isArray(window.uploadQueue) && window.uploadQueue.some(function (qi) {
                 return qi && qi.id !== item.id && (qi.status === 'UPLOADING' || qi.status === 'QUEUED' || qi.status === 'PROCESSING' || qi.status === 'PAUSED');
             });
@@ -395,6 +403,26 @@
             return;
         }
 
+        // Coalesce high-frequency progress ticks via requestAnimationFrame (~60fps max)
+        if (!this._progressRafMap) this._progressRafMap = {};
+        if (!this._progressPendingItems) this._progressPendingItems = {};
+
+        this._progressPendingItems[item.fileName] = item;
+        var self = this;
+
+        if (!this._progressRafMap[item.fileName]) {
+            this._progressRafMap[item.fileName] = requestAnimationFrame(function () {
+                var pendingItem = self._progressPendingItems[item.fileName];
+                delete self._progressRafMap[item.fileName];
+                delete self._progressPendingItems[item.fileName];
+                if (pendingItem) {
+                    self._renderRowProgressDirect(pendingItem);
+                }
+            });
+        }
+    };
+
+    RenderScheduler.prototype._renderRowProgressDirect = function (item) {
         var container = document.getElementById("nasFileList");
         if (!container) return;
 

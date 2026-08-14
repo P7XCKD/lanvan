@@ -283,16 +283,17 @@ class UnifiedResponsivenessManager:
                 try:
                     # Collect performance metrics
                     metrics = self.get_performance_metrics()
+                    active_ops = metrics['active_operations']
                     
                     # Log performance if needed
-                    if metrics['active_operations'] > 0:
-                        self.logger.debug(f"Active operations: {metrics['active_operations']}")
-                    
-                    # Adaptive optimization
-                    self._adaptive_optimization()
-                    
-                    # Sleep for monitoring interval
-                    time.sleep(self.config.monitoring_interval)
+                    if active_ops > 0:
+                        self.logger.debug(f"Active operations: {active_ops}")
+                        # Adaptive optimization during active operations
+                        self._adaptive_optimization()
+                        time.sleep(self.config.monitoring_interval)
+                    else:
+                        # Idle state: sleep longer to conserve CPU/battery when zero operations are active
+                        time.sleep(1.0)
                     
                 except Exception as e:
                     self.logger.error(f"Performance monitoring error: {e}")

@@ -205,23 +205,51 @@ class SimpleMDNSManager:
         self._announcement_thread.start()
         
     def _announcement_worker(self):
-        """Background worker for periodic mDNS announcements - optimized for guest devices"""
+        """
+        Background worker for periodic mDNS announcements and IP change detection.
+        - Immediate initial announcement on startup
+        - Quick initial retries (5s interval for the first 30s to help newly connected guests)
+        - Drops to a low-frequency 60s steady-state heartbeat
+        - Detects LAN IP changes dynamically and updates service registration
+        """
         try:
             announcement_count = 0
             while not self._stop_announcements and self.is_running:
-                time.sleep(2)  # More frequent for guest device discovery
-                announcement_count += 1
+                # Dynamic sleep interval based on lifetime phase
+                if announcement_count < 6:
+                    sleep_interval = 5.0  # Quick initial phase (first 30s)
+                else:
+                    sleep_interval = 60.0  # Steady state: low-power maintenance
                 
-                # More frequent announcements for first 5 minutes (guest device discovery)
-                if announcement_count <= 150 and announcement_count % 3 == 0:
-                    try:
-                        if self.service_info and self.zeroconf:
+                # Check for stop signal during sleep interval with 1s granularity
+                slept = 0.0
+                while slept < sleep_interval and not self._stop_announcements and self.is_running:
+                    time.sleep(1.0)
+                    slept += 1.0
+
+                if self._stop_announcements or not self.is_running:
+                    break
+
+                announcement_count += 1
+
+                # Check if LAN IP changed (e.g. Wi-Fi reconnected, network handover)
+                try:
+                    current_ip = self.get_lan_ip()
+                    if current_ip and current_ip != "127.0.0.1" and current_ip != self.lan_ip and not self._is_docker_bridge_ip(current_ip):
+                        logger.info("MDNS", "Detected LAN IP change, updating mDNS service registration", details={"OldIP": self.lan_ip, "NewIP": current_ip})
+                        self.lan_ip = current_ip
+                        if self.zeroconf and self.service_info:
+                            try:
+                                self.zeroconf.unregister_service(self.service_info)
+                            except Exception:
+                                pass
+                            self.service_info.addresses = [socket.inet_aton(current_ip)]
                             self.zeroconf.register_service(self.service_info)
-                    except Exception:
-                        pass  # Ignore re-registration errors
-                        
-                # Then announce every 30 seconds (maintenance)
-                elif announcement_count > 150 and announcement_count % 15 == 0:
+                except Exception as ip_err:
+                    logger.debug("MDNS", "IP change check error", details={"Reason": str(ip_err)})
+
+                # Periodic announcement refresh (only when necessary)
+                if announcement_count <= 6:
                     try:
                         if self.service_info and self.zeroconf:
                             self.zeroconf.register_service(self.service_info)

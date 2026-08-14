@@ -50,9 +50,27 @@ class StreamingChunkAssembler:
         self.monitor_thread = None
         self._last_cleanup_time = time.time()
         self._max_session_age_seconds = 900  # 15 minutes TTL for abandoned sessions
-        self._max_total_chunks_memory = 512 * 1024 * 1024  # 512MB global cap
+        
+        # Dynamic platform-aware assembly memory budget:
+        # Calculate safe memory cap based on environment and available memory
+        if _TERMUX_MODE:
+            # On Android/Termux, dynamically allocate between 64MB and 128MB based on RAM
+            try:
+                from app.utils.termux_compat import get_safe_memory_info
+                mem_info = get_safe_memory_info()
+                avail_bytes = mem_info.get('available', 1024 * 1024 * 1024)
+                # Use at most 10% of available RAM, clamped between 32MB and 128MB
+                self._max_total_chunks_memory = max(32 * 1024 * 1024, min(128 * 1024 * 1024, int(avail_bytes * 0.10)))
+            except Exception:
+                self._max_total_chunks_memory = 64 * 1024 * 1024  # 64MB conservative fallback
+        else:
+            self._max_total_chunks_memory = 512 * 1024 * 1024  # 512MB desktop standard
+            
         self._current_chunks_memory = 0
-        logger.info("STORAGE", "Streaming assembly initialized", details={"Mode": "Termux" if _TERMUX_MODE else "Full"})
+        logger.info("STORAGE", "Streaming assembly initialized", details={
+            "Mode": "Termux" if _TERMUX_MODE else "Full",
+            "MemoryBudgetMB": round(self._max_total_chunks_memory / (1024 * 1024), 1)
+        })
 
     def register_file(self, file_id: str, expected_parts: int, filename: str, total_size: int):
         """Register a file for streaming assembly"""

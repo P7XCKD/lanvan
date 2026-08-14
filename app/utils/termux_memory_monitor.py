@@ -93,12 +93,16 @@ class TermuxMemoryMonitor:
         else:
             self.current_status = "normal"
             
-        # Take action if status changed or time for regular GC
-        if old_status != self.current_status or self._should_run_gc():
+        # Take action only if status changed to a non-normal state (warning/critical/emergency)
+        if self.current_status != "normal" and old_status != self.current_status:
+            self._handle_memory_status(available_mb)
+        elif self.current_status != "normal" and self._should_run_gc():
             self._handle_memory_status(available_mb)
             
     def _should_run_gc(self) -> bool:
-        """Check if it's time for regular garbage collection"""
+        """Check if it's time for garbage collection during memory pressure"""
+        if self.current_status == "normal":
+            return False  # Do not force periodic GC when memory is healthy
         current_time = time.time()
         if current_time - self.last_gc_time > self.gc_interval:
             return True

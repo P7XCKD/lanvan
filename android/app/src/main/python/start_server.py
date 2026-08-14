@@ -32,22 +32,89 @@ def sanitize_log_message(message: str) -> str:
 
     return sanitized
 
+import threading
+import time
+
 class LogWriter:
+    """
+    High-performance buffered log writer for Android.
+    Buffers normal log lines to reduce flash I/O lockups and wear.
+    Flushes automatically on high-severity logs (WARN/ERROR/CRITICAL),
+    when buffer exceeds size threshold, on a 2-second timer, or on shutdown.
+    """
     def __init__(self, filepath, terminal):
         self.file = open(filepath, 'a', encoding='utf-8')
         self.terminal = terminal
+        self._lock = threading.Lock()
+        self._buffer = []
+        self._buffer_size = 0
+        self._max_buffer_bytes = 8192  # 8KB buffer threshold
+        self._last_flush = time.time()
+        self._stop_flush_thread = False
         
+        # Periodic background flusher (every 2 seconds)
+        self._flusher = threading.Thread(target=self._periodic_flush_worker, daemon=True, name="LogWriter-Flusher")
+        self._flusher.start()
+
+    def _periodic_flush_worker(self):
+        while not self._stop_flush_thread:
+            time.sleep(2.0)
+            self.flush()
+
     def write(self, message):
+        if not message:
+            return
         sanitized_msg = sanitize_log_message(message)
         if self.terminal:
-            self.terminal.write(sanitized_msg)
-        self.file.write(sanitized_msg)
-        self.file.flush()
-        
+            try:
+                self.terminal.write(sanitized_msg)
+            except Exception:
+                pass
+
+        # Check for high severity requiring immediate synchronous flush
+        is_high_severity = any(tag in sanitized_msg for tag in ["[ERROR]", "[CRITICAL]", "[WARN]", "Traceback", "Exception", "Error:"])
+
+        with self._lock:
+            self._buffer.append(sanitized_msg)
+            self._buffer_size += len(sanitized_msg)
+            should_flush = is_high_severity or (self._buffer_size >= self._max_buffer_bytes) or (time.time() - self._last_flush >= 2.0)
+
+        if should_flush:
+            self.flush()
+
     def flush(self):
+        with self._lock:
+            if not self._buffer:
+                if self.terminal:
+                    try:
+                        self.terminal.flush()
+                    except Exception:
+                        pass
+                return
+            to_write = "".join(self._buffer)
+            self._buffer.clear()
+            self._buffer_size = 0
+            self._last_flush = time.time()
+
+        try:
+            self.file.write(to_write)
+            self.file.flush()
+        except Exception:
+            pass
+
         if self.terminal:
-            self.terminal.flush()
-        self.file.flush()
+            try:
+                self.terminal.flush()
+            except Exception:
+                pass
+
+    def close(self):
+        self._stop_flush_thread = True
+        self.flush()
+        try:
+            self.file.close()
+        except Exception:
+            pass
 
     def isatty(self):
         return False
