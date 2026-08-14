@@ -1042,18 +1042,19 @@ class MainActivity : AppCompatActivity() {
 
                 reportFile.writeText(reportContent)
 
-                val emailBody = """
-                    Hello Lanvan team,
-
-                    ${if (userFeedback.isNotEmpty()) userFeedback else "[Enter Your Feedback Here]"}
-
-                    I've attached a diagnostic report to help investigate this issue.
-
-                    Lanvan version: $appVersion
-
-                    Thank you,
-                    Lanvan user
-                """.trimIndent()
+                val feedbackText = if (userFeedback.isNotBlank()) userFeedback.trim() else "[Enter Your Feedback Here]"
+                val emailBody = buildString {
+                    appendLine("Hello Lanvan team,")
+                    appendLine()
+                    appendLine(feedbackText)
+                    appendLine()
+                    appendLine("I've attached a diagnostic report to help investigate this issue.")
+                    appendLine()
+                    appendLine("Lanvan version: $appVersion")
+                    appendLine()
+                    appendLine("Thank you,")
+                    append("Lanvan user")
+                }
 
                 val contentUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", reportFile)
 
@@ -1066,19 +1067,24 @@ class MainActivity : AppCompatActivity() {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
             } else {
-                val emailBody = """
-                    Hello Lanvan team,
+                val feedbackText = if (userFeedback.isNotBlank()) userFeedback.trim() else "[Enter Your Feedback Here]"
+                val emailBody = buildString {
+                    appendLine("Hello Lanvan team,")
+                    appendLine()
+                    appendLine(feedbackText)
+                    appendLine()
+                    appendLine("Lanvan version: $appVersion")
+                    appendLine()
+                    appendLine("Thank you,")
+                    append("Lanvan user")
+                }
 
-                    ${if (userFeedback.isNotEmpty()) userFeedback else "[Enter Your Feedback Here]"}
+                val encodedSubject = Uri.encode("Lanvan Feedback")
+                val encodedBody = Uri.encode(emailBody)
+                val mailtoUri = Uri.parse("mailto:p7xckd@gmail.com?subject=$encodedSubject&body=$encodedBody")
 
-                    Lanvan version: $appVersion
-
-                    Thank you,
-                    Lanvan user
-                """.trimIndent()
-
-                emailIntent = Intent(Intent.ACTION_SENDTO).apply {
-                    data = Uri.parse("mailto:p7xckd@gmail.com")
+                emailIntent = Intent(Intent.ACTION_SENDTO, mailtoUri).apply {
+                    putExtra(Intent.EXTRA_EMAIL, arrayOf("p7xckd@gmail.com"))
                     putExtra(Intent.EXTRA_SUBJECT, "Lanvan Feedback")
                     putExtra(Intent.EXTRA_TEXT, emailBody)
                 }
