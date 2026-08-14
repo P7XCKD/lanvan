@@ -33,33 +33,18 @@ data class LanNetworkState(
  */
 fun detectShareableLanNetwork(context: Context): LanNetworkState {
     try {
-        val wifiManager =
-            context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
-        val isWifiEnabled = wifiManager?.isWifiEnabled ?: false
-
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
-        // Determine which transports the active and all available networks carry
-        var hasWifiTransport = false
+        // Determine which transports the active network carries
         var hasEthernetTransport = false
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            // Check the default active network first
             val activeNet = cm.activeNetwork
             if (activeNet != null) {
                 val caps = cm.getNetworkCapabilities(activeNet)
                 if (caps != null) {
-                    hasWifiTransport = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-                    hasEthernetTransport =
-                        caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                    hasEthernetTransport = caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
                 }
-            }
-            // Also scan all networks — handles VPN-over-Wi-Fi where active network is VPN
-            for (net in cm.allNetworks) {
-                val caps = cm.getNetworkCapabilities(net) ?: continue
-                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) hasWifiTransport = true
-                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) hasEthernetTransport =
-                    true
             }
         }
 
@@ -116,8 +101,8 @@ fun detectShareableLanNetwork(context: Context): LanNetworkState {
             }
         }
 
-        // Priority 1: Wi-Fi — must have both hardware enabled and active transport
-        if (isWifiEnabled && hasWifiTransport && candidateWlanIp != null) {
+        // Priority 1: Wi-Fi — candidateWlanIp present on active wlan interface
+        if (candidateWlanIp != null) {
             val state = LanNetworkState(
                 available = true,
                 ipAddress = candidateWlanIp,

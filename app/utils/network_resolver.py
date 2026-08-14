@@ -98,7 +98,9 @@ def auto_discover_host_lan_ip() -> Optional[str]:
 
     return None
 
-def resolve_advertise_host() -> Dict[str, Any]:
+_cached_resolved_result: Optional[Dict[str, Any]] = None
+
+def resolve_advertise_host(force_refresh: bool = False) -> Dict[str, Any]:
     """
     Single authoritative address resolution for Lanvan.
     Returns dictionary with:
@@ -107,55 +109,67 @@ def resolve_advertise_host() -> Dict[str, Any]:
       - 'is_override': bool (whether LANVAN_HOST / LANVAN_ADVERTISE_HOST was provided)
       - 'display_ip': display string (lan_ip or '127.0.0.1')
     """
+    global _cached_resolved_result
+    if not force_refresh and _cached_resolved_result is not None:
+        return _cached_resolved_result
+
     is_docker = is_docker_environment()
     env_host = os.getenv("LANVAN_HOST") or os.getenv("LANVAN_ADVERTISE_HOST") or os.getenv("ADVERTISE_HOST") or os.getenv("LAN_IP")
     
     if env_host and env_host.strip():
         val = env_host.strip()
         if not is_docker_bridge_ip(val):
-            return {
+            res = {
                 "lan_ip": val,
                 "is_docker": is_docker,
                 "is_override": True,
                 "display_ip": val
             }
+            _cached_resolved_result = res
+            return res
 
     if is_docker:
         # Inside Docker Desktop bridge mode without explicit LANVAN_HOST,
         # attempt lightweight auto-discovery of the host's LAN IP across the local subnet.
         discovered_ip = auto_discover_host_lan_ip()
         if discovered_ip:
-            return {
+            res = {
                 "lan_ip": discovered_ip,
                 "is_docker": True,
                 "is_override": False,
                 "display_ip": discovered_ip
             }
+            _cached_resolved_result = res
+            return res
         
-        return {
+        res = {
             "lan_ip": None,
             "is_docker": True,
             "is_override": False,
             "display_ip": "127.0.0.1"
         }
+        _cached_resolved_result = res
+        return res
 
     # Native Windows / Linux / Termux / Android execution
-    # Method 1: Try socket connection to local router
-    router_targets = ["192.168.1.1", "192.168.0.1", "10.0.0.1", "192.168.43.1"]
-    for target in router_targets:
+    # Method 1: Instant UDP route query to public DNS / gateway targets (does not send packets, queries OS routing table)
+    probe_targets = ["8.8.8.8", "1.1.1.1", "192.168.1.1", "192.168.0.1", "10.0.0.1", "192.168.43.1"]
+    for target in probe_targets:
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.settimeout(0.5)
+            s.settimeout(0.05)
             s.connect((target, 80))
             ip = s.getsockname()[0]
             s.close()
             if ip and not ip.startswith('127.') and not is_docker_bridge_ip(ip):
-                return {
+                res = {
                     "lan_ip": ip,
                     "is_docker": False,
                     "is_override": False,
                     "display_ip": ip
                 }
+                _cached_resolved_result = res
+                return res
         except Exception:
             continue
 
@@ -164,12 +178,14 @@ def resolve_advertise_host() -> Dict[str, Any]:
         hostname = socket.gethostname()
         host_ip = socket.gethostbyname(hostname)
         if host_ip and not host_ip.startswith('127.') and host_ip != '192.0.0.4' and not is_docker_bridge_ip(host_ip):
-            return {
+            res = {
                 "lan_ip": host_ip,
                 "is_docker": False,
                 "is_override": False,
                 "display_ip": host_ip
             }
+            _cached_resolved_result = res
+            return res
     except Exception:
         pass
 
@@ -181,18 +197,22 @@ def resolve_advertise_host() -> Dict[str, Any]:
                 if addr.family == socket.AF_INET and not addr.address.startswith('127.'):
                     ip = addr.address
                     if not is_docker_bridge_ip(ip):
-                        return {
+                        res = {
                             "lan_ip": ip,
                             "is_docker": False,
                             "is_override": False,
                             "display_ip": ip
                         }
+                        _cached_resolved_result = res
+                        return res
     except Exception:
         pass
 
-    return {
+    res = {
         "lan_ip": None,
         "is_docker": False,
         "is_override": False,
         "display_ip": "127.0.0.1"
     }
+    _cached_resolved_result = res
+    return res

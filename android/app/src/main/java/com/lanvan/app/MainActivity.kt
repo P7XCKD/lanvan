@@ -185,8 +185,9 @@ class MainActivity : AppCompatActivity() {
                 btnStartServer.text = "Starting..."
                 val useHttps = sharedPrefs.getBoolean("use_https", false)
                 startServerService(useHttps)
+                refreshLanNetworkState()
                 lanFallbackHandler.removeCallbacks(lanFallbackRunnable)
-                lanFallbackHandler.postDelayed(lanFallbackRunnable, 1500)
+                lanFallbackHandler.postDelayed(lanFallbackRunnable, 200)
             }
         }
 
