@@ -49,7 +49,7 @@ class LogWriter:
     def isatty(self):
         return False
 
-def run_fastapi_server(port="5000", use_https="false", files_dir=None, is_debug=False, block_dangerous=None):
+def run_fastapi_server(port="5000", use_https="false", files_dir=None, is_debug=False, block_dangerous=None, lan_ip=None):
     """
     Launches uvicorn server in Android JVM thread.
     - is_debug=False by default: APK runs in Production mode automatically.
@@ -129,6 +129,12 @@ def run_fastapi_server(port="5000", use_https="false", files_dir=None, is_debug=
     
     os.environ['PORT'] = str(port)
     os.environ['USE_HTTPS'] = str(use_https).lower()
+
+    # If Android passed in the correct Wi-Fi LAN IP, pin it as the authoritative advertise host.
+    # This prevents Python's own interface detection from picking a hotspot or VPN bridge address.
+    if lan_ip and str(lan_ip).strip() and str(lan_ip).strip() != "127.0.0.1":
+        os.environ['LANVAN_HOST'] = str(lan_ip).strip()
+        print(f"[NET] Android LAN IP pinned: {os.environ['LANVAN_HOST']}")
     
     # Configure SSL arguments dynamically if HTTPS protocol is selected
     uvicorn_kwargs = {
