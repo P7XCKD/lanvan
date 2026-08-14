@@ -335,6 +335,7 @@ class MainActivity : AppCompatActivity() {
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 runOnUiThread {
+                    com.lanvan.app.invalidateLanNetworkCache()
                     val status = if (currentState == ServerState.RUNNING) ServerService.STATUS_RUNNING else ServerService.STATUS_STOPPED
                     handleStatusUpdate(status)
                 }
@@ -342,6 +343,7 @@ class MainActivity : AppCompatActivity() {
 
             override fun onLost(network: Network) {
                 runOnUiThread {
+                    com.lanvan.app.invalidateLanNetworkCache()
                     val status = if (currentState == ServerState.RUNNING) ServerService.STATUS_RUNNING else ServerService.STATUS_STOPPED
                     handleStatusUpdate(status)
                 }
@@ -349,6 +351,7 @@ class MainActivity : AppCompatActivity() {
 
             override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
                 runOnUiThread {
+                    com.lanvan.app.invalidateLanNetworkCache()
                     val status = if (currentState == ServerState.RUNNING) ServerService.STATUS_RUNNING else ServerService.STATUS_STOPPED
                     handleStatusUpdate(status)
                 }
@@ -356,6 +359,7 @@ class MainActivity : AppCompatActivity() {
 
             override fun onLinkPropertiesChanged(network: Network, linkProperties: android.net.LinkProperties) {
                 runOnUiThread {
+                    com.lanvan.app.invalidateLanNetworkCache()
                     val status = if (currentState == ServerState.RUNNING) ServerService.STATUS_RUNNING else ServerService.STATUS_STOPPED
                     handleStatusUpdate(status)
                 }
@@ -1061,10 +1065,29 @@ class MainActivity : AppCompatActivity() {
         val view = layoutInflater.inflate(R.layout.sheet_send_feedback, null)
         dialog.setContentView(view)
 
+        dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+
+        dialog.setOnShowListener {
+            val bottomSheet = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+            if (bottomSheet != null) {
+                val behavior = com.google.android.material.bottomsheet.BottomSheetBehavior.from(bottomSheet)
+                behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+                behavior.skipCollapsed = true
+            }
+        }
+
         val btnClose = view.findViewById<ImageButton>(R.id.btn_close_feedback)
         val editBody = view.findViewById<EditText>(R.id.edit_feedback_body)
         val switchDiagnostics = view.findViewById<SwitchCompat>(R.id.switch_include_diagnostics)
         val btnSubmit = view.findViewById<Button>(R.id.btn_submit_feedback)
+
+        editBody.movementMethod = android.text.method.ScrollingMovementMethod.getInstance()
+        editBody.setOnTouchListener { v, _ ->
+            if (v.canScrollVertically(1) || v.canScrollVertically(-1)) {
+                v.parent?.requestDisallowInterceptTouchEvent(true)
+            }
+            false
+        }
 
         btnClose.setOnClickListener { dialog.dismiss() }
 

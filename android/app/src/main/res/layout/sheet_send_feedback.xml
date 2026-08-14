@@ -44,6 +44,11 @@
         android:textColorHint="#80868b"
         android:textColor="@color/text_primary"
         android:textSize="14sp"
+        android:inputType="textMultiLine"
+        android:scrollbars="vertical"
+        android:fadeScrollbars="false"
+        android:isScrollContainer="true"
+        android:overScrollMode="always"
         android:layout_marginBottom="16dp" />
 
     <!-- DIAGNOSTICS TOGGLE ROW -->
