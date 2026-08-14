@@ -344,6 +344,21 @@
               </div>
             </div>
 
+            <!-- STOPPED + BACKGROUND OPERATION / BATTERY OPTIMIZATION WARNING CARD -->
+            <div class="new-card new-bg-warning-card" id="new-bg-warning-card" style="display:none;">
+              <div class="warning-icon-box bg-warning-box">
+                <i data-lucide="cpu" class="warning-icon"></i>
+              </div>
+              <div class="warning-text-content" style="flex: 1;">
+                <h4 class="warning-title bg-warning-title">Background Operation Restricted</h4>
+                <p class="warning-sub">Lanvan needs battery optimization exemption so file transfers continue when your screen turns off.</p>
+                <button class="new-outline-btn accent-outline" id="new-btn-main-allow-bg" style="margin-top: 8px; width: 100%;">
+                  <i data-lucide="zap"></i>
+                  <span>Grant Background Permission</span>
+                </button>
+              </div>
+            </div>
+
             <!-- COMPACT STORAGE SECTION CARD -->
             <div class="new-card new-storage-section-card" id="new-storage-section-card">
               <div class="card-section-label">STORAGE</div>
@@ -844,6 +859,7 @@
             <div class="spotlight-card-body">
               <h3 class="spotlight-title" id="spotlight-title">Start Lanvan</h3>
               <p class="spotlight-text" id="spotlight-text">Tap here to start sharing files with devices on your local network.</p>
+              <div id="spotlight-action-container" style="display:none; margin-top: 4px;"></div>
               <p class="spotlight-note" id="spotlight-note" style="display:none;"></p>
             </div>
 
@@ -854,6 +870,7 @@
                 <span class="dot" data-dot="3"></span>
                 <span class="dot" data-dot="4"></span>
                 <span class="dot" data-dot="5"></span>
+                <span class="dot" data-dot="6"></span>
               </div>
 
               <div class="spotlight-nav-actions">

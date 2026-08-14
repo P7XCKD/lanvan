@@ -137,6 +137,61 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- STATE 0.5: STOPPED + BACKGROUND OPERATION RESTRICTED WARNING CARD -->
+            <LinearLayout
+                android:id="@+id/card_stopped_bg_warning"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:background="@drawable/bg_card_degraded"
+                android:padding="16dp"
+                android:gravity="top"
+                android:visibility="gone"
+                android:layout_marginBottom="16dp">
+
+                <ImageView
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_battery"
+                    android:layout_marginEnd="16dp"
+                    app:tint="@color/warning_amber" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Background Operation Restricted"
+                        android:textColor="@color/warning_amber"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Allow Lanvan to run in the background so file transfers continue smoothly when your screen turns off."
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp"
+                        android:layout_marginTop="2dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_main_allow_bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Grant Background Permission"
+                        android:textColor="@color/warning_amber"
+                        app:strokeColor="@color/warning_amber"
+                        app:strokeWidth="1dp"
+                        app:backgroundTint="@android:color/transparent"
+                        android:layout_marginTop="12dp"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+                </LinearLayout>
+            </LinearLayout>
+
             <!-- STATE 1: STOPPED SERVER CARD -->
             <LinearLayout
                 android:id="@+id/card_stopped"
@@ -573,8 +628,11 @@
                 android:text="No Lanvan app is required on the other device."
                 android:textColor="@color/primary_accent_blue"
                 android:textSize="12sp"
-                android:background="@drawable/bg_circle_blue_tint"
-                android:padding="10dp"
+                android:background="@drawable/bg_note_blue_box"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"
                 android:visibility="gone"
                 android:layout_marginBottom="12dp" />
 
@@ -586,20 +644,21 @@
                 android:gravity="center_vertical"
                 android:layout_marginTop="8dp">
 
-                <!-- 5 STEP DOT INDICATOR CONTAINER -->
+                <!-- 6 STEP DOT INDICATOR CONTAINER -->
                 <LinearLayout
                     android:id="@+id/spotlight_dots_container"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:layout_marginEnd="16dp">
+                    android:layout_marginEnd="6dp">
 
-                    <View android:id="@+id/dot_step_1" android:layout_width="18dp" android:layout_height="6dp" android:background="@drawable/bg_dot_active" android:layout_marginEnd="4dp" />
-                    <View android:id="@+id/dot_step_2" android:layout_width="6dp" android:layout_height="6dp" android:background="@drawable/bg_dot_inactive" android:layout_marginEnd="4dp" />
-                    <View android:id="@+id/dot_step_3" android:layout_width="6dp" android:layout_height="6dp" android:background="@drawable/bg_dot_inactive" android:layout_marginEnd="4dp" />
-                    <View android:id="@+id/dot_step_4" android:layout_width="6dp" android:layout_height="6dp" android:background="@drawable/bg_dot_inactive" android:layout_marginEnd="4dp" />
-                    <View android:id="@+id/dot_step_5" android:layout_width="6dp" android:layout_height="6dp" android:background="@drawable/bg_dot_inactive" />
+                    <View android:id="@+id/dot_step_1" android:layout_width="18dp" android:layout_height="6dp" android:background="@drawable/bg_dot_active" android:layout_marginEnd="3dp" />
+                    <View android:id="@+id/dot_step_2" android:layout_width="6dp" android:layout_height="6dp" android:background="@drawable/bg_dot_inactive" android:layout_marginEnd="3dp" />
+                    <View android:id="@+id/dot_step_3" android:layout_width="6dp" android:layout_height="6dp" android:background="@drawable/bg_dot_inactive" android:layout_marginEnd="3dp" />
+                    <View android:id="@+id/dot_step_4" android:layout_width="6dp" android:layout_height="6dp" android:background="@drawable/bg_dot_inactive" android:layout_marginEnd="3dp" />
+                    <View android:id="@+id/dot_step_5" android:layout_width="6dp" android:layout_height="6dp" android:background="@drawable/bg_dot_inactive" android:layout_marginEnd="3dp" />
+                    <View android:id="@+id/dot_step_6" android:layout_width="6dp" android:layout_height="6dp" android:background="@drawable/bg_dot_inactive" />
                 </LinearLayout>
 
                 <View
@@ -618,7 +677,15 @@
                     android:textColor="@color/text_primary"
                     android:textSize="13sp"
                     android:visibility="gone"
-                    android:layout_marginEnd="8dp"
+                    android:layout_marginEnd="6dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:minWidth="0dp"
+                    android:singleLine="true"
+                    android:insetLeft="0dp"
+                    android:insetRight="0dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
                     app:strokeColor="@color/border_outline_btn"
                     app:strokeWidth="1dp"
                     app:cornerRadius="19dp" />
@@ -632,6 +699,14 @@
                     android:textColor="#041E49"
                     android:textSize="13sp"
                     android:textStyle="bold"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:minWidth="0dp"
+                    android:singleLine="true"
+                    android:insetLeft="0dp"
+                    android:insetRight="0dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
                     app:backgroundTint="@color/primary_accent_blue"
                     app:cornerRadius="19dp" />
 
@@ -645,6 +720,14 @@
                     android:textSize="13sp"
                     android:textStyle="bold"
                     android:visibility="gone"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:minWidth="0dp"
+                    android:singleLine="true"
+                    android:insetLeft="0dp"
+                    android:insetRight="0dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
                     app:backgroundTint="@color/primary_accent_blue"
                     app:cornerRadius="19dp" />
             </LinearLayout>

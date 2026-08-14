@@ -89,6 +89,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSettings: ImageButton
 
     private lateinit var cardStoppedNetWarning: LinearLayout
+    private lateinit var cardStoppedBgWarning: LinearLayout
+    private lateinit var btnMainAllowBg: Button
     private lateinit var cardStopped: LinearLayout
     private lateinit var btnStartServer: Button
 
@@ -145,8 +147,17 @@ class MainActivity : AppCompatActivity() {
         btnSettings = findViewById(R.id.btn_settings)
 
         cardStoppedNetWarning = findViewById(R.id.card_stopped_net_warning)
+        cardStoppedBgWarning = findViewById(R.id.card_stopped_bg_warning)
+        btnMainAllowBg = findViewById(R.id.btn_main_allow_bg)
         cardStopped = findViewById(R.id.card_stopped)
         btnStartServer = findViewById(R.id.btn_start_server)
+
+        btnMainAllowBg.setOnClickListener {
+            requestBatteryOptimizationExemption()
+            if (currentSpotlightStep == 4) {
+                renderSpotlightStep(5)
+            }
+        }
 
         cardRunningConnected = findViewById(R.id.card_running_connected)
         imgQrCode = findViewById(R.id.img_qrcode)
@@ -246,7 +257,10 @@ class MainActivity : AppCompatActivity() {
         val appTitle = findViewById<TextView>(R.id.app_title)
         appTitle.setOnLongClickListener {
             val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
-            sharedPrefs.edit().remove("lanvan_onboarding_completed").apply()
+            sharedPrefs.edit()
+                .remove("lanvan_onboarding_completed")
+                .remove("lanvan_has_seen_battery_step")
+                .apply()
             Toast.makeText(this, "Onboarding reset for testing", Toast.LENGTH_SHORT).show()
             startSpotlightWalkthrough()
             true
@@ -255,6 +269,7 @@ class MainActivity : AppCompatActivity() {
         setupNetworkCallback()
         updateStorageUsage()
         initSpotlightWalkthrough()
+        checkAndResetDailyLogs()
     }
 
     private fun refreshLanNetworkState() {
@@ -265,6 +280,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         isActivityResumed = true
+        checkAndResetDailyLogs()
         val filter = IntentFilter(ServerService.ACTION_STATUS_CHANGE)
         val wifiFilter = IntentFilter().apply {
             addAction(android.net.wifi.WifiManager.WIFI_STATE_CHANGED_ACTION)
@@ -403,6 +419,7 @@ class MainActivity : AppCompatActivity() {
                 btnStopServer.text = "Stop Lanvan"
 
                 cardStoppedNetWarning.visibility = View.GONE
+                cardStoppedBgWarning.visibility = View.GONE
 
                 val lanIp = getLocalIpAddress()
                 if (lanIp == "127.0.0.1") {
@@ -466,6 +483,15 @@ class MainActivity : AppCompatActivity() {
                     cardStoppedNetWarning.visibility = View.VISIBLE
                 } else {
                     cardStoppedNetWarning.visibility = View.GONE
+                }
+
+                val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
+                val hasSeenBatteryStep = sharedPrefs.getBoolean("lanvan_has_seen_battery_step", false)
+                val isSpotlightActive = (spotlightOverlayContainer?.visibility == View.VISIBLE)
+                if (!isBatteryOptimizationExempted() && (!isSpotlightActive || currentSpotlightStep >= 4 || hasSeenBatteryStep)) {
+                    cardStoppedBgWarning.visibility = View.VISIBLE
+                } else {
+                    cardStoppedBgWarning.visibility = View.GONE
                 }
             }
         }
@@ -837,6 +863,79 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {}
     }
 
+    private fun isBatteryOptimizationExempted(): Boolean {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            pm.isIgnoringBatteryOptimizations(packageName)
+        } else true
+    }
+
+    private fun requestBatteryOptimizationExemption() {
+        val intent = Intent().apply {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                data = Uri.parse("package:$packageName")
+            } else {
+                action = Settings.ACTION_SETTINGS
+            }
+        }
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+            val fallbackIntent = Intent().apply {
+                action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                data = Uri.fromParts("package", packageName, null)
+            }
+            try {
+                startActivity(fallbackIntent)
+            } catch (_: Exception) {
+                Toast.makeText(this, "Could not open background settings.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun checkAndResetDailyLogs() {
+        try {
+            val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
+            val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            val lastCleanedDate = sharedPrefs.getString("last_daily_log_clean_date", "") ?: ""
+
+            if (todayDate != lastCleanedDate) {
+                Thread {
+                    try {
+                        // 1. Clear diagnostic & log files in cache directory
+                        val cacheDir = applicationContext.cacheDir
+                        if (cacheDir.exists()) {
+                            val cacheFiles = cacheDir.listFiles() ?: arrayOf()
+                            for (file in cacheFiles) {
+                                if (file.isFile && (file.name.endsWith(".txt") || file.name.endsWith(".log") || file.name.contains("diagnostic"))) {
+                                    file.delete()
+                                }
+                            }
+                        }
+
+                        // 2. Clear stale temp chunks directory
+                        val tempChunksDir = File(applicationContext.filesDir, "data/temp_chunks")
+                        if (tempChunksDir.exists()) {
+                            val chunks = tempChunksDir.listFiles() ?: arrayOf()
+                            for (chunk in chunks) {
+                                chunk.delete()
+                            }
+                        }
+
+                        // 3. Save today's date as last cleaned date
+                        sharedPrefs.edit().putString("last_daily_log_clean_date", todayDate).apply()
+                        Log.d("LanvanDailyLog", "Daily log & cache reset completed for $todayDate")
+                    } catch (e: Exception) {
+                        Log.e("LanvanDailyLog", "Error cleaning daily logs", e)
+                    }
+                }.start()
+            }
+        } catch (e: Exception) {
+            Log.e("LanvanDailyLog", "Error checking daily log date", e)
+        }
+    }
+
     private fun openBackgroundOperationSheet() {
         val dialog = BottomSheetDialog(this, R.style.LanvanBottomSheetDialog)
         val view = layoutInflater.inflate(R.layout.sheet_background_operation, null)
@@ -847,10 +946,7 @@ class MainActivity : AppCompatActivity() {
         val txtDesc = view.findViewById<TextView>(R.id.txt_background_detail_desc)
         val btnConfigure = view.findViewById<Button>(R.id.btn_configure_battery)
 
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        val isExempted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            pm.isIgnoringBatteryOptimizations(packageName)
-        } else true
+        val isExempted = isBatteryOptimizationExempted()
 
         if (isExempted) {
             txtTitle.text = "Allowed"
@@ -867,27 +963,7 @@ class MainActivity : AppCompatActivity() {
         btnClose.setOnClickListener { dialog.dismiss() }
 
         btnConfigure.setOnClickListener {
-            val intent = Intent().apply {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
-                    data = Uri.parse("package:$packageName")
-                } else {
-                    action = Settings.ACTION_SETTINGS
-                }
-            }
-            try {
-                startActivity(intent)
-            } catch (_: Exception) {
-                val fallbackIntent = Intent().apply {
-                    action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-                    data = Uri.fromParts("package", packageName, null)
-                }
-                try {
-                    startActivity(fallbackIntent)
-                } catch (_: Exception) {
-                    Toast.makeText(this, "Could not open background settings.", Toast.LENGTH_SHORT).show()
-                }
-            }
+            requestBatteryOptimizationExemption()
             dialog.dismiss()
         }
 
@@ -1449,9 +1525,10 @@ class MainActivity : AppCompatActivity() {
     private var dotStep3: View? = null
     private var dotStep4: View? = null
     private var dotStep5: View? = null
+    private var dotStep6: View? = null
 
     private var currentSpotlightStep = 1
-    private val TOTAL_SPOTLIGHT_STEPS = 5
+    private val TOTAL_SPOTLIGHT_STEPS = 6
     private var preTutorialStatus = ServerService.STATUS_STOPPED
 
     private data class SpotlightStepConfig(
@@ -1481,6 +1558,7 @@ class MainActivity : AppCompatActivity() {
         dotStep3 = findViewById(R.id.dot_step_3)
         dotStep4 = findViewById(R.id.dot_step_4)
         dotStep5 = findViewById(R.id.dot_step_5)
+        dotStep6 = findViewById(R.id.dot_step_6)
 
         btnSpotlightNext?.setOnClickListener {
             if (currentSpotlightStep < TOTAL_SPOTLIGHT_STEPS) {
@@ -1530,6 +1608,11 @@ class MainActivity : AppCompatActivity() {
     private fun renderSpotlightStep(stepIndex: Int) {
         currentSpotlightStep = stepIndex
 
+        val isExempted = isBatteryOptimizationExempted()
+        val bgTargetId = if (!isExempted) R.id.card_stopped_bg_warning else R.id.btn_settings
+        val bgNote = if (!isExempted) "Tap 'Grant Background Permission' on the card above." else "✓ Background operation is already allowed."
+        val bgText = if (!isExempted) "Allow Lanvan to run in the background so file transfers continue smoothly when your screen turns off." else "Background operation is enabled. File transfers will stay active when your screen turns off."
+
         val configs = listOf(
             SpotlightStepConfig(
                 step = 1,
@@ -1563,6 +1646,16 @@ class MainActivity : AppCompatActivity() {
             ),
             SpotlightStepConfig(
                 step = 4,
+                title = "Background Operation",
+                text = bgText,
+                note = bgNote,
+                forceRunningPreview = false,
+                targetViewId = bgTargetId,
+                paddingDp = 6f,
+                radiusDp = 16f
+            ),
+            SpotlightStepConfig(
+                step = 5,
                 title = "Settings",
                 text = "Connection, security, storage, background operation, and feedback are available here.",
                 note = null,
@@ -1572,7 +1665,7 @@ class MainActivity : AppCompatActivity() {
                 radiusDp = 50f
             ),
             SpotlightStepConfig(
-                step = 5,
+                step = 6,
                 title = "You're ready",
                 text = "Start Lanvan whenever you want to share files with another device.",
                 note = null,
@@ -1585,9 +1678,18 @@ class MainActivity : AppCompatActivity() {
 
         val config = configs.find { it.step == stepIndex } ?: return
 
+        if (stepIndex >= 4) {
+            val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
+            sharedPrefs.edit().putBoolean("lanvan_has_seen_battery_step", true).apply()
+        }
+
+        val hasSeenBatteryStep = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
+            .getBoolean("lanvan_has_seen_battery_step", false)
+
         // Switch card preview representation for tutorial steps
         if (config.forceRunningPreview) {
             cardStopped.visibility = View.GONE
+            cardStoppedBgWarning.visibility = View.GONE
             cardRunningConnected.visibility = View.VISIBLE
 
             val displayUrl = if (currentServerUrl.isNotEmpty()) currentServerUrl else "http://192.168.1.100:5000"
@@ -1598,6 +1700,11 @@ class MainActivity : AppCompatActivity() {
             }
         } else {
             handleStatusUpdate(preTutorialStatus)
+            if (!isExempted && (stepIndex >= 4 || hasSeenBatteryStep)) {
+                cardStoppedBgWarning.visibility = View.VISIBLE
+            } else {
+                cardStoppedBgWarning.visibility = View.GONE
+            }
         }
 
         txtSpotlightTitle?.text = config.title
@@ -1610,8 +1717,8 @@ class MainActivity : AppCompatActivity() {
             txtSpotlightNote?.visibility = View.GONE
         }
 
-        // Update 5-dot indicator states
-        val dots = listOf(dotStep1, dotStep2, dotStep3, dotStep4, dotStep5)
+        // Update 6-dot indicator states
+        val dots = listOf(dotStep1, dotStep2, dotStep3, dotStep4, dotStep5, dotStep6)
         for (i in dots.indices) {
             val d = dots[i] ?: continue
             val params = d.layoutParams

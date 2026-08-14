@@ -146,16 +146,22 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
+    const newBgWarningCard = document.getElementById("new-bg-warning-card");
+
     // Hide all main cards first to enforce strict 1-card primary context
     newStoppedCard.style.display = "none";
     newRunningCard.style.display = "none";
     if (newDegradedCard) newDegradedCard.style.display = "none";
     if (newNetWarning) newNetWarning.style.display = "none";
+    if (newBgWarningCard) newBgWarningCard.style.display = "none";
 
     if (currentServerState === "stopped") {
       newStoppedCard.style.display = "flex";
       if (currentNetworkState === "disconnected" && newNetWarning) {
         newNetWarning.style.display = "flex";
+      }
+      if (currentBgState !== "allowed" && newBgWarningCard) {
+        newBgWarningCard.style.display = "flex";
       }
     } else if (currentServerState === "running") {
       if (currentNetworkState === "connected") {
@@ -557,18 +563,46 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  function updateBackgroundState(bgState) {
+    currentBgState = bgState;
+    updateBackgroundUI();
+    updateMainUIState();
+
+    const newBgWarningCard = document.getElementById("new-bg-warning-card");
+    if (newBgWarningCard) {
+      if (currentBgState === "allowed") {
+        newBgWarningCard.style.display = "none";
+      } else if (currentServerState === "stopped") {
+        newBgWarningCard.style.display = "flex";
+      }
+    }
+  }
+
   // Handle toolbar state switcher buttons (Allowed / Restricted / Unknown)
   bgStateButtons.forEach(btn => {
     btn.addEventListener("click", () => {
-      currentBgState = btn.dataset.bg;
-      updateBackgroundUI();
+      updateBackgroundState(btn.dataset.bg);
     });
   });
+
+  // Handle main card "Grant Background Permission" button
+  const newBtnMainAllowBg = document.getElementById("new-btn-main-allow-bg");
+  if (newBtnMainAllowBg) {
+    newBtnMainAllowBg.addEventListener("click", () => {
+      updateBackgroundState("allowed");
+      if (typeof currentSpotlightStep !== "undefined" && currentSpotlightStep === 4) {
+        if (typeof renderSpotlightStep === "function") {
+          renderSpotlightStep(5);
+        }
+      }
+    });
+  }
 
   // Prototype action button inside detail sheet
   if (newBtnConfigureBackground) {
     newBtnConfigureBackground.addEventListener("click", () => {
-      alert("Simulated: Opening Android System Battery & Background Access Settings");
+      updateBackgroundState("allowed");
+      alert("Simulated: Background permission granted! Lanvan can now run without battery optimization restrictions.");
     });
   }
 
@@ -967,7 +1001,7 @@ None`;
   const spotlightDots = document.querySelectorAll("#spotlight-dots .dot");
 
   let currentSpotlightStep = 1;
-  const TOTAL_SPOTLIGHT_STEPS = 5;
+  const TOTAL_SPOTLIGHT_STEPS = 6;
   let preTutorialState = "stopped";
   let isSpotlightDebugMode = false;
 
@@ -1004,6 +1038,16 @@ None`;
     },
     {
       step: 4,
+      title: "Background Operation",
+      text: "Allow Lanvan to run in the background without battery optimization restrictions so file transfers stay active when your screen turns off.",
+      note: "Tap 'Grant Permission' below to allow background running.",
+      state: "stopped",
+      targetSelector: "#new-bg-warning-card",
+      padding: 6,
+      radius: 16
+    },
+    {
+      step: 5,
       title: "Settings",
       text: "Connection, security, storage, background operation, and feedback are available here.",
       note: null,
@@ -1013,7 +1057,7 @@ None`;
       radius: "50%"
     },
     {
-      step: 5,
+      step: 6,
       title: "You're ready",
       text: "Start Lanvan whenever you want to share files with another device.",
       note: null,
@@ -1045,7 +1089,7 @@ None`;
     if (!spotlightHole || !spotlightTooltipCard || !spotlightOverlay) return;
 
     if (!config || !config.targetSelector) {
-      // Step 5: Center tooltip card, hide spotlight cutout
+      // Step 6: Center tooltip card, hide spotlight cutout
       spotlightHole.style.opacity = "0";
       spotlightHole.style.width = "0px";
       spotlightHole.style.height = "0px";
@@ -1066,9 +1110,9 @@ None`;
       return;
     }
 
-    // Scroll target into view inside scrollable phone container if needed
+    // Scroll target into view inside scrollable phone container cleanly
     try {
-      targetEl.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+      targetEl.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
     } catch (_) {}
 
     // Compute bounding rectangles in viewport space
@@ -1131,20 +1175,28 @@ None`;
     // Position floating Tooltip Card safely relative to spotlight hole bounds
     spotlightTooltipCard.style.transform = "none";
     const overlayUnscaledHeight = spotlightOverlay.offsetHeight || overlayRect.height;
-    const tooltipHeight = spotlightTooltipCard.offsetHeight || 150;
-    const targetCenterY = localTop + (localHeight / 2);
+    const tooltipHeight = spotlightTooltipCard.offsetHeight || 140;
 
-    if (targetCenterY > (overlayUnscaledHeight / 2) - 20) {
-      // Target is in lower half -> Place tooltip ABOVE target hole
+    const spaceAbove = holeTop - 50;
+    const spaceBelow = overlayUnscaledHeight - (holeTop + holeHeight) - 60;
+
+    if (spaceBelow < tooltipHeight + 10 && spaceAbove >= tooltipHeight) {
+      // Place tooltip ABOVE target hole
       let calcTop = holeTop - tooltipHeight - 14;
-      if (calcTop < 50) calcTop = 50; // Guard against top overflow
+      if (calcTop < 50) calcTop = 50;
+      spotlightTooltipCard.style.top = `${calcTop}px`;
+      spotlightTooltipCard.style.bottom = "auto";
+    } else if (spaceAbove > spaceBelow && spaceAbove >= tooltipHeight) {
+      // Place tooltip ABOVE target hole if more room above
+      let calcTop = holeTop - tooltipHeight - 14;
+      if (calcTop < 50) calcTop = 50;
       spotlightTooltipCard.style.top = `${calcTop}px`;
       spotlightTooltipCard.style.bottom = "auto";
     } else {
-      // Target is in upper half -> Place tooltip BELOW target hole
+      // Place tooltip BELOW target hole
       let calcTop = holeTop + holeHeight + 14;
       if (calcTop + tooltipHeight > overlayUnscaledHeight - 65) {
-        calcTop = overlayUnscaledHeight - tooltipHeight - 65; // Guard against bottom nav collision
+        calcTop = overlayUnscaledHeight - tooltipHeight - 65;
       }
       spotlightTooltipCard.style.top = `${calcTop}px`;
       spotlightTooltipCard.style.bottom = "auto";
@@ -1154,10 +1206,36 @@ None`;
     spotlightTooltipCard.style.right = "20px";
   }
 
+  const spotlightActionContainer = document.getElementById("spotlight-action-container");
+
   function renderSpotlightStep(stepIndex) {
     currentSpotlightStep = stepIndex;
     const config = spotlightStepConfigs.find(c => c.step === stepIndex);
     if (!config) return;
+
+    // Dynamic Step 4 handling for Background Operation / Battery Optimization
+    if (stepIndex === 4) {
+      const newBgWarningCard = document.getElementById("new-bg-warning-card");
+      if (currentBgState !== "allowed") {
+        config.targetSelector = "#new-bg-warning-card";
+        config.text = "Allow Lanvan to run in the background so file transfers continue smoothly when your screen turns off.";
+        config.note = "Tap 'Grant Background Permission' on the card above.";
+        if (newBgWarningCard) newBgWarningCard.style.display = "flex";
+      } else {
+        // Background access is already granted: hide warning card completely
+        config.targetSelector = "#new-btn-settings";
+        config.text = "Background operation is enabled. File transfers will stay active when your screen turns off.";
+        config.note = "✓ Background operation is already allowed.";
+        if (newBgWarningCard) newBgWarningCard.style.display = "none";
+      }
+      if (spotlightActionContainer) spotlightActionContainer.style.display = "none";
+    } else {
+      const newBgWarningCard = document.getElementById("new-bg-warning-card");
+      if (currentBgState === "allowed" && newBgWarningCard) {
+        newBgWarningCard.style.display = "none";
+      }
+      if (spotlightActionContainer) spotlightActionContainer.style.display = "none";
+    }
 
     // Switch server state for simulation during tutorial
     if (config.state) {
