@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity() {
 
     private var currentState = ServerState.STOPPED
     private var currentServerUrl = ""
+    private var lastGeneratedQrUrl = ""
 
     private val isServerRunning: Boolean
         get() = currentState == ServerState.RUNNING
@@ -450,9 +451,12 @@ class MainActivity : AppCompatActivity() {
 
                     txtIpLink.text = currentServerUrl
 
-                    val bitmap = generateQrCodeBitmap(currentServerUrl)
-                    if (bitmap != null) {
-                        imgQrCode.setImageBitmap(bitmap)
+                    if (currentServerUrl.isNotEmpty() && currentServerUrl != lastGeneratedQrUrl) {
+                        val bitmap = generateQrCodeBitmap(currentServerUrl)
+                        if (bitmap != null) {
+                            imgQrCode.setImageBitmap(bitmap)
+                            lastGeneratedQrUrl = currentServerUrl
+                        }
                     }
 
                     cardStopped.visibility = View.GONE
@@ -463,6 +467,7 @@ class MainActivity : AppCompatActivity() {
             ServerService.STATUS_STOPPED, ServerService.STATUS_ERROR -> {
                 currentState = ServerState.STOPPED
                 currentServerUrl = ""
+                lastGeneratedQrUrl = ""
 
                 btnStartServer.isEnabled = true
                 btnStartServer.text = "Start Lanvan"
