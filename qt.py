@@ -47,21 +47,51 @@ def OK(m):   return f"  {C.GREEN}[OK]{C.RESET} {m}"
 def FAIL(m): return f"  {C.RED}[FAIL]{C.RESET} {C.RED}{m}{C.RESET}"
 def WARN(m): return f"  {C.YELLOW}[WARN]{C.RESET} {m}"
 def INFO(m): return f"  {C.CYAN}[INFO]{C.RESET} {m}"
-def HEAD(m): return f"\n{C.BOLD}{C.CYAN}{'='*60}\n  {m}\n{'='*60}{C.RESET}"
+def HEAD(m): 
+    return f"\n{C.BOLD}{C.CYAN}--- {m} ---{C.RESET}"
 
 class Suite:
     def __init__(self):
         self.r = {"pass":0,"fail":0,"warn":0,"checks":[]}
         self.base_url = None; self.server = None; self.task = None
+        self.start_time = time.time()
+        self.test_counter = 0
+        self.total_tests = 173
 
-    def _rec(self, name, passed, cat="general"):
-        self.r["checks"].append({"name":name,"passed":passed,"category":cat})
-        if passed: self.r["pass"]+=1
-        else: self.r["fail"]+=1
+    def _rec(self, name, passed, cat="general", expected=None, actual=None, reason=None, duration=0.0):
+        self.test_counter += 1
+        entry = {
+            "index": self.test_counter,
+            "name": name,
+            "passed": passed,
+            "category": cat,
+            "expected": expected,
+            "actual": actual,
+            "reason": reason or ("TEST_PASSED" if passed else "ASSERTION_FAILED"),
+            "duration": duration
+        }
+        self.r["checks"].append(entry)
+        if passed:
+            self.r["pass"] += 1
+        else:
+            self.r["fail"] += 1
 
-    def _ck(self, cond, name, cat="general"):
-        if cond: print(OK(name)); self._rec(name,True,cat)
-        else: print(FAIL(name)); self._rec(name,False,cat)
+    def _ck(self, cond, name, cat="general", expected=None, actual=None, reason=None):
+        t0 = time.time()
+        passed = bool(cond)
+        duration = round(time.time() - t0, 3)
+        self._rec(name, passed, cat, expected, actual, reason, duration)
+        
+        idx_str = f"[{self.test_counter:02d}/{self.total_tests}]"
+        if passed:
+            print(f"  {idx_str} {C.GREEN}[PASS]{C.RESET} {name} ({duration}s)")
+        else:
+            print(f"  {idx_str} {C.RED}[FAIL]{C.RESET} {name} ({duration}s)")
+            print(f"        Reason: {reason or 'ASSERTION_FAILED'}")
+            if expected is not None:
+                print(f"        Expected: {expected}")
+            if actual is not None:
+                print(f"        Actual:   {actual}")
 
     # ═══════ SECURITY ═══════
     def test_security(self):
@@ -932,23 +962,59 @@ class Suite:
             shutil.rmtree(test_dl, ignore_errors=True)
             print(OK("Removed test downloads directory"))
 
-        elapsed = time.time()-start
-        tot = self.r["pass"]+self.r["fail"]
-        pct = (self.r["pass"]/tot*100) if tot else 0
-        bar = f"{C.GREEN}{'\u2588'*int(40*self.r['pass']/tot) if tot else ''}{C.RED}{'\u2591'*(40-int(40*self.r['pass']/tot)) if tot else '\u2591'*40}{C.RESET}"
-
-        print(f"\n{'='*60}")
-        status_text = "ALL PASSED" if not self.r["fail"] else f"FAILED: {self.r['fail']}"
-        bg = C.BG_GREEN if not self.r["fail"] else C.BG_RED
-        print(f"  {bg}{C.WHITE}  {status_text}  {C.RESET}")
-        print(f"  {bar}  {pct:.0f}%")
-        print(f"  {C.GREEN}\u2713 {self.r['pass']}{C.RESET}  |  {C.RED}\u2717 {self.r['fail']}{C.RESET}  |  {elapsed:.1f}s")
-        print(f"{'='*60}")
-        if self.r["fail"]:
-            print(f"\n{C.BOLD}Failed:{C.RESET}")
+        elapsed = time.time() - start
+        tot = self.r["pass"] + self.r["fail"]
+        
+        print("\n============================================================")
+        print("TEST SUMMARY")
+        print("============================================================")
+        print(f"Total:   {tot}")
+        print(f"Passed:  {self.r['pass']}")
+        print(f"Failed:  {self.r['fail']}")
+        print(f"Skipped: 0")
+        print(f"Duration: {elapsed:.2f}s")
+        print()
+        
+        if self.r["fail"] > 0:
+            print("FAILED TESTS")
+            print("------------------------------------------------------------")
             for c in self.r["checks"]:
-                if not c["passed"]: print(f"  {C.RED}\u2717{C.RESET} [{c['category']}] {c['name']}")
-        return self.r["fail"]==0
+                if not c["passed"]:
+                    print(f"[{c['index']:02d}/{self.total_tests}] {c['name']}")
+                    print(f"        Reason: {c['reason']}")
+                    if c.get("expected") is not None:
+                        print(f"        Expected: {c['expected']}")
+                    if c.get("actual") is not None:
+                        print(f"        Actual:   {c['actual']}")
+            print()
+        
+        print("============================================================")
+
+        # Write test execution artifact
+        try:
+            reports_dir = ROOT / "testing" / "reports"
+            reports_dir.mkdir(parents=True, exist_ok=True)
+            report_file = reports_dir / "latest-test-report.txt"
+            
+            report_lines = [
+                "============================================================",
+                "LANVAN TEST SUITE REPORT",
+                "============================================================",
+                f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+                f"Total: {tot} | Passed: {self.r['pass']} | Failed: {self.r['fail']} | Duration: {elapsed:.2f}s",
+                ""
+            ]
+            for c in self.r["checks"]:
+                status = "PASS" if c["passed"] else "FAIL"
+                report_lines.append(f"[{c['index']:02d}] [{status}] [{c['category']}] {c['name']} ({c['duration']}s)")
+                if not c["passed"]:
+                    report_lines.append(f"      Reason: {c['reason']}")
+            
+            report_file.write_text("\n".join(report_lines), encoding="utf-8")
+        except Exception:
+            pass
+
+        return self.r["fail"] == 0
 
 def main():
     p = argparse.ArgumentParser(description="Lanvan Regression Suite v6")

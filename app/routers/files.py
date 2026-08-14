@@ -24,6 +24,7 @@ import uuid
 from pathlib import Path
 from mimetypes import guess_type
 from typing import List, Optional, Dict, Any, Tuple, Set
+from app.core.logger import logger
 
 from pydantic import BaseModel
 
@@ -114,7 +115,7 @@ try:
         if orphan_tmp.is_file():
             try:
                 orphan_tmp.unlink()
-                print(f"[STARTUP CLEANUP] Removed orphan temporary file: {orphan_tmp}")
+                logger.info("STORAGE", "Removed orphan temporary file")
             except Exception:
                 pass
     # Also clean temp_chunks
@@ -151,47 +152,38 @@ def cleanup_temp_file_for_filename(filename: str, parent_path: Optional[str] = N
         resolved = UploadPathResolver.resolve(resolved_parent, safe_name, UPLOAD_FOLDER)
         target_dir = resolved.target_directory
         exact_target = resolved.full_path
-        # Derive the same chunk_prefix that upload_chunk used when writing the temp chunks.
-        # For ROOT/A: scoped_key="A", chunk_prefix="A"
-        # For Inside/A: scoped_key="Inside/A", chunk_prefix="Inside__A"
         chunk_prefix = resolved.relative_path.as_posix().replace("/", "__")
     except Exception:
         target_dir = _resolve_target_dir(resolved_parent)
         exact_target = target_dir / safe_name
-        # Fallback: basename-only prefix (safe, because UploadPathResolver failed)
         chunk_prefix = safe_name
 
-    print(
-        f"[CLEANUP] operation=cancelled_upload upload_id={upload_id or ''} "
-        f"parent_path={resolved_parent or ''} filename={safe_name} "
-        f"relative_path={relative_path or ''} resolved_path={exact_target} "
-        f"chunk_prefix={chunk_prefix}"
-    )
+    logger.log_upload("Cancelled file cleanup", op_id=upload_id, file_ext=logger.extract_safe_ext(filename))
 
     if exact_target.exists() and exact_target.is_file():
         try:
             exact_target.unlink()
             deleted_count += 1
-            print(f"[CLEANUP] Deleted cancelled target file: {exact_target}")
+            logger.info("STORAGE", "Deleted cancelled target file")
         except Exception as e:
-            print(f"[ERR] Failed to delete cancelled target file {exact_target}: {e}")
+            logger.warn("STORAGE", "Failed to delete cancelled target file", details={"Reason": str(e)})
 
     for p in target_dir.glob(f"{safe_name}.tmp"):
         if p.is_file():
             try:
                 p.unlink()
                 deleted_count += 1
-                print(f"[CLEANUP] Deleted temporary file: {p}")
+                logger.info("STORAGE", "Deleted temporary file")
             except Exception as e:
-                print(f"[ERR] Failed to delete temp file {p}: {e}")
+                logger.warn("STORAGE", "Failed to delete temp file", details={"Reason": str(e)})
     for p in target_dir.glob(f"{safe_name}.chunk.tmp"):
         if p.is_file():
             try:
                 p.unlink()
                 deleted_count += 1
-                print(f"[CLEANUP] Deleted chunk temp file: {p}")
+                logger.info("STORAGE", "Deleted chunk temp file")
             except Exception as e:
-                print(f"[ERR] Failed to delete chunk temp file {p}: {e}")
+                logger.warn("STORAGE", "Failed to delete chunk temp file", details={"Reason": str(e)})
 
     # Use the scoped chunk_prefix (e.g. "Inside__A") to match exactly the temp
     # chunk files created by upload_chunk, which names them as chunk_prefix.partN.
@@ -481,210 +473,137 @@ async def save_upload_file_async(upload_file: UploadFile, destination: Path, enc
     
     # [START] TEMPORARY FILE STRATEGY: Upload to .tmp extension first
     temp_destination = destination.with_suffix(destination.suffix + '.tmp')
-    print(f"[RETRY] Uploading to temporary file: {temp_destination.name}")
+    safe_ext = logger.extract_safe_ext(upload_file.filename or destination.name)
+    start_time = time.time()
     
-    # [MOBILE] Platform Detection (but optimizations apply to ALL)
+    # Platform Detection
     is_android = is_android_environment()
-    
     is_windows = os.name == 'nt'
     is_linux = os.name == 'posix' and not is_android
-    
     platform_name = "Android/Termux" if is_android else "Windows" if is_windows else "Linux/Unix"
     
-    # [STATS] ASYNC File size estimation for progress tracking (NON-BLOCKING)
-    await asyncio.to_thread(upload_file.file.seek, 0, 2)  # Seek to end - ASYNC
-    file_size = await asyncio.to_thread(upload_file.file.tell)  # Tell position - ASYNC  
-    await asyncio.to_thread(upload_file.file.seek, 0)  # Reset to beginning - ASYNC
+    # ASYNC File size estimation for progress tracking
+    await asyncio.to_thread(upload_file.file.seek, 0, 2)
+    file_size = await asyncio.to_thread(upload_file.file.tell)
+    await asyncio.to_thread(upload_file.file.seek, 0)
     
-    #  Apply optimizations for large files on ALL platforms
-    if file_size > 50 * 1024 * 1024:  # Files > 50MB
-        print(f"[RETRY] Large file detected ({file_size//1024//1024}MB) - enabling streaming optimizations")
-        
-        # Android-specific feasibility check (but streaming works everywhere)
-        if is_android:
-            feasibility = optimize_for_upload(file_size)
-            if feasibility['warnings']:
-                for warning in feasibility['warnings']:
-                    print(f"[WARN] {warning}")
-            if feasibility['recommendations']:
-                print(f"[TIP] Android recommendations:")
-                for rec in feasibility['recommendations']:
-                    print(f"   • {rec}")
-        else:
-            # General recommendations for PC/Linux/Mac
-            feasibility = optimize_for_upload(file_size)
-            if feasibility['warnings']:
-                for warning in feasibility['warnings']:
-                    print(f"[WARN] {warning}")
-            if feasibility['recommendations']:
-                print(f"[TIP] {platform_name} recommendations:")
-                for rec in feasibility['recommendations']:
-                    print(f"   • {rec}")
+    logger.log_upload("Async Upload Started", file_ext=safe_ext, size_bytes=file_size, status="STARTED")
     
-    # [TARGET] Universal adaptive chunk sizing optimized for each platform
+    # Universal adaptive chunk sizing
     CHUNK_SIZE = universal_optimizer.get_adaptive_chunk_size(file_size)
-    print(f"[TARGET] {platform_name} - chunk size: {CHUNK_SIZE//1024}KB")
     
-    print(f"[RETRY] ASYNC Upload: {destination.name} ({file_size:,} bytes)")
-    
-    # [LOCK] ACQUIRE FILE LOCK: Prevent race conditions during upload
+    # ACQUIRE FILE LOCK: Prevent race conditions during upload
     async with lock_manager.upload_lock(destination.name, timeout=60.0):
-        print(f"[LOCK] File lock acquired for: {destination.name}")
-        
         if encrypt:
-            # [LOCK] For now, fall back to original method for encrypted files
-            # TODO: Implement true streaming encryption in future update
-            print(f"[LOCK] Using existing encryption method (will be optimized in future)")
             try:
                 data = await asyncio.to_thread(upload_file.file.read)
-                
-                # Import streaming encryption functions
                 from app.core.aes_utils import encrypt_file_stream
-                
-                # Add file integrity validation for encrypted files
                 original_hash = hashlib.sha256(data).hexdigest()
-                print(f"[LOCK] Original file hash: {original_hash}")
                 
-                # Use memory-efficient streaming encryption
                 encrypted_data, metadata = encrypt_file_stream(data, chunk_size=CHUNK_SIZE)
-                
-                # Enhanced metadata with integrity information
                 metadata['original_hash'] = original_hash
                 metadata['original_size'] = str(len(data))
                 metadata['encrypted_size'] = str(len(encrypted_data))
                 
-                # Write encrypted data to file using async I/O
                 import aiofiles
                 async with aiofiles.open(temp_destination, 'wb') as f:
                     await f.write(encrypted_data)
                 
-                # [TARGET] ATOMIC MOVE: Move encrypted file from .tmp to final destination
                 import shutil
                 max_retries = 3 if is_windows else 1
                 retry_delay = 0.3 if is_windows else 0.1
                 
                 for attempt in range(max_retries):
                     try:
-                        print(f"[RETRY] Moving encrypted {temp_destination.name} -> {destination.name} (attempt {attempt + 1})")
-                        
                         if is_windows:
-                            # Use shutil.move for better Windows compatibility
                             await asyncio.to_thread(shutil.move, str(temp_destination), str(destination))
                         else:
                             temp_destination.rename(destination)
                         
-                        print(f"[OK] Encrypted file atomically moved to final destination: {destination.name}")
+                        duration = time.time() - start_time
+                        logger.log_upload("Encrypted Upload Completed", file_ext=safe_ext, size_bytes=file_size, duration=duration, status="SUCCESS")
                         break
-                        
                     except Exception as e:
                         if attempt < max_retries - 1:
-                            print(f"[WARN] Encrypted move attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}")
                             await asyncio.sleep(retry_delay)
-                            retry_delay *= 1.5  # Exponential backoff
+                            retry_delay *= 1.5
                         else:
-                            # Final attempt failed, clean up and raise
                             if temp_destination.exists():
                                 try:
                                     temp_destination.unlink()
                                 except:
                                     pass
-                            print(f"[ERR] Failed to move encrypted temp file after {max_retries} attempts: {e}")
-                            raise Exception(f"Failed to finalize encrypted upload after {max_retries} attempts: {e}")
+                            logger.log_upload("Encrypted Finalization Failed", file_ext=safe_ext, size_bytes=file_size, status="FAILED", reason="STORAGE_WRITE_FAILED")
+                            raise Exception(f"Failed to finalize encrypted upload: {e}")
                 
-                # Yield control periodically - OPTIMIZED: 10ms instead of 1ms for better performance
                 await asyncio.sleep(0.01)
-                
             except Exception as e:
-                # Clean up encrypted temp file
                 if temp_destination.exists():
                     temp_destination.unlink()
-                print(f"[ERR] Encryption error: {e}")
+                logger.log_upload("Encryption Upload Failed", file_ext=safe_ext, size_bytes=file_size, status="FAILED", reason="ENCRYPTION_ERROR")
                 raise
         else:
-            # [PKG] Async Streaming upload without encryption
             try:
                 import aiofiles
                 bytes_written = 0
                 hash_calculator = hashlib.sha256()
-                processed_chunks = 0  # Initialize chunk counter
+                processed_chunks = 0
                 
-                # Open file, write data, and explicitly close before moving
                 async with aiofiles.open(temp_destination, 'wb') as f:
                     while True:
-                        # Read chunk asynchronously
                         chunk = await asyncio.to_thread(upload_file.file.read, CHUNK_SIZE)
                         if not chunk:
                             break
                         
-                        # Write chunk asynchronously
                         await f.write(chunk)
-                        await f.flush()  # Ensure data is written
+                        await f.flush()
                         
                         bytes_written += len(chunk)
                         hash_calculator.update(chunk)
                         processed_chunks += 1
                         
-                        # Yield control every 5 chunks to prevent blocking - OPTIMIZED: Less frequent yielding
                         if processed_chunks % 5 == 0:
-                            await asyncio.sleep(0.01)  # OPTIMIZED: 10ms instead of 1ms
-                        
-                        # Progress for large files (reduce spam)
-                        if bytes_written > 10 * 1024 * 1024 and bytes_written % (20 * 1024 * 1024) == 0:
-                            print(f"[PKG] Progress: {bytes_written // 1024 // 1024}MB")
+                            await asyncio.sleep(0.01)
                 
-                # File handle is now closed, add extra delay for Windows
-                print(f"[OK] Upload to temp file completed: {temp_destination.name} ({bytes_written:,} bytes)")
                 if is_windows:
-                    await asyncio.sleep(0.2)  # Extra delay for Windows to release file handle
+                    await asyncio.sleep(0.2)
                     
-                # [TARGET] ATOMIC MOVE: Move from .tmp to final destination to prevent race conditions
                 import shutil
-                import time
                 max_retries = 3 if is_windows else 1
                 retry_delay = 0.3 if is_windows else 0.1
                 
                 for attempt in range(max_retries):
                     try:
-                        print(f"[RETRY] Moving {temp_destination.name} -> {destination.name} (attempt {attempt + 1})")
-                        
                         if is_windows:
-                            # Use shutil.move for better Windows compatibility
                             await asyncio.to_thread(shutil.move, str(temp_destination), str(destination))
                         else:
                             temp_destination.rename(destination)
                         
-                        print(f"[OK] File atomically moved to final destination: {destination.name}")
+                        duration = time.time() - start_time
+                        logger.log_upload("Upload Completed", file_ext=safe_ext, size_bytes=bytes_written, duration=duration, status="SUCCESS")
                         break
-                        
                     except Exception as e:
                         if attempt < max_retries - 1:
-                            print(f"[WARN] Move attempt {attempt + 1} failed, retrying in {retry_delay}s: {e}")
                             await asyncio.sleep(retry_delay)
-                            retry_delay *= 1.5  # Exponential backoff
+                            retry_delay *= 1.5
                         else:
-                            # Final attempt failed, clean up and raise
                             if temp_destination.exists():
                                 try:
                                     temp_destination.unlink()
                                 except:
                                     pass
-                            print(f"[ERR] Failed to move temp file after {max_retries} attempts: {e}")
-                            raise Exception(f"Failed to finalize upload after {max_retries} attempts: {e}")
+                            logger.log_upload("Finalization Failed", file_ext=safe_ext, size_bytes=bytes_written, status="FAILED", reason="STORAGE_WRITE_FAILED")
+                            raise Exception(f"Failed to finalize upload: {e}")
                 
             except Exception as e:
-                # Clean up partial temp file
                 if temp_destination.exists():
                     temp_destination.unlink()
-                print(f"[ERR] ASYNC Upload error: {e}")
+                logger.log_upload("Upload Transfer Failed", file_ext=safe_ext, size_bytes=file_size, status="FAILED", reason="UPLOAD_TRANSFER_FAILED")
                 raise
             finally:
-                # [CLEAN] Universal cleanup (applies to ALL platforms)
                 if hasattr(universal_optimizer, 'upload_active'):
                     universal_optimizer.upload_active = False
                 universal_optimizer.memory_cleanup(force=True)
-                print(f"[RETRY] Universal async cleanup completed")
-        
-        print(f"[UNLOCK] File lock released for: {destination.name}")
 
 async def scan_file_async(path: Path):
     """

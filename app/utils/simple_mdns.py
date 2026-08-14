@@ -59,11 +59,8 @@ def check_mdns_dependencies() -> tuple[bool, str]:
             except Exception:
                 pass
             
-            # Additional warning for Android/Termux users
-            print("[MOBILE] Android/Termux mDNS Limitations:")
-            print("   • .local domains often don't work due to system restrictions")
-            print("   • Use direct IP access instead: [IP]:5000 or [IP]:5001")
-            print("   • QR codes will show IP-based URLs for better compatibility")
+            from app.core.logger import logger
+            logger.info("ANDROID", "mDNS system limitations active", details={"Recommendation": "DIRECT_IP"})
         
         return True, "[OK] mDNS dependencies available"
     
@@ -273,17 +270,6 @@ class SimpleMDNSManager:
                 normalized_services = [s.split('.')[0] for s in services_found]
                 base_lower = service_name.lower()
                 
-                # Check system DNS resolution for conflict fallback
-                try:
-                    resolved_ip = socket.gethostbyname(f"{service_name}.local")
-                    our_ip = self.get_lan_ip()
-                    if resolved_ip and resolved_ip != our_ip and resolved_ip != "127.0.0.1":
-                        print(f"[WARN] Host conflict detected via DNS lookup: {service_name}.local already points to {resolved_ip}")
-                        if base_lower not in normalized_services:
-                            normalized_services.append(base_lower)
-                except Exception:
-                    pass
-                
                 if base_lower not in normalized_services:
                     return service_name, False
                 
@@ -292,22 +278,9 @@ class SimpleMDNSManager:
                 while True:
                     candidate = f"{service_name}-{counter}"
                     if candidate.lower() not in normalized_services:
-                        # Double-check via DNS resolution
-                        conflict_via_dns = False
-                        try:
-                            resolved_ip = socket.gethostbyname(f"{candidate}.local")
-                            our_ip = self.get_lan_ip()
-                            if resolved_ip and resolved_ip != our_ip and resolved_ip != "127.0.0.1":
-                                conflict_via_dns = True
-                        except Exception:
-                            pass
-                            
-                        if not conflict_via_dns:
-                            print(f"[WARN] Name collision detected! '{service_name}' is already in use")
-                            print(f"[RETRY] Using alternative name: '{candidate}'")
-                            return candidate, True
-                        else:
-                            normalized_services.append(candidate.lower())
+                        print(f"[WARN] Name collision detected! '{service_name}' is already in use")
+                        print(f"[RETRY] Using alternative name: '{candidate}'")
+                        return candidate, True
                     counter += 1
                     if counter > 100:  # Safety bound
                         break
@@ -554,29 +527,17 @@ class SimpleMDNSManager:
                     print(f"[ERR] Service info creation failed: {si_error}")
                     return False
                 
-                # Register the service
-                try:
-                    self.zeroconf.register_service(self.service_info)
-                    self.is_running = True
-                    print("[OK] mDNS service registered successfully")
-                except Exception as reg_error:
-                    print(f"[WARN] Service registration warning: {reg_error}")
-                    # Continue anyway - some systems have registration warnings but still work
-                    self.is_running = True
-                
-                # Brief pause for registration to take effect
-                time.sleep(0.1)
-                
-                # Offline-optimized announcements (reduce frequency to prevent HTTP conflicts)
-                try:
-                    # Single announcement to prevent HTTP request conflicts
-                    time.sleep(0.2)  # Longer delay for stability
-                    if self.zeroconf and self.service_info:
-                        self.zeroconf.register_service(self.service_info)
-                        print("[MDNS] mDNS service announcement sent")
-                except Exception as announce_error:
-                    print(f"[WARN] Announcement warning (non-critical): {announce_error}")
-                    # Non-critical - continue
+                # Register the service asynchronously in a daemon thread so mDNS probing doesn't block server startup
+                self.is_running = True
+                def _async_register():
+                    try:
+                        if self.zeroconf and self.service_info:
+                            self.zeroconf.register_service(self.service_info)
+                            print("[OK] mDNS service registered successfully")
+                    except Exception as reg_error:
+                        print(f"[WARN] Service registration warning: {reg_error}")
+
+                threading.Thread(target=_async_register, daemon=True, name="mdns-register").start()
                 
                 # [NET] Protocol-Specific Access Information
                 protocol_name = "HTTPS" if self.use_https else "HTTP"

@@ -284,10 +284,10 @@ class FileOperationLock:
         
         try:
             async with lock:
-                logger.info(f"[LOCK] [{PLATFORM_NAME}] Upload lock acquired for: {filename}")
+                logger.debug(f"[LOCK] [{PLATFORM_NAME}] Upload lock acquired")
                 yield lock
         finally:
-            logger.info(f"[UNLOCK] [{PLATFORM_NAME}] Upload lock released for: {filename}")
+            logger.debug(f"[UNLOCK] [{PLATFORM_NAME}] Upload lock released")
     
     @contextlib.asynccontextmanager 
     async def directory_lock(
@@ -309,10 +309,10 @@ class FileOperationLock:
         
         try:
             async with lock:
-                logger.info(f"[LOCK] [{PLATFORM_NAME}] Directory lock acquired for: {dir_path}")
+                logger.debug(f"[LOCK] [{PLATFORM_NAME}] Directory lock acquired")
                 yield lock
         finally:
-            logger.info(f"[UNLOCK] [{PLATFORM_NAME}] Directory lock released for: {dir_path}")
+            logger.debug(f"[UNLOCK] [{PLATFORM_NAME}] Directory lock released")
 
 # Global file operation lock manager
 file_lock_manager = None

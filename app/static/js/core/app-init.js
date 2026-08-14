@@ -130,19 +130,21 @@
     (function () {
         const _originalOpen = XMLHttpRequest.prototype.open;
         XMLHttpRequest.prototype.open = function (method, url) {
+            this._method = method;
             this._url = url;
             return _originalOpen.apply(this, arguments);
         };
 
         const _originalSend = XMLHttpRequest.prototype.send;
         XMLHttpRequest.prototype.send = function (body) {
-            // No automatic parent_path injection — production handlers set it correctly.
-            // Log response errors
             var self = this;
             var originalOnLoad = this.onload;
             this.onload = function () {
                 if (self.status >= 400) {
-                    console.error("[Network Error] XHR failed with status " + self.status + " for URL: " + self._url + "\nResponse: ", self.responseText);
+                    var endpoint = (self._url || '').split('?')[0];
+                    if (window.Logger && window.Logger.logNetwork) {
+                        window.Logger.logNetwork('Request failed', endpoint, self._method || 'POST', self.status, 'HTTP_ERROR');
+                    }
                 }
                 if (originalOnLoad) {
                     originalOnLoad.apply(this, arguments);
@@ -150,7 +152,10 @@
             };
             var originalOnError = this.onerror;
             this.onerror = function () {
-                console.error("[Network Error] XHR connection failed for URL: " + self._url);
+                var endpoint = (self._url || '').split('?')[0];
+                if (window.Logger && window.Logger.logNetwork) {
+                    window.Logger.logNetwork('Connection failed', endpoint, self._method || 'POST', 0, 'NETWORK_ERROR');
+                }
                 if (originalOnError) {
                     originalOnError.apply(this, arguments);
                 }
@@ -161,11 +166,14 @@
 
         const _originalFetch = window.fetch;
         window.fetch = function (url, options) {
-            // No automatic parent_path injection — production handlers set it correctly.
+            var method = (options && options.method) ? options.method : 'GET';
+            var endpoint = (typeof url === 'string' ? url : (url ? url.url : '')).split('?')[0];
             return _originalFetch.apply(this, arguments)
                 .then(function (response) {
                     if (!response.ok) {
-                        console.error("[Network Error] Fetch failed with status " + response.status + " for URL: " + url);
+                        if (window.Logger && window.Logger.logNetwork) {
+                            window.Logger.logNetwork('Request failed', endpoint, method, response.status, 'HTTP_ERROR');
+                        }
                     }
                     return response;
                 })
@@ -173,7 +181,9 @@
                     if (error && (error.name === 'AbortError' || error.message === 'signal is aborted without reason')) {
                         throw error;
                     }
-                    console.error("[Network Error] Fetch connection failed for URL: " + url + ". Error: ", error);
+                    if (window.Logger && window.Logger.logNetwork) {
+                        window.Logger.logNetwork('Connection failed', endpoint, method, 0, 'NETWORK_ERROR');
+                    }
                     throw error;
                 });
         };

@@ -2,15 +2,10 @@
 [CORE] Lanvan FastAPI Application Entry Point
 Initializes the FastAPI application, registers middleware (CORS, network filters),
 binds WebSocket sub-routers, and handles server lifespan events (mDNS, thread lifecycle).
-
-Key Features:
-- Lifespan context manager controlling resource initialization and prioritized shutdowns
-- Secure CORSMiddleware with local network restriction filtering
-- Global client disconnect log silencer filters
-- Custom error pages redirection and loading phase states
 """
 
 import os
+import re
 import signal
 import asyncio
 import threading
@@ -26,31 +21,25 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import ClientDisconnect
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
 from app.routers.pages import router as pages_router
 from app.routers.files import router as files_router
 from app.routers.clipboard import router as clipboard_router
 from app.routers.system import router as system_router
 
-# Import mDNS manager for service discovery
 from app.utils.simple_mdns import mdns_manager
+from app.core.logger import logger
 
-# Import HTTPS redirect server for dual-protocol support
-# Removed: HTTPS redirect server import (no longer needed)
-
-#  Suppress noisy ClientDisconnect errors in logs
 class ClientDisconnectFilter(logging.Filter):
     def filter(self, record):
         if hasattr(record, 'exc_info') and record.exc_info:
             exc_type, exc_value, exc_traceback = record.exc_info
             if isinstance(exc_value, ClientDisconnect):
                 return False
-            # Also filter HTTPException with "parsing the body" message
             if isinstance(exc_value, HTTPException) and "parsing the body" in str(exc_value.detail):
                 return False
-            # Filter out static file 404s and other noise
             if isinstance(exc_value, HTTPException) and exc_value.status_code == 404:
                 return False
-        # Filter out the string-based error messages too
         if hasattr(record, 'getMessage'):
             msg = record.getMessage()
             if any(path in msg for path in [
@@ -75,7 +64,6 @@ class ClientDisconnectFilter(logging.Filter):
                 return False
         return True
 
-# Apply filter to uvicorn and starlette loggers
 logging.getLogger("uvicorn.error").addFilter(ClientDisconnectFilter())
 logging.getLogger("uvicorn").addFilter(ClientDisconnectFilter())
 logging.getLogger("uvicorn.access").addFilter(ClientDisconnectFilter())
@@ -83,11 +71,8 @@ logging.getLogger("starlette").addFilter(ClientDisconnectFilter())
 logging.getLogger("fastapi").addFilter(ClientDisconnectFilter())
 logging.getLogger().addFilter(ClientDisconnectFilter())
 
-# [!] Global shutdown event for immediate server termination
 shutdown_event = asyncio.Event()
 active_connections = set()
-
-# [TARGET] Global graceful shutdown state
 graceful_shutdown_initiated = False
 shutdown_countdown = 0
 
@@ -109,13 +94,11 @@ class ConnectionManager:
             try:
                 await connection.close()
             except Exception as e:
-                print(f"Error closing connection: {e}")
+                pass
         self.active_connections.clear()
 
 connection_manager = ConnectionManager()
 
-
-# [TARGET] Console command monitor for "close" command
 from app.ws_manager import clipboard_ws_router, upload_status_ws_router
 from app.core.shutdown import shutdown_manager
 
@@ -125,190 +108,153 @@ def console_command_monitor():
         try:
             command = input().strip().lower()
             if command in ['close', 'quit', 'exit', 'shutdown']:
-                print(f"[!] Console command '{command}' detected - initiating graceful shutdown...")
+                logger.info("SERVER", "Console shutdown command detected")
                 initiate_graceful_shutdown_process()
                 break
         except (EOFError, KeyboardInterrupt):
-            # Handle Ctrl+C in input - this will also trigger signal handler
             break
-        except Exception as e:
-            # Ignore input errors and continue monitoring
+        except Exception:
             pass
 
-# [TARGET] Graceful shutdown process
 def initiate_graceful_shutdown_process():
-    """Start graceful shutdown with client notifications"""
-    global graceful_shutdown_initiated, shutdown_countdown
-    
+    """Initiate graceful shutdown process"""
+    global graceful_shutdown_initiated
     if graceful_shutdown_initiated:
-        return  # Already shutting down
+        return
     
     graceful_shutdown_initiated = True
-    shutdown_countdown = 5  # 5 second countdown
+    logger.info("SERVER", "Shutdown initiated")
     
-    print("[!] Graceful shutdown initiated - notifying all connected clients...")
+    try:
+        from app.ws_manager import ui_events_manager
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                ui_events_manager.broadcast("server_shutdown", {"reason": "Console command shutdown", "graceful_time": 3.0}),
+                loop
+            )
+    except Exception as e:
+        logger.warn("WEBSOCKET", "Could not broadcast shutdown to UI clients", details={"Reason": str(e)})
     
-    def countdown_and_shutdown():
-        global shutdown_countdown
-        for i in range(5, 0, -1):
-            shutdown_countdown = i
-            print(f"[TIME] Shutdown in {i} seconds...")
-            time.sleep(1)  # sleep 1 second between countdown steps
+    def force_exit():
+        time.sleep(3.0)
+        os._exit(0)
         
-        print("[!] Server is now inactive...")
-        shutdown_event.set()
-        
-        # On Android, exit the thread cleanly instead of killing the JVM process
-        # This keeps the host APK running while stopping the FastAPI server
-        import sys
-        if "ANDROID_STORAGE" in os.environ:
-            sys.exit(0)
-        else:
-            os._exit(0)
-    
-    # Start countdown in background thread
-    shutdown_thread = threading.Thread(target=countdown_and_shutdown, daemon=True)
-    shutdown_thread.start()
+    threading.Thread(target=force_exit, daemon=True).start()
 
-# NOTE: stdin command monitor ('close'/'quit') is handled in run.py, not here,
-# because with a single-process uvicorn (reload=False) stdin belongs to run.py.
+def setup_signal_handlers():
+    """Setup graceful signal handling for CTRL+C and SIGTERM"""
+    def handle_signal(sig, frame):
+        logger.info("SERVER", "Shutdown signal received")
+        initiate_graceful_shutdown_process()
+    
+    try:
+        signal.signal(signal.SIGINT, handle_signal)
+        signal.signal(signal.SIGTERM, handle_signal)
+    except (ValueError, AttributeError):
+        pass
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Handle app startup and shutdown"""
-    print("[START] Server starting up with enhanced shutdown handling...")
-    print("[TIP] Use Ctrl+C to shutdown gracefully (console commands disabled)")
+    """
+    [LIFESPAN] Lifespan context manager for resource initialization and clean shutdown.
+    """
+    logger.info("SERVER", "Server starting up")
     
-    # Start responsiveness monitor
-    from app.utils.responsiveness_manager import responsiveness_monitor
-    await responsiveness_monitor.start_monitoring()
+    setup_signal_handlers()
     
-    # Start mDNS service
-    # Get the actual port being used (80/443 or fallback ports)
-    port = int(os.environ.get('PORT', 80))  # Default to HTTP port 80
-    # Get HTTPS mode from environment variable set by run.py
-    use_https = os.environ.get('USE_HTTPS', 'false').lower() == 'true'
-    mdns_manager.port = port
-    mdns_manager.use_https = use_https  # Configure HTTPS mode
+    if sys.stdin.isatty():
+        command_thread = threading.Thread(target=console_command_monitor, daemon=True)
+        command_thread.start()
     
-    print(f"[SEARCH] Starting mDNS service discovery ({'HTTPS' if use_https else 'HTTP'} mode)...")
+    try:
+        from app.utils.simple_mdns import mdns_manager
+        mdns_mode = "HTTPS" if os.environ.get("USE_HTTPS", "false").lower() == "true" else "HTTP"
+        logger.info("MDNS", "Starting mDNS service discovery", details={"Mode": mdns_mode})
+        mdns_manager.start_service()
+    except Exception as mdns_err:
+        logger.warn("MDNS", "mDNS startup warning", details={"Reason": str(mdns_err)})
     
-    #  HTTPS redirect server DISABLED for flexible access
-    # This allows both HTTP and HTTPS access without forced redirects:
-    # - Users can access http://lanvan.local for HTTP
-    # - Users can access https://lanvan.local for HTTPS  
-    # - Both LAN IP and localhost work with both protocols
-    #
-    # Original redirect server logic preserved but disabled:
-    # if use_https:
-    #     try:
-    #         # Determine HTTP redirect port logic...
-    #         await start_https_redirect_server(port, http_redirect_port)
-    #     except Exception as e:
-    #         print(f"[WARN] HTTPS redirect server failed: {e}")
+    try:
+        from app.utils.termux_memory_monitor import termux_memory_monitor
+        termux_memory_monitor.start_monitoring()
+    except Exception as mem_err:
+        logger.warn("STORAGE", "Memory monitor warning", details={"Reason": str(mem_err)})
     
-    print(f"[NET] Flexible access enabled: Both HTTP and HTTPS protocols supported")
+    try:
+        from app.utils.responsiveness_manager import responsiveness_monitor
+        await responsiveness_monitor.start_monitoring()
+    except Exception as resp_err:
+        logger.warn("STORAGE", "Responsiveness monitor warning", details={"Reason": str(resp_err)})
     
-    # Start mDNS in background thread to not block server startup
-    def start_mdns_background():
-        try:
-            time.sleep(1)  # Give server time to start
-            if mdns_manager.start_service():
-                mdns_info = mdns_manager.get_mdns_info()
-                print(f"[OK] mDNS service active: {mdns_info['domain']}")
-                print(f"   Access via: {mdns_info['url']}")
-                if mdns_info['conflict_resolved']:
-                    print(f"   [CFG] Conflict resolved (attempt #{mdns_info['conflict_count'] + 1})")
-                
-                # Show redirect info for HTTPS mode
-                if use_https and mdns_info['domain'] != "lanvan.local":
-                    print(f" Redirect available: http://lanvan.local -> https://lanvan.local:{port}")
-            else:
-                print("[WARN]  mDNS service failed to start - using IP access only")
-        except Exception as e:
-            print(f"[WARN]  mDNS service error: {e} - using IP access only")
+    try:
+        from app.core.streaming_assembly import initialize_streaming_assembly
+        initialize_streaming_assembly("data/temp_chunks", "data/uploads")
+    except Exception as stream_err:
+        logger.warn("STORAGE", "Streaming assembly init warning", details={"Reason": str(stream_err)})
+
+    try:
+        from app.routers.clipboard import initialize_clipboard_persistence
+        initialize_clipboard_persistence()
+    except Exception as clip_err:
+        logger.warn("CLIPBOARD", "Clipboard persistence warning", details={"Reason": str(clip_err)})
     
-    # Start mDNS in background thread
-    mdns_thread = threading.Thread(target=start_mdns_background, daemon=True)
-    mdns_thread.start()
-    
-    # Mark resources as ready after startup
-    def mark_resources_ready():
-        global resources_ready
-        time.sleep(2)  # Give time for initial setup
-        
-        # Initialize clipboard persistence after everything is ready
-        try:
-            from app.routers.clipboard import initialize_clipboard_persistence
-            initialize_clipboard_persistence()
-        except Exception as e:
-            print(f"[WARN] Clipboard persistence initialization failed: {e}")
-        
-        resources_ready = True
-        print("[OK] Server resources are ready")
-    
-    ready_thread = threading.Thread(target=mark_resources_ready, daemon=True)
-    ready_thread.start()
-    
-    # Store shutdown state in app for access from routes
-    app.state.graceful_shutdown_initiated = False
-    app.state.shutdown_countdown = 0
+    logger.info("SERVER", "Startup completed", details={"Status": "READY"})
     
     yield
-    print("[!] Server shutting down immediately...")
     
-    # Stop responsiveness monitor
-    await responsiveness_monitor.stop_monitoring()
+    logger.info("SERVER", "Shutdown initiated")
     
-    # Stop universal optimizations if active
+    try:
+        from app.utils.responsiveness_manager import responsiveness_monitor
+        await responsiveness_monitor.stop_monitoring()
+    except Exception as resp_err:
+        pass
+    
+    try:
+        from app.utils.termux_memory_monitor import termux_memory_monitor
+        termux_memory_monitor.stop_monitoring()
+    except Exception as mem_err:
+        pass
+    
     try:
         import gc
-        gc.collect()  # Simple cleanup without specific function
-        print("[RETRY] Universal optimizer resources cleaned")
+        gc.collect()
+        logger.debug("STORAGE", "Garbage collection completed during shutdown")
     except Exception as e:
-        print(f"[WARN] Cleanup warning: {e}")
+        logger.warn("STORAGE", "Garbage collection warning", details={"Reason": str(e)})
     
-    # HTTPS redirect server removed - no longer needed
-    
-    # Stop streaming assembly system
-    print("[STREAM] Stopping streaming assembly system...")
+    logger.info("STORAGE", "Stopping streaming assembly system")
     from app.core.streaming_assembly import shutdown_streaming_assembly
     shutdown_streaming_assembly()
     
-    # Stop WebSocket managers
-    print("[WS] Stopping WebSocket connection managers...")
+    logger.info("WEBSOCKET", "Stopping WebSocket managers")
     try:
         from app.ws_manager import clipboard_ws_manager, upload_status_manager, file_events_manager, ui_events_manager
         await clipboard_ws_manager.shutdown()
         await upload_status_manager.shutdown()
         await file_events_manager.shutdown()
         await ui_events_manager.shutdown()
-        print("[OK] WebSocket managers shutdown successfully")
+        logger.info("WEBSOCKET", "WebSocket managers stopped successfully")
     except Exception as ws_err:
-        print(f"[WARN] WebSocket managers shutdown warning: {ws_err}")
+        logger.warn("WEBSOCKET", "WebSocket manager shutdown warning", details={"Reason": str(ws_err)})
     
-    # Stop mDNS service
-    print(" Stopping mDNS service...")
+    logger.info("MDNS", "Stopping mDNS service")
     mdns_manager.stop_service()
     
-    # Force close all active connections
     await connection_manager.disconnect_all()
-    # Set shutdown event
     shutdown_event.set()
-    print("[OK] All connections closed. Server stopped.")
+    logger.info("SERVER", "Shutdown completed", details={"Status": "STOPPED"})
 
-# [OK] Initialize FastAPI app with lifespan management
+
 app = FastAPI(
     title="Lanvan File Server",
     version="1.0.0",
-    docs_url=None,     # Disable Swagger docs for performance
-    redoc_url=None,    # Disable ReDoc
-    lifespan=lifespan  # Enable graceful shutdown handling
+    docs_url=None,
+    redoc_url=None,
+    lifespan=lifespan
 )
 
-# [OK] CORS Middleware: Enhanced security with local network restriction
-import re
-from typing import List
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
@@ -323,456 +269,96 @@ class SecureCORSMiddleware(BaseHTTPMiddleware):
         self.expose_headers = kwargs.get('expose_headers', ["*"])
         self.max_age = kwargs.get('max_age', 3600)
         
-        # Define allowed origin patterns for local network
         self.allowed_patterns = [
             r'^https?://localhost(:\d+)?$',
             r'^https?://127\.0\.0\.1(:\d+)?$',
-            r'^https?://10\.\d+\.\d+\.\d+(:\d+)?$',                    # 10.0.0.0/8
-            r'^https?://172\.(1[6-9]|2\d|3[01])\.\d+\.\d+(:\d+)?$',   # 172.16.0.0/12
-            r'^https?://192\.168\.\d+\.\d+(:\d+)?$',                   # 192.168.0.0/16
-            r'^https?://169\.254\.\d+\.\d+(:\d+)?$',                   # 169.254.0.0/16 (link-local)
-            r'^https?://[^\.]+\.local(:\d+)?$',                        # .local domains (mDNS)
-            r'^https?://lanvan\.local(:\d+)?$',                        # Lanvan mDNS domain
+            r'^https?://10\.\d+\.\d+\.\d+(:\d+)?$',
+            r'^https?://172\.(1[6-9]|2\d|3[01])\.\d+\.\d+(:\d+)?$',
+            r'^https?://192\.168\.\d+\.\d+(:\d+)?$',
+            r'^https?://169\.254\.\d+\.\d+(:\d+)?$',
+            r'^https?://[^\.]+\.local(:\d+)?$',
+            r'^https?://lanvan\.local(:\d+)?$',
         ]
     
     def is_origin_allowed(self, origin: str) -> bool:
-        """Check if origin matches any allowed patterns"""
         if not origin:
             return False
-        
-        # Check against all patterns
         for pattern in self.allowed_patterns:
             if re.match(pattern, origin):
                 return True
-        
         return False
     
-    async def dispatch(self, request, call_next):
-        origin = request.headers.get('origin')
+    async def dispatch(self, request: Request, call_next):
+        origin = request.headers.get("origin")
         
-        # Handle preflight requests
-        if request.method == 'OPTIONS':
+        if request.method == "OPTIONS":
+            response = Response(status_code=200)
             if origin and self.is_origin_allowed(origin):
-                response = Response()
-                response.headers['Access-Control-Allow-Origin'] = origin
-                response.headers['Access-Control-Allow-Credentials'] = 'true'
-                response.headers['Access-Control-Allow-Methods'] = ', '.join(self.allow_methods)
-                response.headers['Access-Control-Allow-Headers'] = ', '.join(self.allow_headers)
-                response.headers['Access-Control-Max-Age'] = str(self.max_age)
-                return response
+                response.headers["Access-Control-Allow-Origin"] = origin
             else:
-                # Reject preflight for non-allowed origins
-                return Response(status_code=403)
+                response.headers["Access-Control-Allow-Origin"] = "*"
+            
+            response.headers["Access-Control-Allow-Credentials"] = str(self.allow_credentials).lower()
+            response.headers["Access-Control-Allow-Methods"] = ", ".join(self.allow_methods)
+            response.headers["Access-Control-Allow-Headers"] = ", ".join(self.allow_headers)
+            response.headers["Access-Control-Max-Age"] = str(self.max_age)
+            return response
         
-        # Process the request
         response = await call_next(request)
         
-        # Add CORS headers to actual requests
         if origin and self.is_origin_allowed(origin):
-            response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Access-Control-Allow-Credentials'] = 'true'
-            response.headers['Access-Control-Expose-Headers'] = ', '.join(self.expose_headers)
-        
-        return response
-
-# Apply custom secure CORS middleware
-app.add_middleware(
-    SecureCORSMiddleware,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
-    allow_headers=[
-        "*",
-        "Content-Type",
-        "Authorization", 
-        "X-Requested-With",
-        "Accept",
-        "Origin",
-        "User-Agent",
-        "DNT",
-        "Cache-Control",
-        "X-Mx-ReqToken",
-        "Keep-Alive",
-        "If-Modified-Since",
-        "X-File-Name"
-    ],
-    expose_headers=["*"],
-    max_age=3600,
-)
-
-
-# [!] Custom middleware to track connections and handle immediate shutdown
-import asyncio
-
-
-class IOSSafariMiddleware(BaseHTTPMiddleware):
-    """Middleware to handle iOS Safari specific compatibility issues"""
-    
-    def detect_ios_safari(self, user_agent: str) -> bool:
-        """Detect iOS Safari browser"""
-        user_agent_lower = user_agent.lower()
-        is_ios = any(ios_indicator in user_agent_lower for ios_indicator in [
-            'iphone', 'ipad', 'ipod'
-        ])
-        is_safari = 'safari' in user_agent_lower and 'chrome' not in user_agent_lower
-        return is_ios and is_safari
-    
-    async def dispatch(self, request: Request, call_next):
-        user_agent = request.headers.get("user-agent", "")
-        is_ios_safari = self.detect_ios_safari(user_agent)
-        
-        # Add iOS Safari detection to request state
-        request.state.is_ios_safari = is_ios_safari
-        
-        try:
-            response = await call_next(request)
-            
-            # Add iOS Safari-specific headers
-            if is_ios_safari:
-                # Prevent iOS Safari caching issues
-                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
-                response.headers["Pragma"] = "no-cache"
-                response.headers["Expires"] = "0"
-                
-                # iOS Safari WebSocket compatibility
-                response.headers["Connection"] = "keep-alive"
-                
-                # Prevent iOS Safari from auto-optimizing resources
-                response.headers["X-Content-Type-Options"] = "nosniff"
-                
-                # iOS Safari viewport handling
-                response.headers["X-UA-Compatible"] = "IE=edge"
-            
-            return response
-            
-        except Exception as e:
-            # Log iOS-specific errors for debugging
-            if is_ios_safari:
-                print(f" iOS Safari error: {str(e)} - User-Agent: {user_agent[:100]}...")
-            raise
-
-class ShutdownMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        # Reject new work during shutdown — existing connections and static
-        # assets are still served so the frontend can display the shutdown notice.
-        if shutdown_manager.is_stopping():
-            path = request.url.path
-            # Allow static assets, already-open pages, and the shutdown endpoint itself
-            if not (
-                path.startswith("/static/")
-                or path.startswith("/api/shutdown")
-                or path.startswith("/api/server-status")
-                or path.startswith("/ws/")
-            ):
-                return JSONResponse(
-                    status_code=503,
-                    content={
-                        "status": "error",
-                        "message": "Server is shutting down",
-                    },
-                )
-
-        # Track this request connection
-        await connection_manager.add_connection(request)
-
-        try:
-            response = await call_next(request)
-            return response
-        except Exception as e:
-            # If shutdown occurred during request, return shutdown message
-            if shutdown_manager.is_stopping():
-                return JSONResponse(
-                    status_code=503,
-                    content={
-                        "status": "error",
-                        "message": "Server is shutting down",
-                    },
-                )
-            raise
-        finally:
-            await connection_manager.remove_connection(request)
-
-class EnsureDataDirMiddleware(BaseHTTPMiddleware):
-    """Automatically recreate data & data/uploads folders on demand if deleted during runtime"""
-    async def dispatch(self, request: Request, call_next):
-        try:
-            from app.routers.files import UPLOAD_FOLDER, TEMP_CHUNKS_FOLDER, UPLOAD_HISTORY_FILE
-            UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
-            TEMP_CHUNKS_FOLDER.mkdir(parents=True, exist_ok=True)
-            if not UPLOAD_HISTORY_FILE.parent.exists():
-                UPLOAD_HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            pass
-        return await call_next(request)
-
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Production Security Headers Middleware"""
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "SAMEORIGIN"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: blob:; "
-            "media-src 'self' blob:; "
-            "font-src 'self' data:; "
-            "connect-src 'self' ws: wss:;"
-        )
-        return response
-
-
-class RateLimitMiddleware(BaseHTTPMiddleware):
-    """
-    Lightweight in-memory rate limiting middleware.
-    Uses a sliding-window counter per client IP with automatic TTL eviction.
-    No external dependencies required.
-    
-    Limits (per second, per IP):
-      - Upload endpoints:     30 req/s  (/upload, /upload-auto, /encrypt_http_safe)
-      - Chunk endpoints:      60 req/s  (/upload_chunk)
-      - Clipboard writes:     20 req/s  (/api/clipboard/add, /api/clipboard, /api/clipboard/download-zip)
-      - API reads:           100 req/s  (/api/* GET endpoints)
-      - Default:             200 req/s  (everything else — static files, pages, WebSocket upgrades)
-    
-    These limits are generous for LAN usage and only protect against
-    accidental or malicious flooding from a single client.
-    
-    To disable rate limiting entirely, set env: LANVAN_RATE_LIMIT=off
-    """
-    def __init__(self, app, **kwargs):
-        super().__init__(app)
-        # Check if rate limiting is disabled (default off unless explicitly enabled)
-        env_val = os.environ.get("LANVAN_RATE_LIMIT", "").lower()
-        self._enabled = env_val in ("on", "1", "true", "yes")
-        # Structure: { "ip:window_key": (count, expiry) }
-        self._windows: dict[str, tuple[int, float]] = {}
-        self._lock = threading.Lock()
-        self._cleanup_interval = 60  # seconds between stale entry sweeps
-        self._last_cleanup = time.time()
-
-    def _get_limit(self, path: str) -> int:
-        """Return the per-second rate limit for a given request path."""
-        if path in ("/upload", "/upload-auto", "/encrypt_http_safe"):
-            return 30
-        if path == "/upload_chunk":
-            return 60
-        if path in ("/api/clipboard/add", "/api/clipboard", "/api/clipboard/download-zip"):
-            return 20
-        if path.startswith("/api/") or path.startswith("/api"):
-            return 100
-        return 200  # default for static files, pages, WebSocket upgrades
-
-    def _get_key(self, request: Request) -> str:
-        """Derive a rate-limit key from the client IP and current second window."""
-        client_ip = request.client.host if request.client else "unknown"
-        # Use 1-second windows for per-second limiting
-        window = int(time.time())
-        return f"{client_ip}:{window}"
-
-    def _maybe_cleanup(self, now: float):
-        """Periodically evict stale window entries to prevent unbounded growth."""
-        if now - self._last_cleanup < self._cleanup_interval:
-            return
-        with self._lock:
-            stale = [k for k, (_, expiry) in self._windows.items() if now > expiry]
-            for k in stale:
-                del self._windows[k]
-            self._last_cleanup = now
-
-    async def dispatch(self, request: Request, call_next):
-        # Rate limiting is disabled throughout the application for fast page loading and transfers
-        if not self._enabled:
-            return await call_next(request)
-
-        path = request.url.path
-        limit = self._get_limit(path)
-        
-        # WebSocket upgrade requests bypass rate limiting
-        if request.headers.get("upgrade", "").lower() == "websocket":
-            return await call_next(request)
-        
-        key = self._get_key(request)
-        now = time.time()
-        
-        with self._lock:
-            self._maybe_cleanup(now)
-            
-            current = self._windows.get(key)
-            if current is None:
-                # First request in this second window
-                self._windows[key] = (1, now + 10)  # expiry in 10 seconds
-                count = 1
-            else:
-                count, expiry = current
-                count += 1
-                self._windows[key] = (count, expiry)
-        
-        if count > limit:
-            # Rate limit exceeded — return 429 Too Many Requests
-            # Note: We've already incremented the counter, which is correct —
-            # the first request over the limit triggers the 429.
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "status": "error",
-                    "msg": "Too many requests. Please slow down."
-                }
-            )
-        
-        return await call_next(request)
-
-
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(RateLimitMiddleware)
-app.add_middleware(EnsureDataDirMiddleware)
-app.add_middleware(IOSSafariMiddleware)
-app.add_middleware(ShutdownMiddleware)
-
-def is_production_mode() -> bool:
-    return os.environ.get("LANVAN_ENV", "").lower() in ("production", "prod", "1") or os.environ.get("PRODUCTION", "").lower() in ("1", "true")
-
-class ProductionStaticFiles(StaticFiles):
-    """
-    Transparently resolves static assets:
-    - In Production mode: Serves minified .min.js assets from dist/static/js if available.
-    - In Development mode: Serves original unminified .js source files directly from app/static/js.
-    - Adds Cache-Control headers: 1 year for versioned assets, 1 hour for unversioned.
-    """
-    async def get_response(self, path: str, scope):
-        if is_production_mode() and path.endswith(".js") and not path.endswith(".min.js"):
-            min_path = path[:-3] + ".min.js"
-            full_min_path = os.path.join(self.directory, min_path)
-            if os.path.exists(full_min_path):
-                response = await super().get_response(min_path, scope)
-                # Versioned/minified assets get long-lived cache (1 year)
-                response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-                return response
-        response = await super().get_response(path, scope)
-        # Set appropriate cache headers based on file type
-        if path.endswith((".min.js", ".min.css", ".woff2", ".woff", ".ttf")):
-            # Versioned/hashed assets: 1 year
-            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-        elif path.endswith((".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp")):
-            # Images: 1 week
-            response.headers["Cache-Control"] = "public, max-age=604800"
-        elif path.endswith((".html", ".htm")):
-            # HTML templates: no cache
-            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+            response.headers["Access-Control-Allow-Origin"] = origin
         else:
-            # Other assets (CSS, JS, fonts): 1 hour
-            response.headers["Cache-Control"] = "public, max-age=3600"
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            
+        response.headers["Access-Control-Allow-Credentials"] = str(self.allow_credentials).lower()
+        if self.expose_headers:
+            response.headers["Access-Control-Expose-Headers"] = ", ".join(self.expose_headers)
+            
         return response
 
-static_dir = os.path.abspath("dist/static") if (is_production_mode() and os.path.exists("dist/static")) else os.path.abspath("app/static")
-app.mount("/static", ProductionStaticFiles(directory=static_dir), name="static")
+app.add_middleware(SecureCORSMiddleware)
 
-from app.ws_manager import clipboard_ws_router, upload_status_ws_router, file_events_ws_router, ui_events_ws_router
-from app.routers.version_routes import router as version_router
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/images", StaticFiles(directory="app/static/images"), name="images")
 
-# [OK] Register app routes
 app.include_router(pages_router)
 app.include_router(files_router)
-app.include_router(version_router)
 app.include_router(clipboard_router)
 app.include_router(system_router)
 app.include_router(clipboard_ws_router)
 app.include_router(upload_status_ws_router)
+
+from app.ws_manager import file_events_ws_router, ui_events_ws_router
 app.include_router(file_events_ws_router)
 app.include_router(ui_events_ws_router)
 
-# [OK] Exception handlers for smart loading page system
-# Track when the server started and if resources are ready
-server_start_time = time.time()
-resources_ready = False
-startup_grace_period = 5  # seconds
+from app.routers.version_routes import router as version_router
+app.include_router(version_router)
 
-def are_resources_ready():
-    """Check if server resources are ready"""
-    global resources_ready, server_start_time
-    
-    # If we've explicitly marked resources as ready, return True
-    if resources_ready:
-        return True
-    
-    # If it's been more than grace period since startup, consider ready
-    if time.time() - server_start_time > startup_grace_period:
-        resources_ready = True
-        return True
-    
-    # During startup grace period, check if essential services are available
-    try:
-        template_dir = "app/templates"
-        static_dir = "app/static"
-        if os.path.exists(template_dir) and os.path.exists(static_dir):
-            resources_ready = True
-            return True
-    except Exception:
-        pass
-    
-    return False
-
-@app.exception_handler(404)
 @app.exception_handler(StarletteHTTPException)
-async def smart_404_handler(request: Request, exc):
-    from fastapi.responses import PlainTextResponse
-    status_code = getattr(exc, 'status_code', 404)
-    return PlainTextResponse("Not Found" if status_code == 404 else str(exc), status_code=status_code)
+async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404:
+        return JSONResponse(
+            status_code=404,
+            content={"status": "error", "msg": "Resource not found"}
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"status": "error", "msg": str(exc.detail)}
+    )
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    from fastapi.responses import JSONResponse
-    return JSONResponse(status_code=422, content={"status": "error", "msg": "Validation Error", "details": str(exc)})
+    return JSONResponse(
+        status_code=422,
+        content={"status": "error", "msg": "Validation error", "errors": exc.errors()}
+    )
 
-@app.exception_handler(500)
 @app.exception_handler(Exception)
-async def smart_internal_error_handler(request: Request, exc: Exception):
-    from fastapi.responses import PlainTextResponse, JSONResponse
-    if _is_client_disconnect_error(exc):
-        print(f"[INFO] Client disconnected during request to {request.url.path} (wrapped)")
-        return PlainTextResponse("Client disconnected", status_code=400)
-    
-    # Log the full traceback internally via the logger (not to stdout)
-    # but NEVER leak stack traces, paths, or exception types to clients.
-    import logging
-    logger = logging.getLogger("lanvan")
-    logger.error("Unhandled exception on %s: %s", request.url.path, exc, exc_info=True)
-    
-    # In production mode, return a generic message. In dev mode, include details.
-    if is_production_mode():
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "msg": "Internal Server Error"
-            }
-        )
-    else:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "msg": str(exc) or "Internal Server Error",
-                "path": str(request.url.path),
-                "error_type": type(exc).__name__
-            }
-        )
-
-
-def _is_client_disconnect_error(exc) -> bool:
-    """Check if exception is caused by client disconnect"""
-    # Check the exception chain for ClientDisconnect
-    current = exc
-    while current:
-        if isinstance(current, ClientDisconnect):
-            return True
-        # Check if it's an HTTPException with ClientDisconnect as cause
-        if hasattr(current, '__cause__') and isinstance(current.__cause__, ClientDisconnect):
-            return True
-        # Check if error message indicates client disconnect
-        if hasattr(current, 'detail') and 'parsing the body' in str(current.detail):
-            return True
-        current = getattr(current, '__cause__', None)
-    return False
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error("SERVER", "Unhandled request exception", details={"Reason": str(exc)})
+    return JSONResponse(
+        status_code=500,
+        content={"status": "error", "msg": "Internal Server Error"}
+    )

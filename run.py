@@ -327,35 +327,47 @@ def check_and_run_build_if_needed(force=False, clean=False):
             print("[!] Production build failed!")
             sys.exit(1)
         dur = time.time() - start_t
-        print(f"\n✔ Build complete ({dur:.2f} s)\n")
+        print(f"\n[OK] Build complete ({dur:.2f} s)\n")
         return f"Rebuilt ({dur:.2f}s)"
     else:
-        print("✔ Production assets are up-to-date.\n")
+        print("[OK] Production assets are up-to-date.\n")
         return "Up-to-date"
 
 def print_banner(ip, port, use_https, is_production=False, build_status=None):
     protocol_str = "HTTPS" if use_https else "HTTP"
     mode_str = "Production" if is_production else "Development"
-    assets_str = "dist/static" if is_production else "app/static"
     
     scheme = "https" if use_https else "http"
     show_port = not ((port == 80 and scheme == "http") or (port == 443 and scheme == "https"))
-    url_local = f"{scheme}://127.0.0.1:{port}" if show_port else f"{scheme}://127.0.0.1"
     url_lan = f"{scheme}://{ip}:{port}" if show_port else f"{scheme}://{ip}"
+    
+    import platform
+    try:
+        from app.utils.termux_compat import is_android_environment
+        is_android = is_android_environment()
+    except Exception:
+        is_android = False
 
-    print("========================================")
-    print("Lanvan v1.0")
+    plat_str = "Android/Termux" if is_android else platform.system()
+
+    print("============================================================")
+    print("LANVAN SERVER")
+    print("============================================================")
     print()
-    print(f"Mode      : {mode_str}")
-    print(f"Protocol  : {protocol_str}")
-    print(f"Assets    : {assets_str}")
-    if is_production and build_status:
-        print(f"Build     : {build_status}")
+    print("[SERVER] Starting")
+    print(f"Mode: {mode_str}")
+    print(f"Platform: {plat_str}")
     print()
-    print("URL")
-    print(f"Local : {url_local}")
-    print(f"LAN   : {url_lan}")
-    print("========================================")
+    print("[NETWORK] LAN network available")
+    print(f"IP: {ip}")
+    print()
+    print("[SERVER] Listening")
+    print(f"Port: {port}")
+    print(f"Protocol: {protocol_str}")
+    print()
+    print("[SERVER] Ready")
+    print(f"Direct URL: {url_lan}")
+    print("============================================================")
     print()
 
 def open_browser(ip, port, use_https):
@@ -399,13 +411,13 @@ def kill_servers_on_port(port):
                             if proc.info['pid'] == os.getpid():
                                 continue
                                 
-                            print(f"[CLEAN] Killing stale background server process {proc.info['pid']} ({proc.info['name']}) on port {conn.laddr.port}")
+                            print(f"[SERVER] Terminating stale background server process {proc.info['pid']} on port {conn.laddr.port}")
                             proc.kill() # Force kill immediately to release socket hook
                             proc.wait(timeout=2)
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, AttributeError):
                 pass
     except Exception as e:
-        print(f"[!] Process scan warning: {e}")
+        print(f"[SERVER] Process scan warning: {e}")
         
     # Fallback/Diagnostic: Double check via socket test
     for p in target_ports:
@@ -426,7 +438,7 @@ def kill_servers_on_port(port):
                         for pid_str in pid_out.split():
                             pid = int(pid_str)
                             if pid > 0 and pid != os.getpid():
-                                print(f"[CLEAN] Releasing port {p} by terminating process ID {pid}...")
+                                print(f"[SERVER] Releasing port {p} by terminating process ID {pid}")
                                 subprocess.run(["powershell", "-Command", f"Stop-Process -Id {pid} -Force"], capture_output=True)
                 except Exception:
                     pass
