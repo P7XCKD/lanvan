@@ -21,7 +21,7 @@ class TestLoggingPrivacy(unittest.TestCase):
         """Verify extension extraction never includes filenames or directory paths"""
         self.assertEqual(StructuredLogger.extract_safe_ext("my_secret_photo.jpg"), "JPG")
         self.assertEqual(StructuredLogger.extract_safe_ext("C:\\Users\\Secret\\Document.PDF"), "PDF")
-        self.assertEqual(StructuredLogger.extract_safe_ext("/data/user/0/com.lanvan.app/files/test.png"), "PNG")
+        self.assertEqual(StructuredLogger.extract_safe_ext("/data/user/0/com.probz.lanvan/files/test.png"), "PNG")
         self.assertEqual(StructuredLogger.extract_safe_ext("no_ext_file"), "BIN")
 
     def test_format_size(self):

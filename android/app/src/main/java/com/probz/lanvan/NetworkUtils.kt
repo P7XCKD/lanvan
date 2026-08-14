@@ -1,4 +1,4 @@
-package com.lanvan.app
+package com.probz.lanvan
 
 import android.content.Context
 import android.net.ConnectivityManager

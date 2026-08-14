@@ -28,7 +28,7 @@ ok, out, err = test_android.run_cmd(f'"{adb}" install -r "{apk_path}"')
 print(f"[INSTALL OUTPUT]\n{out}\n{err}")
 
 print("[LAUNCH] Starting Lanvan app on physical phone...")
-ok, out, err = test_android.run_cmd(f'"{adb}" shell am start -n com.lanvan.app/.MainActivity')
+ok, out, err = test_android.run_cmd(f'"{adb}" shell am start -n com.probz.lanvan/.MainActivity')
 print(f"[LAUNCH OUTPUT]\n{out}\n{err}")
 
 print("[SUCCESS] Lanvan APK successfully built, installed, and launched on your physical phone!")
