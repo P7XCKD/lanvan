@@ -287,36 +287,52 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:background="@drawable/bg_card"
+                android:background="@drawable/bg_card_degraded"
                 android:padding="24dp"
                 android:gravity="center"
                 android:visibility="gone"
                 android:layout_marginBottom="16dp">
 
-                <ImageView
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:src="@drawable/ic_wifi_off"
-                    android:layout_marginBottom="12dp"
-                    app:tint="@color/warning_amber" />
+                <LinearLayout
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="@drawable/bg_icon_amber_circle"
+                    android:gravity="center"
+                    android:layout_marginBottom="12dp">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_wifi_off"
+                        app:tint="@color/warning_amber" />
+                </LinearLayout>
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Network connection lost"
-                    android:textColor="@color/warning_amber"
-                    android:textSize="16sp"
+                    android:text="Network unavailable"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
                     android:textStyle="bold"
-                    android:layout_marginBottom="6dp" />
+                    android:layout_marginBottom="8dp" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Reconnect to Wi-Fi or enable a hotspot to allow Lanvan to keep sharing."
+                    android:text="Lanvan is still running, but other devices cannot connect right now. Reconnect to Wi-Fi or enable a hotspot to resume sharing."
                     android:textColor="@color/text_muted"
                     android:textSize="13sp"
                     android:gravity="center"
                     android:lineSpacingExtra="3dp"
+                    android:layout_marginBottom="12dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Your files are safe."
+                    android:textColor="@color/primary_accent_blue"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
                     android:layout_marginBottom="20dp" />
 
                 <com.google.android.material.button.MaterialButton
@@ -326,10 +342,27 @@
                     android:layout_height="48dp"
                     android:text="Open Wi-Fi Settings"
                     android:textAllCaps="false"
-                    android:textColor="@color/primary_accent_blue"
+                    android:textColor="@color/warning_amber"
                     android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="12dp"
+                    app:backgroundTint="@color/bg_amber_btn"
+                    app:strokeColor="@color/border_amber_btn"
+                    app:strokeWidth="1dp"
+                    app:cornerRadius="12dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_degraded_stop_server"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Stop Lanvan"
+                    android:textAllCaps="false"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
                     app:backgroundTint="@android:color/transparent"
-                    app:strokeColor="@color/primary_accent_blue"
+                    app:strokeColor="@color/border_outline_btn"
                     app:strokeWidth="1dp"
                     app:cornerRadius="12dp" />
             </LinearLayout>

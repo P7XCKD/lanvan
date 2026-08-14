@@ -295,6 +295,19 @@ MANDATORY PRACTICES
 - Git commits: natural, human-readable, imperative mood.
 
 ========================
+ANDROID BUILD RULES
+========================
+
+- ALWAYS run Gradle assembleDebug before installing APK to the device.
+- NEVER install a stale APK without recompiling first.
+- The build command is: .\gradlew.bat assembleDebug --no-daemon (from android/ directory).
+- After build completes, install with ADB: adb install -r app/build/outputs/apk/debug/app-debug.apk.
+- The install_app.py helper script handles both build and install. Always use it.
+- If Gradle build fails, fix the compilation error before attempting install.
+- Kotlin source changes in MainActivity.kt, ServerService.kt, or any .kt file require recompilation.
+- Never assume code changes are live on the device without a fresh Gradle build + ADB install.
+
+========================
 REPOSITORY / PROJECTION STABILITY RULES
 ========================
 

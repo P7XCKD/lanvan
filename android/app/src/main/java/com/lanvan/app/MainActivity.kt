@@ -75,6 +75,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val wifiStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val status = if (currentState == ServerState.RUNNING) ServerService.STATUS_RUNNING else ServerService.STATUS_STOPPED
+            handleStatusUpdate(status)
+        }
+    }
+
     // Main Activity UI Binding References
     private lateinit var headerStatusPill: LinearLayout
     private lateinit var statusDot: View
@@ -99,6 +106,24 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cardSupportLanvan: LinearLayout
     private lateinit var btnSupportLanvan: Button
 
+    data class LanNetworkState(
+        val available: Boolean,
+        val ipAddress: String?,
+        val interfaceName: String?,
+        val transport: String,
+        val reason: String
+    )
+
+    private var isActivityResumed = false
+    private val lanFallbackHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val lanFallbackRunnable = object : Runnable {
+        override fun run() {
+            if (isActivityResumed && currentState == ServerState.RUNNING) {
+                refreshLanNetworkState()
+                lanFallbackHandler.postDelayed(this, 1500)
+            }
+        }
+    }
     private var connectivityManager: ConnectivityManager? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
@@ -155,18 +180,27 @@ class MainActivity : AppCompatActivity() {
                 btnStartServer.text = "Starting..."
                 val useHttps = sharedPrefs.getBoolean("use_https", false)
                 startServerService(useHttps)
+                lanFallbackHandler.removeCallbacks(lanFallbackRunnable)
+                lanFallbackHandler.postDelayed(lanFallbackRunnable, 1500)
             }
         }
 
-        btnStopServer.setOnClickListener {
+        val btnDegradedStopServer = findViewById<Button>(R.id.btn_degraded_stop_server)
+
+        val onStopClickListener = View.OnClickListener {
             if (currentState == ServerState.RUNNING) {
                 currentState = ServerState.STOPPING
+                lanFallbackHandler.removeCallbacks(lanFallbackRunnable)
                 btnStopServer.isEnabled = false
                 btnStopServer.text = "Stopping..."
+                btnDegradedStopServer.isEnabled = false
+                btnDegradedStopServer.text = "Stopping..."
                 headerStatusText.text = "Stopping..."
                 stopServerService()
             }
         }
+        btnStopServer.setOnClickListener(onStopClickListener)
+        btnDegradedStopServer.setOnClickListener(onStopClickListener)
 
         btnCopyAddress.setOnClickListener {
             if (currentServerUrl.isNotEmpty()) {
@@ -229,18 +263,34 @@ class MainActivity : AppCompatActivity() {
         initSpotlightWalkthrough()
     }
 
+    private fun refreshLanNetworkState() {
+        val status = if (currentState == ServerState.RUNNING) ServerService.STATUS_RUNNING else ServerService.STATUS_STOPPED
+        handleStatusUpdate(status)
+    }
+
     override fun onResume() {
         super.onResume()
+        isActivityResumed = true
         val filter = IntentFilter(ServerService.ACTION_STATUS_CHANGE)
+        val wifiFilter = IntentFilter().apply {
+            addAction(android.net.wifi.WifiManager.WIFI_STATE_CHANGED_ACTION)
+            addAction(android.net.wifi.WifiManager.NETWORK_STATE_CHANGED_ACTION)
+            addAction(ConnectivityManager.CONNECTIVITY_ACTION)
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(statusReceiver, filter, RECEIVER_EXPORTED)
+            registerReceiver(wifiStateReceiver, wifiFilter, RECEIVER_EXPORTED)
         } else {
             registerReceiver(statusReceiver, filter)
+            registerReceiver(wifiStateReceiver, wifiFilter)
         }
 
         if (ServerService.isRunning) {
             currentState = ServerState.RUNNING
             handleStatusUpdate(ServerService.STATUS_RUNNING)
+            lanFallbackHandler.removeCallbacks(lanFallbackRunnable)
+            lanFallbackHandler.postDelayed(lanFallbackRunnable, 1500)
         } else {
             currentState = ServerState.STOPPED
             handleStatusUpdate(ServerService.STATUS_STOPPED)
@@ -251,8 +301,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        isActivityResumed = false
+        lanFallbackHandler.removeCallbacks(lanFallbackRunnable)
         try {
             unregisterReceiver(statusReceiver)
+        } catch (_: Exception) {}
+        try {
+            unregisterReceiver(wifiStateReceiver)
         } catch (_: Exception) {}
     }
 
@@ -268,24 +323,46 @@ class MainActivity : AppCompatActivity() {
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 runOnUiThread {
-                    if (currentState == ServerState.RUNNING) {
-                        handleStatusUpdate(ServerService.STATUS_RUNNING)
-                    }
+                    val status = if (currentState == ServerState.RUNNING) ServerService.STATUS_RUNNING else ServerService.STATUS_STOPPED
+                    handleStatusUpdate(status)
                 }
             }
 
             override fun onLost(network: Network) {
                 runOnUiThread {
-                    if (currentState == ServerState.RUNNING) {
-                        handleStatusUpdate(ServerService.STATUS_RUNNING)
-                    }
+                    val status = if (currentState == ServerState.RUNNING) ServerService.STATUS_RUNNING else ServerService.STATUS_STOPPED
+                    handleStatusUpdate(status)
+                }
+            }
+
+            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+                runOnUiThread {
+                    val status = if (currentState == ServerState.RUNNING) ServerService.STATUS_RUNNING else ServerService.STATUS_STOPPED
+                    handleStatusUpdate(status)
+                }
+            }
+
+            override fun onLinkPropertiesChanged(network: Network, linkProperties: android.net.LinkProperties) {
+                runOnUiThread {
+                    val status = if (currentState == ServerState.RUNNING) ServerService.STATUS_RUNNING else ServerService.STATUS_STOPPED
+                    handleStatusUpdate(status)
                 }
             }
         }
-        val request = NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
-        connectivityManager?.registerNetworkCallback(request, networkCallback!!)
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                connectivityManager?.registerDefaultNetworkCallback(networkCallback!!)
+            } else {
+                val request = NetworkRequest.Builder().build()
+                connectivityManager?.registerNetworkCallback(request, networkCallback!!)
+            }
+        } catch (_: Exception) {
+            try {
+                val request = NetworkRequest.Builder().build()
+                connectivityManager?.registerNetworkCallback(request, networkCallback!!)
+            } catch (_: Exception) {}
+        }
     }
 
     private fun startServerService(useHttps: Boolean) {
@@ -432,28 +509,163 @@ class MainActivity : AppCompatActivity() {
         return null
     }
 
-    private fun getLocalIpAddress(): String {
+    private fun detectShareableLanNetwork(): LanNetworkState {
         try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val networkInterface = interfaces.nextElement()
-                if (networkInterface.isLoopback || !networkInterface.isUp) continue
+            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+            val isWifiEnabled = wifiManager?.isWifiEnabled ?: false
 
-                val addresses = networkInterface.inetAddresses
-                while (addresses.hasMoreElements()) {
-                    val addr = addresses.nextElement()
-                    if (addr is Inet4Address && !addr.isLoopbackAddress) {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+            // Check if active network has TRANSPORT_WIFI or TRANSPORT_ETHERNET
+            var hasWifiTransport = false
+            var hasEthernetTransport = false
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val activeNet = cm.activeNetwork
+                if (activeNet != null) {
+                    val caps = cm.getNetworkCapabilities(activeNet)
+                    if (caps != null) {
+                        hasWifiTransport = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                        hasEthernetTransport = caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                    }
+                }
+                // Also check all networks if active network is VPN or default
+                for (net in cm.allNetworks) {
+                    val caps = cm.getNetworkCapabilities(net) ?: continue
+                    if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) hasWifiTransport = true
+                    if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) hasEthernetTransport = true
+                }
+            }
+
+            // 1. Audit all active NetworkInterfaces on the device
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            var candidateWlanIp: String? = null
+            var candidateWlanName: String? = null
+
+            var candidateHotspotIp: String? = null
+            var candidateHotspotName: String? = null
+
+            var candidateEthIp: String? = null
+            var candidateEthName: String? = null
+
+            var foundCellularOnlyIp: String? = null
+            var foundCellularName: String? = null
+
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                if (!iface.isUp || iface.isLoopback) continue
+                val name = iface.name.lowercase()
+
+                // Reject VPN, virtual, loopback, and p2p interfaces
+                if (name.contains("tun") || name.contains("tap") || name.contains("dummy") || name.contains("p2p") || name.contains("lo")) continue
+
+                val addrs = iface.inetAddresses
+                while (addrs.hasMoreElements()) {
+                    val addr = addrs.nextElement()
+                    if (addr is Inet4Address && !addr.isLoopbackAddress && addr.hostAddress != "0.0.0.0") {
                         val host = addr.hostAddress
-                        if (host.startsWith("192.168.") || host.startsWith("10.") || host.startsWith("172.")) {
-                            return host
+                        // Reject loopback or invalid broadcast addresses
+                        if (host == "127.0.0.1" || host.startsWith("169.254.")) continue
+
+                        if (name.contains("wlan")) {
+                            candidateWlanIp = host
+                            candidateWlanName = iface.name
+                        } else if (name.contains("ap") || name.contains("swlan") || name.contains("rndis")) {
+                            candidateHotspotIp = host
+                            candidateHotspotName = iface.name
+                        } else if (name.contains("eth")) {
+                            candidateEthIp = host
+                            candidateEthName = iface.name
+                        } else if (name.contains("rmnet") || name.contains("ccmni") || name.contains("pdp")) {
+                            foundCellularOnlyIp = host
+                            foundCellularName = iface.name
                         }
                     }
                 }
             }
+
+            // Priority 1: Wi-Fi interface (MUST have Wi-Fi hardware enabled AND active Wi-Fi transport)
+            if (isWifiEnabled && hasWifiTransport && candidateWlanIp != null) {
+                val state = LanNetworkState(
+                    available = true,
+                    ipAddress = candidateWlanIp,
+                    interfaceName = candidateWlanName,
+                    transport = "WIFI",
+                    reason = "WIFI_CONNECTED"
+                )
+                Log.d("LANVAN_NETWORK", "[LANVAN NETWORK] available=true interface=${state.interfaceName} transport=${state.transport} ip=${state.ipAddress} reason=${state.reason}")
+                return state
+            }
+
+            // Priority 2: Wi-Fi Hotspot / Tethering interface
+            if (candidateHotspotIp != null) {
+                val state = LanNetworkState(
+                    available = true,
+                    ipAddress = candidateHotspotIp,
+                    interfaceName = candidateHotspotName,
+                    transport = "HOTSPOT",
+                    reason = "HOTSPOT_ACTIVE"
+                )
+                Log.d("LANVAN_NETWORK", "[LANVAN NETWORK] available=true interface=${state.interfaceName} transport=${state.transport} ip=${state.ipAddress} reason=${state.reason}")
+                return state
+            }
+
+            // Priority 3: Ethernet interface
+            if (hasEthernetTransport && candidateEthIp != null) {
+                val state = LanNetworkState(
+                    available = true,
+                    ipAddress = candidateEthIp,
+                    interfaceName = candidateEthName,
+                    transport = "ETHERNET",
+                    reason = "ETHERNET_CONNECTED"
+                )
+                Log.d("LANVAN_NETWORK", "[LANVAN NETWORK] available=true interface=${state.interfaceName} transport=${state.transport} ip=${state.ipAddress} reason=${state.reason}")
+                return state
+            }
+
+            // No usable LAN interface found
+            if (foundCellularOnlyIp != null) {
+                val state = LanNetworkState(
+                    available = false,
+                    ipAddress = null,
+                    interfaceName = foundCellularName,
+                    transport = "CELLULAR",
+                    reason = "CELLULAR_ONLY"
+                )
+                Log.d("LANVAN_NETWORK", "[LANVAN NETWORK] available=false interface=${state.interfaceName} transport=${state.transport} ip=REDACTED reason=${state.reason}")
+                return state
+            }
+
+            val state = LanNetworkState(
+                available = false,
+                ipAddress = null,
+                interfaceName = null,
+                transport = "NONE",
+                reason = "NO_LAN_INTERFACE"
+            )
+            Log.d("LANVAN_NETWORK", "[LANVAN NETWORK] available=false interface=none transport=NONE ip=null reason=${state.reason}")
+            return state
+
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("LANVAN_NETWORK", "[LANVAN NETWORK] Exception during detection: ${e.message}")
         }
-        return "127.0.0.1"
+
+        return LanNetworkState(
+            available = false,
+            ipAddress = null,
+            interfaceName = null,
+            transport = "NONE",
+            reason = "ERROR"
+        )
+    }
+
+    private fun getLocalIpAddress(): String {
+        val state = detectShareableLanNetwork()
+        return if (state.available && !state.ipAddress.isNullOrEmpty()) {
+            state.ipAddress
+        } else {
+            "127.0.0.1"
+        }
     }
 
     private fun updateStorageUsage() {
@@ -636,13 +848,17 @@ class MainActivity : AppCompatActivity() {
 
         val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
 
-        // Update summaries
+        // Update summaries with HTML styling (blue for active/on states)
         val useHttps = sharedPrefs.getBoolean("use_https", false)
-        txtProtocolSummary.text = if (useHttps) "HTTPS · Encrypted" else "HTTP · Default"
+        val protocolHtml = if (useHttps) "<font color='#8AB4F8'>HTTPS · Encrypted</font>" else "<font color='#9AA0A6'>HTTP · Default</font>"
+        txtProtocolSummary.text = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) android.text.Html.fromHtml(protocolHtml, android.text.Html.FROM_HTML_MODE_LEGACY) else @Suppress("DEPRECATION") android.text.Html.fromHtml(protocolHtml)
 
         val blockHttp = sharedPrefs.getBoolean("block_dangerous_http", false)
         val blockHttps = sharedPrefs.getBoolean("block_dangerous_https", true)
-        txtSecuritySummary.text = "HTTP: ${if (blockHttp) "On" else "Off"} · HTTPS: ${if (blockHttps) "On" else "Off"}"
+        val httpPart = if (blockHttp) "<font color='#8AB4F8'>HTTP: On</font>" else "<font color='#9AA0A6'>HTTP: Off</font>"
+        val httpsPart = if (blockHttps) "<font color='#8AB4F8'>HTTPS: On</font>" else "<font color='#9AA0A6'>HTTPS: Off</font>"
+        val securityHtml = "$httpPart <font color='#5F6368'>·</font> $httpsPart"
+        txtSecuritySummary.text = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) android.text.Html.fromHtml(securityHtml, android.text.Html.FROM_HTML_MODE_LEGACY) else @Suppress("DEPRECATION") android.text.Html.fromHtml(securityHtml)
 
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         val isExempted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

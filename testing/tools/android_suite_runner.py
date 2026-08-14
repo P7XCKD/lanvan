@@ -156,7 +156,7 @@ def main():
 
     # PHASE 2: Start Server & Running State
     print("\n--- PHASE 2: Start Server & Running State ---")
-    tap_element(resource_id="btn_start_server", text="Start Lanvan", fallback_coords=(540, 697))
+    tap_element(resource_id="btn_start_server", text="Start Lanvan", fallback_coords=(540, 506))
     time.sleep(6)
     capture_screenshot("04_running_connected.png")
 
