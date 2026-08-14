@@ -342,38 +342,46 @@ async def emergency_shutdown(request: Request):
         "action": "Server will restart automatically if using a process manager."
     })
 
+from fastapi import Request
+
 @router.get("/api/network-info", name="network_info")
-async def get_network_info():
+async def get_network_info(request: Request):
     """Get network information including LAN IP and mDNS info"""
     try:
         import socket
         import os
         
-        # Get mDNS info and protocol settings
         mdns_info = mdns_manager.get_mdns_info()
         protocol = "https" if mdns_manager.use_https else "http"
         port = mdns_manager.port
 
-        # Use single authoritative address resolver (supports env vars & container host auto-discovery)
+        req_host_header = request.headers.get("host", "")
+        connected_host = req_host_header.split(":")[0] if req_host_header else None
+        connected_port = req_host_header.split(":")[1] if ":" in req_host_header else str(port)
+
         from app.utils.network_resolver import resolve_advertise_host
-        adv_info = resolve_advertise_host()
+        adv_info = resolve_advertise_host(req_host=connected_host)
         lan_ip = adv_info["lan_ip"]
         is_docker = adv_info["is_docker"]
         is_android = is_android_environment() and not is_docker
-        docker_needs_host_env = is_docker and not bool(lan_ip)
+        from app.utils.network_resolver import is_docker_bridge_ip
+        if (not lan_ip or lan_ip == "127.0.0.1") and connected_host and connected_host not in ("localhost", "127.0.0.1", "0.0.0.0") and not is_docker_bridge_ip(connected_host):
+            lan_ip = connected_host
 
-        # Format LAN IP URL using the same logic as mDNS URLs
+        docker_needs_host_env = is_docker and not bool(lan_ip)
+        display_port = connected_port if is_docker else str(port)
+
         if docker_needs_host_env:
             lan_ip_val = None
             lan_ip_url = None
-            hybrid_url = f"{protocol}://localhost"
-        elif (port == 80 and protocol == "http") or (port == 443 and protocol == "https"):
+            hybrid_url = f"{protocol}://localhost" if display_port in ("80", "443") else f"{protocol}://localhost:{display_port}"
+        elif (display_port == "80" and protocol == "http") or (display_port == "443" and protocol == "https"):
             lan_ip_val = lan_ip
             lan_ip_url = f"{protocol}://{lan_ip}"
             hybrid_url = lan_ip_url
         else:
             lan_ip_val = lan_ip
-            lan_ip_url = f"{protocol}://{lan_ip}:{port}"
+            lan_ip_url = f"{protocol}://{lan_ip}:{display_port}"
             hybrid_url = lan_ip_url
         
         response_data = {

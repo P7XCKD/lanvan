@@ -192,8 +192,8 @@ class ConcurrentUploadManager:
             if file_size > 50 * 1024 * 1024:  # Files > 50MB
                 universal_optimizer.optimize_for_large_files("upload")
             
-            # [INFO] Process file with streaming - Enhanced with NEW async function option
-            print(f"[SEARCH] [{upload_id}] Starting upload...")
+            from app.core.logger import logger
+            logger.info("UPLOAD", "Starting upload", op_id=upload_id)
             
             # [START] NEW: Option to use optimized async function from routes.py
             USE_NEW_ASYNC_FUNCTION = False  # Temporarily disabled - need to fix return format

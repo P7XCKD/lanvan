@@ -17,6 +17,7 @@ import platform
 import threading
 from typing import Optional, Dict
 import subprocess
+from app.core.logger import logger
 
 # Import Termux compatibility layer
 try:
@@ -73,13 +74,11 @@ class UniversalOptimizer:
         if self.is_termux or self.is_android:
             try:
                 start_termux_memory_monitoring()
-                print("[BOT] Termux memory monitoring initialized")
+                logger.info("ANDROID", "Memory monitoring initialized")
             except Exception as e:
-                print(f"[WARN] Memory monitoring init warning: {e}")
+                logger.warn("ANDROID", "Memory monitoring init warning", details={"Reason": str(e)})
         
-        print(f"[INFO] Platform detected: {self.platform_type.title()}")
-        if self.is_termux:
-            print(f"[BOT] Termux environment detected")
+        logger.info("SERVER", "Platform detected", details={"Platform": self.platform_type.title()})
             
     def get_adaptive_chunk_size(self, file_size: int) -> int:
         """Get adaptive chunk size with Termux memory monitoring"""

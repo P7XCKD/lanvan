@@ -17,6 +17,9 @@ MUST NEVER reach log outputs or diagnostic buffers.
 import time
 import datetime
 import threading
+import logging
+import warnings
+import sys
 from typing import List, Dict, Any, Optional
 
 # Valid Categories
@@ -28,6 +31,25 @@ CATEGORIES = {
 # Valid Levels
 LEVELS = {"INFO", "WARN", "ERROR", "DEBUG"}
 
+class QuietAccessFilter(logging.Filter):
+    """
+    Filter out 200/304 GET requests for static files and high-frequency polling from persistent logs.
+    Keep errors (4xx, 5xx), state-changing requests (POST, DELETE, PUT), and WebSocket lifecycle events.
+    """
+    NOISE_EXTENSIONS = ('.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.woff2', '.ttf', '.map', '.html')
+    NOISE_ENDPOINTS = ('/api/clipboard/list', '/api/upload-history', '/favicon.ico', '/apple-touch-icon.png')
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        if "GET " in msg and (" 200" in msg or " 304" in msg):
+            for ep in self.NOISE_ENDPOINTS:
+                if ep in msg:
+                    return False
+            for ext in self.NOISE_EXTENSIONS:
+                if f"{ext} " in msg or f"{ext}?" in msg or f"{ext} HTTP" in msg:
+                    return False
+        return True
+
 class StructuredLogger:
     """Thread-safe structured logger with diagnostic event ring buffer"""
     
@@ -35,6 +57,7 @@ class StructuredLogger:
         self._max_history = max_history
         self._history: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
+        self._last_line: Optional[str] = None
 
     def _format_timestamp(self) -> str:
         return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -45,7 +68,6 @@ class StructuredLogger:
         if not filename or "." not in filename:
             return "BIN"
         ext = filename.rsplit(".", 1)[-1].strip().upper()
-        # Sanitize extension string (max 10 alphanumeric chars)
         safe_ext = "".join(c for c in ext if c.isalnum())[:10]
         return safe_ext if safe_ext else "BIN"
 
@@ -76,11 +98,9 @@ class StructuredLogger:
         lvl = level.upper() if level.upper() in LEVELS else "INFO"
         timestamp = self._format_timestamp()
         
-        # Build formatted header: YYYY-MM-DD HH:MM:SS [LEVEL] [CATEGORY][OP_ID]
         op_suffix = f"[{op_id}]" if op_id else ""
         header = f"{timestamp} [{lvl}] [{cat}]{op_suffix} {message}"
         
-        # Append safe key-value details if provided
         detail_str = ""
         if details:
             kv_pairs = []
@@ -92,26 +112,28 @@ class StructuredLogger:
         
         full_line = header + detail_str
         
-        # Print to stdout/console safely
-        print(full_line, flush=True)
-
-        # Store in ring buffer for diagnostic report generation
-        entry = {
-            "timestamp": timestamp,
-            "category": cat,
-            "level": lvl,
-            "message": message,
-            "op_id": op_id,
-            "details": details or {},
-            "full_line": full_line
-        }
-        
         with self._lock:
+            # Prevent duplicate identical consecutive log lines
+            line_comparison_key = f"[{lvl}] [{cat}]{op_suffix} {message}" + detail_str
+            if self._last_line == line_comparison_key:
+                return
+            self._last_line = line_comparison_key
+
+            print(full_line, flush=True)
+
+            entry = {
+                "timestamp": timestamp,
+                "category": cat,
+                "level": lvl,
+                "message": message,
+                "op_id": op_id,
+                "details": details or {},
+                "full_line": full_line
+            }
             self._history.append(entry)
             if len(self._history) > self._max_history:
                 self._history.pop(0)
 
-    # Convenience Log Helpers
     def info(self, category: str, message: str, op_id: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
         self.log(category, "INFO", message, op_id, details)
 
@@ -124,7 +146,6 @@ class StructuredLogger:
     def debug(self, category: str, message: str, op_id: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
         self.log(category, "DEBUG", message, op_id, details)
 
-    # Specialized Safe Handlers
     def log_upload(
         self,
         event: str,
@@ -187,6 +208,25 @@ class StructuredLogger:
             recent = self._history[-count:]
             return [item["full_line"] for item in recent]
 
-
 # Global Logger Instance
 logger = StructuredLogger()
+
+# Apply Uvicorn Access Filter
+uvicorn_access_logger = logging.getLogger("uvicorn.access")
+uvicorn_access_logger.addFilter(QuietAccessFilter())
+
+# Structured Warning Interceptor
+_original_showwarning = warnings.showwarning
+
+def _structured_warning_handler(message, category, filename, lineno, file=None, line=None):
+    warning_str = str(message)
+    category_name = category.__name__ if category else "Warning"
+    
+    if "python-multipart" in warning_str.lower():
+        logger.warn("DIAGNOSTIC", "Dependency deprecation", details={"Component": "python-multipart"})
+    elif "socket" in warning_str.lower() or "transport" in warning_str.lower() or "zeroconf" in warning_str.lower():
+        logger.error("MDNS", "Resource cleanup incomplete", details={"Resource": "UDP transport"})
+    else:
+        logger.warn("DIAGNOSTIC", f"{category_name}: {warning_str}")
+
+warnings.showwarning = _structured_warning_handler

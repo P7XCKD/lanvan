@@ -28,7 +28,8 @@ def is_termux_environment() -> bool:
     
     # Only log once per session
     if is_termux and not hasattr(is_termux_environment, '_logged'):
-        print("[BOT] Termux environment detected - using safe compatibility mode")
+        from app.core.logger import logger
+        logger.info("ANDROID", "Termux environment detected", details={"Mode": "SAFE_COMPATIBILITY"})
         is_termux_environment._logged = True
     
     return is_termux
@@ -186,13 +187,14 @@ def get_safe_memory_info() -> Dict[str, Any]:
 
 def optimize_for_termux():
     """
-    [MOBILE] Apply Termux-specific optimizations
+    Apply Termux-specific optimizations
     """
     if not is_termux_environment():
         return False
     
     try:
-        print("[BOT] Applying Termux optimizations...")
+        from app.core.logger import logger
+        logger.info("ANDROID", "Applying Termux optimizations")
         
         # Set environment variables for better performance
         os.environ['PYTHONUNBUFFERED'] = '1'
@@ -203,7 +205,6 @@ def optimize_for_termux():
         try:
             with open(keepalive_file, 'w') as f:
                 f.write(str(time.time()))
-            print(f"[OK] Termux keepalive created: {keepalive_file}")
         except Exception:
             pass  # Non-critical
         
@@ -213,7 +214,8 @@ def optimize_for_termux():
         return True
         
     except Exception as e:
-        print(f"[WARN] Termux optimization warning: {e}")
+        from app.core.logger import logger
+        logger.warn("ANDROID", "Termux optimization warning", details={"Reason": str(e)})
         return False
 
 

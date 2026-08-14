@@ -79,7 +79,8 @@ class UploadStatusConnectionManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"Upload WebSocket cleanup error: {e}")
+                from app.core.logger import logger
+                logger.warn("WEBSOCKET", "Upload WebSocket cleanup warning", details={"Reason": str(e)})
         
         # Run final connection cleanup sweep during server shutdown
         try:

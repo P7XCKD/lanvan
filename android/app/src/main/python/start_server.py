@@ -35,9 +35,15 @@ class LogWriter:
     def __init__(self, filepath, terminal):
         self.file = open(filepath, 'a', encoding='utf-8')
         self.terminal = terminal
+        self._last_line = ""
         
     def write(self, message):
         sanitized_msg = sanitize_log_message(message)
+        stripped = sanitized_msg.strip()
+        if stripped and stripped == self._last_line:
+            return
+        if stripped:
+            self._last_line = stripped
         self.terminal.write(sanitized_msg)
         self.file.write(sanitized_msg)
         self.file.flush()

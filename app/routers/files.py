@@ -623,7 +623,7 @@ async def scan_file_async(path: Path):
         
         # For large files, break processing into smaller chunks with yielding
         if file_size > 100 * 1024 * 1024:  # >100MB
-            print(f"[SEARCH] Large file processing with yielding: {path.name} ({file_size // 1024 // 1024}MB)")
+            logger.info("UPLOAD", "Processing large file", details={"Size": logger.format_size(file_size)})
             
             # Simulate chunked processing with frequent yielding
             chunk_count = max(1, file_size // (50 * 1024 * 1024))  # 50MB chunks
@@ -1039,14 +1039,12 @@ async def upload_auto_file(
     from app.core.concurrent_upload_manager import upload_multiple_files_concurrent
     
     uploaded = []
-    
-    print(f"[SEARCH] Processing {len(files)} files for concurrent upload...")
+    logger.info("UPLOAD", "Processing files for upload", details={"Count": len(files)})
 
     # [START] CONCURRENT PREPARATION: Prepare all file destinations simultaneously
     async def prepare_file_for_upload(i: int, file: UploadFile) -> Dict[str, Any]:
         """Prepare a single file for upload concurrently"""
         try:
-            print(f"[DIR] Preparing file {i+1}/{len(files)}: {file.filename}")
             
             if not file.filename:
                 return {"error": f"File {i+1}: No filename"}
@@ -2323,42 +2321,28 @@ async def finalize_upload(
         
         # [START] ENHANCED: Check streaming assembly status first
         if assembler:
-            # Check if file was completed via streaming assembly
             streaming_status = check_streaming_status(scoped_key)
-            print(f"[SEARCH] Streaming assembly status: {streaming_status}")
-            
             if streaming_status and streaming_status.get('status') == 'ready':
-                # File completed via streaming assembly
                 file_info = get_assembled_file(scoped_key)
                 if file_info and file_info.get('status') == 'ready':
                     streaming_completed = True
                     final_path = Path(file_info['path'])
-                    print(f"[OK] File completed via streaming assembly: {scoped_key}")
-                    print(f"   [DIR] Path: {final_path}")
-                    print(f"   [STATS] Size: {final_path.stat().st_size:,} bytes")
+                    logger.info("UPLOAD", "File completed via streaming assembly", op_id=scoped_key)
         
-        # Second, check if streaming-assembled file already exists (legacy check)
         potential_streaming_file = resolved.full_path
         if not streaming_completed and potential_streaming_file.exists():
-            print(f"[STREAM] Found legacy streaming-assembled file: {scoped_key}")
             streaming_completed = True
             final_path = potential_streaming_file
             
-            # [START] Check if background processing was completed during streaming
             if assembler:
                 status = assembler.check_status(scoped_key)
                 if status and status.get('validation_result'):
                     validation_from_background = status['validation_result']
                     background_processing_done = True
-                    print(f"[FAST] Background processing completed during upload - no additional processing needed!")
+                    logger.info("UPLOAD", "Background validation complete", op_id=scoped_key)
         
-        print(f"[SEARCH] Streaming completed: {streaming_completed}")
-        print(f"[SEARCH] Background processing done: {background_processing_done}")
-        print(f"[SEARCH] Final path: {final_path}")
-        
-        # [RETRY] Failsafe: Use traditional chunk combination if streaming didn't complete
         if not streaming_completed:
-            print(f"[RETRY] Using traditional chunk assembly for {scoped_key}")
+            logger.info("UPLOAD", "Using fallback chunk assembly", op_id=scoped_key)
             
             # [START] Auto-detect actual chunks (adaptive chunked upload support)
             chunk_files = []
