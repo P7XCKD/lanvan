@@ -19,6 +19,7 @@ import platform
 import os
 from typing import Optional, Dict, Any
 from app.utils.termux_compat import is_android_environment
+from app.core.logger import logger
 
 try:
     from zeroconf import ServiceInfo, Zeroconf, ServiceBrowser
@@ -432,66 +433,41 @@ class SimpleMDNSManager:
 
 
                 
-                print("[SEARCH] Starting mDNS service (offline-compatible, Termux-optimized)...")
-                print(f"   {self.mdns_status}")
+                logger.info("MDNS", "Starting service discovery", details={"Mode": self.protocol.upper()})
                 
-                # Check if we're on Android/Termux for special handling
                 is_android = is_android_environment()
-                
-                # Enhanced cleanup before start (important for Termux restarts)
                 force_cleanup_mdns_resources()
                 
                 if self.zeroconf:
                     try:
+                        self.zeroconf.unregister_all_services()
                         self.zeroconf.close()
                     except Exception:
                         pass
                     self.zeroconf = None
                 
-                # Create zeroconf instance with Android/Termux optimizations
-                try:
-                    if is_android:
-                        print("[MOBILE] Android/Termux detected - using optimized mDNS settings")
-                        # Use more conservative settings for Android
-                        time.sleep(0.5)  # Give time for network interfaces to stabilize
-                    
-                    # Initialize with local interfaces only for offline support
-                    self.zeroconf = Zeroconf()
-                    
-                except Exception as zc_error:
-                    print(f"[WARN] Zeroconf initialization warning: {zc_error}")
-                    print("[CFG] Attempting alternative zeroconf setup...")
-                    try:
-                        # Brief pause for Android/Termux network stability
-                        time.sleep(1.0)
-                        # Fallback zeroconf initialization
-                        self.zeroconf = Zeroconf()
-                    except Exception as zc_fallback_error:
-                        print(f"[ERR] mDNS service failed to initialize: {zc_fallback_error}")
-                        if is_android:
-                            print("[TIP] On Android/Termux, try: pkg install avahi")
-                            print("[TIP] Or restart Termux and try again")
-                        return False
-                
-                # Generate service details with collision detection
                 self.service_name = self.generate_service_name()
                 self.domain = f"{self.service_name}.local"
                 
-                # Get network info (offline-compatible)
-                hostname = socket.gethostname()
                 lan_ip = self.get_lan_ip()
-                
                 if lan_ip == "127.0.0.1" or self._is_docker_bridge_ip(lan_ip):
-                    print("[NET] mDNS service disabled: No physical LAN IP available (e.g. Docker bridge or localhost loopback)")
+                    logger.warn("MDNS", "Service discovery disabled: No physical LAN IP available", details={"IP": lan_ip})
                     return False
 
-                print(f"[NET] Detected LAN IP: {lan_ip}")
-                print(f"[TAG] Service name: {self.service_name}")
-                
-                # Create service name
+                # Bind Zeroconf exclusively to the authoritative LAN IP interface (prevents 172.18.x.x bridge leakage)
+                try:
+                    if is_android:
+                        time.sleep(0.3)
+                    self.zeroconf = Zeroconf(interfaces=[lan_ip])
+                except Exception as zc_error:
+                    try:
+                        self.zeroconf = Zeroconf()
+                    except Exception as zc_fallback_error:
+                        logger.error("MDNS", "Service failed to initialize", details={"Reason": str(zc_fallback_error)})
+                        return False
+
                 service_name_full = f"{self.service_name}.{self.service_type}"
                 
-                # Enhanced properties for guest device compatibility
                 properties = {
                     b'version': b'1.0.0',
                     b'service': b'Lanvan-file-server',
@@ -504,16 +480,15 @@ class SimpleMDNSManager:
                     b'collision_resolved': b'true' if self.conflict_count > 0 else b'false',
                     b'offline_ready': b'true',
                     b'local_network': b'true',
-                    b'guest_access': b'enabled',  # Indicate guest device support
-                    b'cross_platform': b'true',   # Cross-platform compatibility
+                    b'guest_access': b'enabled',
+                    b'cross_platform': b'true',
                     b'actual_port': str(self.actual_port).encode('utf-8'),
                     b'actual_protocol': self.actual_protocol.encode('utf-8'),
                     b'single_protocol': b'true',
                     b'auto_redirect': b'false',
-                    b'firewall_friendly': b'true'  # Indicate firewall configuration
+                    b'firewall_friendly': b'true'
                 }
                 
-                # Create service info with offline optimization
                 try:
                     self.service_info = ServiceInfo(
                         self.service_type,
@@ -524,76 +499,31 @@ class SimpleMDNSManager:
                         server=f"{self.service_name}.local."
                     )
                 except Exception as si_error:
-                    print(f"[ERR] Service info creation failed: {si_error}")
+                    logger.error("MDNS", "Service info creation failed", details={"Reason": str(si_error)})
                     return False
                 
-                # Register the service asynchronously in a daemon thread so mDNS probing doesn't block server startup
                 self.is_running = True
                 def _async_register():
                     try:
                         if self.zeroconf and self.service_info:
                             self.zeroconf.register_service(self.service_info)
-                            print("[OK] mDNS service registered successfully")
+                            logger.info("MDNS", "Service registered", details={"Host": self.domain, "IP": lan_ip})
                     except Exception as reg_error:
-                        print(f"[WARN] Service registration warning: {reg_error}")
+                        logger.warn("MDNS", "Service registration warning", details={"Reason": str(reg_error)})
 
                 threading.Thread(target=_async_register, daemon=True, name="mdns-register").start()
                 
-                # [NET] Protocol-Specific Access Information
                 protocol_name = "HTTPS" if self.use_https else "HTTP"
-                print(f"[OK] mDNS service started: {self.domain}")
-                print(f"[NET] Guest devices can now discover this server!")
+                logger.info("MDNS", "Service started", details={"Host": self.domain, "Protocol": protocol_name, "IP": lan_ip})
                 
-                # Check if we're on Android/Termux for special messaging
-                is_android = is_android_environment()
-                
-                if is_android:
-                    print(f"[MOBILE] Android/Termux {protocol_name} Server:")
-                    print(f"[!] mDNS (.local) may not work on Android/Termux!")
-                    print(f"[OK] RECOMMENDED - Use Direct IP Access:")
-                    if self.use_https:
-                        https_ip_url = self._format_url(lan_ip)
-                        print(f"   [MOBILE] Mobile Access: {https_ip_url}")
-                        print(f"   [PC] Desktop Access: {https_ip_url}")
-                        print(f"[LOCK] HTTPS-only mode")
-                    else:
-                        http_ip_url = self._format_url(lan_ip)
-                        print(f"   [MOBILE] Mobile Access: {http_ip_url}")
-                        print(f"   [PC] Desktop Access: {http_ip_url}")
-                        print(f"[NET] HTTP-only mode")
-                    print(f"[WARN]  Avoid using {self.domain} - use IP instead")
-                else:
-                    print(f"[NET] {protocol_name} Server Access:")
-                    if self.use_https:
-                        # HTTPS-only mode
-                        https_url = self._format_url(self.domain)
-                        https_ip_url = self._format_url(lan_ip)
-                        print(f"   HTTPS access: {https_url}")
-                        print(f"   Direct IP (HTTPS): {https_ip_url}")
-                        print(f"[LOCK] HTTPS-only mode - HTTP requests will not work")
-                    else:
-                        # HTTP-only mode  
-                        http_url = self._format_url(self.domain)
-                        http_ip_url = self._format_url(lan_ip)
-                        print(f"   HTTP access:  {http_url}")
-                        print(f"   Direct IP (HTTP):  {http_ip_url}")
-                        print(f"[NET] HTTP-only mode - HTTPS requests will not work")
-                
-                print(f"[TARGET] Single protocol mode - no redirects needed")
-                
-                if self.conflict_count > 0:
-                    print(f"[INFO] Collision resolved - using unique name: {self.service_name}")
-                
-                # Start background thread for periodic announcements (offline-friendly)
                 self._start_announcement_thread()
-                
                 return True
                 
         except Exception as e:
-            print(f"[ERR] mDNS service failed: {e}")
-            print("[CFG] Service will continue with IP-only access")
+            logger.error("MDNS", "Service start failed", details={"Reason": str(e)})
             if self.zeroconf:
                 try:
+                    self.zeroconf.unregister_all_services()
                     self.zeroconf.close()
                 except Exception:
                     pass
@@ -606,48 +536,42 @@ class SimpleMDNSManager:
             with self._lock:
                 self.ref_count -= 1
                 if self.ref_count > 0:
-                    print(f"[INFO] mDNS service stop requested, but other instances are active (ref_count={self.ref_count})")
+                    logger.info("MDNS", "Stop requested but instances active", details={"RefCount": self.ref_count})
                     return
                 if not self.is_running:
                     return
                 
-                print(" Stopping mDNS service...")
-                
-                # Stop announcement thread first
+                logger.info("MDNS", "Stopping service")
                 self._stop_announcement_thread()
                 
-                # Unregister service with retry for Termux compatibility
-                if self.service_info and self.zeroconf:
-                    try:
-                        self.zeroconf.unregister_service(self.service_info)
-                        print(f"[OK] mDNS service unregistered: {self.domain}")
-                    except Exception as unreg_error:
-                        print(f"[WARN] Unregister warning (non-critical): {unreg_error}")
-                
-                # Close zeroconf with enhanced cleanup for Android/Termux
                 if self.zeroconf:
                     try:
-                        # Force close all sockets and cleanup
-                        self.zeroconf.close()
-                        print("[OK] Zeroconf resources cleaned up")
-                    except Exception as close_error:
-                        print(f"[WARN] Zeroconf close warning: {close_error}")
-                    
-                    # Additional cleanup for Android/Termux
+                        if self.service_info:
+                            self.zeroconf.unregister_service(self.service_info)
+                        self.zeroconf.unregister_all_services()
+                        logger.info("MDNS", "Service unregistered", details={"Host": self.domain})
+                    except Exception as unreg_error:
+                        logger.warn("MDNS", "Unregister warning", details={"Reason": str(unreg_error)})
+                
+                if self.zeroconf:
                     try:
-                        # Force garbage collection to free network resources
+                        self.zeroconf.close()
+                        logger.info("MDNS", "Zeroconf resources closed")
+                    except Exception as close_error:
+                        logger.warn("MDNS", "Zeroconf close warning", details={"Reason": str(close_error)})
+                    
+                    try:
                         import gc
                         gc.collect()
                     except Exception:
                         pass
                 
-                # Reset all state
                 self.is_running = False
                 self.service_info = None
                 self.zeroconf = None
-                self.lan_ip = None  # Reset IP cache for next run
+                self.lan_ip = None
                 
-                print(" mDNS service stopped and cleaned up")
+                logger.info("MDNS", "Service stopped", details={"Status": "INACTIVE"})
                 
         except Exception as e:
             print(f"[ERR] Error stopping mDNS service: {e}")

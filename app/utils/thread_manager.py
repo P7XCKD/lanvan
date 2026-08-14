@@ -66,7 +66,8 @@ class ThreadManager:
             # Expected on Android background threads
             self.logger.warning("Could not register signal handlers (running in background thread)")
         
-        print("[INFO] Thread Manager initialized")
+        from app.core.logger import logger as app_logger
+        app_logger.info("SERVER", "Thread manager initialized")
     
     def _signal_handler(self, signum, frame):
         """Handle shutdown signals"""

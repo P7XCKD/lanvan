@@ -1113,18 +1113,27 @@ class MainActivity : AppCompatActivity() {
                     pm.isIgnoringBatteryOptimizations(packageName)
                 } else true
 
-                var capturedLogs = ServerService.lastErrorLog
                 val logFile = File(filesDir, "lanvan_app.log")
-                if (logFile.exists()) {
+                var rawLogs = if (logFile.exists()) {
                     try {
-                        val logContent = logFile.readText()
-                        capturedLogs = "$capturedLogs\n\n--- persistent lanvan_app.log ---\n$logContent"
+                        logFile.readText()
                     } catch (e: Exception) {
-                        capturedLogs = "$capturedLogs\n\nFailed to read lanvan_app.log: ${e.message}"
+                        "Failed to read lanvan_app.log: ${e.message}"
                     }
+                } else {
+                    ServerService.lastErrorLog
                 }
 
-                val sanitizedLogs = sanitizeLogContent(capturedLogs)
+                // Deduplicate consecutive duplicate lines
+                val dedupedLines = ArrayList<String>()
+                var lastLine: String? = null
+                for (line in rawLogs.lines()) {
+                    val trimmed = line.trim()
+                    if (trimmed.isNotEmpty() && trimmed == lastLine) continue
+                    dedupedLines.add(line)
+                    if (trimmed.isNotEmpty()) lastLine = trimmed
+                }
+                val sanitizedLogs = sanitizeLogContent(dedupedLines.joinToString("\n"))
 
                 val reportContent = StringBuilder().apply {
                     appendLine("=== LANVAN DIAGNOSTIC REPORT ===")

@@ -78,7 +78,8 @@ class ClipboardConnectionManager:
                 break
             except Exception as e:
                 # Suppress errors to prevent the background loop from terminating
-                print(f"WebSocket cleanup error: {e}")
+                from app.core.logger import logger
+                logger.warn("WEBSOCKET", "Clipboard WebSocket cleanup warning", details={"Reason": str(e)})
         
         # Run final connection cleanup sweep during server shutdown
         try:

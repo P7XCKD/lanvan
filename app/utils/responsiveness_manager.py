@@ -305,13 +305,15 @@ class UnifiedResponsivenessManager:
             timeout=5.0
         )
         
-        print("[SEARCH] Unified responsiveness monitoring started")
+        from app.core.logger import logger
+        logger.info("SERVER", "Responsiveness monitoring started")
     
     def stop_monitoring(self):
         """Stop background monitoring"""
         self._monitoring_active = False
         thread_manager.stop_thread("unified_responsiveness_monitor", timeout=3.0)
-        print("[SEARCH] Unified responsiveness monitoring stopped")
+        from app.core.logger import logger
+        logger.info("SERVER", "Responsiveness monitoring stopped")
     
     def _adaptive_optimization(self):
         """Perform adaptive optimization based on metrics"""

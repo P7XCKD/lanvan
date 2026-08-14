@@ -11,20 +11,25 @@ def is_docker_environment() -> bool:
     return os.path.exists('/.dockerenv') or os.getenv('DOCKER_CONTAINER') == 'true'
 
 def is_docker_bridge_ip(ip_str: Optional[str]) -> bool:
-    """Check if an IP belongs to Docker container bridge network (172.17.x.x - 172.31.x.x)"""
-    is_android = 'ANDROID_STORAGE' in os.environ or 'PREFIX' in os.environ
-    if not is_docker_environment() and not is_android:
-        return False
-    if not ip_str or ip_str.startswith('127.'):
+    """Check if an IP belongs to Docker container bridge network or virtual adapter"""
+    if not ip_str or ip_str.startswith('127.') or ip_str.startswith('169.254.'):
         return True
     parts = ip_str.split('.')
-    if len(parts) == 4 and parts[0] == '172':
-        try:
-            second = int(parts[1])
-            if 16 <= second <= 31:
-                return True
-        except ValueError:
-            pass
+    if len(parts) == 4:
+        # Docker Desktop WSL2 internal virtual subnet (192.168.65.x)
+        if parts[0] == '192' and parts[1] == '168' and parts[2] == '65':
+            return True
+        # Docker Desktop Hyper-V internal virtual subnet (10.0.75.x)
+        if parts[0] == '10' and parts[1] == '0' and parts[2] == '75':
+            return True
+        # Docker standard bridge subnets (172.16.x.x - 172.31.x.x)
+        if parts[0] == '172':
+            try:
+                second = int(parts[1])
+                if 16 <= second <= 31:
+                    return True
+            except ValueError:
+                pass
     return False
 
 _cached_discovered_host_ip = None
@@ -32,7 +37,7 @@ _cached_discovered_host_ip = None
 def auto_discover_host_lan_ip() -> Optional[str]:
     """
     Auto-discover the host machine's physical LAN IPv4 address from inside a Docker container.
-    Scans local router subnets (e.g. 192.168.1.x, 192.168.0.x, 10.0.0.x) for the active Lanvan server port 80.
+    Scans local router subnets for the active Lanvan server status endpoint.
     """
     global _cached_discovered_host_ip
     if _cached_discovered_host_ip:
@@ -43,64 +48,63 @@ def auto_discover_host_lan_ip() -> Optional[str]:
         import json
         import concurrent.futures
 
-        # 1. Discover active router IP
+        # 1. Try host.docker.internal resolution first
+        try:
+            host_internal_ip = socket.gethostbyname('host.docker.internal')
+            if host_internal_ip and not host_internal_ip.startswith('127.'):
+                parts = host_internal_ip.split('.')
+                if len(parts) == 4 and parts[0] in ('192', '10', '172') and not is_docker_bridge_ip(host_internal_ip):
+                    _cached_discovered_host_ip = host_internal_ip
+                    return host_internal_ip
+        except Exception:
+            pass
+
+        # 2. Fast scan common LAN subnets directly for host machine running Lanvan
         common_subnets = ["192.168.1", "192.168.0", "192.168.2", "192.168.178", "10.0.0", "10.0.1", "172.16.0"]
-        active_router_subnet = None
-
-        for sub in common_subnets:
-            router_ip = f"{sub}.1"
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(0.12)
-                res = s.connect_ex((router_ip, 80))
-                s.close()
-                if res == 0:
-                    active_router_subnet = sub
-                    break
-            except Exception:
-                pass
-
-        if not active_router_subnet:
-            return None
-
-        # 2. Fast scan active subnet (1-254) for host machine running Lanvan on port 80
         discovered_host_ip = None
 
         def check_host_ip(ip_str):
-            try:
-                url = f"http://{ip_str}/api/server-status"
-                req = urllib.request.Request(url, headers={"User-Agent": "Lanvan-Host-Discovery"})
-                with urllib.request.urlopen(req, timeout=0.25) as resp:
-                    if resp.status == 200:
-                        data = json.loads(resp.read().decode())
-                        if data.get("status") in ("online", "success", "running") or "status" in data:
-                            return ip_str
-            except Exception:
-                pass
+            for check_port in (80, 8080, 443, 5000):
+                try:
+                    url = f"http://{ip_str}:{check_port}/api/server-status" if check_port != 80 else f"http://{ip_str}/api/server-status"
+                    req = urllib.request.Request(url, headers={"User-Agent": "Lanvan-Host-Discovery"})
+                    with urllib.request.urlopen(req, timeout=0.2) as resp:
+                        if resp.status == 200:
+                            data = json.loads(resp.read().decode())
+                            if data.get("status") in ("online", "success", "running") or "status" in data:
+                                return ip_str
+                except Exception:
+                    pass
             return None
 
-        ips = [f"{active_router_subnet}.{i}" for i in range(1, 255)]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
-            futures = {executor.submit(check_host_ip, ip): ip for ip in ips}
+        candidate_ips = []
+        for sub in common_subnets:
+            for i in range(1, 255):
+                candidate_ips.append(f"{sub}.{i}")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
+            futures = {executor.submit(check_host_ip, ip): ip for ip in candidate_ips}
             for future in concurrent.futures.as_completed(futures):
                 res = future.result()
                 if res:
                     discovered_host_ip = res
                     break
 
+        from app.core.logger import logger
         if discovered_host_ip:
             _cached_discovered_host_ip = discovered_host_ip
-            print(f"[NET] Docker host LAN IP auto-discovered: {discovered_host_ip}")
+            logger.info("NETWORK", "Docker host LAN IP auto-discovered", details={"IP": discovered_host_ip})
             return discovered_host_ip
 
     except Exception as e:
-        print(f"[NET] Docker host IP auto-discovery warning: {e}")
+        from app.core.logger import logger
+        logger.warn("NETWORK", "Docker host IP auto-discovery warning", details={"Reason": str(e)})
 
     return None
 
 _cached_resolved_result: Optional[Dict[str, Any]] = None
 
-def resolve_advertise_host(force_refresh: bool = False) -> Dict[str, Any]:
+def resolve_advertise_host(force_refresh: bool = False, req_host: Optional[str] = None) -> Dict[str, Any]:
     """
     Single authoritative address resolution for Lanvan.
     Returns dictionary with:
@@ -110,7 +114,7 @@ def resolve_advertise_host(force_refresh: bool = False) -> Dict[str, Any]:
       - 'display_ip': display string (lan_ip or '127.0.0.1')
     """
     global _cached_resolved_result
-    if not force_refresh and _cached_resolved_result is not None:
+    if not force_refresh and _cached_resolved_result is not None and not req_host:
         return _cached_resolved_result
 
     is_docker = is_docker_environment()
@@ -125,12 +129,20 @@ def resolve_advertise_host(force_refresh: bool = False) -> Dict[str, Any]:
                 "is_override": True,
                 "display_ip": val
             }
-            _cached_resolved_result = res
+            if not req_host:
+                _cached_resolved_result = res
             return res
 
     if is_docker:
-        # Inside Docker Desktop bridge mode without explicit LANVAN_HOST,
-        # attempt lightweight auto-discovery of the host's LAN IP across the local subnet.
+        # If client connected using a valid physical LAN IP (not localhost/127.0.0.1/bridge)
+        if req_host and not req_host.startswith("127.") and req_host != "localhost" and not is_docker_bridge_ip(req_host):
+            return {
+                "lan_ip": req_host,
+                "is_docker": True,
+                "is_override": False,
+                "display_ip": req_host
+            }
+
         discovered_ip = auto_discover_host_lan_ip()
         if discovered_ip:
             res = {
@@ -139,7 +151,8 @@ def resolve_advertise_host(force_refresh: bool = False) -> Dict[str, Any]:
                 "is_override": False,
                 "display_ip": discovered_ip
             }
-            _cached_resolved_result = res
+            if not req_host:
+                _cached_resolved_result = res
             return res
         
         res = {
@@ -148,7 +161,8 @@ def resolve_advertise_host(force_refresh: bool = False) -> Dict[str, Any]:
             "is_override": False,
             "display_ip": "127.0.0.1"
         }
-        _cached_resolved_result = res
+        if not req_host:
+            _cached_resolved_result = res
         return res
 
     # Native Windows / Linux / Termux / Android execution

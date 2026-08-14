@@ -47,11 +47,12 @@ class TermuxMemoryMonitor:
             return
             
         self.monitoring_active = True
+        from app.core.logger import logger
         self.monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self.monitor_thread.start()
         
         if self.is_termux:
-            print("[BOT] Termux memory monitoring started")
+            logger.info("ANDROID", "Termux memory monitoring started")
         
     def stop_monitoring(self):
         """Stop memory monitoring"""
@@ -71,7 +72,8 @@ class TermuxMemoryMonitor:
                 
             except Exception as e:
                 if self.is_termux:
-                    print(f"[WARN] Memory monitor warning: {e}")
+                    from app.core.logger import logger
+                    logger.warn("ANDROID", "Memory monitor warning", details={"Reason": str(e)})
                 time.sleep(10)  # Longer sleep on error
                 
     def _check_memory_status(self):
@@ -104,19 +106,20 @@ class TermuxMemoryMonitor:
         
     def _handle_memory_status(self, available_mb: int):
         """Handle memory status changes"""
+        from app.core.logger import logger
         if self.current_status == "emergency":
             if self.is_termux:
-                print(f"[!] EMERGENCY: Only {available_mb}MB memory remaining!")
+                logger.error("ANDROID", "Emergency low memory", details={"AvailableMB": available_mb})
             self._emergency_cleanup()
             
         elif self.current_status == "critical":
             if self.is_termux:
-                print(f"[WARN] CRITICAL: Only {available_mb}MB memory remaining")
+                logger.warn("ANDROID", "Critical low memory", details={"AvailableMB": available_mb})
             self._critical_cleanup()
             
         elif self.current_status == "warning":
             if self.is_termux:
-                print(f" WARNING: {available_mb}MB memory remaining")
+                logger.warn("ANDROID", "Low memory warning", details={"AvailableMB": available_mb})
             self._warning_cleanup()
             
         elif self.current_status == "normal" and self._should_run_gc():
