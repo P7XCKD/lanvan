@@ -12,7 +12,8 @@ def is_docker_environment() -> bool:
 
 def is_docker_bridge_ip(ip_str: Optional[str]) -> bool:
     """Check if an IP belongs to Docker container bridge network (172.17.x.x - 172.31.x.x)"""
-    if not is_docker_environment():
+    is_android = 'ANDROID_STORAGE' in os.environ or 'PREFIX' in os.environ
+    if not is_docker_environment() and not is_android:
         return False
     if not ip_str or ip_str.startswith('127.'):
         return True
@@ -20,7 +21,7 @@ def is_docker_bridge_ip(ip_str: Optional[str]) -> bool:
     if len(parts) == 4 and parts[0] == '172':
         try:
             second = int(parts[1])
-            if 17 <= second <= 31:
+            if 16 <= second <= 31:
                 return True
         except ValueError:
             pass

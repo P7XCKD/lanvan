@@ -198,14 +198,23 @@ class ServerService : Service() {
                 // Broadcast that server is starting/running
                 sendServerStatus(STATUS_RUNNING)
                 
+                // Detect the correct shareable LAN IP before starting Python.
+                // Python's own interface detection can pick the wrong interface
+                // (e.g. hotspot bridge at 172.x.x.x) on Android. By passing the
+                // Kotlin-detected Wi-Fi IP we guarantee consistency between the
+                // Android UI, QR code, and mDNS advertisement.
+                val lanNetworkState = detectShareableLanNetwork(this)
+                val detectedLanIp: String? = if (lanNetworkState.available) lanNetworkState.ipAddress else null
+
                 // Call uvicorn bootstrapper blocking method
                 val sharedPrefs = getSharedPreferences("lanvan_prefs", Context.MODE_PRIVATE)
                 val blockDangerousHttp = sharedPrefs.getBoolean("block_dangerous_http", false)
                 val blockDangerousHttps = sharedPrefs.getBoolean("block_dangerous_https", true)
                 val isHttps = instanceUseHttps.lowercase() == "true"
                 val blockDangerous = if (isHttps) blockDangerousHttps else blockDangerousHttp
-                // Pass isDebug = false so APK runs in production mode automatically
-                module.callAttr("run_fastapi_server", instancePort, instanceUseHttps, filesDir.absolutePath, false, blockDangerous)
+                // Pass isDebug = false so APK runs in production mode automatically.
+                // Pass detectedLanIp so Python pins the correct Wi-Fi interface.
+                module.callAttr("run_fastapi_server", instancePort, instanceUseHttps, filesDir.absolutePath, false, blockDangerous, detectedLanIp ?: "")
 
 
             } catch (e: Exception) {
@@ -453,27 +462,12 @@ class ServerService : Service() {
     }
 
     private fun getLocalIpAddress(): String {
-        try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val networkInterface = interfaces.nextElement()
-                if (networkInterface.isLoopback || !networkInterface.isUp) continue
-                
-                val addresses = networkInterface.inetAddresses
-                while (addresses.hasMoreElements()) {
-                    val addr = addresses.nextElement()
-                    if (addr is Inet4Address && !addr.isLoopbackAddress) {
-                        val host = addr.hostAddress
-                        if (host.startsWith("192.168.") || host.startsWith("10.") || host.startsWith("172.")) {
-                            return host
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
+        val state = detectShareableLanNetwork(this)
+        return if (state.available && !state.ipAddress.isNullOrEmpty()) {
+            state.ipAddress
+        } else {
+            "127.0.0.1"
         }
-        return "127.0.0.1"
     }
 
     private fun sanitizeLogContent(rawLogs: String): String {
