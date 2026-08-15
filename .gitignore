@@ -202,8 +202,6 @@ settings.local.py
 !.agents/
 !.agents/AGENTS.md
 
-scratch/
-
 # Android builds and packages
 .gradle/
 local.properties
@@ -213,11 +211,11 @@ android/local.properties
 *.aab
 *.zip
 *.iml
-*.jks
-*.keystore
 android/.gradle/
 android/build/
 android/app/build/
+android/app/.cxx/
+android/.cxx/
 temp_gradle/
 testing/tools/temp_gradle/
 android/app/src/main/assets/certs/
@@ -232,14 +230,9 @@ testing/logs/
 testing/reports/
 reports/
 
-
-
-
 # Android release signing keys and property files
 *.jks
 *.keystore
 keystore.properties
 android/keystore.properties
 testing/reports/latest-test-report.txt
-testing/reports/
-reports/

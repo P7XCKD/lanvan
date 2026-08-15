@@ -1377,13 +1377,29 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val PRODUCT_SUPPORTER = "lanvan_supporter"
-        const val PRODUCT_SPONSOR = "lanvan_sponsor"
-        const val PRODUCT_PATRON = "lanvan_patron"
+        const val PRODUCT_SPONSOR = "lanvan_sponsor_2"
+        const val PRODUCT_PATRON = "lanvan_patron_3"
     }
 
     private lateinit var billingClient: BillingClient
     private val productDetailsMap = mutableMapOf<String, ProductDetails>()
     private var isBillingConnected = false
+
+    private fun getBillingErrorMessage(responseCode: Int, debugMessage: String?): String {
+        val base = when (responseCode) {
+            BillingClient.BillingResponseCode.SERVICE_TIMEOUT -> "Google Play connection timed out"
+            BillingClient.BillingResponseCode.FEATURE_NOT_SUPPORTED -> "Google Play Billing is not supported on this device"
+            BillingClient.BillingResponseCode.SERVICE_DISCONNECTED -> "Google Play service disconnected. Please retry"
+            BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE -> "Google Play service is currently unavailable"
+            BillingClient.BillingResponseCode.BILLING_UNAVAILABLE -> "Google Play Billing is unavailable for this account/region"
+            BillingClient.BillingResponseCode.ITEM_UNAVAILABLE -> "Product is not available for purchase in this region"
+            BillingClient.BillingResponseCode.DEVELOPER_ERROR -> "Google Play configuration error"
+            BillingClient.BillingResponseCode.ERROR -> "Google Play encountered an error during transaction"
+            BillingClient.BillingResponseCode.NETWORK_ERROR -> "Network error connecting to Google Play"
+            else -> "Purchase could not be completed (Code $responseCode)"
+        }
+        return if (!debugMessage.isNullOrBlank()) "$base ($debugMessage)" else base
+    }
 
     private val purchasesUpdatedListener = PurchasesUpdatedListener { billingResult, purchases ->
         Log.i("Billing", "[BILLING] Purchase callback\nResponseCode: ${billingResult.responseCode}\nDebugMessage: ${billingResult.debugMessage}")
@@ -1397,8 +1413,9 @@ class MainActivity : AppCompatActivity() {
             Log.i("Billing", "[BILLING] Item already owned. Consuming existing purchase...")
             queryAndConsumeExistingPurchases()
         } else {
-            Log.e("Billing", "[BILLING] Purchase failed: ${billingResult.responseCode} (${billingResult.debugMessage})")
-            Toast.makeText(this, "Purchase status: ${billingResult.debugMessage}", Toast.LENGTH_SHORT).show()
+            val errorMsg = getBillingErrorMessage(billingResult.responseCode, billingResult.debugMessage)
+            Log.e("Billing", "[BILLING] Purchase failed: ${billingResult.responseCode} ($errorMsg)")
+            Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -1430,8 +1447,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun queryProducts() {
-        Log.i("Billing", "[BILLING] Querying products\nType: INAPP\nProducts: lanvan_supporter, lanvan_sponsor, lanvan_patron")
         val expectedIds = listOf(PRODUCT_SUPPORTER, PRODUCT_SPONSOR, PRODUCT_PATRON)
+        Log.i("Billing", "[BILLING] Querying products\nType: INAPP\nProducts: ${expectedIds.joinToString(", ")}")
         val productList = expectedIds.map { id ->
             QueryProductDetailsParams.Product.newBuilder()
                 .setProductId(id)
@@ -1444,21 +1461,28 @@ class MainActivity : AppCompatActivity() {
             .build()
 
         billingClient.queryProductDetailsAsync(params) { billingResult, productDetailsList ->
-            if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+            val responseCode = billingResult.responseCode
+            val debugMsg = billingResult.debugMessage
+            Log.i("Billing", "[BILLING] queryProductDetailsAsync result\nResponseCode: $responseCode\nDebugMessage: $debugMsg\nReturnedCount: ${productDetailsList.size}")
+
+            if (responseCode == BillingClient.BillingResponseCode.OK) {
                 productDetailsMap.clear()
                 val returnedIds = mutableSetOf<String>()
                 for (details in productDetailsList) {
                     productDetailsMap[details.productId] = details
                     returnedIds.add(details.productId)
-                    Log.i("Billing", "[BILLING] Product available\nID: ${details.productId}\nType: INAPP\nPrice: ${details.oneTimePurchaseOfferDetails?.formattedPrice}")
+                    val price = details.oneTimePurchaseOfferDetails?.formattedPrice
+                    val hasOffer = details.oneTimePurchaseOfferDetails != null
+                    Log.i("Billing", "[BILLING] Product available\nID: ${details.productId}\nType: INAPP\nHasEligibleOffer: $hasOffer\nFormattedPrice: $price")
                 }
                 for (id in expectedIds) {
                     if (!returnedIds.contains(id)) {
-                        Log.w("Billing", "[BILLING] Product unavailable\nID: $id")
+                        Log.w("Billing", "[BILLING] Product unavailable in Play Store catalog\nID: $id")
                     }
                 }
             } else {
-                Log.w("Billing", "[BILLING] Product query failed\nResponseCode: ${billingResult.responseCode}\nDebugMessage: ${billingResult.debugMessage}")
+                val errorMsg = getBillingErrorMessage(responseCode, debugMsg)
+                Log.w("Billing", "[BILLING] Product query failed\nResponseCode: $responseCode ($errorMsg)")
                 for (id in expectedIds) {
                     Log.w("Billing", "[BILLING] Product unavailable\nID: $id")
                 }
@@ -1469,7 +1493,7 @@ class MainActivity : AppCompatActivity() {
     private fun handlePurchase(purchase: Purchase) {
         when (purchase.purchaseState) {
             Purchase.PurchaseState.PURCHASED -> {
-                Log.i("Billing", "[BILLING] Purchase state: PURCHASED")
+                Log.i("Billing", "[BILLING] Purchase state: PURCHASED\nProducts: ${purchase.products}")
                 val consumeParams = ConsumeParams.newBuilder()
                     .setPurchaseToken(purchase.purchaseToken)
                     .build()
@@ -1540,78 +1564,90 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openSupportLanvanSheet() {
+        // Trigger a fresh query to ensure latest catalog prices from Google Play
+        if (isBillingConnected) {
+            queryProducts()
+        }
+
         val dialog = BottomSheetDialog(this, R.style.LanvanBottomSheetDialog)
         val view = layoutInflater.inflate(R.layout.sheet_support_lanvan, null)
         dialog.setContentView(view)
 
         val btnClose = view.findViewById<ImageButton>(R.id.btn_close_support)
-        val tier49 = view.findViewById<LinearLayout>(R.id.tier_card_49)
-        val val49 = view.findViewById<TextView>(R.id.txt_tier_val_49)
-        val name49 = view.findViewById<TextView>(R.id.txt_tier_name_49)
+        val tierCardSupporter = view.findViewById<LinearLayout>(R.id.tier_card_49)
+        val txtValSupporter = view.findViewById<TextView>(R.id.txt_tier_val_49)
+        val txtNameSupporter = view.findViewById<TextView>(R.id.txt_tier_name_49)
 
-        val tier159 = view.findViewById<LinearLayout>(R.id.tier_card_159)
-        val val159 = view.findViewById<TextView>(R.id.txt_tier_val_159)
-        val name159 = view.findViewById<TextView>(R.id.txt_tier_name_159)
+        val tierCardSponsor = view.findViewById<LinearLayout>(R.id.tier_card_159)
+        val txtValSponsor = view.findViewById<TextView>(R.id.txt_tier_val_159)
+        val txtNameSponsor = view.findViewById<TextView>(R.id.txt_tier_name_159)
 
-        val tier399 = view.findViewById<LinearLayout>(R.id.tier_card_399)
-        val val399 = view.findViewById<TextView>(R.id.txt_tier_val_399)
-        val name399 = view.findViewById<TextView>(R.id.txt_tier_name_399)
+        val tierCardPatron = view.findViewById<LinearLayout>(R.id.tier_card_399)
+        val txtValPatron = view.findViewById<TextView>(R.id.txt_tier_val_399)
+        val txtNamePatron = view.findViewById<TextView>(R.id.txt_tier_name_399)
 
         val btnConfirm = view.findViewById<Button>(R.id.btn_confirm_support)
 
-        // Dynamically update displayed prices from Google Play ProductDetails if returned
-        productDetailsMap[PRODUCT_SUPPORTER]?.oneTimePurchaseOfferDetails?.formattedPrice?.let {
-            val49.text = it
-        }
-        productDetailsMap[PRODUCT_SPONSOR]?.oneTimePurchaseOfferDetails?.formattedPrice?.let {
-            val159.text = it
-        }
-        productDetailsMap[PRODUCT_PATRON]?.oneTimePurchaseOfferDetails?.formattedPrice?.let {
-            val399.text = it
+        // Helper to update tier UI from dynamically fetched Google Play prices
+        fun updateTierDisplay(productId: String, txtVal: TextView, txtName: TextView, tierName: String) {
+            val details = productDetailsMap[productId]
+            val price = details?.oneTimePurchaseOfferDetails?.formattedPrice
+            if (price != null) {
+                txtVal.text = price
+                txtName.text = tierName
+            } else if (!isBillingConnected) {
+                txtVal.text = "--"
+                txtName.text = "$tierName (Offline)"
+            } else {
+                txtVal.text = "--"
+                txtName.text = "$tierName (Unavailable)"
+            }
         }
 
-        var currentlySelectedTier = 149
+        updateTierDisplay(PRODUCT_SUPPORTER, txtValSupporter, txtNameSupporter, "Supporter")
+        updateTierDisplay(PRODUCT_SPONSOR, txtValSponsor, txtNameSponsor, "Sponsor")
+        updateTierDisplay(PRODUCT_PATRON, txtValPatron, txtNamePatron, "Patron")
 
-        val selectTier = { selected: Int ->
-            currentlySelectedTier = selected
+        // Track selected tier by Product ID (default: Sponsor)
+        var selectedProductId = PRODUCT_SPONSOR
+
+        val selectTier = { targetId: String ->
+            selectedProductId = targetId
             val activeColor = ContextCompat.getColor(this, R.color.primary_accent_blue)
             val primaryTextColor = ContextCompat.getColor(this, R.color.text_primary)
             val mutedColor = ContextCompat.getColor(this, R.color.text_muted)
 
-            val isSelected39 = (selected == 39 || selected == 49)
-            tier49.setBackgroundResource(if (isSelected39) R.drawable.bg_card_active else R.drawable.bg_card_sub)
-            val49.setTextColor(if (isSelected39) activeColor else primaryTextColor)
-            name49.setTextColor(if (isSelected39) activeColor else mutedColor)
+            val isSupporter = (targetId == PRODUCT_SUPPORTER)
+            tierCardSupporter.setBackgroundResource(if (isSupporter) R.drawable.bg_card_active else R.drawable.bg_card_sub)
+            txtValSupporter.setTextColor(if (isSupporter) activeColor else primaryTextColor)
+            txtNameSupporter.setTextColor(if (isSupporter) activeColor else mutedColor)
 
-            val isSelected149 = (selected == 149 || selected == 159)
-            tier159.setBackgroundResource(if (isSelected149) R.drawable.bg_card_active else R.drawable.bg_card_sub)
-            val159.setTextColor(if (isSelected149) activeColor else primaryTextColor)
-            name159.setTextColor(if (isSelected149) activeColor else mutedColor)
+            val isSponsor = (targetId == PRODUCT_SPONSOR)
+            tierCardSponsor.setBackgroundResource(if (isSponsor) R.drawable.bg_card_active else R.drawable.bg_card_sub)
+            txtValSponsor.setTextColor(if (isSponsor) activeColor else primaryTextColor)
+            txtNameSponsor.setTextColor(if (isSponsor) activeColor else mutedColor)
 
-            val isSelected399 = (selected == 399)
-            tier399.setBackgroundResource(if (isSelected399) R.drawable.bg_card_active else R.drawable.bg_card_sub)
-            val399.setTextColor(if (isSelected399) activeColor else primaryTextColor)
-            name399.setTextColor(if (isSelected399) activeColor else mutedColor)
+            val isPatron = (targetId == PRODUCT_PATRON)
+            tierCardPatron.setBackgroundResource(if (isPatron) R.drawable.bg_card_active else R.drawable.bg_card_sub)
+            txtValPatron.setTextColor(if (isPatron) activeColor else primaryTextColor)
+            txtNamePatron.setTextColor(if (isPatron) activeColor else mutedColor)
         }
-        selectTier(149)
+        selectTier(PRODUCT_SPONSOR)
 
-        tier49.setOnClickListener { selectTier(39) }
-        tier159.setOnClickListener { selectTier(149) }
-        tier399.setOnClickListener { selectTier(399) }
+        tierCardSupporter.setOnClickListener { selectTier(PRODUCT_SUPPORTER) }
+        tierCardSponsor.setOnClickListener { selectTier(PRODUCT_SPONSOR) }
+        tierCardPatron.setOnClickListener { selectTier(PRODUCT_PATRON) }
 
         btnClose.setOnClickListener { dialog.dismiss() }
 
         btnConfirm.setOnClickListener {
-            val targetProductId = when (currentlySelectedTier) {
-                39, 49 -> PRODUCT_SUPPORTER
-                399 -> PRODUCT_PATRON
-                else -> PRODUCT_SPONSOR
-            }
+            Log.i("Billing", "[BILLING] Launching purchase for tier\nProduct: $selectedProductId")
 
-            Log.i("Billing", "[BILLING] Launching purchase\nProduct: $targetProductId")
-
-            val productDetails = productDetailsMap[targetProductId]
+            val productDetails = productDetailsMap[selectedProductId]
             if (productDetails != null && isBillingConnected) {
+                val offerDetails = productDetails.oneTimePurchaseOfferDetails
+                Log.i("Billing", "[BILLING] ProductDetails found\nID: ${productDetails.productId}\nFormattedPrice: ${offerDetails?.formattedPrice}")
+
                 val productDetailsParamsList = listOf(
                     BillingFlowParams.ProductDetailsParams.newBuilder()
                         .setProductDetails(productDetails)
@@ -1622,15 +1658,19 @@ class MainActivity : AppCompatActivity() {
                     .build()
 
                 val result = billingClient.launchBillingFlow(this, billingFlowParams)
-                Log.i("Billing", "[BILLING] Purchase callback\nResponseCode: ${result.responseCode}\nDebugMessage: ${result.debugMessage}")
+                Log.i("Billing", "[BILLING] launchBillingFlow returned\nResponseCode: ${result.responseCode}\nDebugMessage: ${result.debugMessage}")
                 if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                     dialog.dismiss()
                 } else {
-                    Toast.makeText(this, "Could not launch Google Play billing flow: ${result.debugMessage}", Toast.LENGTH_SHORT).show()
+                    val errorMsg = getBillingErrorMessage(result.responseCode, result.debugMessage)
+                    Toast.makeText(this, "Could not launch purchase: $errorMsg", Toast.LENGTH_LONG).show()
                 }
+            } else if (!isBillingConnected) {
+                Log.w("Billing", "[BILLING] Cannot launch purchase: BillingClient disconnected")
+                Toast.makeText(this, "Google Play Billing is not connected. Please check network connection.", Toast.LENGTH_SHORT).show()
             } else {
-                Log.w("Billing", "[BILLING] Product unavailable for purchase: $targetProductId (Billing connected: $isBillingConnected)")
-                Toast.makeText(this, "Google Play product is currently unavailable. Please ensure you are connected to Google Play.", Toast.LENGTH_SHORT).show()
+                Log.w("Billing", "[BILLING] Product unavailable for purchase: $selectedProductId in productDetailsMap")
+                Toast.makeText(this, "This support tier is currently unavailable in Google Play. Please try again later.", Toast.LENGTH_SHORT).show()
             }
         }
 

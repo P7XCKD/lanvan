@@ -295,7 +295,7 @@ MANDATORY PRACTICES
 - Git commits: natural, human-readable, imperative mood.
 
 ========================
-ANDROID BUILD RULES
+ANDROID BUILD & RELEASE AAB RULES
 ========================
 
 - ALWAYS run Gradle assembleDebug before installing APK to the device.
@@ -306,6 +306,48 @@ ANDROID BUILD RULES
 - If Gradle build fails, fix the compilation error before attempting install.
 - Kotlin source changes in MainActivity.kt, ServerService.kt, or any .kt file require recompilation.
 - Never assume code changes are live on the device without a fresh Gradle build + ADB install.
+
+RELEASE AAB VERIFICATION CHECKLIST (MANDATORY BEFORE ANY GOOGLE PLAY UPLOAD):
+
+1. CLEAN RELEASE BUILD:
+   - Command: cd android && .\gradlew.bat clean bundleRelease --no-daemon
+   - Target path: android/app/build/outputs/bundle/release/app-release.aab
+
+2. VERSION & IDENTITY AUDIT:
+   - Check merged AndroidManifest.xml: package="com.probz.lanvan".
+   - Confirm versionCode is incremented beyond previously uploaded Play Console versions.
+   - Confirm versionName matches target release (e.g. "1.1.1").
+   - Confirm minSdk is 29 (Android 10+) and targetSdk is 35 (Android 15).
+
+3. SIGNING VERIFICATION:
+   - Verify bundle with jarsigner: & "$JAVA_HOME/bin/jarsigner.exe" -verify app-release.aab
+   - MUST output: "jar verified." with the official Lanvan production certificate.
+   - NEVER create a new keystore or change signing credentials.
+
+4. LAUNCHER & ADAPTIVE ICON VERIFICATION:
+   - Inspect AAB ZIP entries for adaptive icon XMLs:
+     * base/res/mipmap-anydpi-v26/ic_launcher.xml
+     * base/res/mipmap-anydpi-v26/ic_launcher_round.xml
+   - Inspect foreground and legacy density assets:
+     * base/res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}-v4/ic_launcher_foreground.png
+     * base/res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}-v4/ic_launcher.png
+     * base/res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}-v4/ic_launcher_round.png
+   - Ensure the official Lanvan icon (app/static/images/icon.png) is used and not generic Android robot placeholders.
+
+5. NATIVE LIBRARIES & ABI COMPLETENESS:
+   - Inspect AAB ZIP for base/lib/: must bundle all 4 architectures:
+     ['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'].
+
+6. GOOGLE PLAY BILLING & PERMISSIONS AUDIT:
+   - Verify BillingClient dependency (e.g. 6.2.1).
+   - Verify com.android.vending.BILLING in merged manifest.
+   - Verify consumable purchase flow: consumeAsync() called for repeatable supporter tiers (lanvan_supporter, lanvan_sponsor_2, lanvan_patron_3).
+   - Verify Advertising ID: DO NOT include com.google.android.gms.permission.AD_ID (Lanvan is ad-free).
+
+7. AUTOMATED TESTS & ARCHITECTURE SCAN:
+   - Run python qt.py --fast (must achieve 100% pass rate).
+   - Run python testing/tools/architecture_scanner.py (0 violations).
+
 
 ========================
 REPOSITORY / PROJECTION STABILITY RULES
