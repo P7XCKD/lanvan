@@ -207,12 +207,23 @@ async def lifespan(app: FastAPI):
     except Exception as clip_err:
         logger.warn("CLIPBOARD", "Clipboard persistence warning", details={"Reason": str(clip_err)})
     
+    try:
+        from app.core.network_state import ServerNetworkState
+        ServerNetworkState.set_status("RUNNING")
+    except Exception:
+        pass
+
     logger.info("SERVER", "Startup completed", details={"Status": "READY"})
     
     yield
     
     t_start = time.perf_counter()
     logger.info("SERVER", "Shutdown initiated")
+    try:
+        from app.core.network_state import ServerNetworkState
+        ServerNetworkState.set_status("STOPPED")
+    except Exception:
+        pass
     
     # 1. Concurrently stop monitors
     try:

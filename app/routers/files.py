@@ -1314,7 +1314,7 @@ async def range_download_file(file_path: Path, safe_name: str, mime_type: str | 
 
         session = get_stream_manager().register_stream(file_path, "http-client")
 
-        def iterfile():
+        async def iterfile():
             sent = 0
             interrupted = False
             try:
@@ -1328,7 +1328,7 @@ async def range_download_file(file_path: Path, safe_name: str, mime_type: str | 
                             interrupted = True
                             break
                         read_len = min(buffer_size, bytes_left)
-                        data = f.read(read_len)
+                        data = await asyncio.to_thread(f.read, read_len)
                         if not data:
                             break
                         bytes_left -= len(data)
