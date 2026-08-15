@@ -177,31 +177,6 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- NOTICE BOX -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:background="@drawable/bg_card_sub"
-        android:padding="12dp"
-        android:layout_marginBottom="20dp">
-
-        <ImageView
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:src="@drawable/ic_info"
-            android:layout_marginEnd="10dp"
-            app:tint="@color/primary_accent_blue" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Payment will be handled by Google Play."
-            android:textColor="@color/text_muted"
-            android:textSize="12sp" />
-    </LinearLayout>
-
     <Button
         android:id="@+id/btn_confirm_support"
         android:layout_width="match_parent"

@@ -337,6 +337,10 @@ class MainActivity : AppCompatActivity() {
         networkCallback?.let {
             connectivityManager?.unregisterNetworkCallback(it)
         }
+        lanFallbackHandler.removeCallbacks(lanFallbackRunnable)
+        if (::billingClient.isInitialized) {
+            billingClient.endConnection()
+        }
     }
 
     private fun setupNetworkCallback() {
@@ -1367,6 +1371,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ==================================================
+    // ==================================================
     // GOOGLE PLAY BILLING IMPLEMENTATION
     // ==================================================
 
@@ -1381,22 +1386,24 @@ class MainActivity : AppCompatActivity() {
     private var isBillingConnected = false
 
     private val purchasesUpdatedListener = PurchasesUpdatedListener { billingResult, purchases ->
+        Log.i("Billing", "[BILLING] Purchase callback\nResponseCode: ${billingResult.responseCode}\nDebugMessage: ${billingResult.debugMessage}")
         if (billingResult.responseCode == BillingClient.BillingResponseCode.OK && purchases != null) {
             for (purchase in purchases) {
                 handlePurchase(purchase)
             }
         } else if (billingResult.responseCode == BillingClient.BillingResponseCode.USER_CANCELED) {
-            Log.i("Billing", "User canceled Google Play purchase flow.")
+            Log.i("Billing", "[BILLING] Purchase state: CANCELED")
         } else if (billingResult.responseCode == BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED) {
-            Log.i("Billing", "Item already owned. Consuming existing purchase...")
+            Log.i("Billing", "[BILLING] Item already owned. Consuming existing purchase...")
             queryAndConsumeExistingPurchases()
         } else {
-            Log.e("Billing", "Purchase failed: ${billingResult.responseCode} (${billingResult.debugMessage})")
+            Log.e("Billing", "[BILLING] Purchase failed: ${billingResult.responseCode} (${billingResult.debugMessage})")
             Toast.makeText(this, "Purchase status: ${billingResult.debugMessage}", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun setupBillingClient() {
+        Log.i("Billing", "[BILLING] Initializing")
         billingClient = BillingClient.newBuilder(this)
             .setListener(purchasesUpdatedListener)
             .enablePendingPurchases()
@@ -1406,37 +1413,31 @@ class MainActivity : AppCompatActivity() {
             override fun onBillingSetupFinished(billingResult: BillingResult) {
                 if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                     isBillingConnected = true
-                    Log.i("Billing", "BillingClient setup successful.")
+                    Log.i("Billing", "[BILLING] Connected\nResponseCode: OK")
                     queryProducts()
                     queryAndConsumeExistingPurchases()
                 } else {
                     isBillingConnected = false
-                    Log.w("Billing", "BillingClient setup failed: ${billingResult.debugMessage}")
+                    Log.w("Billing", "[BILLING] Connection failed\nResponseCode: ${billingResult.responseCode}\nDebugMessage: ${billingResult.debugMessage}")
                 }
             }
 
             override fun onBillingServiceDisconnected() {
                 isBillingConnected = false
-                Log.w("Billing", "BillingClient service disconnected.")
+                Log.w("Billing", "[BILLING] Connection disconnected")
             }
         })
     }
 
     private fun queryProducts() {
-        val productList = listOf(
+        Log.i("Billing", "[BILLING] Querying products\nType: INAPP\nProducts: lanvan_supporter, lanvan_sponsor, lanvan_patron")
+        val expectedIds = listOf(PRODUCT_SUPPORTER, PRODUCT_SPONSOR, PRODUCT_PATRON)
+        val productList = expectedIds.map { id ->
             QueryProductDetailsParams.Product.newBuilder()
-                .setProductId(PRODUCT_SUPPORTER)
-                .setProductType(BillingClient.ProductType.INAPP)
-                .build(),
-            QueryProductDetailsParams.Product.newBuilder()
-                .setProductId(PRODUCT_SPONSOR)
-                .setProductType(BillingClient.ProductType.INAPP)
-                .build(),
-            QueryProductDetailsParams.Product.newBuilder()
-                .setProductId(PRODUCT_PATRON)
+                .setProductId(id)
                 .setProductType(BillingClient.ProductType.INAPP)
                 .build()
-        )
+        }
 
         val params = QueryProductDetailsParams.newBuilder()
             .setProductList(productList)
@@ -1445,37 +1446,58 @@ class MainActivity : AppCompatActivity() {
         billingClient.queryProductDetailsAsync(params) { billingResult, productDetailsList ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                 productDetailsMap.clear()
+                val returnedIds = mutableSetOf<String>()
                 for (details in productDetailsList) {
                     productDetailsMap[details.productId] = details
-                    Log.i("Billing", "Loaded Play Product: ${details.productId} -> ${details.oneTimePurchaseOfferDetails?.formattedPrice}")
+                    returnedIds.add(details.productId)
+                    Log.i("Billing", "[BILLING] Product available\nID: ${details.productId}\nType: INAPP\nPrice: ${details.oneTimePurchaseOfferDetails?.formattedPrice}")
+                }
+                for (id in expectedIds) {
+                    if (!returnedIds.contains(id)) {
+                        Log.w("Billing", "[BILLING] Product unavailable\nID: $id")
+                    }
                 }
             } else {
-                Log.w("Billing", "Product query returned code: ${billingResult.responseCode}")
+                Log.w("Billing", "[BILLING] Product query failed\nResponseCode: ${billingResult.responseCode}\nDebugMessage: ${billingResult.debugMessage}")
+                for (id in expectedIds) {
+                    Log.w("Billing", "[BILLING] Product unavailable\nID: $id")
+                }
             }
         }
     }
 
     private fun handlePurchase(purchase: Purchase) {
-        if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
-            val consumeParams = ConsumeParams.newBuilder()
-                .setPurchaseToken(purchase.purchaseToken)
-                .build()
+        when (purchase.purchaseState) {
+            Purchase.PurchaseState.PURCHASED -> {
+                Log.i("Billing", "[BILLING] Purchase state: PURCHASED")
+                val consumeParams = ConsumeParams.newBuilder()
+                    .setPurchaseToken(purchase.purchaseToken)
+                    .build()
 
-            billingClient.consumeAsync(consumeParams) { result, _ ->
-                if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                    Log.i("Billing", "Purchase successfully consumed & acknowledged!")
-                } else if (!purchase.isAcknowledged) {
-                    val ackParams = AcknowledgePurchaseParams.newBuilder()
-                        .setPurchaseToken(purchase.purchaseToken)
-                        .build()
-                    billingClient.acknowledgePurchase(ackParams) { _ -> }
-                }
-                runOnUiThread {
-                    showSupportSuccessDialog()
+                billingClient.consumeAsync(consumeParams) { result, _ ->
+                    Log.i("Billing", "[BILLING] Consumption result\nResponseCode: ${result.responseCode}")
+                    if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                        Log.i("Billing", "Purchase successfully consumed & acknowledged!")
+                    } else if (!purchase.isAcknowledged) {
+                        val ackParams = AcknowledgePurchaseParams.newBuilder()
+                            .setPurchaseToken(purchase.purchaseToken)
+                            .build()
+                        billingClient.acknowledgePurchase(ackParams) { ackResult ->
+                            Log.i("Billing", "[BILLING] Acknowledgement result\nResponseCode: ${ackResult.responseCode}")
+                        }
+                    }
+                    runOnUiThread {
+                        showSupportSuccessDialog()
+                    }
                 }
             }
-        } else if (purchase.purchaseState == Purchase.PurchaseState.PENDING) {
-            Toast.makeText(this, "Support purchase pending confirmation.", Toast.LENGTH_SHORT).show()
+            Purchase.PurchaseState.PENDING -> {
+                Log.i("Billing", "[BILLING] Purchase state: PENDING")
+                Toast.makeText(this, "Support purchase pending confirmation.", Toast.LENGTH_SHORT).show()
+            }
+            Purchase.PurchaseState.UNSPECIFIED_STATE -> {
+                Log.w("Billing", "[BILLING] Purchase state: UNSPECIFIED")
+            }
         }
     }
 
@@ -1586,6 +1608,8 @@ class MainActivity : AppCompatActivity() {
                 else -> PRODUCT_SPONSOR
             }
 
+            Log.i("Billing", "[BILLING] Launching purchase\nProduct: $targetProductId")
+
             val productDetails = productDetailsMap[targetProductId]
             if (productDetails != null && isBillingConnected) {
                 val productDetailsParamsList = listOf(
@@ -1598,15 +1622,15 @@ class MainActivity : AppCompatActivity() {
                     .build()
 
                 val result = billingClient.launchBillingFlow(this, billingFlowParams)
+                Log.i("Billing", "[BILLING] Purchase callback\nResponseCode: ${result.responseCode}\nDebugMessage: ${result.debugMessage}")
                 if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                     dialog.dismiss()
                 } else {
                     Toast.makeText(this, "Could not launch Google Play billing flow: ${result.debugMessage}", Toast.LENGTH_SHORT).show()
                 }
             } else {
-                Log.w("Billing", "Product $targetProductId not yet returned by Play Console or Billing not connected.")
-                Toast.makeText(this, "Thank you for supporting Lanvan!", Toast.LENGTH_SHORT).show()
-                dialog.dismiss()
+                Log.w("Billing", "[BILLING] Product unavailable for purchase: $targetProductId (Billing connected: $isBillingConnected)")
+                Toast.makeText(this, "Google Play product is currently unavailable. Please ensure you are connected to Google Play.", Toast.LENGTH_SHORT).show()
             }
         }
 
