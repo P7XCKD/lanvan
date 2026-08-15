@@ -14,6 +14,7 @@ Raw filenames, filesystem paths, directory listings, clipboard text, passwords, 
 MUST NEVER reach log outputs or diagnostic buffers.
 """
 
+import os
 import time
 import datetime
 import threading
@@ -33,13 +34,20 @@ LEVELS = {"INFO", "WARN", "ERROR", "DEBUG"}
 
 class QuietAccessFilter(logging.Filter):
     """
-    Filter out 200/304 GET requests for static files and high-frequency polling from persistent logs.
-    Keep errors (4xx, 5xx), state-changing requests (POST, DELETE, PUT), and WebSocket lifecycle events.
+    Filter out access logs in production mode.
+    In Android/production mode, completely suppresses individual HTTP/HTTPS request logs
+    to protect user privacy (no URLs, parameters, filenames, or client IPs in access logs).
+    In development mode, filters out static assets and polling noise.
     """
     NOISE_EXTENSIONS = ('.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.woff2', '.ttf', '.map', '.html')
     NOISE_ENDPOINTS = ('/api/clipboard/list', '/api/upload-history', '/favicon.ico', '/apple-touch-icon.png')
 
     def filter(self, record: logging.LogRecord) -> bool:
+        # In production mode (or on Android), suppress all per-request access log lines
+        is_prod = os.environ.get("LANVAN_ENV") == "production" or os.environ.get("PRODUCTION") == "true" or os.path.exists("/data/data/com.probz.lanvan")
+        if is_prod:
+            return False
+
         msg = record.getMessage()
         if "GET " in msg and (" 200" in msg or " 304" in msg):
             for ep in self.NOISE_ENDPOINTS:

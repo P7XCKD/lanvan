@@ -648,7 +648,7 @@ def scan_file(path: Path):
             task = submit_background_task(scan_file_async(path), f"scan_file:{path.name}")
             if task is None:
                 # Task manager rejected task (likely due to limits) - graceful degradation
-                print(f"[WARN] Background file scan skipped (task limit): {path.name}")
+                logger.warn("STORAGE", "Background file scan skipped (task limit)")
         except RuntimeError:
             # No event loop running - skip background scan
             pass
@@ -941,7 +941,7 @@ async def upload_files(
                         f.write(chunk)
                 uploaded_files.append(file_path.name)
             except Exception as fb_err:
-                print(f"[ERR] ImportError fallback upload failed for '{file.filename}': {fb_err}")
+                logger.warn("UPLOAD", "Fallback upload failed", details={"Reason": str(fb_err)})
 
         return JSONResponse(content={
             "status": "success",
@@ -980,38 +980,19 @@ async def upload_auto_file(
     #  ULRA-FAST VALIDATION: Start uploads immediately with lightweight validation
     is_valid, error_messages, validated_files, security_warnings = await validate_upload_files_enhanced_fast(files, encrypt, is_https)
     if not is_valid:
-        # [!] LOG VALIDATION FAILURES for debugging
-        print(f" File validation failed:")
-        for i, file in enumerate(files):
-            file_ext = Path(file.filename or "unknown").suffix.lower()
-            print(f"   File {i+1}: {file.filename} ({file_ext}) - Size: {getattr(file, 'size', 'unknown')}")
-        for error in error_messages:
-            print(f"   [ERR] {error}")
-        
+        logger.warn("UPLOAD", "File validation failed", details={"Errors": len(error_messages)})
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
             "status": "error", 
             "msg": "; ".join(error_messages),
             "security_blocked": True
         })
     
-    # [OK] LOG SUCCESSFUL VALIDATION with file details
-    print(f"[OK] File validation passed for {len(files)} files:")
-    for i, file in enumerate(files):
-        file_ext = Path(file.filename or "unknown").suffix.lower()
-        validated_file = validated_files[i] if i < len(validated_files) else {}
-        print(f"   File {i+1}: {file.filename} ({file_ext}) -> {validated_file.get('sanitized_name', 'unknown')}")
-        if file_ext in ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm']:
-            print(f"    Video file detected and approved!")
-    
-    # [!] Log security warnings if any
+    # Log validation outcome safely
+    logger.info("UPLOAD", "File validation passed", details={"Count": len(files)})
     if security_warnings:
-        print(f"[WARN] Security warnings for upload: {'; '.join(security_warnings)}")
+        logger.warn("SECURITY", "Security warnings for upload", details={"Count": len(security_warnings)})
 
-    # [TRACE VERIFY] Log raw UploadFile.filename BEFORE any processing
-    for i, file in enumerate(files):
-        print(f"[TRACE VERIFY] Raw UploadFile.filename: file[{i}].filename='{file.filename}' | parent_path='{parent_path}'")
-
-    #  Enforce encryption restrictions using centralized config
+    # Enforce encryption restrictions using centralized config
     if encrypt:
         validation = AESConfig.validate_file_for_aes(0, is_https)  # Size will be checked per file
         if not validation['valid'] and 'HTTPS' in validation['error']:
@@ -1030,7 +1011,6 @@ async def upload_auto_file(
     async def prepare_file_for_upload(i: int, file: UploadFile) -> Dict[str, Any]:
         """Prepare a single file for upload concurrently"""
         try:
-            
             if not file.filename:
                 return {"error": f"File {i+1}: No filename"}
 
@@ -1041,7 +1021,6 @@ async def upload_auto_file(
                 
             filename = validated_file['sanitized_name']
             file_size = validated_file['size']
-            print(f"[INFO] File {i+1} details: {filename} ({file_size} bytes)")
 
             # Double-check with existing validation (defense in depth)
             if not is_allowed_file(filename):
@@ -1058,15 +1037,8 @@ async def upload_auto_file(
             target_dir = resolved.target_directory
             target_dir.mkdir(parents=True, exist_ok=True)
 
-            # [TRACE STEP 1] Log destination before saving
-            print(f"[TRACE STEP 1] resolve: parent_path='{parent_path}' | file.filename='{file.filename}' | target_dir='{target_dir}' | full_path='{resolved.full_path}'")
-            print(f"[TRACE STEP 1] Destination: {resolved.relative_path}")
-            print(f"[TRACE STEP 1] Absolute: {resolved.full_path.resolve()}")
-
             save_name = resolved.filename + ".enc" if encrypt else resolved.filename
             filepath = target_dir / save_name
-
-            print(f"[SAVE] Will save file {i+1} as: {filepath.name}")
             
             return {
                 "success": True,
@@ -1083,8 +1055,7 @@ async def upload_auto_file(
         except Exception as e:
             return {"error": f"File {i+1}: Preparation failed - {str(e)}"}
     
-    # [START] PREPARE ALL FILES CONCURRENTLY
-    print(f" Starting concurrent preparation of {len(files)} files...")
+    # Prepare all files concurrently
     preparation_tasks = [prepare_file_for_upload(i, file) for i, file in enumerate(files)]
     preparation_results = await asyncio.gather(*preparation_tasks, return_exceptions=True)
     
@@ -1095,14 +1066,13 @@ async def upload_auto_file(
     
     for i, result in enumerate(preparation_results):
         if isinstance(result, Exception):
-            print(f"[ERR] File {i+1} preparation exception: {str(result)}")
+            logger.warn("UPLOAD", "File preparation exception", details={"Index": i+1, "Reason": str(result)})
         elif isinstance(result, dict) and "error" in result:
-            print(f"[ERR] {result['error']}")
+            logger.warn("UPLOAD", "File preparation error", details={"Index": i+1, "Reason": result['error']})
         elif isinstance(result, dict) and "success" in result:
             destinations.append(result["destination"])
             valid_files.append(result["file"])
             file_info.append(result["file_info"])
-            print(f"[OK] File {i+1} prepared successfully")
     
     if not valid_files:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
@@ -1110,9 +1080,7 @@ async def upload_auto_file(
             "msg": "No valid files to process"
         })
     
-    # [START] Execute uploads with bounded concurrency
-    print(f"[START] Starting concurrent direct upload of {len(valid_files)} files...")
-
+    # Execute uploads with bounded concurrency
     max_parallel_uploads = max(1, min(MAX_CONCURRENT_UPLOADS, len(valid_files)))
     upload_manager = ConcurrentUploadManager(max_concurrent_uploads=max_parallel_uploads)
 
@@ -1122,12 +1090,6 @@ async def upload_auto_file(
         encrypt=encrypt
     )
 
-    for i, result in enumerate(upload_results):
-        if result.get('success'):
-            print(f"[OK] File {i+1} uploaded successfully: {result.get('destination', 'unknown')}")
-        else:
-            print(f"[ERR] File {i+1} upload failed: {result.get('error', 'Unknown error')}")
-    
     uploaded = []
     from app.core.version_manager import VersionManager
     
@@ -1139,19 +1101,11 @@ async def upload_auto_file(
             VersionManager.create_version_transaction(rel_dir, filepath.name, filepath)
             background_tasks.add_task(scan_file, filepath)
             uploaded.append(filepath.name)
-            print(f"[OK] File {i+1} uploaded successfully via VersionManager: {filepath.name}")
+            logger.log_upload("File saved via VersionManager", file_ext=logger.extract_safe_ext(filepath.name), status="SUCCESS")
         else:
-            print(f"[ERR] File {i+1} failed: {result.get('error', 'Unknown error')}")
+            logger.log_upload("File upload failed", status="FAILED", reason=result.get('error', 'Unknown error'))
 
-    print(f"[DONE] Concurrent upload complete! {len(uploaded)} files uploaded: {uploaded}")
-
-    # [TRACE STEP 2] Verify filesystem after upload
-    for i, result in enumerate(upload_results):
-        if result.get('success'):
-            filepath = Path(result['destination'])
-            parent_dir = filepath.parent
-            print(f"[TRACE STEP 2] Verify filesystem | File saved at: '{filepath}' | os.path.exists={filepath.exists()}")
-            print(f"[TRACE STEP 2] Verify filesystem | Parent dir: '{parent_dir}' | os.path.exists={parent_dir.exists()} | os.listdir={sorted([p.name for p in parent_dir.iterdir()]) if parent_dir.exists() else 'N/A'}")
+    logger.log_upload("Concurrent upload batch completed", batch_info={"succeeded": len(uploaded), "failed": len(files) - len(uploaded)})
 
     if not uploaded:
         return JSONResponse(status_code=HTTP_400_BAD_REQUEST, content={
@@ -1176,7 +1130,6 @@ async def upload_auto_file(
         "files_skipped": len(files) - len(uploaded)
     }
     
-    print(f"[TARGET] Upload response: {response_data}")
     return JSONResponse(content=response_data)
 
 @router.get("/download/{filename:path}", name="download_file")
@@ -1443,11 +1396,11 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                         if metadata and metadata.get('encryption_method') == 'streaming':
                             from app.core.aes_utils import decrypt_file_stream
                             decrypted_data = decrypt_file_stream(encrypted_data, metadata, chunk_size=1024 * 1024)
-                            print(f"[LOCK] Used streaming decryption for {path.name}")
+                            logger.info("SECURITY", "Used streaming decryption", details={"Algorithm": metadata.get('algorithm', 'AES-256')})
                         else:
-                            print(f"[WARN] Cannot decrypt {path.name} - legacy encryption no longer supported")
+                            logger.warn("SECURITY", "Cannot decrypt file - legacy encryption no longer supported")
                             interrupted = True
-                            yield f"Error: File {path.name} uses unsupported legacy encryption".encode('utf-8')
+                            yield "Error: File uses unsupported legacy encryption".encode('utf-8')
                             return
                         
                         print(f"OK: Decrypted to {len(decrypted_data)} bytes")
@@ -1479,7 +1432,6 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                     error_message = f"Error: Failed to decrypt file {path.name}. {str(e)}"
                     yield error_message.encode('utf-8')
             else:
-                print("[FILE] Processing regular file")
                 try:
                     file_handle = open(path, "rb")
                     session.file_handle = file_handle
@@ -1493,22 +1445,19 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
                             break
                         chunks_sent += 1
                         sent += len(chunk)
-                        print(f"[OUT] Sending chunk {chunks_sent}, size: {len(chunk)} bytes")
                         yield chunk
-                    print(f"OK: Completed streaming {chunks_sent} chunks")
                 except Exception as e:
                     interrupted = True
-                    print(f"[!] File streaming failed for {path}: {e}")
-                    error_message = f"Error: Failed to read file {path.name}. {str(e)}"
+                    logger.error("DOWNLOAD", "File streaming error", details={"Reason": str(e)})
+                    error_message = f"Error: Failed to stream file. {str(e)}"
                     yield error_message.encode('utf-8')
         finally:
             get_stream_manager().unregister_stream(session)
             if file_handle is not None:
                 try:
                     file_handle.close()
-                    print(f"[OK] File handle closed for: {path.name}")
-                except Exception as e:
-                    print(f"[WARN] Error closing file handle: {e}")
+                except Exception:
+                    pass
             if release_slot_cb:
                 try:
                     release_slot_cb(bytes_transferred=sent, interrupted=interrupted or (file_size > 0 and sent < file_size))
@@ -1543,8 +1492,6 @@ async def full_download_file(file_path: Path, safe_name: str, mime_type: str | N
     
     if not file_path.suffix == ".enc":
         headers["Content-Length"] = str(final_file_size)
-    
-    print(f"[INFO] Response headers: {headers}")
     
     return StreamingResponse(
         stream_file_ultra_optimized(file_path),
@@ -1599,7 +1546,7 @@ async def chunked_download_file(file_path: Path, safe_name: str, mime_type: str 
                 yield chunk
         except Exception as e:
             interrupted = True
-            print(f"[STREAM] Chunked download session {session.session_id} error for '{safe_name}': {e}")
+            logger.error("DOWNLOAD", "Chunked download error", details={"Reason": str(e)})
         finally:
             get_stream_manager().unregister_stream(session)
             if file_handle is not None:
@@ -1821,7 +1768,7 @@ async def clear_files():
             })
         else:
             message = f"Cleared {files_deleted} files and {chunks_deleted} chunks"
-            print(f"[OK] {message}")
+            logger.info("STORAGE", "Cleared uploaded files and chunks", details={"Files": files_deleted, "Chunks": chunks_deleted})
             # Broadcast via file_events WebSocket for instant cross-device sync
             try:
                 broadcast_file_event_sync("clear", "", "")
@@ -1835,7 +1782,7 @@ async def clear_files():
                 "files_locked": 0
             })
     except Exception as e:
-        print(f"[ERR] Error during file clearing: {e}")
+        logger.error("STORAGE", "Error during file clearing", details={"Reason": str(e)})
         # Return a JSON error response instead of crashing
         return JSONResponse(
             status_code=500,
@@ -1870,6 +1817,7 @@ async def cancel_upload_api(filename: Optional[str] = Form(None), parent_path: O
 async def delete_file(filename: str, parent_path: Optional[str] = Form(None), request: Request = None):
     """Delete a specific file with proper error handling and idempotent safety"""
     try:
+        is_prod = os.environ.get("LANVAN_ENV") == "production" or os.environ.get("PRODUCTION") == "true" or os.path.exists("/data/data/com.probz.lanvan")
         safe_name = secure_filename(filename)
         if not safe_name:
             return JSONResponse(
@@ -1885,18 +1833,20 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
             except Exception:
                 pass
 
-        print("[REAL DELETE BACKEND]")
-        print(f"timestamp={time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}")
-        print(f"filename={filename}")
-        print(f"parent_path={target_parent or ''}")
-
         target_dir = _resolve_target_dir(target_parent)
-        print(f"resolved target_dir={target_dir}")
-
         file_path = target_dir / safe_name
-        print(f"resolved absolute file_path={file_path.resolve()}")
         exists_before_unlink = file_path.exists()
-        print(f"exists_before={exists_before_unlink}")
+
+        if not is_prod:
+            print("[REAL DELETE BACKEND]")
+            print(f"timestamp={time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())}")
+            print(f"filename={filename}")
+            print(f"parent_path={target_parent or ''}")
+            print(f"resolved target_dir={target_dir}")
+            print(f"resolved absolute file_path={file_path.resolve()}")
+            print(f"exists_before={exists_before_unlink}")
+        else:
+            logger.info("STORAGE", "Delete file requested", details={"Exists": exists_before_unlink})
         
         if not file_path.exists():
             # Check target_dir with unescaped filename or alternate safe_name representations (strictly scoped to target_dir)
@@ -1938,7 +1888,10 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
                     await asyncio.sleep(delay)
                 try:
                     file_path.unlink()
-                    print(f"OK: Deleted file: {file_path.name}")
+                    if not is_prod:
+                        print(f"OK: Deleted file: {file_path.name}")
+                    else:
+                        logger.info("STORAGE", "File deleted successfully")
                     deleted = True
                     print("unlink_result=success")
                     break
@@ -1955,7 +1908,7 @@ async def delete_file(filename: str, parent_path: Optional[str] = Form(None), re
                     except Exception:
                         pass
                 except Exception as e2:
-                    print(f"[WARN] Scheduled background deletion for locked file: {e2}")
+                    logger.warn("STORAGE", "Scheduled background deletion for locked file", details={"Reason": str(e2)})
                     # Store only the absolute path so is_pending_deletion() can
                     # perform exact comparison without substring collision.
                     LOCKED_DELETIONS_SET.add(str(file_path))
@@ -2168,12 +2121,10 @@ async def upload_chunk(
         if assembler:
             # Add chunk to streaming assembly for real-time processing
             streaming_result = add_streaming_chunk(scoped_key, part_number, chunk_data)
-            if part_number == 1 or part_number == total_parts or (total_parts and part_number % max(1, total_parts // 10) == 0):
-                print(f"[STREAM] Added chunk {part_number}/{total_parts or '?'} to streaming assembly: {streaming_result.get('status', 'unknown')}")
             
             # Check if file completed via streaming assembly
             if streaming_result and streaming_result.get("status") == "completed":
-                print(f"[OK] File completed via streaming assembly: {scoped_key}")
+                logger.log_upload("File completed via streaming assembly", file_ext=logger.extract_safe_ext(safe_filename), status="SUCCESS")
                 
                 # Clean up temp chunks since file is completed via streaming
                 try:
@@ -2183,9 +2134,9 @@ async def upload_chunk(
                         chunk_file.unlink()
                         temp_chunks_cleaned += 1
                     if temp_chunks_cleaned > 0:
-                        print(f"[CLEAN] Cleaned up {temp_chunks_cleaned} temp chunk files for {safe_filename}")
+                        logger.info("STORAGE", "Cleaned up temp chunk files", details={"Count": temp_chunks_cleaned})
                 except Exception as e:
-                    print(f"[WARN] Warning: Could not clean up temp chunks: {e}")
+                    logger.warn("STORAGE", "Could not clean up temp chunks", details={"Reason": str(e)})
                 
                 # File is already assembled, no need to save chunk to temp folder
                 return JSONResponse(content={
@@ -2514,15 +2465,10 @@ async def finalize_upload(
         # [SHIELD] ENHANCED SECURITY: Validate the assembled file (skip if already done in background)
         try:
             if background_processing_done and validation_from_background:
-                # [START] Use validation results from background processing - massive time savings!
-                print(f"[FAST] Using background validation results - skipping duplicate processing!")
                 security_check = validation_from_background
             elif final_path:
-                #  Traditional validation (slower)
-                print(f"[RETRY] Performing security validation (no background processing available)")
                 security_check = FileValidator.validate_uploaded_file(final_path, filename, is_https=is_https)
             else:
-                # No final_path available
                 security_check = {'valid': False, 'errors': ['File path not available']}
             
             # Handle case where security_check might be a string (error message)
@@ -2535,6 +2481,7 @@ async def finalize_upload(
                     final_path.unlink()
                     
                 errors = security_check.get('errors', ['Security validation failed'])
+                logger.warn("SECURITY", "Security check failed", details={"Reason": errors[0] if errors else "Unknown"})
                 return JSONResponse(
                     status_code=HTTP_403_FORBIDDEN,
                     content={
@@ -2550,7 +2497,7 @@ async def finalize_upload(
                 )
                 
         except Exception as validation_error:
-            print(f"[WARN] Security validation error for {final_path.name if final_path else 'unknown file'}: {validation_error}")
+            logger.error("SECURITY", "Security validation exception", details={"Reason": str(validation_error)})
             # If validation fails, delete the file as a precaution
             if final_path and final_path.exists():
                 final_path.unlink()
@@ -2568,18 +2515,13 @@ async def finalize_upload(
         if final_path:
             background_tasks.add_task(scan_file, final_path)
         
-        # Clean up streaming registration if applicable.
-        # Use scoped_key (e.g. "Inside/A") and chunk_prefix (e.g. "Inside__A")
-        # — the same identifiers used during registration and chunk storage.
+        # Clean up streaming registration if applicable
         if assembler and scoped_key:
             try:
                 status = assembler.check_status(scoped_key)
                 if status.get("status") != "not_found":
                     assembler.cleanup(scoped_key)
 
-                    # Clean up temp chunk files using the scoped prefix so that
-                    # ROOT/A chunks ("A.part*") and Inside/A chunks ("Inside__A.part*")
-                    # are never confused.
                     if streaming_completed and chunk_prefix:
                         try:
                             pattern = f"{chunk_prefix}.part*"
@@ -2588,12 +2530,11 @@ async def finalize_upload(
                                 chunk_file.unlink()
                                 temp_chunks_cleaned += 1
                             if temp_chunks_cleaned > 0:
-                                print(f"[CLEAN] Cleaned up {temp_chunks_cleaned} temp chunk files for {scoped_key}")
+                                logger.info("STORAGE", "Cleaned up temp chunk files", details={"Count": temp_chunks_cleaned})
                         except Exception as cleanup_error:
-                            print(f"[WARN] Could not clean up temp chunks for {scoped_key}: {cleanup_error}")
+                            logger.warn("STORAGE", "Could not clean up temp chunks", details={"Reason": str(cleanup_error)})
 
             except AttributeError:
-                # Assembler doesn't have these methods, skip cleanup
                 pass
         
         # Success response with security confirmation
@@ -2753,7 +2694,7 @@ async def upload_folder(
                 safe_parts = [p for p in safe_parts if p]  # remove empty after sanitization
 
                 if not safe_parts:
-                    print(f"[WARN] upload_folder: skipping file with unresolvable path: {file.filename}")
+                    logger.warn("UPLOAD", "upload_folder: skipping file with unresolvable path")
                     failed_files.append(file.filename or '')
                     continue
 
@@ -2763,7 +2704,7 @@ async def upload_folder(
                 try:
                     final_path.resolve().relative_to(folder_path.resolve())
                 except ValueError:
-                    print(f"[ERR] upload_folder: path traversal blocked for: {file.filename}")
+                    logger.warn("SECURITY", "upload_folder: path traversal blocked")
                     failed_files.append(file.filename or '')
                     continue
 
@@ -2774,7 +2715,7 @@ async def upload_folder(
                 uploaded_files.append(str(final_path.relative_to(UPLOAD_FOLDER)))
                 
         except Exception as e:
-            print(f"[ERR] Failed to upload file {file.filename}: {e}")
+            logger.error("UPLOAD", "Failed to upload folder file", details={"Reason": str(e)})
             failed_files.append(file.filename)
     
     # Broadcast via file_events WebSocket for instant cross-device sync
@@ -3095,12 +3036,11 @@ async def move_file(filename: str = Form(...), destination: str = Form(...), sou
         # WinError 32: file locked by another process (e.g. currently being streamed/previewed)
         winerr = getattr(e, 'winerror', None)
         if winerr == 32 or 'being used by another process' in str(e):
-            print(f"[WARN] Move blocked: '{safe_filename}' is locked (streaming/open). Retrying after gc...")
             gc.collect()
             time.sleep(0.1)
             try:
                 shutil.move(str(src_path), str(dst_path))
-                print(f"[MOVE] Moved '{safe_filename}' to '{destination}' on retry")
+                logger.info("STORAGE", "File moved on retry")
                 broadcast_file_event_sync("move", destination or "", safe_filename)
                 return JSONResponse(content={
                     "status": "success",
@@ -3115,7 +3055,7 @@ async def move_file(filename: str = Form(...), destination: str = Form(...), sou
                 "msg": f"Cannot move '{safe_filename}' — it is currently open or being streamed. Close the preview and try again.",
                 "file_locked": True
             })
-        print(f"[ERR] Move error: {e}")
+        logger.error("STORAGE", "Move error", details={"Reason": str(e)})
         return JSONResponse(status_code=500, content={
             "status": "error",
             "msg": f"Failed to move file: {e}"
@@ -3234,12 +3174,12 @@ async def delete_folder(folder_path: str):
         except Exception:
             shutil.rmtree(folder_path_obj, ignore_errors=True)
 
-        print(f"[OK] Deleted folder: {folder_path}")
+        logger.info("STORAGE", "Deleted folder")
         broadcast_file_event_sync("delete_folder", folder_path, folder_path)
         return JSONResponse(content={
             "status": "success",
             "msg": f"Folder '{folder_path}' deleted successfully"
         })
     except Exception as e:
-        print(f"[ERR] Failed to delete folder {folder_path}: {e}")
+        logger.error("STORAGE", "Failed to delete folder", details={"Reason": str(e)})
         return JSONResponse(status_code=500, content={"status": "error", "msg": f"Failed to delete folder: {str(e)}"})

@@ -258,8 +258,6 @@ class ConcurrentUploadManager:
         encrypted_temp_destination = None
         encrypted_metadata_path = None
         
-        print(f"[INFO] [{upload_id}] Uploading to temporary file: {temp_destination.name}")
-        
         # Get file size for responsiveness calculations
         file_size = 0
         with self.upload_lock:
@@ -282,7 +280,7 @@ class ConcurrentUploadManager:
                     chunk = await upload_file.read(chunk_size)
                     
                     if not chunk:
-                        print(f"[OK] [{upload_id}] Upload completed: {total_written:,} bytes")
+                        logger.log_upload("Upload streaming completed", op_id=upload_id, size_bytes=total_written, status="SUCCESS")
                         break
                     
                     chunk_count += 1
@@ -292,10 +290,6 @@ class ConcurrentUploadManager:
                     
                     total_written += len(chunk)
                     hash_calculator.update(chunk)
-                    
-                    # Progress logging for large files - MINIMAL SPAM
-                    if chunk_count % 200 == 0:  # Much less frequent logging
-                        print(f"[STATS] [{upload_id}] {total_written//1024//1024}MB")
                     
                     # [CLEAN] Adaptive memory management
                     if universal_optimizer.should_run_gc(total_written, chunk_size):

@@ -99,6 +99,8 @@ class ServerService : Service() {
 
                 // Broadcast stopping state so MainActivity updates the UI
                 sendServerStatus(STATUS_STOPPING)
+                isRunning = false
+                isStarting = false
 
                 stopServer()
                 return START_NOT_STICKY

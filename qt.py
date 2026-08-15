@@ -56,7 +56,7 @@ class Suite:
         self.base_url = None; self.server = None; self.task = None
         self.start_time = time.time()
         self.test_counter = 0
-        self.total_tests = 173
+        self.total_tests = 174
 
     def _rec(self, name, passed, cat="general", expected=None, actual=None, reason=None, duration=0.0):
         self.test_counter += 1
@@ -110,6 +110,15 @@ class Suite:
                         ("test.7z",True),("test",True),("noext",True)]:
             r = is_allowed_file(fn)
             self._ck(r==exp, f"is_allowed({repr(fn)}) \u2192 {r} (exp {exp})", "security")
+
+        # Automated Logging Privacy & PII Leak Scanner
+        try:
+            from scan_privacy import LoggingPrivacyScanner
+            privacy_scanner = LoggingPrivacyScanner()
+            privacy_findings = privacy_scanner.run_scan()
+            self._ck(len(privacy_findings) == 0, f"Logging privacy scan (0 leaks found, scanned {privacy_scanner.total_files_scanned} files)", "security")
+        except Exception as p_err:
+            self._ck(False, f"Logging privacy scanner error: {p_err}", "security")
 
     # ═══════ JS/CSS/HTML ═══════
     def test_static_integrity(self):

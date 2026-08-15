@@ -281,6 +281,11 @@ class MainActivity : AppCompatActivity() {
         updateStorageUsage()
         initSpotlightWalkthrough()
         checkAndResetDailyLogs()
+
+        if (intent?.getBooleanExtra("AUTO_START_SERVER", false) == true) {
+            val useHttps = intent?.getBooleanExtra("USE_HTTPS", false) ?: false
+            startServerService(useHttps)
+        }
     }
 
     private fun refreshLanNetworkState() {
@@ -330,6 +335,22 @@ class MainActivity : AppCompatActivity() {
         try {
             unregisterReceiver(wifiStateReceiver)
         } catch (_: Exception) {}
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent?.getBooleanExtra("AUTO_START_SERVER", false) == true) {
+            val useHttps = intent.getBooleanExtra("USE_HTTPS", false)
+            currentState = ServerState.STARTING
+            startServerService(useHttps)
+        } else if (intent?.getBooleanExtra("STOP_SERVER", false) == true) {
+            currentState = ServerState.STOPPING
+            lanFallbackHandler.removeCallbacks(lanFallbackRunnable)
+            stopServerService()
+            currentState = ServerState.STOPPED
+            handleStatusUpdate(ServerService.STATUS_STOPPED)
+        }
     }
 
     override fun onDestroy() {

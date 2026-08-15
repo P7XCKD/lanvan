@@ -346,6 +346,7 @@ RELEASE AAB VERIFICATION CHECKLIST (MANDATORY BEFORE ANY GOOGLE PLAY UPLOAD):
 
 7. AUTOMATED TESTS & ARCHITECTURE SCAN:
    - Run python qt.py --fast (must achieve 100% pass rate).
+   - Run python testing/tools/scan_privacy.py (0 privacy leaks).
    - Run python testing/tools/architecture_scanner.py (0 violations).
 
 

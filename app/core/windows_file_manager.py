@@ -79,23 +79,20 @@ class WindowsFileManager:
                     
                     # Check if file is still in use
                     if WindowsFileManager.check_file_in_use(file_path):
-                        print(f"[RETRY] File still locked (attempt {attempt + 1}/{max_attempts}): {file_path.name}")
                         continue
                 
                 # Try to delete
                 file_path.unlink()
-                return True, f"[OK] Deleted: {file_path.name}"
+                return True, "[OK] Deleted file successfully"
                 
             except PermissionError as e:
                 last_error = str(e)
-                if attempt < max_attempts - 1:
-                    print(f"[RETRY] Permission denied (attempt {attempt + 1}/{max_attempts}): {file_path.name}")
-                else:
-                    return False, f"[LOCK] File still in use after {max_attempts} attempts: {file_path.name} - {e}"
+                if attempt >= max_attempts - 1:
+                    return False, f"[LOCK] File still in use after {max_attempts} attempts - {e}"
             except Exception as e:
-                return False, f"[ERR] Error deleting file {file_path.name}: {e}"
+                return False, f"[ERR] Error deleting file: {e}"
         
-        return False, f"[LOCK] Failed to delete {file_path.name} after {max_attempts} attempts. Last error: {last_error}"
+        return False, f"[LOCK] Failed to delete after {max_attempts} attempts. Last error: {last_error}"
     
     @staticmethod
     def get_processes_using_file(file_path: Path) -> List[dict]:
@@ -148,17 +145,14 @@ class WindowsFileManager:
                     success, message = await WindowsFileManager.safe_delete_file(file_path)
                     if success:
                         results['files_deleted'] += 1
-                        print(message)
                     else:
                         results['files_locked'] += 1
                         results['locked_files'].append(file_path.name)
-                        print(message)
                         
                         # Get diagnostic info about what's using the file
                         processes = WindowsFileManager.get_processes_using_file(file_path)
                         if processes:
                             results['processes_using_files'].extend(processes)
-                            print(f"[STATS] Processes using {file_path.name}: {[p['name'] for p in processes]}")
         
         # Clean temp chunks
         if temp_folder and temp_folder.exists():

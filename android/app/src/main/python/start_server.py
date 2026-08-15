@@ -12,7 +12,7 @@ sys.path.append(os.path.dirname(__file__))
 def sanitize_log_message(message: str) -> str:
     """
     Sanitizes log messages at write-time to prevent sensitive file names,
-    file paths, and raw user clipboard content from appearing in app logs.
+    file paths, request URLs, and raw user clipboard content from appearing in app logs.
     """
     if not message:
         return message
@@ -25,10 +25,13 @@ def sanitize_log_message(message: str) -> str:
     sanitized = re.sub(r'(?i)("clipboard"\s*:\s*"?[^",\}\r\n]+)', r'"clipboard": "[Clipboard Data]"', sanitized)
 
     # 2. Sanitize file names & explicit file paths
-    sanitized = re.sub(r'(?i)((?:filename|path|full_path|file|target_dir)[\s=:]+)([^\s;,\r\n]+)', r'\1[Sanitized File]', sanitized)
+    sanitized = re.sub(r'(?i)((?:filename|file_name|path|full_path|filepath|target_dir|parent_path)[\s=:]+)([^\s;,\r\n]+)', r'\1[Sanitized File]', sanitized)
     sanitized = re.sub(r'(?i)(data/(?:uploads|clipboard|temp_chunks)/)([^\s;,\r\n]+)', r'\1[Sanitized File]', sanitized)
     sanitized = re.sub(r'(?i)([a-zA-Z]:\\(?:[^\\[\r\n]+\\)+)([^\s;,\r\n]+)', r'\1[Sanitized Path]', sanitized)
-    sanitized = re.sub(r'(?i)(/(?:sdcard|storage|data/data)/[^\s;,\r\n]+)', r'[Sanitized Android Path]', sanitized)
+    sanitized = re.sub(r'(?i)(/(?:sdcard|storage|data/data|data/user)/[^\s;,\r\n]+)', r'[Sanitized Android Path]', sanitized)
+
+    # 3. Sanitize raw HTTP access log lines if any leak through
+    sanitized = re.sub(r'(?i)("?(?:GET|POST|PUT|DELETE|HEAD|OPTIONS)\s+)(/download/[^\s?"]+|/download-folder/[^\s?"]+)([^\r\n]*)', r'\1/download/[Sanitized File]\3', sanitized)
 
     return sanitized
 
@@ -220,7 +223,8 @@ def run_fastapi_server(port="5000", use_https="false", files_dir=None, is_debug=
         "app": app_instance,
         "host": "0.0.0.0",
         "port": int(port),
-        "log_level": "info",
+        "log_level": "warning" if not is_debug else "info",
+        "access_log": False if not is_debug else True,
         "timeout_keep_alive": 1,
         "timeout_graceful_shutdown": 1
     }
