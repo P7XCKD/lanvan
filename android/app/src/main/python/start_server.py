@@ -215,7 +215,7 @@ def run_fastapi_server(port="5000", use_https="false", files_dir=None, is_debug=
         logger.info("SYSTEM", "Server is already running, skipping duplicate initialization", details={"Status": current_status})
         return
 
-    ServerNetworkState.increment_generation()
+    this_gen = ServerNetworkState.increment_generation()
     if lan_ip and str(lan_ip).strip() and str(lan_ip).strip() != "127.0.0.1":
         ServerNetworkState.set_pinned_lan_ip(str(lan_ip).strip())
     
@@ -258,10 +258,11 @@ def run_fastapi_server(port="5000", use_https="false", files_dir=None, is_debug=
         raise e
     finally:
         # Only update global state when we actually owned the lifecycle.
-        # If binding failed before run() was called, _owned_lifecycle is False
-        # and we must not overwrite state that belongs to a running instance.
+        # Guard against older shutdown loops overwriting a newer generation's RUNNING state.
         if _owned_lifecycle:
-            ServerNetworkState.set_status("STOPPED")
+            current_gen = ServerNetworkState.get_generation()
+            if current_gen == this_gen:
+                ServerNetworkState.set_status("STOPPED")
         _active_server = None
 
 _active_server = None

@@ -250,6 +250,7 @@ class ServerService : Service() {
                 }
             } finally {
                 isStarting = false
+                isStopping = false
                 sendServerStatus(STATUS_STOPPED)
                 if (serverThread == Thread.currentThread()) {
                     releaseLocks()
@@ -289,13 +290,24 @@ class ServerService : Service() {
         }
 
         // 2. Fallback localhost shutdown API request to trigger clean cleanup sequence.
-        //    Use plain HTTP to 127.0.0.1 — the shutdown endpoint already enforces localhost-only
-        //    at the application layer (system.py:282). TLS is unnecessary for a local loopback call
-        //    and avoids the need for a trust-all SSL context (which is a security risk).
         Thread {
             try {
-                val url = java.net.URL("http://127.0.0.1:$instancePort/api/shutdown")
-                val conn = url.openConnection() as java.net.HttpURLConnection
+                val scheme = if (instanceUseHttps == "true") "https" else "http"
+                val url = java.net.URL("$scheme://127.0.0.1:$instancePort/api/shutdown")
+                val conn = if (instanceUseHttps == "true") {
+                    val sc = javax.net.ssl.SSLContext.getInstance("TLS")
+                    sc.init(null, arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
+                        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate>? = null
+                        override fun checkClientTrusted(certs: Array<java.security.cert.X509Certificate>?, authType: String?) {}
+                        override fun checkServerTrusted(certs: Array<java.security.cert.X509Certificate>?, authType: String?) {}
+                    }), java.security.SecureRandom())
+                    (url.openConnection() as javax.net.ssl.HttpsURLConnection).apply {
+                        sslSocketFactory = sc.socketFactory
+                        hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true }
+                    }
+                } else {
+                    url.openConnection() as java.net.HttpURLConnection
+                }
                 conn.requestMethod = "POST"
                 conn.connectTimeout = 1500
                 conn.readTimeout = 1500

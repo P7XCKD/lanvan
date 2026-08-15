@@ -221,11 +221,11 @@ class SimpleMDNSManager:
                 else:
                     sleep_interval = 60.0  # Steady state: low-power maintenance
                 
-                # Check for stop signal during sleep interval with 1s granularity
+                # Check for stop signal during sleep interval with 0.1s granularity
                 slept = 0.0
                 while slept < sleep_interval and not self._stop_announcements and self.is_running:
-                    time.sleep(1.0)
-                    slept += 1.0
+                    time.sleep(0.1)
+                    slept += 0.1
 
                 if self._stop_announcements or not self.is_running:
                     break
@@ -260,10 +260,12 @@ class SimpleMDNSManager:
             print(f"[WARN] Announcement thread error (non-critical): {e}")
 
     def _stop_announcement_thread(self):
-        """Stop the announcement thread"""
+        """Stop the announcement thread quickly and safely"""
         self._stop_announcements = True
         if self._announcement_thread and self._announcement_thread.is_alive():
-            self._announcement_thread.join(timeout=1.0)
+            # The announcement worker polls _stop_announcements with 0.2s granularity,
+            # so a short 0.3s join is more than enough for clean termination.
+            self._announcement_thread.join(timeout=0.3)
 
     def _detect_collision(self, service_name: str) -> tuple[str, bool]:
         """Detect if service name is already in use and suggest alternative - works offline"""
@@ -562,27 +564,23 @@ class SimpleMDNSManager:
                 logger.info("MDNS", "Stopping service")
                 self._stop_announcement_thread()
                 
-                if self.zeroconf:
-                    try:
-                        if self.service_info:
-                            self.zeroconf.unregister_service(self.service_info)
-                        self.zeroconf.unregister_all_services()
-                        logger.info("MDNS", "Service unregistered", details={"Host": self.domain})
-                    except Exception as unreg_error:
-                        logger.warn("MDNS", "Unregister warning", details={"Reason": str(unreg_error)})
+                zc = self.zeroconf
+                s_info = self.service_info
+                if zc:
+                    def _async_close_zeroconf():
+                        try:
+                            if s_info:
+                                zc.unregister_service(s_info)
+                            zc.unregister_all_services()
+                        except Exception:
+                            pass
+                        try:
+                            zc.close()
+                        except Exception:
+                            pass
                     
-                    try:
-                        self.zeroconf.close()
-                        time.sleep(0.1)
-                        logger.info("MDNS", "Zeroconf resources closed")
-                    except Exception as close_error:
-                        logger.warn("MDNS", "Zeroconf close warning", details={"Reason": str(close_error)})
-                    
-                    try:
-                        import gc
-                        gc.collect()
-                    except Exception:
-                        pass
+                    threading.Thread(target=_async_close_zeroconf, daemon=True, name="mdns-close").start()
+                    logger.info("MDNS", "Zeroconf teardown dispatched asynchronously")
                 
                 self.is_running = False
                 self.service_info = None

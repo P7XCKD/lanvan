@@ -211,48 +211,55 @@ async def lifespan(app: FastAPI):
     
     yield
     
+    t_start = time.perf_counter()
     logger.info("SERVER", "Shutdown initiated")
     
+    # 1. Concurrently stop monitors
     try:
         from app.utils.responsiveness_manager import responsiveness_monitor
-        await responsiveness_monitor.stop_monitoring()
-    except Exception as resp_err:
-        pass
-    
-    try:
         from app.utils.termux_memory_monitor import termux_memory_monitor
-        termux_memory_monitor.stop_monitoring()
-    except Exception as mem_err:
+        await asyncio.gather(
+            responsiveness_monitor.stop_monitoring(),
+            termux_memory_monitor.stop_monitoring(),
+            return_exceptions=True
+        )
+    except Exception:
         pass
     
-    try:
-        import gc
-        gc.collect()
-        logger.debug("STORAGE", "Garbage collection completed during shutdown")
-    except Exception as e:
-        logger.warn("STORAGE", "Garbage collection warning", details={"Reason": str(e)})
-    
+    # 2. Synchronous storage assembly shutdown
     logger.info("STORAGE", "Stopping streaming assembly system")
-    from app.core.streaming_assembly import shutdown_streaming_assembly
-    shutdown_streaming_assembly()
+    try:
+        from app.core.streaming_assembly import shutdown_streaming_assembly
+        shutdown_streaming_assembly()
+    except Exception as stream_err:
+        logger.warn("STORAGE", "Streaming assembly shutdown warning", details={"Reason": str(stream_err)})
     
-    logger.info("WEBSOCKET", "Stopping WebSocket managers")
+    # 3. Parallel WebSocket managers and client connection teardown
+    logger.info("WEBSOCKET", "Stopping WebSocket managers and notifying clients")
     try:
         from app.ws_manager import clipboard_ws_manager, upload_status_manager, file_events_manager, ui_events_manager
-        await clipboard_ws_manager.shutdown()
-        await upload_status_manager.shutdown()
-        await file_events_manager.shutdown()
-        await ui_events_manager.shutdown()
+        await asyncio.gather(
+            clipboard_ws_manager.shutdown(),
+            upload_status_manager.shutdown(),
+            file_events_manager.shutdown(),
+            ui_events_manager.shutdown(),
+            connection_manager.disconnect_all(),
+            return_exceptions=True
+        )
         logger.info("WEBSOCKET", "WebSocket managers stopped successfully")
     except Exception as ws_err:
         logger.warn("WEBSOCKET", "WebSocket manager shutdown warning", details={"Reason": str(ws_err)})
     
+    # 4. Stop mDNS discovery service
     logger.info("MDNS", "Stopping mDNS service")
-    mdns_manager.stop_service()
+    try:
+        mdns_manager.stop_service()
+    except Exception as mdns_err:
+        logger.warn("MDNS", "mDNS stop warning", details={"Reason": str(mdns_err)})
     
-    await connection_manager.disconnect_all()
     shutdown_event.set()
-    logger.info("SERVER", "Shutdown completed", details={"Status": "STOPPED"})
+    elapsed_ms = (time.perf_counter() - t_start) * 1000
+    logger.info("SERVER", "Shutdown completed", details={"Status": "STOPPED", "DurationMs": f"{elapsed_ms:.1f}ms"})
 
 
 app = FastAPI(

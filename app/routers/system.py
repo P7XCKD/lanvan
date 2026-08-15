@@ -187,7 +187,7 @@ async def server_status(request: Request):
         "message": "[OK] Server is running normally",
         "timestamp": time.time(),
         "resources_ready": resources_ready,
-        "shutdown": net_state["status"] == "STOPPING",
+        "shutdown": net_state["status"] in ("STOPPING", "STOPPED"),
         "server_lifecycle": net_state["status"],
         "network_endpoint": net_state["base_url"],
         "qr_endpoint": f"/api/qr-code?gen={net_state['server_generation']}",
@@ -309,47 +309,25 @@ async def emergency_shutdown(request: Request):
     
     shutdown_event.set()
     
-    async def broadcast_shutdown_and_cleanup():
+    # 1. Immediately set network state to STOPPING and request Uvicorn exit
+    try:
+        from app.core.network_state import ServerNetworkState
+        ServerNetworkState.set_status("STOPPING")
+        import start_server
+        server = start_server.get_active_server()
+        if server is not None:
+            server.should_exit = True
+    except Exception as e:
+        logger.error("SYSTEM", "Error setting should_exit on Uvicorn server", details={"Reason": str(e)})
+
+    # 2. Asynchronously notify connected UI clients
+    async def broadcast_shutdown():
         try:
             await emit_ui_event("server_shutdown", {"message": "Server is shutting down"})
         except Exception as e:
             logger.warn("SYSTEM", "Shutdown broadcast failed", details={"Reason": str(e)})
-        
-        await asyncio.sleep(0.3)
-        await connection_manager.disconnect_all()
-        logger.info("SYSTEM", "All clients notified and disconnected")
     
-    asyncio.create_task(broadcast_shutdown_and_cleanup())
-    
-    async def force_shutdown():
-        await asyncio.sleep(0.3)
-        logger.warn("SYSTEM", "Forcing server exit")
-        try:
-            from app.core.network_state import ServerNetworkState
-            ServerNetworkState.set_status("STOPPING")
-            if is_android_environment():
-                try:
-                    import start_server
-                    server = start_server.get_active_server()
-                    if server is not None:
-                        server.should_exit = True
-                except Exception:
-                    pass
-            else:
-                import os
-                try:
-                    import start_server
-                    server = start_server.get_active_server()
-                    if server is not None:
-                        server.should_exit = True
-                    else:
-                        os._exit(0)
-                except Exception:
-                    os._exit(0)
-        except Exception as e:
-            logger.error("SYSTEM", "Error during graceful shutdown trigger", details={"Reason": str(e)})
-
-    asyncio.create_task(force_shutdown())
+    asyncio.create_task(broadcast_shutdown())
     
     return JSONResponse({
         "status": "shutdown",

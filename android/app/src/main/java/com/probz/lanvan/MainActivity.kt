@@ -181,6 +181,7 @@ class MainActivity : AppCompatActivity() {
         // Wire Main Screen Buttons
         btnStartServer.setOnClickListener {
             if (currentState == ServerState.STOPPED) {
+                // If Python is still cleaning up in the background, ServerService handles thread join safely
                 currentState = ServerState.STARTING
                 btnStartServer.isEnabled = false
                 btnStartServer.text = "Starting..."
@@ -204,15 +205,14 @@ class MainActivity : AppCompatActivity() {
         val btnDegradedStopServer = findViewById<Button>(R.id.btn_degraded_stop_server)
 
         val onStopClickListener = View.OnClickListener {
-            if (currentState == ServerState.RUNNING) {
-                currentState = ServerState.STOPPING
+            if (currentState == ServerState.RUNNING || currentState == ServerState.STARTING) {
                 lanFallbackHandler.removeCallbacks(lanFallbackRunnable)
-                btnStopServer.isEnabled = false
-                btnStopServer.text = "Stopping..."
-                btnDegradedStopServer.isEnabled = false
-                btnDegradedStopServer.text = "Stopping..."
-                headerStatusText.text = "Stopping..."
+                
+                // 1. Immediately trigger the background server stop service
                 stopServerService()
+                
+                // 2. Optimistic UI transition: immediately display the clean Stopped state
+                handleStatusUpdate(ServerService.STATUS_STOPPED)
             }
         }
         btnStopServer.setOnClickListener(onStopClickListener)
@@ -284,6 +284,7 @@ class MainActivity : AppCompatActivity() {
 
         if (intent?.getBooleanExtra("AUTO_START_SERVER", false) == true) {
             val useHttps = intent?.getBooleanExtra("USE_HTTPS", false) ?: false
+            currentState = ServerState.STARTING
             startServerService(useHttps)
         }
     }
